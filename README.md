@@ -95,9 +95,28 @@ K2-Horizon-7B is the default. Serve the model yourself and the well data stays o
 
 ## What you can ask
 
-PetroHarness answers questions about one interval of one well: a formation, a depth window or the whole log. A
-question can touch any of the topic areas below. The model chooses the topics a question needs, and the skill library
-holds a sourced guide for each.
+Ask what you would ask a petrophysicist, about a formation, a depth window or the whole log. There is no fixed list
+of questions. The model reads the well's interpretation record, and when the record does not hold the answer, it has
+Petrophys compute it: another method, an estimate, a what-if, a fit, or any of about 300 Petrophys functions.
+
+| Ask it to | For example |
+|---|---|
+| **Interpret** | Where are the best reservoir intervals, and is any of them hydrocarbon-bearing? · Is there a fluid contact in this sand, and at what depth? |
+| **Describe and compare** | Is porosity higher where shale volume is lower? · Which zone has the highest resistivity? |
+| **Check the data** | Where is the hole washed out, and does it affect the density log? · Are there held readings in any log? |
+| **Recompute with another method** | Compute saturation with Simandoux and give me the statistics. · Recompute porosity with a limestone matrix. · Use Coates permeability with an irreducible water saturation of 0.25. |
+| **Test a what-if** | How does net pay change if the water saturation cutoff is 0.5? · How sensitive is water saturation to m between 1.8 and 2.4? · Compare Archie, Simandoux and Indonesia. |
+| **Estimate a parameter** | What cementation exponent does a Pickett plot give? · Estimate the formation water resistivity and compare it with the Rw used. |
+| **Classify** | What minerals make up this formation? · Define flow units. · Is there any moveable hydrocarbon? |
+| **Summarize** | Net pay, net-to-gross and hydrocarbon pore thickness per zone at a 0.5 SW cutoff. · What would the oil in place be for a 640-acre drainage area? |
+| **Calibrate and model** | Fit a saturation-height function with the free-water level at 870 m. · Predict the shear sonic from the compressional sonic. · Elastic properties by zone. |
+| **Go further** | Split the shale into laminated, dispersed and structural parts with Thomas–Stieber. · How heterogeneous is the permeability (Lorenz, Dykstra–Parsons)? |
+
+When a method needs what the well does not carry (Rwb for dual water, CEC for Waxman–Smits, a normal-compaction
+trend for Eaton), the answer says what is missing. The tools and the functions behind them: [docs/TOOLS.md](docs/TOOLS.md).
+
+**Skill guides.** For the topic areas below, the skill library holds a sourced guide, and the model picks the guides
+a question needs. They guide the investigation; they do not limit what you can ask.
 
 | Rock | Fluids | Reservoir quality | Data and methods |
 |---|---|---|---|
@@ -105,20 +124,6 @@ holds a sourced guide for each.
 | shale and clay | hydrocarbon detection | permeability and rock quality | statistics and data analysis |
 | log facies and stratigraphy | fluid contacts | net reservoir and pay | core-log integration |
 | elastic properties | invasion and movability | | |
-
-For example:
-
-> *Where are the best reservoir intervals in this formation? Give their porosity, shale volume and water saturation, and say whether any of them looks hydrocarbon-bearing.*
->
-> *Are there any hydrocarbon indicators in this well?*
->
-> *How reliable are the density and neutron logs over this interval, and where is the hole washed out?*
->
-> *Is there a fluid contact in this sand, and at what depth?*
->
-> *Can you compute saturation with Simandoux and give me the statistics?*
->
-> *How does net pay change if the water saturation cutoff is 0.5?*
 
 ## How it works
 
