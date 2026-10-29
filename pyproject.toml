@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "petroharness"
-version = "3.5.0"
-description = "Answers petrophysics questions about an interval of a well from its raw LAS: Petrophys calculates, the harness investigates and records, K2-Horizon-7B interprets"
+version = "3.5.1"
+description = "Answers petrophysics questions about an interval of a well from its raw LAS: Petrophys calculates, the harness investigates and records, a language model interprets"
 requires-python = ">=3.10"
 dependencies = [
     "petrophys>=3.0",        # pinned at 916ca46 (README: install)

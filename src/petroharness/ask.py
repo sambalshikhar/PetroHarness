@@ -2,13 +2,16 @@
 
     petroharness --las WELL.las --question "..." [--formation NAME --tops TOPS.csv | [--formation NAME]
                  --top D --base D] [--depth-unit m|ft] [--lithology-curve MNEMONIC] [--formation-lithology TEXT]
-                 [--profile NAME] [--out DIR] [--model-url URL]
+                 [--profile NAME] [--out DIR] [--model NAME | --model-card CARD] [--model-url URL]
 
 The interval asked about: a formation of a tops file (well/tops.py reads it), explicit depths, or by default the whole
 well. No data settings file is needed: the data settings are built from the LAS (a file given with --settings or
 PETROHARNESS_DATA is the base they start from). Petrophys interprets the LAS with its default workflow (net-pay cutoffs
 as the harness policy states them), or with a context profile (--profile). A LAS without a lithology log is zoned by
 shale-volume bands. Writes answer.md and trace.json to the output folder and prints the answer.
+
+The model: any chat model behind an OpenAI-compatible endpoint (--model NAME, or a model card with --model-card;
+default: K2-Horizon-7B's card; petroharness.models, docs/MODELS.md), at --model-url or PETROHARNESS_MODEL_URL.
 
 The same in Python: petroharness.ask.ask(las, question, formation=..., tops=...) -> AskResult.
 """
@@ -166,23 +169,22 @@ def _factor(unit: str, to: str) -> float:
     return convert(1.0, unit, to)
 
 
-def _model_key(model_url: str | None, llm_factory) -> str:
-    """The model registry key for the endpoints: --model-url, else K2H_TOOL_URLS (comma-separated)."""
-    from petroharness.models import MODELS
+def _model_key(model_url: str | None, llm_factory, model: str | None = None, model_card: str | None = None) -> str:
+    """The model registry key (petroharness.models): the model card (--model-card; else the generic card when --model
+    names the served model; else K2-Horizon-7B's) and the endpoints (--model-url, else PETROHARNESS_MODEL_URL;
+    comma-separated)."""
+    from petroharness.models import URL_ENVS, env_urls, register
 
-    urls = [u.strip() for u in (model_url or os.environ.get("K2H_TOOL_URLS", "")).split(",") if u.strip()]
+    urls = [u.strip() for u in model_url.split(",") if u.strip()] if model_url else env_urls()
     if not urls:
-        if llm_factory is not None:
+        if llm_factory is not None and not (model or model_card):
             return "k200t"
-        raise ValueError("WHAT: no model endpoint. WHY: K2-Horizon-7B answers the question, served by vLLM (an "
-                         "OpenAI-compatible /v1 endpoint). FIX: set K2H_TOOL_URLS=http://HOST:PORT/v1 (several, "
-                         "comma-separated) or pass --model-url.")
-    card, known = MODELS["k200t"]
-    if urls == known:
-        return "k200t"
-    key = "k200t@" + ",".join(urls)
-    MODELS.setdefault(key, (card, urls))
-    return key
+        if llm_factory is None:
+            raise ValueError("WHAT: no model endpoint. WHY: the model answers through an OpenAI-compatible endpoint "
+                             f"(/v1). FIX: set {URL_ENVS[0]}=http://HOST:PORT/v1 (several, comma-separated) or pass "
+                             "--model-url.")
+        urls = ["http://stand-in/v1"]               # a stand-in model (tests) is reached through no endpoint
+    return register(urls, model_card, model)
 
 
 # --- one question ----------------------------------------------------------------------------------------------------
@@ -190,14 +192,16 @@ def _model_key(model_url: str | None, llm_factory) -> str:
 def ask(las, question: str, *, formation: str | None = None, tops=None, top: float | None = None,
         base: float | None = None, depth_unit: str | None = None, lithology_curve: str | None = None,
         formation_lithology: str | None = None, profile: str | None = None, out=None,
-        model_url: str | None = None, settings=None, skills: str | None = None, max_steps: int | None = None,
-        llm_factory: Callable | None = None) -> AskResult:
+        model_url: str | None = None, model: str | None = None, model_card: str | None = None, settings=None,
+        skills: str | None = None, max_steps: int | None = None, llm_factory: Callable | None = None) -> AskResult:
     """One question about one LAS file -> AskResult (answer, status, trace, the interval used). The interval: the
     formation `formation` of the tops file `tops`; or the depths `top`/`base` (`formation` names it); or, with
     neither, the whole well. `depth_unit` (m or ft): the unit of the depths given and of the answer's depths (default:
     the tops file's, else the LAS's own). `skills`: the skill library the model reads guides from (a library folder, or
-    "none" for no guides; None: PETROHARNESS_SKILLS, else the packaged library). `out`: a folder for answer.md and
-    trace.json (None: nothing is written).
+    "none" for no guides; None: PETROHARNESS_SKILLS, else the packaged library). `model`: the served model's name
+    (any chat model; the generic card); `model_card`: a model card's YAML file or a packaged card's name (default:
+    K2-Horizon-7B's); `model_url`: the endpoint(s), comma-separated (default: PETROHARNESS_MODEL_URL). `out`: a folder
+    for answer.md and trace.json (None: nothing is written).
     Errors in the inputs raise ValueError (FormationNotFound for a name a tops file lacks); a failed run returns
     status "error: ..." with the traceback in the trace."""
     from petroharness.agent import graph
@@ -218,7 +222,7 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
     question = str(question or "").strip()
     if not question:
         raise ValueError("WHAT: the question is empty. FIX: give the question to answer.")
-    key = _model_key(model_url, llm_factory)
+    key = _model_key(model_url, llm_factory, model, model_card)
     out_dir = Path(out).expanduser().resolve() if out is not None else None
     with tempfile.TemporaryDirectory(prefix="petroharness-ask-") as tmp:
         cache = out_dir / ".cache" if out_dir is not None else Path(tmp)
@@ -274,7 +278,8 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
                     "interval": used, "lithology": litho,
                     "zones": [{"zone": z.zone_id, "lithology": z.lithology, "top": z.top, "base": z.base}
                               for z in view.zones],
-                    "settings": source, "skills": trace.get("skills"), "skills_given": skills,
+                    "model": _model_label(key), "settings": source, "skills": trace.get("skills"),
+                    "skills_given": skills,
                     "interpret": data.get("interpret"), "interpreter": data.get("interpreter"),
                     "petrophys": library_identity()}
     result = AskResult(answer=got["answer"], status=got["status"], trace=trace, interval=used, out_dir=out_dir)
@@ -284,6 +289,13 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
         result.files["answer"].write_text(_answer_md(result, las))
         result.files["trace"].write_text(json.dumps(trace, indent=1, default=str))
     return result
+
+
+def _model_label(key: str) -> str:
+    """The model as people read it: its name, from --model or its card."""
+    from petroharness.models import MODELS, label
+    file, _, *named = MODELS[key]
+    return label(file, named[0] if named else None)
 
 
 def _interval_text(iv: dict) -> str:
@@ -312,6 +324,7 @@ def _answer_md(result: AskResult, las: Path) -> str:
             f"- **Question:** {a['question']}",
             f"- **Interval:** {_interval_text(result.interval)}",
             f"- **Lithology:** {_lithology_text(a['lithology'])}",
+            f"- **Model:** {a['model']}",
             f"- **Skill library:** {_skills_text(a['skills'])}",
             f"- **Status:** {result.status}, {len(result.trace.get('steps') or [])} investigation steps", "", "---", ""]
     body = result.answer if result.answer else f"(no answer: {result.trace.get('error', result.status)})"
@@ -326,7 +339,9 @@ EXAMPLES = """examples:
   petroharness --las well.las --top 5300 --base 5600 --depth-unit ft --question "..."
   petroharness --las well.las --question "..."          (the whole well)
 
-The model endpoint: K2H_TOOL_URLS=http://HOST:PORT/v1 (comma-separated for several) or --model-url.
+The model: K2-Horizon-7B by default; any chat model with --model NAME (as the server lists it), or a model card with
+--model-card (docs/MODELS.md). Its endpoint: PETROHARNESS_MODEL_URL=http://HOST:PORT/v1 (comma-separated for several)
+or --model-url.
 
 The web UI: petroharness ui --help (ask in the browser, with live progress and saved runs).
 Validation mode: petroharness benchmark --help (the harness on a benchmark's questions)."""
@@ -354,7 +369,11 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--profile", help="a Petrophys context profile for wells of a known package (default: "
                                       "Petrophys's default interpretation)")
     ap.add_argument("--out", type=Path, help="the output folder (default: ./petroharness-out/<LAS name>)")
-    ap.add_argument("--model-url", help="the model endpoint(s), comma-separated (default: K2H_TOOL_URLS)")
+    llm = ap.add_argument_group("the model (default: K2-Horizon-7B)")
+    llm.add_argument("--model", help="the served model's name, for any chat model on an OpenAI-compatible endpoint "
+                                     "(as the server lists it at /v1/models)")
+    llm.add_argument("--model-card", help="a model card: a YAML file (docs/MODELS.md), or a packaged card's name")
+    llm.add_argument("--model-url", help="the model endpoint(s), comma-separated (default: PETROHARNESS_MODEL_URL)")
     ap.add_argument("--settings", type=Path, help="a data settings YAML to start from (default: PETROHARNESS_DATA "
                                                   "if set, else none)")
     ap.add_argument("--skills", help="the skill library the model reads guides from: a library folder, or 'none' for "
@@ -371,7 +390,8 @@ def options(args: argparse.Namespace) -> dict:
             "base": args.base, "depth_unit": args.depth_unit, "lithology_curve": args.lithology_curve,
             "formation_lithology": args.formation_lithology, "profile": args.profile,
             "out": args.out if args.out is not None else Path.cwd() / "petroharness-out" / Path(args.las).stem,
-            "model_url": args.model_url, "settings": args.settings, "skills": args.skills, "max_steps": args.max_steps}
+            "model_url": args.model_url, "model": args.model, "model_card": args.model_card, "settings": args.settings,
+            "skills": args.skills, "max_steps": args.max_steps}
 
 
 def main(argv: list | None = None) -> int:
@@ -391,7 +411,7 @@ def main(argv: list | None = None) -> int:
     print(f"petroharness: {Path(a['las']).name}, {result.interval['name']}: {_interval_text(result.interval)}",
           file=sys.stderr)
     print(f"  lithology: {_lithology_text(a['lithology'])}; {len(a['zones'])} zones", file=sys.stderr)
-    print(f"  status: {result.status}; {len(result.trace.get('steps') or [])} steps; skill library: "
+    print(f"  model: {a['model']}; status: {result.status}; {len(result.trace.get('steps') or [])} steps; skill library: "
           f"{_skills_text(a['skills'])}; settings: {a['settings']}", file=sys.stderr)
     if result.files:
         print(f"  wrote {result.files['answer']} and {result.files['trace'].name}", file=sys.stderr)

@@ -1,0 +1,13 @@
+# Model card: any chat model behind an OpenAI-compatible endpoint (vLLM, SGLang, Ollama, LM Studio, or a hosted API
+# that accepts these fields). The served model's name comes from --model (as the server lists it at /v1/models).
+# Sampling is the server's default for the model, and no chat-template variables are sent. A reasoning model, or an
+# API with its own request rules, gets a card of its own: copy this file and set the fields in docs/MODELS.md.
+model:
+  model: ""
+  reasoning: false
+  send_template_kwargs: false        # the model's chat template with its own defaults
+  send_temperature: false            # the server's sampling defaults for the model
+  max_tokens_spec: 16384             # a step's output cap (the investigation's JSON replies)
+  max_tokens_writer: 16384           # the writer's and a repair's output cap
+  timeout_s: 1800
+  max_retries: 2

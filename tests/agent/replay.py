@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 import warnings
@@ -219,7 +218,8 @@ def main():
     traces = sorted((ROOT / "runs").glob(f"{args.prefix}_*/traces/*.json"))
     if args.limit:
         traces = traces[:args.limit]
-    urls = [u for u in os.environ.get("K2H_TOOL_URLS", "").split(",") if u]
+    from petroharness.models import env_urls
+    urls = env_urls()                                       # PETROHARNESS_MODEL_URL (or K2H_TOOL_URLS)
     cfg_file, _ = MODELS["k200t"]
 
     def one(k_path):

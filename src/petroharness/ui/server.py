@@ -1,14 +1,17 @@
 """The PetroHarness web UI: ask about a LAS file in the browser and follow the answer as it is made.
 
-    petroharness ui [--host 127.0.0.1] [--port 7860] [--runs DIR] [--workers N] [--model-url URLS]
+    petroharness ui [--host 127.0.0.1] [--port 7860] [--runs DIR] [--workers N] [--model NAME | --model-card CARD]
+                    [--model-url URLS]
 
 Standard library only. It binds to 127.0.0.1 by default: open http://localhost:7860 on the same machine, or forward the
 port from a remote one (`ssh -L 7860:localhost:7860 HOST`, or the editor's port forwarding). `--host localhost` listens
 on both 127.0.0.1 and ::1; `--host 0.0.0.0` on every interface (anyone who can reach the port can then ask questions
 and read the saved runs).
 
-The model: K2-Horizon-7B on the endpoints in K2H_TOOL_URLS (comma-separated), or --model-url. Each question goes to
-the least busy endpoint that serves the model. --workers questions run at once (default 4); more wait in a queue.
+The model: K2-Horizon-7B by default, or any chat model on an OpenAI-compatible endpoint (--model NAME, or a model card
+with --model-card; docs/MODELS.md), on the endpoints in PETROHARNESS_MODEL_URL (comma-separated), or --model-url. Each
+question goes to the least busy endpoint that serves the model. --workers questions run at once (default 4); more wait
+in a queue.
 
 API (JSON):
     GET  /api/config                endpoints and their health, workers, queue, defaults, topic areas, context profiles
@@ -53,14 +56,10 @@ KEEP_FINISHED = 100          # finished jobs kept in memory; older ones are read
 
 # --- the model endpoints -------------------------------------------------------------------------------------------
 
-def served_model() -> str:
-    """The model id the harness asks the endpoints for (its model card)."""
-    import yaml
-
-    from petroharness.config import RESOURCES
-    from petroharness.models import MODELS
-    card = yaml.safe_load((RESOURCES / MODELS["k200t"][0]).read_text())
-    return str(card["model"]["model"])
+def served_model(model: str | None = None, card: str | None = None) -> str:
+    """The model id the harness asks the endpoints for: --model, else its model card's."""
+    from petroharness.models import card_file, card_settings
+    return model or str(card_settings(card_file(card, model))["model"])
 
 
 class Endpoints:
@@ -103,9 +102,9 @@ class Endpoints:
     def acquire(self) -> str:
         """The least busy endpoint serving the model (counted busy until release)."""
         if not self.urls:
-            raise RuntimeError("WHAT: no model endpoint. WHY: K2-Horizon-7B answers the question, served by vLLM (an "
-                               "OpenAI-compatible /v1 endpoint). FIX: set K2H_TOOL_URLS=http://HOST:PORT/v1 (several, "
-                               "comma-separated) or start the UI with --model-url, then restart it.")
+            raise RuntimeError("WHAT: no model endpoint. WHY: the model answers through an OpenAI-compatible endpoint "
+                               "(/v1). FIX: set PETROHARNESS_MODEL_URL=http://HOST:PORT/v1 (several, comma-separated) "
+                               "or start the UI with --model-url, then restart it.")
         rows = self.health()
         live = [r["url"] for r in rows if r["ok"]]
         if not live:
@@ -113,7 +112,7 @@ class Endpoints:
         if not live:
             said = "; ".join(f"{r['url']}: {r.get('error')}" for r in self._rows)
             raise RuntimeError(f"WHAT: no endpoint serves {self.model} ({said}). FIX: start the model server, or point "
-                               "K2H_TOOL_URLS at one that runs.")
+                               "PETROHARNESS_MODEL_URL at one that runs.")
         with self._lock:
             url = min(live, key=lambda u: self.busy.get(u, 0))
             self.busy[url] = self.busy.get(url, 0) + 1
@@ -131,11 +130,14 @@ class App:
     """The runs folder, the endpoints, the jobs in this server's life and the workers that answer them."""
 
     def __init__(self, runs, workers: int = 4, urls: list | None = None, model_factory: Callable | None = None,
-                 max_age: float = 15.0):
+                 max_age: float = 15.0, model: str | None = None, model_card: str | None = None):
+        from petroharness.models import card_file, label
         self.store = Store(runs)
         self.store.interrupted()
-        model = "" if model_factory is not None else served_model()
-        self.endpoints = Endpoints(urls if urls is not None else _env_urls(), model, max_age)
+        self.choice = {k: v for k, v in (("model", model), ("model_card", model_card)) if v}   # ask's model options
+        self.label = label(card_file(model_card, model), model)
+        served = "" if model_factory is not None else served_model(model, model_card)
+        self.endpoints = Endpoints(urls if urls is not None else _env_urls(), served, max_age)
         self.model_factory = model_factory          # tests: a stand-in model; no endpoint is used then
         self.workers = max(1, int(workers))
         self.jobs: dict = {}
@@ -146,7 +148,7 @@ class App:
             threading.Thread(target=self._work, name=f"petroharness-ui-{i + 1}", daemon=True).start()
 
     def submit(self, inputs: dict) -> A.Job:
-        kwargs = A.arguments(inputs)               # wrong inputs are said now, not after the queue
+        kwargs = A.arguments(inputs) | self.choice  # wrong inputs are said now, not after the queue
         job = A.Job(self.store.new_id(), inputs, kwargs)
         with self._lock:
             self.jobs[job.id] = job
@@ -216,7 +218,7 @@ class App:
         with self._lock:
             running = sum(j.status == "running" for j in self.jobs.values())
             waiting = len(self.waiting)
-        return {"version": __version__, "model": self.endpoints.model or "(stand-in model)",
+        return {"version": __version__, "model": self.endpoints.model or "(stand-in model)", "label": self.label,
                 "endpoints": self.endpoints.health() if self.model_factory is None else [],
                 "workers": self.workers, "running": running, "queued": waiting, "runs": str(self.store.root),
                 "max_steps": MAX_STEPS, "profiles": A.context_profiles(),
@@ -226,7 +228,8 @@ class App:
 
 
 def _env_urls() -> list:
-    return [u for u in os.environ.get("K2H_TOOL_URLS", "").split(",") if u.strip()]
+    from petroharness.models import env_urls
+    return env_urls()
 
 
 # --- HTTP ------------------------------------------------------------------------------------------------------------
@@ -374,14 +377,21 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--runs", type=Path, default=Path("petroharness-ui-runs"),
                     help="the folder for saved runs and uploads (default ./petroharness-ui-runs)")
     ap.add_argument("--workers", type=int, default=4, help="questions answered at once (default 4); more wait")
-    ap.add_argument("--model-url", help="the model endpoint(s), comma-separated (default: K2H_TOOL_URLS)")
+    ap.add_argument("--model", help="the served model's name, for any chat model on an OpenAI-compatible endpoint "
+                                    "(default: K2-Horizon-7B)")
+    ap.add_argument("--model-card", help="a model card: a YAML file (docs/MODELS.md), or a packaged card's name")
+    ap.add_argument("--model-url", help="the model endpoint(s), comma-separated (default: PETROHARNESS_MODEL_URL)")
     return ap
 
 
 def main(argv: list | None = None) -> int:
     args = parser().parse_args(argv)
     urls = [u for u in args.model_url.split(",") if u.strip()] if args.model_url else None
-    app = App(args.runs, workers=args.workers, urls=urls)
+    try:
+        app = App(args.runs, workers=args.workers, urls=urls, model=args.model, model_card=args.model_card)
+    except ValueError as exc:                       # a model card that is missing or wrong
+        print(f"petroharness ui: {exc}", file=sys.stderr)
+        return 2
     try:
         servers = make_servers(app, args.host, args.port)
     except OSError as exc:
@@ -390,8 +400,9 @@ def main(argv: list | None = None) -> int:
         return 2
     where = ", ".join(_url(s.server_address) for s in servers)
     print(f"PetroHarness UI on {where}", file=sys.stderr)
-    print(f"  runs: {app.store.root}; workers: {app.workers}; model endpoints: "
-          f"{', '.join(app.endpoints.urls) or 'none (set K2H_TOOL_URLS or --model-url)'}", file=sys.stderr, flush=True)
+    print(f"  runs: {app.store.root}; workers: {app.workers}; model: {app.label} ({app.endpoints.model}); endpoints: "
+          f"{', '.join(app.endpoints.urls) or 'none (set PETROHARNESS_MODEL_URL or --model-url)'}", file=sys.stderr,
+          flush=True)
     for s in servers[1:]:
         threading.Thread(target=s.serve_forever, daemon=True).start()
     try:

@@ -219,7 +219,7 @@ def engine_dir(policy: dict, engines_dir: Optional[Path]) -> Optional[Path]:
     meta = path / "ENGINE.json"
     if not meta.exists():
         raise FileNotFoundError(f"WHAT: interpretation engine {name!r} not found at {path}. WHY: the policy names it as "
-                                "its workflow of record. FIX: build the pinned engine (README), or set data.engines_dir.")
+                                "its workflow of record. FIX: build the pinned engine (docs/DEVELOPMENT.md), or set data.engines_dir.")
     if json.loads(meta.read_text()).get("name") != name:
         raise ValueError(f"WHAT: {meta} does not describe engine {name!r}. FIX: rebuild the engine directory.")
     return path

@@ -8,7 +8,7 @@ the `petroharness` command (`petroharness.ask`), with the same inputs, and chang
 ## Start it
 
 ```bash
-export K2H_TOOL_URLS=http://host-a:8100/v1              # the model servers; several: comma-separated
+export PETROHARNESS_MODEL_URL=http://host-a:8100/v1     # the model servers; several: comma-separated
 petroharness ui                                         # http://127.0.0.1:7860
 ```
 
@@ -21,7 +21,9 @@ runs folder and the model endpoints, and runs until you stop it (Ctrl+C).
 | `--port N` | the port (default 7860) |
 | `--runs DIR` | the folder for saved runs and uploads (default `./petroharness-ui-runs`) |
 | `--workers N` | questions answered at once (default 4); more wait in a queue |
-| `--model-url URLS` | the model endpoints, comma-separated (default `K2H_TOOL_URLS`) |
+| `--model NAME` | any chat model, by its served name (default: K2-Horizon-7B; [MODELS.md](MODELS.md)) |
+| `--model-card CARD` | a model card: a YAML file or a packaged card's name |
+| `--model-url URLS` | the model endpoints, comma-separated (default `PETROHARNESS_MODEL_URL`) |
 
 As for the command, a data settings file in `PETROHARNESS_DATA` is the base the settings start from, and
 `PETROHARNESS_SKILLS` chooses the default skill library; unset them to ask about a new well with the defaults.
@@ -115,8 +117,8 @@ the browser console, `__replay.open(id, 0)` then `__replay.seek(t)` shows the ru
 
 ## Model endpoints and the queue
 
-The dots in the top bar are the model endpoints, green when one answers `/v1/models` with the model the harness
-asks for (hover for its address and how many questions it is answering). Each question goes to the least busy
+The top bar names the model (its card's label, or `--model`). The dots are the model endpoints, green when one answers
+`/v1/models` with the model the harness asks for (hover for its address and how many questions it is answering). Each question goes to the least busy
 endpoint that answers; `--workers` questions run at once, and the top bar counts the ones running and waiting.
 
 ## The API

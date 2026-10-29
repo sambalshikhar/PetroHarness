@@ -1,7 +1,7 @@
 # Working on PetroHarness
 
-What the harness is and how it is laid out: `README.md`, `docs/ARCHITECTURE.md`, `docs/GRAPH.md`. The design rules:
-`docs/DESIGN.md`.
+What the harness is: `README.md`, `docs/ARCHITECTURE.md`, `docs/GRAPH.md`. The code layout, configuration and tests:
+`docs/DEVELOPMENT.md`. The design rules: `docs/DESIGN.md`.
 
 ## Rules (each with its reason)
 
@@ -15,8 +15,10 @@ What the harness is and how it is laid out: `README.md`, `docs/ARCHITECTURE.md`,
    hand.*
 4. **Petrophys calculates.** A tool computes petrophysics only through Petrophys, or is a listed generic data
    operation (`tests/test_petrophys_integration.py`). *Why: one source of truth, auditable.*
-5. **The model is K2-Horizon-7B.** No other model in any role. *Why: the harness exists to make this model answer
-   well.*
+5. **One model answers, whichever it is.** Every call in a run goes to the one model its card names (any chat model on
+   an OpenAI-compatible endpoint; K2-Horizon-7B by default). No helper model in any role, and no code path for one
+   model only: what differs between models is the card's request settings (`docs/MODELS.md`). *Why: the answer and
+   its trace are one model's work, and the harness must serve any model.*
 6. **Every step is one call rebuilt from the state.** No multi-turn conversation inside the investigation. *Why:
    what the model sees at each step is exactly what the trace records.*
 7. **A change that should not alter behaviour passes the golden tapes** (`tests/agent/test_golden_tapes.py`), the

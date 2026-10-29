@@ -278,6 +278,14 @@ def test_endpoint_health_and_choice():
 
 def test_the_model_is_the_harness_model_card():
     assert U.served_model() == "k2-horizon-7b-grpo200"
+    assert U.served_model("Qwen/Qwen3-32B") == "Qwen/Qwen3-32B"            # any chat model, by its served name
+
+
+def test_the_page_names_the_model_from_its_card(tmp_path):
+    app = U.App(tmp_path / "runs", workers=1, model_factory=lambda cfg: None)
+    assert app.config()["label"] == "K2-Horizon-7B" and app.choice == {}
+    other = U.App(tmp_path / "runs2", workers=1, model_factory=lambda cfg: None, model="Qwen/Qwen3-32B")
+    assert other.config()["label"] == "Qwen/Qwen3-32B" and other.choice == {"model": "Qwen/Qwen3-32B"}
 
 
 # --- the command ---------------------------------------------------------------------------------------------------
@@ -295,7 +303,7 @@ def test_petroharness_ui_is_a_subcommand(monkeypatch, capsys):
 
 
 def test_a_port_in_use_is_said(tmp_path, capsys, monkeypatch):
-    monkeypatch.setattr(U, "served_model", lambda: "m")
+    monkeypatch.setattr(U, "served_model", lambda *a: "m")
     busy = ThreadingHTTPServer(("127.0.0.1", 0), BaseHTTPRequestHandler)
     try:
         assert U.main(["--port", str(busy.server_address[1]), "--runs", str(tmp_path / "r")]) == 2

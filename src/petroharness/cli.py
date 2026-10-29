@@ -6,11 +6,12 @@ Benchmark mode runs the harness on benchmark questions: each question investigat
 (petroharness.agent.graph). The run takes the question, the well and the formation; the evaluation index's category
 only groups the output files.
 
-    PETROHARNESS_DATA=<data config> K2H_TOOL_URLS=<servers> petroharness benchmark --arm A1 --rep 1 \
+    PETROHARNESS_DATA=<data config> PETROHARNESS_MODEL_URL=<servers> petroharness benchmark --arm A1 --rep 1 \
         --cats hydrocarbon,porosity --ids IDS.json --gt-dir GT --workers 40
 writes runs/<ARM>_<model>[r<rep>]_<cat>/{responses,traces} and the judge's reference subset runs/gt_subsets/<prefix>
 (the evaluation side; the harness never reads it). Resumes from saved traces of the same commit. The defaults are
-the configuration the v3.5 benchmark ran with (model k200t, writer open, the reporting profile's format).
+the configuration the v3.5 benchmark ran with (model k200t, writer open, the reporting profile's format). Another
+model: --model NAME (any chat model on an OpenAI-compatible endpoint) or --model-card CARD (docs/MODELS.md).
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -83,7 +85,9 @@ def benchmark(argv=None):
                                  description="Validation mode: run the harness on a benchmark's questions.")
     ap.add_argument("--arm", required=True)
     ap.add_argument("--cats", default="hydrocarbon")
-    ap.add_argument("--models", default="k200t")
+    ap.add_argument("--models", default="k200t", help="model registry keys, comma-separated (petroharness.models)")
+    ap.add_argument("--model", help="the served model's name, for any chat model (the generic card; instead of --models)")
+    ap.add_argument("--model-card", help="a model card: a YAML file or a packaged card's name (instead of --models)")
     ap.add_argument("--rep", type=int, default=1)
     ap.add_argument("--ids", required=True, help="JSON file {qa_ids: [...]}")
     ap.add_argument("--workers", type=int, default=12)
@@ -100,7 +104,13 @@ def benchmark(argv=None):
     cats = set(args.cats.split(","))
     tasks = [t for t in tasks if index[t.task_id]["qa_id"] in wanted and index[t.task_id]["category"] in cats]
     summary = {}
-    for m in args.models.split(","):
+    if args.model or args.model_card:
+        from petroharness.models import MODELS, card_file, env_urls, register
+        name = re.sub(r"[^A-Za-z0-9._-]+", "-", args.model or Path(card_file(args.model_card)).stem)
+        keys = {name: register(env_urls() or MODELS["k200t"][1], args.model_card, args.model)}
+    else:
+        keys = {m: m for m in args.models.split(",")}
+    for m, key in keys.items():
         prefix = f"{args.arm}_{m}" + (f"r{args.rep}" if args.rep > 1 else "")
 
         def one(t):
@@ -110,7 +120,7 @@ def benchmark(argv=None):
                 tr = json.loads(path.read_text())
                 if tr.get("commit") == COMMIT and "answer" in tr and not str(tr.get("status", "")).startswith("error"):
                     return {"answer": tr["answer"], "status": tr["status"], "trace": tr}
-            r = answer(t, m, args.rep, args.max_steps, args.writer, args.format)
+            r = answer(t, key, args.rep, args.max_steps, args.writer, args.format)
             r["trace"]["answer"] = r["answer"]
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(r["trace"], indent=1, default=str))

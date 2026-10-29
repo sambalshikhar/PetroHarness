@@ -126,7 +126,7 @@ the change reaches.
 ### Switches
 
 `agent/options.py` holds the switches under test. A switch exists only while a comparison needs it: it defaults off,
-and once measured it becomes the default or goes. 3.5.0 defines none. `PETROHARNESS_SET` sets them for one run, and
+and once measured it becomes the default or goes. this release defines none. `PETROHARNESS_SET` sets them for one run, and
 every trace records the options in force.
 
 ## Resources (`petroharness/resources`)

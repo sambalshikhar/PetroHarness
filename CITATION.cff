@@ -1,0 +1,61 @@
+cff-version: 1.2.0
+message: "If you use PetroHarness in your work, please cite the paper below."
+title: "PetroHarness"
+abstract: "An open-source agentic harness for auditable formation evaluation: it answers a petrophysics question about an interval of a well from its raw LAS file."
+version: 3.5.1
+date-released: 2026-10-29
+repository-code: "https://github.com/sambalshikhar/PetroHarness"
+authors:
+  - family-names: Shikhar
+    given-names: S.
+  - family-names: Kabashev
+    given-names: Z.
+  - family-names: Umurzak
+    given-names: S.
+  - family-names: Lee
+    given-names: M.
+  - family-names: Barillas
+    given-names: L.
+  - family-names: Bharadwaj
+    given-names: S.
+  - family-names: Thomas
+    given-names: J.
+  - family-names: Lahoud
+    given-names: J.
+  - family-names: Castanedo
+    given-names: F.
+  - family-names: Cholakkal
+    given-names: H.
+preferred-citation:
+  type: conference-paper
+  title: "PetroHarness: An Open-Source Agentic Harness for Auditable Formation Evaluation"
+  authors:
+    - family-names: Shikhar
+      given-names: S.
+    - family-names: Kabashev
+      given-names: Z.
+    - family-names: Umurzak
+      given-names: S.
+    - family-names: Lee
+      given-names: M.
+    - family-names: Barillas
+      given-names: L.
+    - family-names: Bharadwaj
+      given-names: S.
+    - family-names: Thomas
+      given-names: J.
+    - family-names: Lahoud
+      given-names: J.
+    - family-names: Castanedo
+      given-names: F.
+    - family-names: Cholakkal
+      given-names: H.
+  collection-title: "ADIPEC 2026"
+  conference:
+    name: "ADIPEC 2026"
+    city: "Abu Dhabi"
+    country: AE
+  publisher:
+    name: "Society of Petroleum Engineers"
+  number: "SPE-236034-MS"
+  year: 2026

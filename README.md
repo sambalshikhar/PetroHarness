@@ -1,328 +1,300 @@
-# PetroHarness
+<div align="center">
 
-PetroHarness answers a petrophysics question about one interval of one well, starting from the well's raw LAS file.
+<img src="src/petroharness/ui/static/img/petroharness_logo.svg" alt="PetroHarness" width="440">
 
-- **Petrophys calculates.** Every petrophysical number comes from the Petrophys library: the interpretation of the
-  LAS, the analyzers' classes, the statistics.
-- **The harness lets the model investigate step by step, and records every step.** The model never sees all the data
-  at once. It reads a map of what the record holds, asks for results with tools, and builds its answer as claims that
-  cite those results. Every result is kept in full with an id, and every model call is written to the trace.
-- **The model interprets and writes.** Presence, fluid, mobility, rankings and verdicts are the model's readings of
-  computed facts. The model is K2-Horizon-7B.
-- **Code checks what it writes.** Code shows the model facts about the record and its citations: a number no result
-  shows, an item cited but not opened, data said missing that the interval has. The model decides what to do with
-  them; code never changes its grades, verdicts or text.
+### Ask a well a question. Get an answer you can audit.
 
-The point is auditability. Each number in an answer can be traced to the result that holds it, each result to the
-tool call that opened it, and each prompt can be rebuilt from the trace.
+PetroHarness turns a raw LAS file and a question in plain language into a petrophysical interpretation.<br>
+Petrophys computes it, a language model investigates it step by step, and code checks the result.<br>
+Every number in the answer traces back to the log.
+
+**Petrophys calculates · the model investigates · the harness records · you decide**
+
+[![Version](https://img.shields.io/badge/version-3.5.1-011e3f)](CHANGELOG.md)
+[![Python](https://img.shields.io/badge/python-3.10-011e3f)](#install)
+[![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](docs/MODELS.md)
+[![Default model](https://img.shields.io/badge/default-K2--Horizon--7B-ef6719)](docs/MODELS.md)
+[![Calculations](https://img.shields.io/badge/calculations-Petrophys-197e6f)](https://github.com/sambalshikhar/petrophys)
+[![Paper](https://img.shields.io/badge/paper-ADIPEC%202026%20%C2%B7%20SPE--236034--MS-011e3f)](#citation)
+
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Your own wells](docs/USAGE.md) · [Models](docs/MODELS.md) · [Web UI](docs/UI.md) · [Architecture](docs/ARCHITECTURE.md) · [Citation](#citation)
+
+<img src="docs/images/ui-answer.png" alt="The PetroHarness web UI: a question about the Mount Messenger formation of a well, answered, with the interval used, the topic areas read, the skills used and the zone table" width="100%">
+
+</div>
+
+## Why PetroHarness
+
+Interpreting a well log is a chain of small expert decisions. Which curves can be trusted? Which zones matter? Which
+cutoff applies? What does a reading mean? A language model handed the whole log at once guesses at them. PetroHarness
+gives the model a petrophysicist's way of working instead, and keeps a record of every step.
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+#### Every number is traceable
+Each number in an answer cites the result it came from. Each result keeps the tool call that opened it, and each
+value in it names its source: a measurement, or the Petrophys step that computed it. The trace can rebuild every
+prompt.
+
+</td>
+<td width="33%" valign="top">
+
+#### An investigation, not a data dump
+The model reads a map of the well, then opens only what it needs, zone by zone, over up to eight steps. Along the way
+it builds claims that cite their evidence.
+
+</td>
+<td width="33%" valign="top">
+
+#### Any LAS file
+You give a raw LAS file, and formation tops from any table, a depth window or the whole well. No lithology log? The
+well is zoned by shale volume. Depths can be in feet or metres, even mixed.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+#### Petrophys calculates
+Clay volume, porosity, saturation, permeability, net pay, analyzer classes and statistics all come from
+[Petrophys](https://github.com/sambalshikhar/petrophys). A number that no result shows is sent back for repair.
+
+</td>
+<td valign="top">
+
+#### Code checks, the model decides
+Code checks each claim's citations and numbers, and any statement that data is missing, and shows the model the
+facts it finds. Code never rewrites a grade, a verdict or a sentence.
+
+</td>
+<td valign="top">
+
+#### Bring your own model
+Use any chat model behind an OpenAI-compatible endpoint: vLLM, SGLang, Ollama, LM Studio or a hosted API.
+K2-Horizon-7B is the default. Serve the model yourself and the well data stays on your machines.
+
+</td>
+</tr>
+</table>
+
+## See the investigation
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/images/ui-progress.png" alt="The progress tab: the topic areas the model read, then each step with its points, the tools it called and the results it opened"></td>
+<td width="50%" valign="top"><img src="docs/images/ui-claims.png" alt="The claims tab: each claim with its grade, what it means, what weakens it, and the results it cites"></td>
+</tr>
+<tr>
+<td valign="top"><b>Follow it live.</b> You can see the topic areas the model chose, and each step's working points, tool calls and opened results, as they happen.</td>
+<td valign="top"><b>Check every claim.</b> Each claim shows its grade, what it means, what weakens it and the results it cites. Code's fact checks appear beside it.</td>
+</tr>
+</table>
+
+## What you can ask
+
+PetroHarness answers questions about one interval of one well: a formation, a depth window or the whole log. A
+question can touch any of the topic areas below. The model chooses the topics a question needs, and the skill library
+holds a sourced guide for each.
+
+| Rock | Fluids | Reservoir quality | Data and methods |
+|---|---|---|---|
+| lithology and mineralogy | water saturation | porosity | data quality |
+| shale and clay | hydrocarbon detection | permeability and rock quality | statistics and data analysis |
+| log facies and stratigraphy | fluid contacts | net reservoir and pay | core-log integration |
+| elastic properties | invasion and movability | | |
+
+For example:
+
+> *Where are the best reservoir intervals in this formation? Give their porosity, shale volume and water saturation, and say whether any of them looks hydrocarbon-bearing.*
+>
+> *Are there any hydrocarbon indicators in this well?*
+>
+> *How reliable are the density and neutron logs over this interval, and where is the hole washed out?*
+>
+> *Is there a fluid contact in this sand, and at what depth?*
 
 ## How it works
 
-1. **The well.** The raw LAS is interpreted by Petrophys and cut to the interval the user asks about: a formation
-   named in a tops file, or a depth interval; with neither, the interval is the whole well. The interval is split into
-   zones by its lithology log (by shale-volume bands where the well has none). Zones are the unit of analysis.
-2. **The map.** The model first reads the interval as plain facts: its zones, its curves and what each one is, the
-   workflow's steps and sections.
-3. **READ.** One call in which the model chooses the topic areas the question touches and lists the measurements it
-   names. A measurement the question names that this well's record lacks is said once, under the question.
-4. **The first look.** The key curves of the chosen topics, zone by zone, opened before the first step.
-5. **The steps.** Up to 8. Each step is one model call rebuilt from the state. The model adds, revises and drops
-   claims, and asks for lookups, guides and calculations. Code runs them into the ledger and checks each claim as it
-   arrives. When the model says it is done, code accepts that only if every point it set has a settled claim
-   (graded, cited, unflagged) and no claim is left as a hypothesis or flagged; otherwise it refuses once and names
-   what is open. The investigation also ends when two steps in a row only rephrase a settled answer, and at the step cap.
-6. **Settle.** A last step with every opened result in view; the claims become final.
-7. **Write.** The writer writes the answer from the claims and the results they cite. A checker looks for numbers no
-   result shows, words about the investigation instead of the formation, statements the record contradicts and
-   working notes left in the text, and asks for repairs (up to two rounds). Code places the zone table.
+```mermaid
+flowchart LR
+    las["Raw LAS file"]:::input
+    where["Tops file, depths,<br/>or the whole well"]:::input
+    q["Your question"]:::input
+    pp["Petrophys<br/>interprets the well"]:::petrophys
+    rec[("The record<br/>zones, curves, classes,<br/>statistics")]:::record
+    read["Read<br/>topics and named<br/>measurements"]:::model
+    inv["Investigate<br/>up to 8 steps: tools,<br/>ledger, cited claims"]:::model
+    skills[("Skill library<br/>sourced guides")]:::record
+    settle["Settle<br/>final claims"]:::model
+    write["Write and check<br/>repairs"]:::model
+    out["Answer and<br/>full trace"]:::output
 
-The parts, and how a question flows through them: `docs/ARCHITECTURE.md`. The question graph, node by node:
-`docs/GRAPH.md`. The design rules: `docs/DESIGN.md`.
+    las --> pp
+    where --> pp
+    pp --> rec
+    rec -- "map and first look" --> inv
+    q --> read --> inv
+    skills -. "guides" .-> inv
+    inv --> settle --> write --> out
 
-## Install
+    classDef input fill:#ffffff,stroke:#011e3f,color:#011e3f
+    classDef petrophys fill:#e3f2ee,stroke:#197e6f,color:#0f4f45
+    classDef record fill:#f0eeea,stroke:#9aa0aa,color:#1c2433
+    classDef model fill:#e6ecf4,stroke:#011e3f,color:#011e3f
+    classDef output fill:#fdeee4,stroke:#ef6719,color:#7a3410
+```
 
-Python 3.10. The environment is pinned in `requirements.lock`. Petrophys is pinned at commit
-916ca46c37980ceac56a0c4ac94b2eb0f8d8632c.
+| Stage | What happens |
+|---|---|
+| **1 · The well** | Petrophys interprets the raw LAS and cuts it to your interval. The interval is zoned by its lithology log, or by shale-volume bands when there is none. |
+| **2 · Read** | The model chooses the topic areas the question touches, and lists the measurements the question names. |
+| **3 · Investigate** | Up to eight steps, each one model call rebuilt from the state. The model opens results with tools (statistics zone by zone, analyzer classes as located depth runs, profiles, comparisons, crossplots, overlaps, arithmetic) and adds, revises or drops claims that cite them. Code checks each claim as it arrives. |
+| **4 · Settle** | With every opened result in view, the claims become final. |
+| **5 · Write and check** | The writer composes the answer from the settled claims. A checker sends back numbers no result shows, statements the record contradicts and leftover working notes, for repair. |
+
+The parts in detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The question graph, node by node:
+[docs/GRAPH.md](docs/GRAPH.md). The design rules: [docs/DESIGN.md](docs/DESIGN.md).
+
+## Quick start
+
+### Install
 
 ```bash
 python3.10 -m venv .venv
 .venv/bin/pip install -r requirements.lock
 .venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@916ca46c37980ceac56a0c4ac94b2eb0f8d8632c"
-.venv/bin/pip install -e . --no-deps        # the lock already holds every dependency
+.venv/bin/pip install -e . --no-deps
 ```
 
-The package installs the command `petroharness`.
+This installs the `petroharness` command. Petrophys is pinned at commit `916ca46`.
 
-## Serving the model
+### Connect a model
 
-The harness talks to an OpenAI-compatible endpoint. The model is K2-Horizon-7B (its GRPO checkpoint, served as
-`k2-horizon-7b-grpo200`), served by vLLM 0.30 or later with native tool calling:
+Point PetroHarness at any OpenAI-compatible endpoint:
 
 ```bash
-vllm serve /path/to/k2-horizon-7b-grpo200 --served-model-name k2-horizon-7b-grpo200 --port 8100 \
-    --trust-remote-code --dtype bfloat16 --max-model-len 131072 \
-    --reasoning-parser k2_horizon --chat-template-content-format string \
-    --enable-auto-tool-choice --tool-call-parser k2_horizon
+export PETROHARNESS_MODEL_URL=http://localhost:8000/v1     # several servers: comma-separated
 ```
 
-`--chat-template-content-format string` is required: the model's chat template reads each message's content as a
-string, and without the flag the user text does not reach the model.
-
-The model card, `src/petroharness/resources/models/k2_horizon_7b_grpo200.yaml`, sets how the harness calls it:
-reasoning effort high (low for the one retry after an empty reply), temperature 1.0, top_p 0.95, and up to 32,768
-output tokens for a step and for the writer. A reply cut off by the token cap is a failed reply, not a short one.
-
-Point the harness at the servers with `K2H_TOOL_URLS`, a comma-separated list of base URLs. Each question uses one
-of them, chosen by its task id and run number, so a batch spreads over the servers.
+The default model is K2-Horizon-7B. To use any other chat model, give its served name with `--model`:
 
 ```bash
-export K2H_TOOL_URLS=http://host-a:8100/v1,http://host-b:8100/v1
+petroharness --model Qwen/Qwen3-32B --las well.las --question "..."
 ```
 
-The API key is read from `PETROHARNESS_API_KEY` (a local vLLM server accepts any key).
+How to serve a model with vLLM, SGLang or Ollama, a reasoning model's settings, a hosted API, and model cards:
+[docs/MODELS.md](docs/MODELS.md).
 
-## Using it on your own wells
-
-Asking about your own well is the default command. Give the LAS file, the question and, if you have it, the interval:
+### Ask
 
 ```bash
-export K2H_TOOL_URLS=http://host-a:8100/v1          # where the model is served (comma-separate several servers)
-
-# a formation from a tops file
 petroharness --las well.las --tops tops.csv --formation "Mount Messenger" \
-    --question "Where are the best reservoir intervals in this formation, and is any of them hydrocarbon-bearing?"
-
-# a depth interval (both depths included; the LAS's own depth unit unless --depth-unit says otherwise)
-petroharness --las well.las --top 5340 --base 5600 --depth-unit ft --question "..."
-
-# the whole well (the default when no interval is given)
-petroharness --las well.las --question "..."
+    --question "Where are the best reservoir intervals, and is any of them hydrocarbon-bearing?"
 ```
 
-- **Tops file:** a CSV, TSV or Excel table, one row per top. Its columns are found by meaning (`formation`,
-  `formation_name`, `name`; `top`, `top_depth`, `md`; an optional `bottom`/`base`; an optional depth unit; an optional
-  well column). The interval runs from the formation's top to its stated base, else to the next deeper top, else to
-  the end of the log. Formation information in another form (a list in a report or an email) becomes such a table
-  in a few lines; `docs/USAGE.md` shows how.
-- **No lithology log:** the well is zoned by shale-volume bands, and Petrophys's default interpretation does the rest.
-  `--lithology-curve MNEMONIC` names a lithology or facies log the harness does not find on its own;
-  `--formation-lithology TEXT` states what you know about the formation's rock.
-- **Skills:** `--skills none` runs without the guide library; `--skills PATH` plugs in your own.
-- **Output:** the answer is printed, and `answer.md` and `trace.json` (every model call and every result opened) are
-  written to `./petroharness-out/<well>/` (`--out DIR`).
-- **From Python:** `from petroharness.ask import ask; result = ask("well.las", "...", tops="tops.csv",
-  formation="Mount Messenger")`.
-
-The full guide, with every option, units, curve names and examples on three wells: `docs/USAGE.md`.
-
-## Web UI
-
-`petroharness ui` serves a page for the same questions in the browser: choose a LAS file (a path or an upload), the
-interval (a formation from a tops file, a depth interval, or the whole well) and the question; follow the
-investigation as it happens; then read the answer with the claims, the results they cite and the record behind it.
-Every run is saved, can be rated and replayed.
-
-```bash
-export K2H_TOOL_URLS=http://host-a:8100/v1
-petroharness ui                                   # http://127.0.0.1:7860
-ssh -L 7860:localhost:7860 server                 # from your machine, when it runs on a remote server
-```
-
-The page asks through the same entry point as the command (`petroharness.ask`) and changes no prompt. Options, the
-parts of the page and its API: `docs/UI.md`.
-
-## Configuration
-
-### The data config
-
-The data config says where the data is. Copy `configs/data.example.yaml` to `configs/data.local.yaml` (untracked), or
-point `PETROHARNESS_DATA` at a file like it. A misspelt key is an error. `src/petroharness/config.py` documents every
-key; the main ones:
-
-| key | meaning |
+| You have | Choose the interval with |
 |---|---|
-| `data.las_dir` | one LAS file per well, named `<well>.las` |
-| `data.tops_csv` | the tops table, for intervals given by a formation name; `tops_columns`, `top_name_pattern` and `tops_depth_unit` describe it |
-| `data.lithology_curve` | the lithology log's mnemonic (or a list; the first with data is used). Left out: the LAS curve whose mnemonic or description names a lithology or facies log and holds integer codes |
-| `data.lithology_nomenclature` | a workbook mapping lithology codes to labels (overrides the library's table); `lithology_columns` names its columns |
-| `data.zone_layout` | `lithology_runs` (default: runs of the lithology log, thin runs dropped) or `formation` (the whole interval is one zone) |
-| `data.depth_unit` | the unit depths and thicknesses are shown in: `m`, `ft` or `las` (each file's own); default metres |
-| `data.interpret` | options for `petrophys.interpret`, which then interprets each LAS (below) |
-| `data.interpreter` | a Petrophys batch interpreter, `module:function` or `/path/adapter.py:function`, that interprets the data instead |
-| `data.engines_dir` | the folder of pinned interpretation engines, when the policy names one |
-| `data.cache_dir` | where interpreted wells are cached (default `.cache/wells`), keyed by the LAS content and the interpretation settings |
-| `eval.*` | question and reference files, read only by benchmark mode, the tests and evaluation scripts; a task never sees them |
+| a tops file | `--tops tops.csv --formation NAME` (CSV, TSV or Excel; its columns are found by meaning) |
+| depths | `--top 5340 --base 5600 --depth-unit ft` |
+| neither | nothing: the whole well is the default |
 
-**How each LAS is interpreted.** With `interpret` set, `petrophys.interpret` interprets the LAS with those options
-(`{}` for the library's defaults). With `interpreter` set, that function does. With neither, the policy
-(`src/petroharness/resources/policy/reference_v2.yaml`) decides: the pinned engine it names, from `engines_dir`, run
-in a subprocess, or the installed library with the policy's corrections. Setting both `interpret` and `interpreter`
-is an error.
+The answer is printed. `answer.md` and `trace.json` are written to `./petroharness-out/<well>/`; the trace holds
+every model call and every result opened. With no lithology log, the well is zoned by shale volume
+(`--lithology-curve` names one the harness does not find, and `--formation-lithology` states what you know). Every
+option, with examples on three wells: [docs/USAGE.md](docs/USAGE.md).
 
-**Context profiles.** For wells that belong to a Petrophys context package, `interpret: {context_profile: <name>}`
-interprets each well as that package's context does: its preparation, the workflow, its QC and recomputation, with
-every calculation in the step record the harness reads.
-
-```yaml
-data:
-  las_dir: /path/to/las
-  tops_csv: /path/to/formation_tops.csv
-  interpret: {context_profile: <name>}
-```
-
-### The skill library
-
-The guides the model reads come from a pluggable skill library. One setting picks it: `skills` in the harness
-configuration, or `PETROHARNESS_SKILLS`, which overrides it. Its value is a library folder (absolute, or relative to
-`src/petroharness/resources`) or `none`. The default is the packaged library, `skills/researched`: one guide per topic
-area and two common guides (`answer`, `route`), written from the petrophysics literature, with the sources of every
-line.
+### In the browser
 
 ```bash
-export PETROHARNESS_SKILLS=/path/to/my_library   # another library: library.yaml, refs.yaml,
-                                                 # <guide>/SKILL.md, <guide>/sources.yaml
-export PETROHARNESS_SKILLS=none                  # no library: no DIRECTION index, no guide action
+petroharness ui                      # http://127.0.0.1:7860
 ```
 
-The harness owns the topic areas (`src/petroharness/resources/topics.yaml`); a library's guides declare the areas they
-serve. A library is checked as it loads, and a bad one stops the run before its first question, with each problem as
-WHAT / WHY / FIX. Each trace records the library it read (`skills`: its name and a hash of its files). The format and
-the checks: `src/petroharness/resources/skills/README.md`.
+In the browser you can:
 
-### Environment variables
+- pick a LAS file and the interval, and ask your question;
+- follow every model call live;
+- read the answer with its claims, its citations and the record behind it.
 
-| variable | meaning |
+Runs are saved, and can be rated and replayed. See [docs/UI.md](docs/UI.md).
+
+### From Python
+
+```python
+from petroharness.ask import ask
+
+result = ask("well.las", "Are there any hydrocarbon indicators?", tops="tops.csv", formation="Oread",
+             model="Qwen/Qwen3-32B", model_url="http://localhost:8000/v1")
+print(result.answer)          # result.trace: every call and every result opened
+```
+
+## Make it yours
+
+| Part | How to change it |
 |---|---|
-| `PETROHARNESS_DATA` | the data config (default `configs/data.local.yaml`) |
-| `K2H_TOOL_URLS` | the model servers, comma-separated |
-| `PETROHARNESS_API_KEY` | the API key sent to the servers |
-| `PETROHARNESS_SKILLS` | the skill library: a folder or `none` |
-| `PETROHARNESS_COMPONENTS` | another copy of the component texts (`src/petroharness/agent/components`), to compare two versions |
-| `PETROHARNESS_SET` | switches under test, `name=true,...`; 3.5.0 defines none |
+| **Models** | Any chat model, by name or by a model card with its own request settings. See [docs/MODELS.md](docs/MODELS.md). |
+| **Skill library** | Plug in your own guides with `--skills PATH`, or run with none (`--skills none`). A library is checked as it loads. See [skills/README.md](src/petroharness/resources/skills/README.md). |
+| **Interpretation** | Petrophys's default workflow, a Petrophys context profile (`--profile`), or an interpreter of your own. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#configuration). |
+| **Benchmark mode** | Run a question file with reference answers in parallel, for validation (`petroharness benchmark`). See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#benchmark-mode). |
 
-Hosted tracing stays off: the harness refuses to start when `LANGSMITH_TRACING` (or a LangChain equivalent) is on,
-because LangSmith would send every prompt, with the well data, to its service.
+## Built on Petrophys
 
-## Benchmark mode (validation)
+<table>
+<tr>
+<td width="200" align="center" valign="middle">
+<a href="https://github.com/sambalshikhar/petrophys">
+<img src="docs/images/brand/petrophys-logo.png" alt="Petrophys" width="180">
+</a>
+</td>
+<td valign="middle">
 
-Benchmark mode runs a question file with reference answers, in parallel, and saves an answer and a trace for each.
-It is for validating the harness on a question set; for your own wells, use the default command above.
+[Petrophys](https://github.com/sambalshikhar/petrophys) turns well logs into traceable petrophysical
+interpretations: clay volume, porosity, water saturation, permeability, rock quality and net pay. Every step records
+its method, inputs, outputs and parameters, and every skipped step records why. PetroHarness reads that record. It
+never recomputes petrophysics on its own. Documentation: [petrophys.netlify.app](https://petrophys.netlify.app).
 
-```bash
-export PETROHARNESS_DATA=/path/to/data.yaml
-export K2H_TOOL_URLS=http://host-a:8100/v1,http://host-b:8100/v1
-.venv/bin/petroharness benchmark --arm run1 --cats porosity,saturation --ids ids.json --gt-dir /path/to/reference_files \
-    --workers 40
-```
+</td>
+</tr>
+</table>
 
-**The question file** is the data config's `eval.questions`: a JSON list with one row per question.
+## Documentation
 
-```json
-{"qa_id": "q0001", "question": "...", "las_path": "WELL_A.las", "formation": "EXAMPLE FM. TOP", "category": "porosity"}
-```
-
-- `las_path`: only the file name is used; the file is read from the data config's `las_dir`.
-- `formation`: a top name, whose interval the tops table gives (the named top down to the next deeper top), or a
-  depth interval, `{"name": ..., "top": ..., "base": ..., "depth_unit": "m" | "ft"}` (depths in the LAS's own depth
-  unit when `depth_unit` is left out; an optional `"lithology"` states the formation's lithology).
-- `category`: a group name. `--cats` selects groups, and the group names the output folder. The run itself never
-  sees it.
-- `qa_id`: the question's id. The run sees only an opaque task id made from it (`t` and 10 hex digits).
-
-**The options:**
-
-| option | meaning |
+| Guide | What it covers |
 |---|---|
-| `--arm NAME` | a name for the run; it starts every output folder's name |
-| `--cats A,B` | the groups to run (default `hydrocarbon`) |
-| `--ids FILE` | a JSON file `{"qa_ids": [...]}`: the questions to run |
-| `--gt-dir DIR` | a folder of reference files, one per group (`single_formation_<group>_qa_pairs.json`); the runner copies the rows of the run's questions to `runs/gt_subsets/`, for scoring outside the harness. No question's run reads it. |
-| `--rep N` | the run number (default 1); above 1 it is added to the folder names, and it changes which server a question uses |
-| `--models KEY` | the model key (default `k200t`: the model card above) |
-| `--workers N` | questions run at once (default 12) |
-| `--max-steps N` | the step cap (default 8) |
-| `--writer open` | the writer's variant: `open` (default; everything opened in view, up to two repair rounds) or `''` |
-| `--format profile` | the answer format: the report style's (`profile`, default) or the writer's own (`default`) |
+| [docs/USAGE.md](docs/USAGE.md) | asking about your own wells: intervals, tops files, units, lithology, output, the Python API |
+| [docs/MODELS.md](docs/MODELS.md) | models: serving, model cards, reasoning models, hosted APIs |
+| [docs/UI.md](docs/UI.md) | the web UI: options, the parts of the page, its API |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the parts, and how a question flows through them |
+| [docs/GRAPH.md](docs/GRAPH.md) | the question graph, node by node |
+| [docs/DESIGN.md](docs/DESIGN.md) | the design rules and the generality contract |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | configuration, benchmark mode, testing and the code layout |
+| [AGENTS.md](AGENTS.md) | the rules for changing the code |
+| [CHANGELOG.md](CHANGELOG.md) | the releases |
 
-**The output**, under `runs/` in the checkout:
+## Citation
 
-```
-runs/<arm>_<model>[r<rep>]_<group>/traces/<task_id>.json        one per question: the answer, its status, every call
-runs/<arm>_<model>[r<rep>]_<group>/responses/single_formation_<group>_qa_pairs.json
-                                                                 the answers: {metadata, qa_pairs: [{qa_id, question, answer}]}
-runs/gt_subsets/<arm>_<model>[r<rep>]/single_formation_<group>_qa_pairs.json
-                                                                 the reference rows of the run's questions
-runs/summaries/run_<arm>_r<rep>.json                             counts: ok, unresolved numbers, errors; mean steps
-                                                                 and opened results per question
-```
+If you use PetroHarness in your work, please cite the paper:
 
-A question's status is `ok`, `unresolved_numbers` (the checker still found numbers no result shows after the
-repairs) or `error: <type>` (the trace holds the error and its traceback; the run goes on). A run resumes: a question
-whose trace was written at the same commit, without an error, is not run again.
+> **PetroHarness: An Open-Source Agentic Harness for Auditable Formation Evaluation**<br>
+> S. Shikhar, Z. Kabashev, S. Umurzak, M. Lee, L. Barillas, S. Bharadwaj, J. Thomas, J. Lahoud, F. Castanedo, H. Cholakkal<br>
+> ADIPEC 2026, paper SPE-236034-MS<br>
+> Mohamed bin Zayed University of Artificial Intelligence (MBZUAI) · Khalifa University · Inception42 · AIQ; Abu Dhabi, United Arab Emirates
 
-## Testing
-
-```bash
-PETROHARNESS_DATA=/path/to/data.yaml .venv/bin/python -m pytest -o addopts= -q -n 16 -p no:cacheprovider tests
+```bibtex
+@inproceedings{shikhar2026petroharness,
+  title     = {PetroHarness: An Open-Source Agentic Harness for Auditable Formation Evaluation},
+  author    = {Shikhar, S. and Kabashev, Z. and Umurzak, S. and Lee, M. and Barillas, L. and Bharadwaj, S. and Thomas, J. and Lahoud, J. and Castanedo, F. and Cholakkal, H.},
+  booktitle = {ADIPEC 2026},
+  number    = {SPE-236034-MS},
+  publisher = {Society of Petroleum Engineers},
+  year      = {2026}
+}
 ```
 
-Tests marked `data` need the files the data config names; they skip where a dataset lacks what a test needs.
-Some tests need data that is not part of this repository, and skip without it:
-- the golden tapes (`tests/golden/`) and the prompt fixture (`tests/agent/fixtures/prompts.json.gz`) are recorded on
-  benchmark wells and kept with that data; the golden tests also read the data configs from `$WELLLOGBENCH`;
-- the end-to-end tests of the own-well command and the web UI read sample wells from `$PETROHARNESS_SAMPLE_LAS`;
-- the tests of saved runs read `$PETROHARNESS_RUNS` (a glob of run folders).
-
-`tests/test_generality.py` holds one test per rule of the generality contract (`docs/DESIGN.md`), and
-`tests/test_lint.py` keeps well, formation and dataset names and depth literals out of the code, rules and prompts.
-
-Three regression gates show that a change alters nothing it does not mean to. They run wherever their data is
-present: record golden tapes and a fixture on wells you have with the tools below. A change that alters behaviour
-on purpose re-records the gate it changes, after checking that every difference is intended.
-
-- **Golden tapes** (`tests/agent/test_golden_tapes.py`). `tests/golden/<dataset>/` holds, for each recorded question,
-  every model request and reply (`<task>.tape.jsonl.gz`) and the result the code gave (`<task>.result.json.gz`). The
-  test replays each question through the question graph with no server: every request must equal the recorded one
-  field by field, and the answer, status and trace (component versions included) must equal the recording.
-  `tests/agent/record_golden.py replay` rewrites the results from the tapes, and refuses when the code makes a request
-  a tape does not hold; `record_golden.py live` records new tapes from the servers. The data configs are read from
-  `$WELLLOGBENCH/<dataset>.yaml`.
-- **The prompt fixture** (`tests/agent/test_skill_library.py`). `tests/agent/fixtures/prompts.json.gz` holds five
-  prompts for each of 12 tasks: the brief, the READ prompt, the step-1 prompt with its first look, the DIRECTION
-  index, and the step-2 prompt after two guides and an action the harness does not read. They are rendered with a stub
-  model, and the test compares them byte for byte. `tests/agent/prompt_fixture.py` renders them.
-- **The ledger replay** (`tests/agent/replay.py`). `replay.py PREFIX OUT.json --baseline` rebuilds each saved
-  investigation of `runs/PREFIX_*/traces/` through the ledger, with no model call: the traced tool calls run again in
-  order, and the claims are restored and re-checked. It reports how many rebuild exactly: the same opened results and
-  the same claim flags. Without `--baseline` it also runs the settle step and the writer on each rebuilt session
-  (this needs the servers).
-
-## Layout
-
-```
-src/petroharness/
-  cli.py        the command line: a question about one well (default) and benchmark mode
-  ask.py        a question about any LAS file: the interval, the settings, the run, the output (and its Python API)
-  ui/           the web UI: a standard-library server over ask, the page, saved runs
-  config.py     the configuration (data config, model, resources, skill library)
-  tasks.py      a question as the harness sees it: question, well, interval, LAS path
-  llm.py        the client: token accounting, retries, the reasoning field
-  tape.py       record and replay at the model boundary
-  models.py profile.py registry.py   the model key, the report style, the registries
-  well/         the raw LAS read and interpreted by Petrophys, viewed interval by interval; the summary layer;
-                the tops reader (well/tops.py)
-  record/       the workflow's record as evidence: analyzer sections, the evidence catalog, the record's facts
-  agent/        the map, the tools, the ledger and claims, the question graph, the writer
-  agent/components/   every fixed text the model reads, by component (C1-C10)
-  resources/    the policy, the report style, the registries, the topic areas, the skill libraries, the model card
-configs/        data.example.yaml
-tests/          unit and data tests; tests/agent the harness's own; tests/golden the tapes
-docs/           USAGE.md (your own wells), UI.md (the web UI), ARCHITECTURE.md, GRAPH.md and graph.mmd
-                (the question graph), DESIGN.md
-```
-
-`AGENTS.md` holds the rules for changing the code; `CHANGELOG.md` the releases.
-
-## License
-
-No license has been chosen yet: this repository has no `LICENSE` file.
+<div align="center">
+<br>
+<img src="src/petroharness/ui/static/img/petroharness_logo.svg" alt="PetroHarness" width="160">
+&nbsp;&nbsp;&nbsp;
+<img src="docs/images/brand/petrophys-logo.png" alt="Petrophys" width="110">
+</div>

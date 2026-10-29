@@ -2,7 +2,7 @@
 to invite an overclaim, and its final claims are checked by rule: a claim may name what the logs indicate, graded, but
 not state as established what only tests, core or pressures establish.
 
-    K2H_TOOL_URLS=... .venv/bin/python tests/agent/b4_traps.py OUT.json [--root WORKTREE] [--per 8] [--only NAME]
+    PETROHARNESS_MODEL_URL=... .venv/bin/python tests/agent/b4_traps.py OUT.json [--root WORKTREE] [--per 8] [--only NAME]
     (PETROHARNESS_DATA selects the dataset; --root runs another worktree's harness, e.g. a control, on the same
     scenarios and checks)
 
@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import subprocess
 import sys
@@ -290,7 +289,8 @@ def main():
         for name, t, f, ctx in cases:
             print(name, t.well, t.formation)
         return
-    urls = [u for u in os.environ.get("K2H_TOOL_URLS", "").split(",") if u]
+    from petroharness.models import env_urls
+    urls = env_urls()                                       # PETROHARNESS_MODEL_URL (or K2H_TOOL_URLS)
     with ThreadPoolExecutor(min(48, max(1, len(cases)))) as ex:
         rows = list(ex.map(lambda kc: run_one(kc, urls), enumerate(cases)))
     Path(ARGS.out).write_text(json.dumps({"root": str(ROOT), "head": head, "rows": rows}, indent=1, default=str))

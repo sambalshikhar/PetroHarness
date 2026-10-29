@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.5.1 (2026-10-29)
+
+- **Any chat model.** PetroHarness runs on any chat model behind an OpenAI-compatible endpoint (vLLM, SGLang, Ollama,
+  LM Studio or a hosted API):
+  - `--model NAME` names the served model, through the packaged generic card;
+  - `--model-card FILE` loads a model card with its own request settings (reasoning, sampling, template variables,
+    the output cap's name, structured output);
+  - K2-Horizon-7B stays the default.
+
+  The command, the web UI, benchmark mode and the Python API take the same options. The endpoints come from
+  `PETROHARNESS_MODEL_URL`. The model's name is recorded in `answer.md` and in the trace, and shown in the web UI.
+- **Documentation:** a new README, `docs/MODELS.md` (serving, model cards, reasoning models, hosted APIs) and
+  `docs/DEVELOPMENT.md` (configuration, benchmark mode, testing, layout).
+- **Citation:** the paper (ADIPEC 2026, SPE-236034-MS) in the README and in `CITATION.cff`.
+
 ## 3.5.0 (2026-10-29)
 
 First public release.

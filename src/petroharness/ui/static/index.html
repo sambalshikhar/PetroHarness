@@ -306,7 +306,7 @@ h3.sec:first-child { margin-top: 0; }
   </button>
   <a class="logo" href="/" title="PetroHarness"><img class="logo-light" src="/img/petroharness_logo.svg" alt="PetroHarness"><img class="logo-dark" src="/img/petroharness_logo_dark.png" alt="PetroHarness"></a>
   <span class="divider"></span>
-  <div class="sub">Ask about a LAS file · K2-Horizon-7B</div>
+  <div class="sub">Ask about a LAS file<span id="modelname"></span></div>
   <div class="grow"></div>
   <div class="health" id="health">checking endpoints…</div>
 </header>
@@ -620,10 +620,12 @@ async function fillForm(inputs) {
 // ---------- endpoints and the queue ----------
 async function loadConfig() {
   try {
-    const c = await api("/api/config"); S.cfg = c;
+    const c = await api("/api/config"); const first = !S.cfg; S.cfg = c;
+    $("#modelname").textContent = c.label ? ` · ${c.label}` : "";
+    if (first && !location.hash) emptyPage();                   // the tagline names the model
     const eps = c.endpoints || [];
     const dots = eps.map(e => `<span title="${esc(e.url)}: ${e.ok ? `serves ${esc(c.model)}${e.ms != null ? ` (${e.ms} ms)` : ""}; answering ${e.busy}` : esc(e.error || "not reachable")}"><span class="dot ${e.ok ? "ok" : "bad"}"></span><span class="hname">${esc(hostname(e.url))}</span></span>`).join("");
-    $("#health").innerHTML = (eps.length ? dots : `<span title="Set K2H_TOOL_URLS or start with --model-url"><span class="dot bad"></span>no model endpoint</span>`) +
+    $("#health").innerHTML = (eps.length ? dots : `<span title="Set PETROHARNESS_MODEL_URL or start with --model-url"><span class="dot bad"></span>no model endpoint</span>`) +
       `<span class="q">${c.running} running · ${c.queued} waiting · ${c.workers} at once</span>`;
     if (!$("#maxsteps").placeholder) $("#maxsteps").placeholder = `default ${c.max_steps}`;
     const env = [c.settings_env && `PETROHARNESS_DATA (${c.settings_env}) is the base of the data settings`, c.skills_env && `PETROHARNESS_SKILLS (${c.skills_env}) is the default skill library`].filter(Boolean);
@@ -1023,7 +1025,7 @@ function lithText(l) {
 function emptyPage() {
   $("#run").innerHTML = `<div class="empty"><h2>Ask about a LAS file</h2><div>Choose a well, the interval and the question on the left.</div>
     <div class="steps3"><div><span class="n">1</span>A LAS file: a path on the server, or an upload</div><div><span class="n">2</span>The interval: a formation from a tops file, depths, or the whole well</div><div><span class="n">3</span>The question, in your own words</div></div>
-    <div class="tagline"><span class="pp"><img src="/img/petrophys_mark.png" alt=""><b>Petrophys</b>&nbsp;calculates</span><span class="sep">·</span><span><b>PetroHarness</b> investigates and records</span><span class="sep">·</span><span><b>K2-Horizon-7B</b> interprets</span></div></div>`;
+    <div class="tagline"><span class="pp"><img src="/img/petrophys_mark.png" alt=""><b>Petrophys</b>&nbsp;calculates</span><span class="sep">·</span><span><b>PetroHarness</b> investigates and records</span><span class="sep">·</span><span><b>${esc((S.cfg && S.cfg.label) || "The model")}</b> interprets</span></div></div>`;
 }
 
 // ---------- start ----------

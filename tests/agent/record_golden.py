@@ -3,7 +3,7 @@
     PYTHONPATH=src:tests/agent python tests/agent/record_golden.py replay [DATASET ...]
         keeps every tape (the model's recorded replies) and rewrites each result as the current code produces it
         from the tape; refuses when the code makes a request the tape does not hold (that is a behaviour change)
-    PYTHONPATH=src:tests/agent K2H_TOOL_URLS=... python tests/agent/record_golden.py live [--workers N] DATASET ...
+    PYTHONPATH=src:tests/agent PETROHARNESS_MODEL_URL=... python tests/agent/record_golden.py live [--workers N] DATASET ...
         records new tapes and results from the live model for the dataset's selected questions (a change of
         behaviour made on purpose), N questions at a time (default 12)
 

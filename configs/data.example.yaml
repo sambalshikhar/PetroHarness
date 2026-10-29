@@ -12,7 +12,7 @@ data:
   # mnemonic or description names a lithology or facies log; wells without one are zoned by shale-volume bands.
   lithology_curve: null
   # interpret: {}                  # petrophys.interpret options; e.g. {context_profile: costa} for a context package's wells
-  engines_dir: null                # the pinned interpretation engines, when the policy names one (README.md)
+  engines_dir: null                # the pinned interpretation engines, when the policy names one (docs/DEVELOPMENT.md)
 
 # Evaluation only (tests, diagnostics, scoring); a task never sees these.
 eval:

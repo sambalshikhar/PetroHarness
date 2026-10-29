@@ -2,8 +2,8 @@
 
 `petroharness` answers one petrophysics question about one well from its LAS file. The well does not have to belong
 to any data set the harness knows: give the LAS, the question and, if you have it, the interval you are asking about.
-Petrophys interprets the log, the harness investigates and records, and K2-Horizon-7B reads the results and writes
-the answer. (`petroharness benchmark` is the validation mode, which runs a benchmark's questions; this page does not
+Petrophys interprets the log, the harness investigates and records, and a language model reads the results and writes
+the answer (K2-Horizon-7B by default, or any chat model: [MODELS.md](MODELS.md)). (`petroharness benchmark` is the validation mode, which runs a benchmark's questions; this page does not
 need it.)
 
 The examples use three sample wells kept in one folder, `$S` below:
@@ -20,13 +20,15 @@ None of the three has a lithology log.
 
 - **The package.** Install PetroHarness and Petrophys as the README's Install section says. The command is
   `petroharness` (in the virtual environment: `.venv/bin/petroharness`); `petroharness --help` lists the options.
-- **The model.** Tell the harness where K2-Horizon-7B is served (vLLM, an OpenAI-compatible `/v1` endpoint):
+- **The model.** Tell the harness where the model is served (an OpenAI-compatible `/v1` endpoint):
 
   ```bash
-  export K2H_TOOL_URLS=http://host-a:8100/v1                       # several servers: comma-separated
+  export PETROHARNESS_MODEL_URL=http://host-a:8100/v1              # several servers: comma-separated
   ```
 
-  or pass `--model-url http://host-a:8100/v1` on each call.
+  or pass `--model-url http://host-a:8100/v1` on each call. The default model is K2-Horizon-7B. For any other chat
+  model, add `--model NAME` (its served name), or `--model-card FILE` for a card of your own
+  ([MODELS.md](MODELS.md)).
 - **No data settings file is needed.** The harness builds its data settings from the LAS file. (A settings file is
   optional; see "A data settings file" below.)
 
@@ -265,8 +267,8 @@ print(r.answer)
 ```
 
 The keyword arguments mirror the command's options (`formation`, `tops`, `top`, `base`, `depth_unit`,
-`lithology_curve`, `formation_lithology`, `profile`, `out`, `model_url`, `settings`, `skills`). Without `out`, nothing is
-written. Wrong inputs raise `ValueError` (a formation the tops file lacks: `FormationNotFound`), with a message that
+`lithology_curve`, `formation_lithology`, `profile`, `out`, `model`, `model_card`, `model_url`, `settings`, `skills`).
+Without `out`, nothing is written. Wrong inputs raise `ValueError` (a formation the tops file lacks: `FormationNotFound`), with a message that
 says what is wrong, why it matters and how to fix it.
 
 ## A data settings file (optional)
@@ -294,7 +296,9 @@ apply (the stderr record names the settings used).
 | `--formation-lithology TEXT` | the formation's lithology as you know it |
 | `--profile NAME` | a Petrophys context profile, for wells of a known context package |
 | `--out DIR` | the output folder (default `./petroharness-out/<LAS name>/`) |
-| `--model-url URL` | the model endpoint(s), comma-separated (default `K2H_TOOL_URLS`) |
+| `--model NAME` | any chat model, by its served name (default: K2-Horizon-7B) |
+| `--model-card CARD` | a model card: a YAML file or a packaged card's name ([MODELS.md](MODELS.md)) |
+| `--model-url URL` | the model endpoint(s), comma-separated (default `PETROHARNESS_MODEL_URL`) |
 | `--settings PATH` | a data settings file to start from |
 | `--skills PATH\|none` | the skill library (default: the packaged one); `none` for no guides |
 | `--max-steps N` | the investigation's step cap (default: the harness's) |

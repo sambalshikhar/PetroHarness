@@ -131,6 +131,7 @@ class EvalPaths(_Strict):
 class ModelConfig(_Strict):
     base_url: str = "http://localhost:8000/v1"     # an OpenAI-compatible server (vLLM's default port)
     model: str = "qwen/qwen3.6-27b"
+    label: Optional[str] = None                    # the model's name as people read it (the UI); default: model
     api_key_env: str = "PETROHARNESS_API_KEY"  # local vLLM accepts any key
     temperature: float = 0.0
     max_tokens_spec: int = 3000

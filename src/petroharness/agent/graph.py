@@ -578,8 +578,10 @@ def answer(task, model_key: str, rep: int, max_steps: int = MAX_STEPS, writer: s
     from petroharness.config import HarnessConfig
     from petroharness.models import MODELS
     from petroharness.config import RESOURCES
-    cfg_file, urls = MODELS[model_key]
+    cfg_file, urls, *named = MODELS[model_key]
     cfg = HarnessConfig.load(RESOURCES / cfg_file)
+    if named:
+        cfg.model.model = named[0]                   # the served model's name (petroharness --model)
     cfg.model.base_url = urls[(int(hashlib.sha256(task.task_id.encode()).hexdigest()[:8], 16) + rep) % len(urls)]
     tcfg = cfg.for_tasks()
     library = direction.plugged(tcfg)                # the skill library, checked as it loads: a bad one stops here

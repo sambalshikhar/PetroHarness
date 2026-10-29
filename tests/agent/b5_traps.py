@@ -1,7 +1,7 @@
 """The investigation loop's measure L4: traps as K2H scenarios on real formations. The loop runs alone
 (no writer, no judge) on a question written here for the trap, and its final claims are checked by rule.
 
-    K2H_TOOL_URLS=... .venv/bin/python tests/agent/b5_traps.py OUT.json [--per 8] [--only NAME]
+    PETROHARNESS_MODEL_URL=... .venv/bin/python tests/agent/b5_traps.py OUT.json [--per 8] [--only NAME]
     (PETROHARNESS_DATA selects the dataset)
 
 Each trap: where it applies (detected in the formation's inventory, never by name), the question, and the rule on the
@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 import warnings
@@ -231,7 +230,8 @@ def main():
         for name, t, f, ctx in cases:
             print(name, t.well, t.formation, ctx)
         return
-    urls = [u for u in os.environ.get("K2H_TOOL_URLS", "").split(",") if u]
+    from petroharness.models import env_urls
+    urls = env_urls()                                       # PETROHARNESS_MODEL_URL (or K2H_TOOL_URLS)
     with ThreadPoolExecutor(min(48, len(cases))) as ex:
         rows = list(ex.map(lambda kc: run_one(kc, urls), enumerate(cases)))
     Path(args.out).write_text(json.dumps(rows, indent=1, default=str))

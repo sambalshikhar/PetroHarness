@@ -304,14 +304,59 @@ def test_skills_none_reaches_the_config(monkeypatch, tmp_path):
 
 def test_the_model_endpoint(monkeypatch):
     from petroharness.models import MODELS
+    monkeypatch.delenv("PETROHARNESS_MODEL_URL", raising=False)
     monkeypatch.delenv("K2H_TOOL_URLS", raising=False)
-    with pytest.raises(ValueError, match="no model endpoint.*K2H_TOOL_URLS"):
+    with pytest.raises(ValueError, match="no model endpoint.*PETROHARNESS_MODEL_URL"):
         A._model_key(None, None)
     assert A._model_key(None, lambda cfg: None) == "k200t"                 # a stub model needs none
     key = A._model_key("http://h1:8100/v1,http://h2:8100/v1", None)
     assert MODELS[key] == (MODELS["k200t"][0], ["http://h1:8100/v1", "http://h2:8100/v1"])
-    monkeypatch.setenv("K2H_TOOL_URLS", ",".join(MODELS["k200t"][1]))
+    monkeypatch.setenv("PETROHARNESS_MODEL_URL", ",".join(MODELS["k200t"][1]))
     assert A._model_key(None, None) == "k200t"
+    monkeypatch.delenv("PETROHARNESS_MODEL_URL")
+    monkeypatch.setenv("K2H_TOOL_URLS", "http://h3:8100/v1")              # read too
+    assert MODELS[A._model_key(None, None)][1] == ["http://h3:8100/v1"]
+
+
+def test_any_chat_model_by_its_served_name(monkeypatch):
+    from petroharness.models import GENERIC_CARD, MODELS, label
+    key = A._model_key("http://h:8000/v1", None, "Qwen/Qwen3-32B")
+    assert MODELS[key] == (GENERIC_CARD, ["http://h:8000/v1"], "Qwen/Qwen3-32B")
+    assert A._model_label(key) == "Qwen/Qwen3-32B" and label(MODELS["k200t"][0]) == "K2-Horizon-7B"
+    assert A._model_key(None, lambda cfg: None, "m") != "k200t"            # a stub model with a name: the generic card
+    with pytest.raises(ValueError, match="names no model.*--model NAME"):
+        A._model_key("http://h:8000/v1", None, model_card="generic")
+    with pytest.raises(ValueError, match="no model card 'nope'.*generic, k2_horizon_7b_grpo200"):
+        A._model_key("http://h:8000/v1", None, model_card="nope")
+
+
+def test_a_model_card_of_your_own(tmp_path):
+    from petroharness.models import MODELS
+    card = _file(tmp_path, "my.yaml", "model:\n  model: gpt-x\n  label: GPT X\n  send_template_kwargs: false\n"
+                                      "  max_tokens_param: max_completion_tokens\n")
+    key = A._model_key("https://api.example.com/v1", None, model_card=str(card))
+    assert MODELS[key] == (str(card.resolve()), ["https://api.example.com/v1"]) and A._model_label(key) == "GPT X"
+    bad = _file(tmp_path, "bad.yaml", "model:\n  model: m\n  temprature: 0.2\n")
+    with pytest.raises(ValueError, match="temprature"):                    # a misspelt field is an error
+        A._model_key("http://h/v1", None, model_card=str(bad))
+
+
+def test_the_run_asks_for_the_named_model(monkeypatch, tmp_path):
+    """graph.answer builds the client from the card, with the served name --model gives."""
+    from petroharness.agent import graph
+    from petroharness.config import given_settings
+    from petroharness.tasks import Task
+    seen = []
+
+    def factory(cfg):
+        seen.append((cfg.model.model, cfg.model.send_template_kwargs, cfg.model.base_url))
+        raise RuntimeError("stop here")
+
+    key = A._model_key("http://h:8000/v1", None, "my-model")
+    task = Task(task_id="t0", question="q", well="W", formation="F", las_path=tmp_path / "W.las")
+    with given_settings({"data": {"las_dir": str(tmp_path)}}), pytest.raises(RuntimeError, match="stop here"):
+        graph.answer(task, key, 1, llm_factory=factory)
+    assert seen == [("my-model", False, "http://h:8000/v1")]
 
 
 # --- the command line --------------------------------------------------------------------------------------------------
@@ -325,7 +370,10 @@ def test_the_command_line(tmp_path, monkeypatch):
     assert kw == {"las": Path("w/TW1.las"), "question": "How porous?", "formation": "Upper", "tops": Path("t.csv"),
                   "top": None, "base": None, "depth_unit": "ft", "lithology_curve": "LITH",
                   "formation_lithology": "sandstone", "profile": None, "out": Path.cwd() / "petroharness-out" / "TW1",
-                  "model_url": "http://h:8100/v1", "settings": None, "skills": None, "max_steps": None}
+                  "model_url": "http://h:8100/v1", "model": None, "model_card": None, "settings": None, "skills": None,
+                  "max_steps": None}
+    kw = A.options(A.parser().parse_args(["--las", "a.las", "--question", "q", "--model", "Qwen/Qwen3-32B"]))
+    assert (kw["model"], kw["model_card"]) == ("Qwen/Qwen3-32B", None)
     qf = _file(tmp_path, "q.txt", "What is the net pay?\n")
     kw = A.options(A.parser().parse_args(["--las", "a.las", "--question-file", str(qf), "--top", "10", "--base", "20.5",
                                           "--out", "o"]))
