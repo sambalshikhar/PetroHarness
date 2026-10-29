@@ -1,0 +1,7 @@
+id: C3
+name: memory
+purpose: 'the state the model reads back: the claims, the ledger of opened results, NEW and OPENED'
+texts: {}
+frames:
+- agent/ledger.py
+- agent/claims.py

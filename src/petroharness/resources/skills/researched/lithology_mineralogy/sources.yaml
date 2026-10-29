@@ -1,0 +1,173 @@
+# Provenance of lithology_mineralogy's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - AK2004 (lithology and porosity crossplot chapter)
+  - SLB-charts (density-neutron crossplot charts)
+  - SLB-LIP1989 (lithology and porosity)
+  note: Standard neutron-density crossplot; gas, shale and evaporite displacement directions.
+- class: a
+  refs:
+  - AK2004 (crossplot chapter)
+  - ES2007 (litho-density and PEF)
+  - Doveton1994 (lithology from crossplots)
+  note: Sonic misses isolated vugs, so sonic porosity is lower than neutron-density porosity in vuggy rock.
+- class: a
+  refs:
+  - Doveton1994
+  - 'SLB-charts (MID plot: RHOmaa against Umaa)'
+  - ES2007 (litho-density interpretation)
+  note: 'Apparent matrix (MID) method; U is approximated with RHOB in place of electron density. The closest tool here
+    is named (a guide names only methods the harness can run).'
+- class: a
+  refs:
+  - 'AK2004 (crossplot chapter: M-N plot)'
+  - SLB-charts (M-N plot)
+  - SLB-LIP1989
+  verified: textbook
+  note: 'Factor 0.01 applies to DTC in us/ft and RHOB in g/cc. Secondary porosity raises M (Schlumberger chart notes).
+    The closest tool here is named (a guide names only methods the harness can run).'
+- class: a
+  refs:
+  - Doveton1994 (compositional analysis by linear algebra)
+  - MayerSibbit1980
+  note: 'Reconstruction error and endpoint sensitivity are standard solver checks. The closest tool here is named (a
+    guide names only methods the harness can run).'
+- class: g
+  refs: []
+  note: Support/against framing for a label-versus-log check.
+- class: a
+  refs:
+  - ES2007 (PEF of minerals)
+  - AK2004 (crossplot chapter)
+  - RK2011 (gamma ray chapter)
+  note: PEF values from the chart mineral tables.
+- class: a
+  refs:
+  - RK2011 (lithology identification)
+  - AK2004 (crossplot chapter)
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - SLB-charts (mineral property table)
+  - ES2007 (mineral density table)
+  - AK2004 ch. 4 (matrix densities)
+  - KGS-LA
+  verified: opened
+  note: 'KGS Geological Log Analysis (opened by reviewer): quartz 2.65, calcite 2.71, dolomite 2.87, anhydrite 2.98, gypsum
+    2.35; halite real 2.16, log apparent 2.03. Siderite, pyrite and barite from chartbook tables (textbook).'
+- class: a
+  refs:
+  - SLB-charts (mineral property table)
+  - ES2007 (PEF of minerals)
+  - SLB-photoelectric
+  - KGS-LA
+  verified: opened
+  note: 'Rounded chart values (pyrite 16.97, siderite 14.69, barite 266.8; fresh water 0.358). Reviewer opened KGS pages:
+    quartz 1.81, calcite 5.08, dolomite 3.14, anhydrite 5.05, gypsum about 4.0, halite about 4.7.'
+- class: a
+  refs:
+  - SLB-charts (mineral property table)
+  - Doveton1994
+  - ES2007
+  verified: textbook
+  note: U = PEF x electron density.
+- class: a
+  refs:
+  - SLB-charts (neutron crossplots)
+  - AK2004 (crossplot chapter)
+  - ES2007 (neutron porosity devices)
+  - KGS-LA
+  verified: softened
+  note: 'UNSURE on exact values: zero-porosity points differ by tool (thermal, epithermal) and chart; dolomite especially.
+    Given as approximate.'
+- class: a
+  refs:
+  - 'RK2011 (density, neutron, sonic chapters: shale responses)'
+  - ES2007 (clay mineral properties)
+  - SLB-charts
+  verified: softened
+  note: 'UNSURE on range ends: shale RHOB 2.2-2.75 and DTC 70-150 us/ft are broad rules of thumb that vary with compaction
+    and age.'
+- class: a
+  refs:
+  - RK2011 (evaporites)
+  - AK2004 (crossplot chapter)
+  - SLB-charts
+  - AK2004 ch. 4 (sonic matrix velocities table)
+  - KGS-LA-evap
+  verified: opened
+  note: 'KGS evaporites page (opened by reviewer): anhydrite neutron zero, PEF 5.05; halite neutron -3 limestone p.u., washouts
+    in fresh mud; gypsum neutron over 60 p.u. Slowness values textbook (AK2004).'
+- class: a
+  refs:
+  - RK2011 (coal)
+  - AK2004
+  verified: textbook
+  note: Coal density range covers lignite to anthracite.
+- class: a
+  refs:
+  - AK2004 ch. 4 (secondary porosity index)
+  - SLB-LIP1989
+  - SLB-excavation-effect
+  note: PHI_SEC in the record = max(PHIT - PHIS, 0).
+- class: a
+  refs:
+  - AK2004 (crossplot chapter)
+  - SLB-LIP1989
+  - ES2007
+  verified: textbook
+  note: Classic non-uniqueness of two-measurement crossplots.
+- class: a
+  refs:
+  - Doveton1994
+  - MayerSibbit1980
+misread:
+- class: a
+  refs:
+  - AK2004 (crossplot chapter)
+  - AK2004 ch. 4
+  note: Limestone-compatible display of a quartz sand.
+- class: a
+  refs:
+  - AK2004 (crossplot chapter)
+  - RK2011
+  - SLB-charts (PEF of dolomite and illite)
+  verified: textbook
+- class: a
+  refs:
+  - SLB-charts (mineral property table)
+  verified: opened
+  note: 'Reviewer: anhydrite 2.98 / PEF 5.05 and calcite 2.71 / PEF 5.08 on the opened KGS pages.'
+- class: a
+  refs:
+  - RK2011 (coal)
+  - AK2004
+- class: g
+  refs:
+  - RK2011 (cuttings and logs)
+  note: Cuttings lag and cavings are standard mud-logging caveats.
+- class: g
+  refs:
+  - ES2007 (litho-density in barite mud)
+ceiling:
+- class: a
+  refs:
+  - ES2007
+  - Doveton1994
+- class: g
+  refs: []
+- class: g
+  refs: []
+- class: a
+  refs:
+  - Doveton1994
+  - AK2004 (crossplot chapter)

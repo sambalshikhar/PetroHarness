@@ -1,0 +1,13 @@
+id: C4
+name: tools
+purpose: 'what the model can call and how: tool descriptions, argument vocabularies, the condition grammar'
+texts:
+  condition: condition.md
+  v9_descriptions: v9_descriptions.json
+  v9_zones: v9_zones.md
+  argument_texts: argument_texts.json
+  grammar: grammar.md
+  tool_descriptions: tool_descriptions.json
+frames:
+- agent/schemas.py
+- agent/engine.py

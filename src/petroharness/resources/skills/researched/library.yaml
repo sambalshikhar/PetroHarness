@@ -1,0 +1,5 @@
+# The researched skill library: one guide per topic area, written from the petrophysics literature by writers who
+# never saw the benchmark, and reviewed line by line against rules A-G. The library format: ../README.md.
+name: researched
+description: One guide per topic area, written from the petrophysics literature and reviewed line by line.
+common: [answer, route]

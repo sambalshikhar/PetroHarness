@@ -1,0 +1,1 @@
+A weakness lowers the confidence of a finding; it never reverses the workflow's classes or flags into a denial: report the class with its weakness. A negative finding says in how many zones the pattern holds and in how many it breaks. (A caveat turned into a verdict contradicts the evidence the answer rests on.)

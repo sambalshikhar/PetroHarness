@@ -1,0 +1,12 @@
+id: C10
+name: reading
+purpose: 'how evidence is read and graded: caveats, levels and rankings, negatives, absence'
+texts:
+  v9_brief: v9_brief.md
+  v10_brief: v10_brief.md
+  settle_v9: settle_v9.md
+  high_low_rule: high_low_rule.md
+  no_reversal_rule: no_reversal_rule.md
+  absent_note: absent_note.md
+frames:
+- agent/vocabulary.py

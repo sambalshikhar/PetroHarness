@@ -1,0 +1,1 @@
+ Read the guides in DIRECTION that your points need ({"guide": "<facet>"}; up to 2 a step, beside the {ACTIONS} actions).

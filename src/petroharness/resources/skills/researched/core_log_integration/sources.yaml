@@ -1,0 +1,147 @@
+# Provenance of core_log_integration's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - APIRP40
+  - ES2007
+  note: Core gamma logging for core-to-log depth matching; shifts per core run. The record offers lag correlation between
+    logs.
+- class: a
+  refs:
+  - CorbettJensen1992
+  - Jensen2000
+  - ES2007
+  verified: softened
+  note: 'Plug volume vs log investigation volume; averaging core to log scale before comparison. Reviewer: averaging
+    window is a practice range, worded as roughly. The closest tool here is named (a guide names only methods the
+    harness can run).'
+- class: a
+  refs:
+  - APIRP40
+  - AK2004
+  - SLB-EffPor
+  note: 'API RP 40: oven vs humidity drying. SLB ''effective porosity'' (opened by reviewer): dried-core porosity close to
+    log total; humidity-dried keeps part of the clay-bound water.'
+- class: a
+  refs:
+  - Jensen2000
+  - MaleJensen2022
+  note: Bias/scatter decomposition of differences; log space for permeability.
+- class: g
+  refs: []
+  note: Tolerance choice is left to the model; tie it to scatter and to cutoff margins.
+- class: a
+  refs:
+  - Crain_perm
+  - Nelson1994
+  - Amaefule1993
+  note: 'Crain: porosity-based permeability calibrated to core is the first choice (search excerpt); rock-type-specific transforms
+    (Nelson; Amaefule).'
+- class: g
+  refs:
+  - Delfiner2007
+  - Jensen2000
+  note: Extrapolation outside the calibration range is unsupported.
+- class: a
+  refs:
+  - Crain_perm
+  - APIRP40
+  - Klinkenberg1941
+  - JonesOwens1980
+  note: 'Crain: exclude fractured core samples from calibration (search excerpt); Klinkenberg and stress corrections.'
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - CorbettJensen1992
+  - ES2007
+  - IODP180
+  verified: opened
+  note: 'Corbett and Jensen 1992 abstract (re-opened by reviewer): plugs 1.0-1.5 in (2.5-3.8 cm) at about 1 ft (0.3 m). Log
+    resolution from IODP Leg 180 Table T8 (opened).'
+- class: g
+  refs:
+  - APIRP40
+  verified: softened
+  note: Driller's vs logger's depth; 'a metre or more' is a practice rule of thumb, not a published constant.
+- class: a
+  refs:
+  - JonesOwens1980
+  - APIRP40
+  verified: softened
+  note: 'Jones and Owens: stress sensitivity of low-permeability gas sands, in-situ k up to about an order of magnitude below
+    routine values. Reviewer: hedged (''can'', ''up to about''); not re-checked online.'
+- class: a
+  refs:
+  - Klinkenberg1941
+  - APIRP40
+  note: Gas slippage correction.
+- class: a
+  refs:
+  - APIRP40
+  - ES2007
+  note: Core fluid saturations altered by invasion and pressure release; oil-based mud preserves water saturation.
+- class: a
+  refs:
+  - Delfiner2007
+  - MaleJensen2022
+  - Jensen2000
+  note: Regression smoothing and back-transform bias of phi-k transforms.
+- class: g
+  refs:
+  - Jensen2000
+  - APIRP40
+  note: Plug sampling bias toward competent rock; whole-core analysis for heterogeneous or vuggy rock.
+- class: a
+  refs:
+  - Nelson1994
+  - Amaefule1993
+  - Lucia1995
+  note: Rock-type-specific porosity-permeability relations.
+misread:
+- class: g
+  refs:
+  - Delfiner2007
+  note: Transform output vs measurement; record vocabulary defines PHIE_CC and PERM_CC.
+- class: a
+  refs:
+  - Jensen2000
+  note: 'Correlation measures association, not agreement; bias is separate. Worded ''assess'', not ''judge'' (the G5
+    word lint bans ''judge'').'
+- class: g
+  refs: []
+  note: Aggregation can hide group-wise bias (zone-level check).
+- class: g
+  refs:
+  - APIRP40
+  note: Depth mismatch inflates scatter.
+- class: g
+  refs:
+  - APIRP40
+  note: Total vs effective porosity basis.
+- class: g
+  refs:
+  - CorbettJensen1992
+  note: Small-sample instability; 'about 10' is a rule of thumb.
+ceiling:
+- class: g
+  refs: []
+  note: Measured vs derived curves in the record vocabulary.
+- class: g
+  refs: []
+  note: Calibration domain.
+- class: g
+  refs:
+  - APIRP40
+  note: Core saturation alteration.
+- class: g
+  refs:
+  - BEG_mod14
+  note: Calibration sources other than conventional core.

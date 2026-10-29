@@ -1,0 +1,1 @@
+Where the way a number is summarised changes the answer (per zone or overall; zone means or samples; which average; which threshold), give the results that differ and say which you lead with and why. Look at the question from more than one aspect where the data allow. A difference between zones means something only where it exceeds the spread within them.

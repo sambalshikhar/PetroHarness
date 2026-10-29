@@ -1,0 +1,26 @@
+# Provenance of answer's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# The general answering guidance; it names no basis for a number (the tools show the bases, the model chooses: G6).
+decide:
+- class: a
+  refs:
+  - gum2008
+- class: a
+  refs:
+  - Jensen2000
+- class: a
+  refs:
+  - Jensen2000
+  origin: 'negative verdicts drawn from a pooled coefficient or from a caveat'
+know:
+- class: b
+  fact: 'the workflow reports every value per lithology zone (zones are its unit of analysis, docs/DESIGN.md G7)'
+- class: g
+  note: a finding is reported with what weakens it
+- class: g
+  note: 'a general guideline: a caveat lowers confidence; it does not turn a class into a denial'
+ceiling:
+- class: b
+  fact: 'the harness''s number provenance: a number comes from an opened result or calc'

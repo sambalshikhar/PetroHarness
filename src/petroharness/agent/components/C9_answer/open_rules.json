@@ -1,0 +1,8 @@
+[
+ "Length follows the content: cover every point fully, with every zone, interval, class and value the claims and the opened results give for it. There is no word limit. (An answer that leaves out what the data shows reads as incomplete.)",
+ "Name each zone at first mention by its lithology and depth range as the map gives them, e.g. \"the upper <lithology> interval (<top>-<base> <unit>)\". (Readers know intervals by rock and depth.)",
+ "Give every finding its confidence in words, \"high\", \"moderate\" or \"low confidence\", with what limits it (the claim's grade and weak). (The reader needs to know how far each finding can be trusted.)",
+ "If the question asks for a quantity this interval does not have (the note under the question), say so in the opening sentences, then answer as far as the evidence in its place allows. (The absence is part of the answer.)",
+ "In the limitations, say once which measured logs the answer rests on and which logs that bear on the question are not in this well (the map lists both); add the weaknesses of the claims the answer uses. (What the data cannot show is part of how far the answer can be trusted.)",
+ "ALL RESULTS hold everything the investigation computed: use them for completeness (every zone's values, every class's intervals), with the id of the result after each value you take from them. Findings and grades come from the claims. (The claims are the checked record; the results fill in their detail.)"
+]

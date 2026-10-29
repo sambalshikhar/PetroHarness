@@ -1,0 +1,129 @@
+# Provenance of log_facies_stratigraphy's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - SEPM-log-response
+  - RK2011 (facies, sequences and depositional environments from logs)
+  - Serra1985
+  note: Shape vocabulary and smooth/serrated character from SEPM Strata (opened) and Rider and Kennedy.
+- class: g
+  refs:
+  - Jensen2000 (regression and its uncertainty)
+  note: Signal-against-noise test for a trend; the threshold is the analyst's choice.
+- class: a
+  refs:
+  - RK2011 (bed boundaries and vertical resolution)
+  - IODP180
+  note: Midpoint (half-amplitude, inflection) boundary picking.
+- class: a
+  refs:
+  - SerraAbbott1982
+  - Doveton1994 (electrofacies and cluster analysis)
+  - YeRabiller2000
+  note: 'MRGC = multi-resolution graph-based clustering. The closest tool here is named (a guide names only methods the
+    harness can run).'
+- class: a
+  refs:
+  - VanWagoner1990
+  - EmeryMyers1996 (well-log expression of systems tracts and parasequence sets)
+- class: a
+  refs:
+  - Cant1992
+  - Selley1985
+  - RK2011 (facies from logs)
+  note: These sources treat shape as one line of evidence among several.
+- class: g
+  refs:
+  - RK2011 (correlation)
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - SerraAbbott1982
+  note: Definition quoted as commonly cited from Serra and Abbott (1982); wording not re-checked against the paper.
+- class: a
+  refs:
+  - SEPM-log-response
+  - RK2011
+  - Cant1992
+  note: 'SEPM: cleaning-up = gradual upward decrease in gamma; dirtying-up = gradual upward increase; boxcar = low gamma,
+    sharp boundaries, no internal change; bow = decrease then increase.'
+- class: a
+  refs:
+  - SEPM-log-response
+  - Selley1985
+  - Cant1992
+  note: SEPM lists boxcar for fluvial channel sands, turbidites, aeolian sands and evaporites, and cleaning-up trends in both
+    shallow and deep marine settings.
+- class: a
+  refs:
+  - RK2011 (gamma ray and facies chapters)
+  - Selley1985
+- class: a
+  refs:
+  - IODP180
+  - RK2011
+  verified: opened
+  note: Resolution values from one tool table (opened).
+- class: a
+  refs:
+  - EmeryMyers1996
+  - VanWagoner1990
+  - RK2011 (sequence stratigraphy from logs)
+- class: a
+  refs:
+  - VanWagoner1990
+- class: a
+  refs:
+  - Lucia2007
+  - RK2011
+- class: a
+  refs:
+  - RK2011
+  note: Measured-depth thickness against true stratigraphic thickness.
+- class: g
+  refs:
+  - RK2011
+misread:
+- class: g
+  refs: []
+  note: Sign convention check.
+- class: g
+  refs: []
+- class: a
+  refs:
+  - RK2011
+  - AK2004
+  note: Resistivity, density and neutron respond to fluids; GR does not.
+- class: g
+  refs: []
+- class: a
+  refs:
+  - Doveton1994
+  - YeRabiller2000
+- class: a
+  refs:
+  - RK2011 (gamma ray and grain size)
+ceiling:
+- class: a
+  refs:
+  - SEPM-log-response
+  - Cant1992
+  - Selley1985
+  note: 'SEPM: use core where possible; logs infer, core gives direct access.'
+- class: a
+  refs:
+  - RK2011
+- class: a
+  refs:
+  - EmeryMyers1996
+  - VanWagoner1990
+- class: g
+  refs: []

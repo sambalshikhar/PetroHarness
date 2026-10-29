@@ -1,0 +1,146 @@
+# Provenance of data_quality's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - SLB-delta-rho
+  - Theys1999 (log quality control chapters)
+  - RK2011 (caliper chapter)
+  verified: opened
+  note: 'SLB ''delta rho'' (opened by reviewer): typical threshold about +/-0.15 g/cm3, above which the correction may
+    not be accurate. 0.05-0.1 g/cc and 1-2 in are practice values, not from one source (softened as examples). The guide
+    says ''a service-company glossary'' for SLB (the name stays in refs).'
+- class: g
+  refs: []
+  note: 'Coverage and leave-flagged-out sensitivity test. Worded ''assess'', not ''judge'' (the G5 word lint bans
+    ''judge'').'
+- class: g
+  refs:
+  - RK2011 (lithology responses of coal, evaporites, pyrite)
+  - ES2007 (tool physics)
+  note: Multi-curve coincidence test; the thin-bed responses come from the cited texts.
+- class: a
+  refs:
+  - Jensen2000 (univariate statistics; robust estimators)
+  note: Robust location and spread; 3 MAD and 1.5 IQR (Tukey fences) are conventions.
+- class: a
+  refs:
+  - SLB-cycle-skip
+  - 'AK2004 ch. 4 (porosity logs: matrix and fluid transit times)'
+  verified: textbook
+  note: Fluid slowness 189 us/ft and matrix slowness 38.5-55.5 us/ft from AK2004 sonic table; 40 us/ft is a rounded screening
+    bound.
+- class: a
+  refs:
+  - Theys1999 (depth control)
+  - RK2011 (log depth and depth matching)
+  note: GR recorded on each pass is the usual depth-matching reference; windowed cross-correlation is the standard method.
+- class: a
+  refs:
+  - IODP180
+  - ES2007 (vertical resolution of each tool)
+  note: 'Resolution mismatch; numbers in Know line 8. The closest tool here is named (a guide names only methods the
+    harness can run).'
+- class: g
+  refs: []
+  note: How to state impact.
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - RK2011 (caliper chapter)
+  - AK2004 ch. 1 (borehole environment)
+  verified: textbook
+  note: Mudcake thickness from (bit size - caliper)/2 is the standard reading of a two-arm caliper.
+- class: a
+  refs:
+  - ES2007 (density measurement chapter)
+  - SLB-delta-rho
+  - IODP180
+  note: Density depth of investigation about 20 cm in the IODP table; +/-0.15 g/cc from the SLB glossary.
+- class: a
+  refs:
+  - 'ES2007 (density measurement chapter: mudcake compensation, spine and ribs)'
+  - SLB-charts (mineral PEF table)
+  verified: textbook
+  note: UNSURE on how general the negative-DRHO-with-barite statement is; the sign depends on mudcake versus formation density.
+    Barite PEF 266.8 from the chart tables.
+- class: a
+  refs:
+  - SLB-standoff
+  - SLB-excavation-effect
+  - ES2007 (neutron porosity devices)
+  note: Standoff definition opened in the SLB glossary; absorber sensitivity of thermal neutron tools from ES2007.
+- class: a
+  refs:
+  - ES2007 (gamma ray devices)
+  - RK2011 (gamma ray chapter)
+  - SLB-charts (GR borehole corrections)
+- class: a
+  refs:
+  - SLB-cycle-skip
+  - ES2007 (acoustic logging chapters)
+  - RK2011 (sonic chapter)
+  note: 'Cycle-skip causes listed in the SLB glossary: fractures, gas, unconsolidated rock, aerated mud, enlarged hole.'
+- class: a
+  refs:
+  - AK2004 ch. 2 (SP)
+  - AK2004 ch. 5 (resistivity logs)
+  - ES2007 (resistivity and induction chapters)
+- class: a
+  refs:
+  - IODP180
+  verified: opened
+  note: 'IODP Leg 180 Table T8 (opened by reviewer): density 40/20 cm (resolution/investigation), neutron 30-60/20-50 cm,
+    GR 45 cm, sonic 61-107 cm, deep induction 200/120-150 cm.'
+- class: a
+  refs:
+  - CWLS-LAS2
+  - Theys1999
+  - RK2011 (log presentation and quality)
+  verified: textbook
+  note: -999.25 is the usual LAS NULL value.
+- class: a
+  refs:
+  - ES2007 (nuclear counting statistics)
+  - Theys1999
+misread:
+- class: g
+  refs:
+  - ES2007 (density measurement chapter)
+  note: Follows from density reading mud when pad contact is lost; stated as a screening guideline.
+- class: a
+  refs:
+  - SLB-delta-rho
+  - ES2007 (density measurement chapter)
+- class: g
+  refs: []
+  note: Non-random missing data bias.
+- class: g
+  refs:
+  - Theys1999 (depth control)
+- class: a
+  refs:
+  - AK2004 ch. 4 (porosity logs)
+  - ES2007
+  verified: textbook
+  note: 1 ft = 0.3048 m, so us/m = us/ft / 0.3048 = 3.281 x us/ft.
+- class: g
+  refs: []
+ceiling:
+- class: g
+  refs:
+  - Theys1999
+- class: g
+  refs: []
+- class: a
+  refs:
+  - SLB-charts (environmental correction charts)
+- class: g
+  refs: []

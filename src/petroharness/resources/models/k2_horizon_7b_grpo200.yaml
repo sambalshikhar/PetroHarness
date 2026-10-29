@@ -1,0 +1,18 @@
+# Model profile: K2-Horizon-7B GRPO step-200 checkpoint, served as k2-horizon-7b-grpo200 (the `model` below);
+# reasoning_effort=high (model card: temperature 1.0, top_p 0.95, >= 32,768 output tokens). Serve the released
+# checkpoint natively (vLLM >= 0.30 with --chat-template-content-format string, or SGLang) under that name; where the
+# checkpoint lives (a local path or a hub id) is your serving setup's. A run's endpoint is one of K2H_TOOL_URLS
+# (src/petroharness/models.py); base_url is the endpoint when this profile is loaded on its own (PETROHARNESS_BASE_URL
+# or an overlay file overrides it).
+model:
+  base_url: http://localhost:8000/v1
+  model: k2-horizon-7b-grpo200
+  reasoning: true
+  chat_template_kwargs: {reasoning_effort: high}
+  retry_template_kwargs: {reasoning_effort: low}    # after an empty reply (reasoning used every token)
+  temperature: 1.0
+  top_p: 0.95
+  max_tokens_spec: 32768
+  max_tokens_writer: 32768
+  timeout_s: 3600
+  max_retries: 1

@@ -1,0 +1,19 @@
+# Provenance of route's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# The workflow-route guide: how a curve or class was computed, its model, inputs and parameters.
+decide:
+- class: b
+  fact: the workflow records each computed curve's model, parameters and their source
+know:
+- class: b
+  fact: 'curve meanings: the curve registry (rules/curves.yaml) and the LAS'
+- class: b
+  fact: a step's parameters record their source in _source fields (the step record)
+misread:
+- class: g
+  note: curves computed from one another, or from one input, co-vary by construction
+ceiling:
+- class: b
+  fact: the workflow's parameter sources and the models it ran

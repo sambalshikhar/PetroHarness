@@ -1,0 +1,13 @@
+# Evidence catalog limits: the resolution and list lengths the record's calls read (src/petroharness/record/catalog.py,
+# view.reg.limit).
+limits:
+  flag_intervals_max_items: 25   # intervals listed per flag (the thickest are kept)
+  classify_max_per_class: 8      # intervals listed per class (the thickest, in depth order)
+  # A second sample basis (e.g. the whole interval next to the lithology zones) is noted only when its figure differs
+  # from the first by more than this fraction of the larger: a note that repeats the same number adds nothing.
+  basis_note_min_relative_difference: 0.02
+  curve_order_max_runs: 8        # depth intervals listed where an order holds / fails (the thickest, in depth order)
+  # Sample runs of an order count as resolved only from this thickness: about the vertical resolution of deep
+  # induction and laterolog tools; thinner runs sit inside their shoulder-bed blur.
+  curve_order_min_run_m: 1.0
+  correlation_max_ranked_zones: 12   # zones listed in a correlation's ranking (above it: the highest and lowest half)

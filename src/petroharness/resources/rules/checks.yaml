@@ -1,0 +1,90 @@
+# Verifier vocabulary (the checks in src/petroharness/agent/checks.py and the claim checks in claims.py). Patterns
+# are Python regular expressions, matched case-insensitively. Edit this file to adapt the checks to another
+# language, field or house style.
+
+numbers:                       # number provenance (the claims' K3 and the writer's checker)
+  skip_integers_below: 20      # small counts and ordinals are not checked
+  derived: true                # a difference/sum/ratio of two supported numbers in the same sentence is supported
+  question: true               # numbers the question states (a threshold, the 25 of "25th percentile") are supported
+  # Text that contains digits but is not a number (regexes). The task's well name is always ignored, however the
+  # dataset names its wells (src/petroharness/agent/checks.py: well_name_pattern).
+  ignore: []
+
+availability:                  # V4 claims about core-calibrated porosity/permeability
+  negated: '\b(not|no|without|absen\w*|lack\w*|missing|unavailable|neither|nor)\b'
+  about_poroperm: '\b(phie|perm|porosity|permeability|phie_cc|perm_cc)\b'
+  denial: '\b(no|without|lack of|absence of)( usable| any)? core[- ]calibrat|core[- ]calibrat\w*( \w+){0,4} (is|are|was|were) (not available|unavailable|absent|missing)|\b(phie_cc|perm_cc)( \w+){0,4} (is|are|was|were) (not available|unavailable|absent|missing)'
+  # a conditional (where a curve is missing, the fallback) states coverage, not a denial
+  hypothetical: 'in the absence of|\b(may|might|would|could)\b|\bwhere\b( \w+){0,4} (is|are) (missing|absent|unavailable|not available)|\bfall(s|ing)? back\b'
+  calibrated_curve: '\b(phie_cc|perm_cc)\b'
+
+indicators:                    # K8 a claim about a property whose flags or classes have data here
+  # A claim that speaks of a property (its words) while the interval has data for its flags or classes and no
+  # opened item shows any of them is flagged K8: open them first. One entry per property:
+  #   classes                 library class labels that place an interval in an indicator class (fullmatch)
+  #   flags                   flag curves whose intervals are indicators
+  #   words                   how prose names the property
+  properties:
+    moveable hydrocarbons:
+      classes: '(HIGH|MODERATE|LOW|EXCELLENT|GOOD|FAIR)_MOVEABLE_HC|MOVABLE_HC'
+      flags: []
+      words: '\b(mobil\w*|mov(e)?ab\w*|displac\w*)'
+    pay:
+      classes: 'POTENTIAL_PAY|PRIME_(OIL|GAS)_TARGET'
+      flags: [NET_PAY]
+      words: '\b((net )?pay|net_pay|producib\w*)\b'
+    gas:
+      classes: '(STRONG|MODERATE|WEAK)_GAS_EFFECT|(STRONG_)?GAS_INDICATION|LOW_VPVS|GAS_SHOW|PRIME_GAS_TARGET'
+      flags: [CROSSOVER_FLAG, PRIME_GAS_TARGET]
+      words: '(?<!mud )\bgas\b'           # mud gas is a measurement, not a gas indicator
+    neutron-density crossover:      # gas-effect classes grade the neutron-density separation
+      classes: '(STRONG|MODERATE|WEAK)_GAS_EFFECT|(STRONG_)?GAS_INDICATION'
+      flags: [CROSSOVER_FLAG]
+      words: '\bcross-?overs?\b'
+    fluid contact or transition:
+      classes: 'TRANSITION_ZONE|POTENTIAL_CONTACT_ZONE'
+      flags: []
+      words: '\b(contacts?|transitions?|transition zones?)\b'
+    deviations or anomalies:
+      classes: 'EXTREME_DEVIATION_ZONE|SIGNIFICANT_DEVIATION_ZONE'
+      flags: []
+      words: '\b(anomal\w*|outliers?|deviations?|spikes?|cycle[- ]skips?|abrupt changes?)\b'
+    pore or flow-unit classes:
+      classes: 'MEGA_PORES|MACRO_PORES|MESO_PORES|MICRO_PORES'
+      flags: []
+      words: '\b(mega|macro|meso|micro)[- ]?pores?\b'
+    data-quality issues:
+      classes: 'POOR_LOG_QUALITY'
+      flags: [BAD_HOLE]
+      words: '\b(quality (issues?|problems?|concerns?)|washouts?|bad[- ]hole|artifacts?|borehole (effects?|problems?))\b'
+
+data_denials:                  # V9 data said to be missing while the interval has it
+  # A claim that a measurement is missing, or that a property cannot be assessed for lack of it, contradicts the card
+  # when the interval has one of the listed curves (e.g. "no shallow resistivity, mobility cannot be assessed" while
+  # SXO was computed from RSHA). "No RXO" alone is often true and is not matched.
+  shallow resistivity:
+    curves: [RSHA, RXO, RMIC]          # shallow and flushed-zone readings (RMED is medium)
+    pattern: '\b(no|without|lack of|absence of|missing)\b[^.;:]{0,30}\b(shallow|flushed[- ]zone|invaded[- ]zone)[- ]resistivit\w*|\b(shallow|flushed[- ]zone) resistivity\b[^.;:]{0,20}\b(is|was|are|were)\s+(not available|unavailable|absent|missing)\b|\b(mobility|mov(e)?ability|mov(e)?able hydrocarbons?)\b[^.;:]{0,40}\bcannot be (assessed|evaluated|determined|quantified)'
+
+  spectral gamma ray:
+    curves: [THOR, URAN, POTA, SGR, CGR]
+    pattern: '\b(no|without|lack of|absence of|missing)\b[^.;:]{0,30}\bspectral (gamma[- ]ray|GR)\b|\bspectral (gamma[- ]ray|GR)\b[^.;:]{0,25}\b(is|was|are|were)\s+(not available|unavailable|absent|missing|not (run|acquired|recorded))\b'
+
+screen_not_run:                # K11 a negative resting on a screen that could not run
+  # A screen whose record says its inputs were unavailable and that labels (nearly) every sample with its no-indication
+  # class did not test anything: it is no evidence either way. A graded denial that cites it is flagged unless it says
+  # the screen could not run. (A general caveat of screening analyses.)
+  no_indication_classes: [NO_INDICATION, NO_DATA]
+  min_share_pct: 99
+  could_not_run: '\b(unavailable|not available|missing|could not|cannot|not run|insufficient|absent)\b'
+  denial: '\bno (?:hydrocarbons?|gas|oil|indication)\b|\b(?:hydrocarbons?|gas|oil)\b[^.;]{0,30}\b(?:not indicated|absent)\b|\bnot indicated\b|water[- ]bearing throughout'
+  caveat: '\b(could not|cannot|unavailable|missing|not run|undetermin\w*|insufficient|without)\b'
+
+
+not_assessed:                 # a section that assessed nothing here: its index was not computed
+  # The class labels the analyzers give a sample they could not assess (undetermined, unknown, insufficient, no data).
+  # A section whose every class is one of them, and whose method names a curve with no value in the interval (or says
+  # an input was unavailable), classified nothing: its thresholds are not printed, and the line says why. Vocabulary of
+  # the analyzers' labels (a workflow fact), not a reading.
+  labels: '^(?:UNDETERMINED|UNKNOWN|INSUFFICIENT)(?:_[A-Z0-9]+)*$|^NO(?:_[A-Z0-9]+)*_DATA$'
+  unavailable: '\bunavailable\b'

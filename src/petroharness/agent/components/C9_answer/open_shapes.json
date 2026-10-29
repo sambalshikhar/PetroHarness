@@ -1,0 +1,5 @@
+{
+ "direct_value": "the value with its unit, statistic, interval and basis (lithology zones or whole interval; n for a named statistic) first, then every supporting fact and limit that bears on it; no headings.",
+ "list": "\"## Answer\" (the judgement and count), \"## Intervals\" (every qualifying interval with its class or grade, key values and what limits it), \"## Data and Limitations\", \"## Conclusions\".",
+ "report": "\"## Formation Overview\" (interval, gross thickness, the zones by lithology and depth and how much of the interval they cover), one or more question-specific \"## ...\" sections, \"## Data and Limitations\", \"## Conclusions\" (the judgement restated with the key zones and values)."
+}

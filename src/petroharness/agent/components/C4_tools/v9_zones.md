@@ -1,0 +1,1 @@
+zone ids (e.g. ["Z2", "Z3"]), a lithology (e.g. ["SILT"]), or ALL; all zones when left out

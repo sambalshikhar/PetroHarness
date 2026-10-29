@@ -1,0 +1,156 @@
+# Provenance of invasion_movability's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - AK2004
+  - SLB-LIP1989
+  - Archie1942
+  note: Follows from Archie applied to flushed and uninvaded zones with the same a and m; AK2004 chapter 1 invasion profiles.
+- class: a
+  refs:
+  - SLB-LIP1989
+  - AK2004
+  - Archie1942
+  note: Rxo/Rt quick-look relation; derived from Archie.
+- class: a
+  refs:
+  - AsquithGibson1982
+  - AK2004
+  - ND-GI48
+  - KGS-PfEFFER9
+  verified: opened
+  note: 'ND GI-48 (opened by reviewer) quoting Asquith 1982: Sw/Sxo >= 1 no hydrocarbons moved; < 0.7 sandstone, < 0.6
+    carbonates moveable hydrocarbons indicated. KGS PfEFFER 9: Sxo by Archie with Rmf and Rxo. The guide says ''values
+    vary''.'
+- class: a
+  refs:
+  - SLB-LIP1989
+  - AK2004
+  - VOCAB
+  verified: textbook
+  note: 'Ratio-method Sxo = Sw^(1/5); computed: Sw/Sw^0.2 = Sw^0.8. Record defines MHI = SW/SXO.'
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  - SLB-Invasion
+  note: Invasion and mudcake imply permeability; SLB invasion opened.
+- class: a
+  refs:
+  - AK2004
+  note: Causes of absent separation; follows from Decide line 1 relation.
+- class: a
+  refs:
+  - SLB-Annulus
+  note: 'SLB opened: annulus from different oil/water mobilities; induction low; medium more affected than deep, out-of-order
+    curves; dissipates; laterologs little affected.'
+- class: a
+  refs:
+  - ES2007
+  note: Oil-based mud filtrate non-conductive.
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - SLB-Invasion
+  - SLB-TransZone
+  - SLB-FlushedZone
+  note: Zone definitions (SLB invasion and transition zone opened; flushed zone snippet).
+- class: a
+  refs:
+  - ES2007
+  - SLB-LIP1989
+  - IODP180
+  verified: opened
+  note: 'IODP Leg 180 Table T8 (opened by reviewer): button resistivity ~5 cm, shallow spherically focused 30-40 cm, medium
+    induction 60-80 cm, deep induction 120-150 cm; other tools differ.'
+- class: a
+  refs:
+  - AK2004
+  - AsquithGibson1982
+  note: Water-zone profiles from AK2004 chapter 1 figures (recalled).
+- class: a
+  refs:
+  - SLB-LIP1989
+  - AK2004
+  verified: textbook
+  note: Ratio method; computed exponent 1/1.6 = 5/8 for n = 2. Exponent 1/1.6 = 0.625 checked by reviewer.
+- class: a
+  refs:
+  - KGS-PfEFFER9
+  - SLB-MovHC
+  note: 'KGS opened: movable = difference in hydrocarbon saturation between uninvaded and flushed zones; residual = hydrocarbons
+    remaining in flushed zone.'
+- class: a
+  refs:
+  - SLB-MovHC
+  note: SLB opened.
+- class: a
+  refs:
+  - KGS-PfEFFER9
+  - SLB-MovHC
+  note: Residual hydrocarbon in the flushed zone.
+- class: a
+  refs:
+  - Archie1942
+  - Arps1953
+  note: Computed from flushed-zone Archie; RMF temperature correction (Arps).
+- class: a
+  refs:
+  - SLB-Invasion
+  note: 'SLB opened: gravity can cause different invasion depths at top and bottom when permeability is high and densities
+    differ.'
+- class: a
+  refs:
+  - ES2007
+  - SLB-Invasion
+  note: Dynamic vs static invasion over time (SLB); time-lapse LWD vs wireline from ES2007 (recalled).
+misread:
+- class: a
+  refs:
+  - ES2007
+  - SLB-Annulus
+  note: Environmental and tool-physics separation; laterolog vs induction respond differently (SLB annulus).
+- class: g
+  refs:
+  - VOCAB
+  note: Independence check on SXO provenance.
+- class: g
+  refs:
+  - AK2004
+  note: MHI is undefined in meaning when SW = 1 or rock is impermeable.
+- class: a
+  refs:
+  - SLB-Invasion
+  note: Invasion volume controlled by mudcake and pressure.
+- class: a
+  refs:
+  - SLB-MovHC
+  note: Moved vs moveable.
+- class: g
+  refs:
+  - SLB-Annulus
+  - ES2007
+  note: Alternative causes of out-of-order curves.
+ceiling:
+- class: g
+  refs:
+  - SLB-MovHC
+  note: Producibility needs flow data.
+- class: g
+  refs: []
+  note: Provenance of Sxo must be stated.
+- class: g
+  refs: []
+  note: Permeability values need direct measurement or calibrated methods.
+- class: g
+  refs:
+  - ES2007
+  note: Water-filtrate equations invalid in oil-based mud.

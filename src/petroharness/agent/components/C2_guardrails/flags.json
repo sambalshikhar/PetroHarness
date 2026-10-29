@@ -1,0 +1,16 @@
+{
+ "K1": "K1 {missing} not opened (cite opened items, or MAP for the description)",
+ "K2": "K2 a graded claim must cite the items that show it",
+ "K3": "K3 {numbers} (cite the item a number comes from and write it as shown; a value no item shows is computed or recalled: compute it with calc and cite the result, or drop it)",
+ "K3_held": "{number} is in {items}",
+ "K3_none": "{numbers} in no opened item",
+ "K4": "K4 high confidence needs two lines of evidence: cite at least two items, or grade it lower",
+ "K10": "K10 graded, but the text still reads as a hypothesis: rewrite it as the finding the cited results show (what is there, with its numbers), or keep the grade hypothesis",
+ "K9": "K9 say what this means for the point (means): the interpretation, not a restatement",
+ "K5_present": "K5 says '{said}', but this interval has {curves} ({name})",
+ "K7_unavailable": "K7 says core-calibrated porosity/permeability is unavailable, but PHIE_CC/PERM_CC are here",
+ "K7_absent": "K7 uses PHIE_CC/PERM_CC, but no core-calibrated curves are here",
+ "K5_route": "K5 {said}: say the route this interval uses",
+ "K11": "K11 rests on {items}, a screen that could not run here (its record says its inputs were unavailable and it labels every sample with no indication): it is no evidence either way. Rest the finding on other evidence, or say the screen could not run",
+ "K8": "K8 this claim is about {name}, and no opened item shows {shown}, which this interval has: open {how} before claiming it"
+}

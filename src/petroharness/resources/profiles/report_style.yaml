@@ -1,0 +1,26 @@
+# Report style: a configurable answer format (G2 class f, report style). It sets how an answer is laid out - its
+# sections, its length, the by-interval zone table and the limitations rule - never what it concludes or which basis a
+# number is taken on. The policy names the style it uses (reporting.profile); a user or dataset can supply its own, and
+# the run option --format default ignores it (the writer then uses its own default format).
+format:
+  shapes:          # by the writer's shape (the loop's intent picks it)
+    report: >-
+      "## Formation Overview" (the formation's interval, its lithology intervals and how much of it they cover, and in
+      brief what the question asks for), one or more question-specific "## ..." sections, with a "### <lithology>
+      interval" subsection for each lithology interval where the answer differs by interval, "## Data Limitations and
+      Recommendations", "## Conclusions" (the answer restated with the key intervals and values).
+    list: >-
+      "## Formation Overview" (the interval and its lithology intervals, and in brief the answer and count), "## ..."
+      with every qualifying interval (its depth range, lithology, key values and grade), "## Data Limitations and
+      Recommendations", "## Conclusions".
+    direct_value: >-
+      "## Formation Overview" (the interval and its lithology intervals), "## ..." with the value asked for (unit,
+      statistic, basis, n) and the facts that bear on it, "## Data Limitations and Recommendations", "## Conclusions".
+  words: [350, 1200]           # the answer's length in words
+  zone_names: lithology_and_depth   # intervals named by lithology and depth range, never by zone id or record name
+  zone_table: by_interval      # code-composed table: one row per interval, first column "Depth Interval (<unit>)"
+  rules:
+    - >-
+      In "Data Limitations and Recommendations", keep to the limitations that change this answer: say what each one
+      limits and, where data could resolve it, which (a log not run, core, pressure tests, fluid samples). (The reader
+      wants to know what would firm up the answer.)

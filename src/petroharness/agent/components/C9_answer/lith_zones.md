@@ -1,0 +1,1 @@
+Name each zone by its lithology and depth range as the map gives them, in the map's depth unit, e.g. "the upper <lithology> interval (<top>-<base> <unit>)"; do not write zone ids (Z1) or record names. Use the map's curve meanings for the words you use. (The reader knows the intervals by rock and depth.)

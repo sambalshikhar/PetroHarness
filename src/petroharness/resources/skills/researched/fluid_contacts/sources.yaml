@@ -1,0 +1,138 @@
+# Provenance of fluid_contacts's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - AK2004
+  - SLB-OWC
+  - SLB-Contact
+  note: Contacts from Sw and resistivity profiles; pick criteria vary between analysts (no single standard).
+- class: g
+  refs: []
+  note: Reporting a pick as a bounded window.
+- class: a
+  refs:
+  - AAPG-FluidContacts
+  - IHRDC-FWL
+  - SLB-Contact
+  note: 'AAPG (snippet): OWC corresponds to displacement pressure, FWL to zero capillary pressure. IHRDC opened: FWL definition.'
+- class: a
+  refs:
+  - Acronyms-FWL
+  - US-GradContact
+  - Dake1978
+  note: FWL from intercept of pressure gradients in formation-tester data (snippets); gradient intersection marks a contact
+    (patent snippet).
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  note: Gas-oil contact from gas indicators; resistivity cannot separate oil from gas.
+- class: a
+  refs:
+  - AAPG-CapPressure
+  - KGS-PfEFFER7
+  note: 'Capillary pressure controls contact height per rock type; KGS: separate petrofacies need separate curves.'
+- class: g
+  refs: []
+  note: '''Down to'' and ''up to'' reporting is common industry usage; no specific source opened.'
+- class: g
+  refs:
+  - ES2007
+  - IODP180
+  verified: opened
+  note: Vertical resolution figures approximate and tool-dependent.
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - IHRDC-FWL
+  - AAPG-FluidContacts
+  note: IHRDC opened; AAPG snippet.
+- class: a
+  refs:
+  - KGS-PfEFFER7
+  - Dake1978
+  verified: textbook
+  note: 'Hydrostatics: Pc = delta-rho g h; 0.433 psi/ft is the gradient of 1 g/cc fluid.'
+- class: a
+  refs:
+  - AAPG-CapPressure
+  - KGS-PfEFFER7
+  note: 'AAPG (snippet): column height lets hydrocarbon enter smaller throats; small pores give wide transition (patent snippet).'
+- class: a
+  refs:
+  - Dake1978
+  verified: softened
+  note: 0.433 conversion is exact physics; example gradients water 0.45, oil 0.35, gas 0.08 psi/ft recalled from Dake ch.
+    1 example. UNSURE on attribution of the example values.
+- class: a
+  refs:
+  - Buckles1965
+  - KGS-PfEFFER4
+  - Archie1942
+  note: BVW above transition; Rt = Ro below contact.
+- class: a
+  refs:
+  - SLB-Contact
+  - SLB-OWC
+  note: 'SLB opened: horizontal usually assumed, tilted contacts occur; production perturbs contacts.'
+- class: a
+  refs:
+  - SLB-OWC
+  - SLB-MovHC
+  note: 'SLB OWC opened: some oil trapped and unproducible; residual palaeo-column is a general reasoning extension.'
+- class: a
+  refs:
+  - US-Supercharge
+  note: Supercharging reads high near the wellbore (patent snippets). The advice to use stable, repeatable points is a general
+    guideline. Weakest-sourced Know line in this area.
+misread:
+- class: g
+  refs:
+  - Archie1942
+  note: Follows from Ro = a Rw / phi^m and shale conduction.
+- class: a
+  refs:
+  - KGS-PfEFFER4
+  - KGS-PfEFFER7
+  note: Irreducible Sw depends on pore size (petrofacies).
+- class: g
+  refs:
+  - VOCAB
+  note: Seal and tight streaks mimic contacts.
+- class: a
+  refs:
+  - SLB-Annulus
+  - AK2004
+  note: 'SLB opened: annulus makes induction read low.'
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  note: Crossover controls (shale, porosity, invasion).
+- class: g
+  refs: []
+  note: Geometric correction to TVD.
+ceiling:
+- class: g
+  refs:
+  - AAPG-FluidContacts
+  note: FWL needs pressure or capillary data.
+- class: g
+  refs: []
+  note: No contact without water-bearing reservoir.
+- class: g
+  refs:
+  - SLB-Contact
+  note: Lateral behaviour needs more than one well.
+- class: g
+  refs:
+  - AK2004
+  note: Fluid typing needs samples or gradients.

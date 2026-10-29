@@ -1,0 +1,15 @@
+{
+ "condition": "\"SW < 0.5 and PHIE > 0.1\"",
+ "where": "\"NET_PAY\"",
+ "a": "\"PHIE\"",
+ "b": "\"PHIE_CC\"",
+ "curve": "\"SW\"",
+ "y": "\"RHOB\"",
+ "x": "\"NPHI\"",
+ "key": "\"hydrocarbon.petrophysical_hydrocarbon_indicators\"",
+ "name": "\"saturation\"",
+ "relation": "\"decreasing\"",
+ "baseline": "\"zoned\"",
+ "topic": "\"hc_indicators\"",
+ "op": "\">\""
+}

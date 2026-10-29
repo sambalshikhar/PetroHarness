@@ -1,0 +1,6 @@
+{
+ "head": "BOOKKEEPING (lists to act on as you see fit; nothing here holds the answer back):",
+ "named": "- named in your reading, and in no claim or result a claim cites: {items}",
+ "unused": "- opened, cited by no claim (does each bear on what the question asks?): {items}",
+ "hypotheses": "- still graded hypothesis: {items} (support, grade or drop each)"
+}

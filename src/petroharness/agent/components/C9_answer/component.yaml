@@ -1,0 +1,20 @@
+id: C9
+name: answer
+purpose: 'the writer: its prompt, rules, shapes, the zone table and its frame'
+texts:
+  rules: rules.json
+  open_rules: open_rules.json
+  v5_rules: v5_rules.json
+  open_shapes: open_shapes.json
+  exact_rule: exact_rule.md
+  table_rule: table_rule.md
+  limits_rule: limits_rule.md
+  absent_rule: absent_rule.md
+  aspects_rule: aspects_rule.md
+  one_zone_rule: one_zone_rule.md
+  lith_zones: lith_zones.md
+  write: write.md
+frames:
+- agent/writer.py
+- resources/rules/shapes.yaml
+- resources/profiles/*.yaml

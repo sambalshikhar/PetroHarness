@@ -1,0 +1,23 @@
+# Answer shapes. Step 1's intent selects the shape (Registry.shape_for); the writer's own format (writer variant '')
+# reads each shape's instructions.
+default: report
+shapes:
+  direct_value:
+    intents: [value]
+    instructions: |-
+      one paragraph of at most 150 words, no headings: the value with unit, statistic, interval
+        and basis (lithology zones or whole interval; n for a named statistic), then one to three supporting facts
+        or caveats that bear on the value.
+  list:
+    intents: [locate]
+    instructions: |-
+      "## Answer" (judgement and count), "## Intervals" (every qualifying interval with its class or grade, key
+        values and what limits it), "## Data Limitations and Recommendations" (one to three sentences, only what
+        changes this answer), "## Conclusions". 350-650 words.
+  report:
+    intents: [characterize, compare, explain, qc_check]
+    instructions: |-
+      "## Formation Overview" (interval, gross thickness, the zones characterized and how much of the interval
+        they cover, their lithology mix), one or two question-specific "## ..." sections, "## Data Limitations and
+        Recommendations" (one to three sentences, only what changes this answer), "## Conclusions"
+        (the judgement restated with the two or three key zones and values). 600-900 words.

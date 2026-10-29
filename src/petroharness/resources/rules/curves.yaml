@@ -1,0 +1,317 @@
+# Curve registry: what the harness knows about curve mnemonics (data, not code). Used by the formation card,
+# the evidence catalog and the verifier. Another dataset with other mnemonics edits this file, not the code.
+
+# Card inventory, in display order. A curve is listed when it has any finite sample in the interval.
+inventory:
+  raw: [GR, SGR, CGR, THOR, URAN, POTA, SP, CALI, BS, RHOB, DRHO, NPHI, PEF, DTC, DTS, RDEP, RMED, RSHA, RXO]
+  # listed when present, not in the absent list (named_measurements reports their absence once)
+  raw_optional: [SGR, CGR, THOR, URAN, POTA]
+  derived: [VCL, PHIT, PHIE, PHIE_CC, PHID, PHIN, PHIS, PHI_SEC, SW, SXO, BVW, MHI, SWIRR_APP, PERM, PERM_CC, RQI, FZI,
+            RW, RMF, TEMP, INVASION_RATIO, VP_VS_RATIO, VQUAR, VCALC, VDOLO, VANHY, NET_ROCK, NET_RES, NET_PAY,
+            RESFLAG, SEALFLAG, CROSSOVER_FLAG, BAD_HOLE, PRIME_GAS_TARGET, PRIME_OIL_TARGET]
+
+# Measured log families, in display order: family -> mnemonics. The curve token "measured" (zone_stats,
+# interval_stats, ...) stands for every curve listed here that has data, and a family name for its members, so a broad
+# statistics question gets each family (every sonic, every resistivity) whatever the LAS calls them. A LAS curve listed
+# here but not in the inventory is shown on the card as an other LAS curve (uninterpreted) with its family. Bit size
+# (BS) and drilling data (e.g. ROP) are not formation measurements and belong to no family.
+families:
+  gamma ray: [GR, SGR, CGR]
+  spectral gamma ray: [THOR, URAN, POTA]
+  spontaneous potential: [SP]
+  caliper: [CALI, DCAL]
+  density: [RHOB, DRHO]
+  neutron: [NPHI]
+  photoelectric: [PEF]
+  sonic: [DTC, DT, DTC_ALT, DTE, DTS]
+  resistivity: [RDEP, RMED, RSHA, RXO, RMIC]
+
+# Invasion profile: the order of resistivity readings that invasion physics expects (curve_order states it per zone
+# and compares the zone means with it). Applies when every curve an order is tested on belongs to `family`.
+invasion_profile:
+  # The expected profile itself (depth-of-investigation order, mud regime from Rmf/Rw, the expected shallow/deep order
+  # for water- and hydrocarbon-bearing rock and why) is petrophys interpretation.electrical.invasion. Here: which
+  # curves of the workflow of record are Rmf and Rw (their interval medians at formation temperature are compared).
+  rmf_curve: RMF
+  rw_curve: RW
+  # Rw routes of the workflow record that are an assumed value, not derived from the logs: an expected profile from
+  # them is no evidence, so it is not assessed (the card still states the route).
+  rw_assumed_routes: [user_provided_assumed_reference_temperature]
+  # Zones of the policy's non-reservoir lithologies (confidence.non_reservoir_lithologies) are not invaded.
+  not_invaded: not invaded (impermeable; separation there reflects tool and bed effects)
+
+# 0/1 flag curves written by the interpretation (zone mean of a flag = fraction of the zone flagged).
+flags: [NET_ROCK, NET_RES, NET_PAY, RESFLAG, SEALFLAG, CROSSOVER_FLAG, BAD_HOLE, PRIME_GAS_TARGET, PRIME_OIL_TARGET]
+
+core:
+  # core plug curves (point samples), in card order
+  curves: [PHIC, GDEN, KH_CORE, KV_CORE, SWC, SOC]
+  # where a plug curve has no samples and the LAS supplies its core-corrected substitute (core_substitution), core_vs_log
+  # compares these further log curves with it as well, and counts samples beyond the tolerance (3 porosity units; 0
+  # counts none) - general practice for log-core porosity agreement
+  reference_logs: {PHIC: [PHID, PHIN, PHIS]}
+  reference_tolerance: {PHIC: 0.03}
+  # core curve -> log curves compared at core depths (core_vs_log)
+  log_pairs:
+    PHIC: [PHIE, PHIE_CC, PHIT]
+    KH_CORE: [PERM, PERM_CC]
+    SWC: [SW]
+  # Fractions that core analyses report in percent or as a fraction, whatever the unit header says. Curves in one group
+  # come from the same analysis and share a unit: the group is in percent when its unit says % or any of its values
+  # in the well exceeds 1.5 (no fraction can). core_vs_log converts them to the log curve's unit (v/v).
+  fraction_groups: [[SWC, SOC], [PHIC]]
+
+# Sections whose classes rest on one curve that some zones lack. The analyzer computes that curve again from its inputs
+# in a zone where it has no value at all, and in a zone where it has some values a sample without one takes the
+# section's default class. section_evidence states, per section, where the curve has values and what the classes rest
+# on elsewhere: a section's classes can rest mostly on the curve computed again (e.g. movability classes from MHI
+# computed from a quicklook SXO), or on samples with no value at all.
+section_basis:
+  saturation.hydrocarbon_movability_invasion_characteristics:
+    curve: MHI
+    inputs: [SW, SXO]       # what the analyzer computes MHI from where it has none; a zone without them has no class
+    none: the analyzer computed MHI = SW / SXO itself; where SXO is the quicklook transform of SW those classes follow SW and are not invasion evidence
+    missing: MINIMAL_MOVEABLE_HC (no MHI value there, not a measured low movability)
+    derived: MHI is not among the workflow's curves; the analyzer computed MHI = SW / SXO itself in every zone (the MHI curve shown is that computation, added afterwards); where SXO is the quicklook transform of SW those classes follow SW and are not invasion evidence
+    plain:                  # the same facts without interpretation (what SXO is, its meaning says)
+      none: the analyzer computed MHI = SW / SXO there
+      missing: a sample without MHI takes MINIMAL_MOVEABLE_HC
+      derived: the workflow wrote no MHI; the analyzer computed MHI = SW / SXO in every zone
+  hydrocarbon.petrophysical_hydrocarbon_indicators:
+    curve: MHI
+    inputs: []              # this analyzer does not compute MHI: a zone without it is not assessed for movability
+    none: MOVABLE_HC was not assessed there (this analyzer uses MHI only where the workflow wrote it)
+    missing: no MOVABLE_HC (a sample without MHI is not assessed for movability)
+    derived: MHI is not among the workflow's curves, so MOVABLE_HC was not assessed in this section; the MHI curve shown was derived afterwards from SW / SXO by the saturation analyzer
+    plain:
+      none: MOVABLE_HC was not assessed there
+      missing: a sample without MHI is not assessed for MOVABLE_HC
+      derived: the workflow wrote no MHI; MOVABLE_HC was not assessed in this section
+
+# Curves averaged over NET_PAY samples by pay_summary.
+pay_summary_curves: [PHIE, PHIE_CC, SW, VCL, PERM, PERM_CC]
+
+# Measurements a question may name that a LAS may not contain: name (before the parenthesis: how a question names it)
+# -> the mnemonics that count as having it. Vocabulary for what a question names (src/petroharness/agent/vocabulary.py):
+# named, and none of them with data in the interval, the measurement is "named but not in this well's record".
+named_measurements:
+  "spectral gamma ray (THOR/URAN/POTA)": [THOR, URAN, POTA, SGR, CGR]
+  "NMR (T2 porosity, bound fluid)": [TCMR, CMRP, CMFF, BFV, T2LM, NMR]
+  "flushed-zone resistivity (RXO/RSHA)": [RXO, RSHA, MSFL]
+  "shear sonic (DTS)": [DTS]
+
+# The curve catalog: one line per curve the workflow writes into a record (every derived curve of the
+# configured datasets' records; tests/agent/test_curve_catalog.py) and per core-plug curve, in the record's
+# vocabulary: "<what it is>, <unit>; <kind> from <its inputs>". The kind is one of a measurement, a model output, a
+# flag, a class or a parameter (one value for the whole well). The map shows the line wherever the curve is, whatever
+# its source; the step lines show which inputs this well's step used. Drafted from the Petrophys catalog (its labels,
+# the descriptions its analyzers give the curves they derive, the steps that write them and their inputs), reviewed
+# by hand against the Petrophys code. Workflow facts (class b), not readings.
+meanings:
+  # porosity, shale and lithology
+  VCL: shale (clay) volume fraction, v/v; a model output from the shale indicators (GR, and neutron-density or SP where the vclay step uses them)
+  PHIT: total porosity, v/v; a model output from the density and neutron porosity (PHID, PHIN), or one of them where the other is missing
+  PHIE: effective porosity, v/v; a model output from PHIT less VCL times the shale's porosity
+  PHIE_CC: core-calibrated effective porosity, v/v; a model output from log porosity corrected with a fit to core plugs
+  PHID: density porosity, v/v; a model output from RHOB with the porosity step's matrix and fluid densities
+  PHIN: neutron porosity corrected to the matrix, v/v; a model output from NPHI with the porosity step's matrix values
+  PHIS: sonic porosity, v/v; a model output from DTC with the porosity step's matrix and fluid transit times
+  PHI_SEC: secondary-porosity index, v/v; a model output from PHIT and PHIS, PHIT - PHIS where positive, else 0
+  PHI_Z: normalized porosity, phi / (1 - phi); a model output from the porosity the rock-quality step reads
+  PHI_NORM: normalized porosity, phi / (1 - phi); a model output from PHIE_CC where present, otherwise PHIE, otherwise PHIT
+  PHIT_GAS_CORR: gas-corrected total porosity proxy, v/v; a model output from PHID and PHIN, sqrt((PHID^2 + PHIN^2) / 2) between 0 and 0.45
+  ND_SEPARATION: neutron-density separation, v/v; a model output from PHID and PHIN, PHID - PHIN (above 0 where density porosity reads above neutron porosity)
+  DS_SEPARATION: density-sonic separation, v/v; a model output from PHID and PHIS, PHID - PHIS
+  PORO_QUALITY_INDEX: porosity quality index; a model output from PHIT and PERM, sqrt(PHIT x log10 PERM) between 0.001 and 5
+  VQUAR: quartz volume fraction, v/v; a model output of the mineral solver from RHOB, NPHI, PEF, DTC, VCL and porosity
+  VCALC: calcite volume fraction, v/v; a model output of the mineral solver from RHOB, NPHI, PEF, DTC, VCL and porosity
+  VDOLO: dolomite volume fraction, v/v; a model output of the mineral solver from RHOB, NPHI, PEF, DTC, VCL and porosity
+  VANHY: anhydrite volume fraction, v/v; a model output of the mineral solver from RHOB, NPHI, PEF, DTC, VCL and porosity
+  LITHO: lithology class (limestone or dolomite); a class from VCALC and VDOLO, the larger of the two
+  GT_LITHOLOGY_GROUP_CODE: lithology group code; a class from the lithology log, its rock-type group as an integer per sample
+  LIMESTONE_INDICATOR: limestone indicator (0 or 1); a flag from PEF and RHOB, 1 where PEF > 4.5 and RHOB > 2.7 g/cc
+  DOLOMITE_INDICATOR: dolomite indicator (0 or 1); a flag from PEF and RHOB, 1 where PEF is 2.8 to 3.2 and RHOB 2.8 to 2.9 g/cc
+  CARBONATE_INDICATOR: carbonate indicator (0 or 1); a flag from PEF and RHOB, 1 where PEF > 2.8 and RHOB > 2.6 g/cc
+  GR_CLAY_INDICATOR: GR clay indicator (0 or 1); a flag from GR, 1 where GR > 100 API
+  NPHI_CLAY_INDICATOR: NPHI clay indicator (0 or 1); a flag from NPHI, 1 where NPHI > 0.30
+  PEF_CLAY_INDICATOR: PEF clay indicator (0 or 1); a flag from PEF, 1 where PEF < 2.5
+  COMPOSITE_CLAY: composite clay indicator (0, 1/3, 2/3 or 1); a model output from GR_CLAY_INDICATOR, NPHI_CLAY_INDICATOR and PEF_CLAY_INDICATOR, the share of the three set at a sample
+  CONSISTENCY_SCORE: 'lithology consistency score (0-1); a model output from GR, PEF and the lithology log, the share of GR and PEF inside the window of the sample''s label'
+  ELECTROFACIES: electrofacies; a class from RHOB, NPHI, GR and RDEP, up to 5 clusters of samples with similar values
+  # saturation, fluids and movability
+  SW: water saturation in the uninvaded zone, v/v; a model output of the saturation model from RDEP, porosity, VCL and RW, with a, m and n
+  SXO: flushed-zone water saturation, v/v; a model output from a shallow resistivity and RMF, or from SW where there is none (the saturation step's record says which)
+  SO: oil (hydrocarbon) saturation, v/v; a model output from SW, 1 - SW
+  BVW: bulk volume water, v/v; a model output from porosity and SW, porosity x SW
+  MHI: moveable hydrocarbon index; a model output from SW and SXO, SW / SXO (near 1 where invasion moved little hydrocarbon)
+  SWIRR_APP: apparent irreducible water saturation, v/v; a parameter, one value for the whole well (a low percentile of SW in reservoir-flagged, resistive rock) used by the permeability transform
+  RW: formation water resistivity at formation temperature, ohm.m; a model output of the rw step (its route says from what) corrected to TEMP
+  RMF: mud-filtrate resistivity at formation temperature, ohm.m; a model output from the header's mud-filtrate resistivity and TEMP
+  TEMP: formation temperature, degF; a model output of the temperature step (a gradient from surface, or the header's temperatures)
+  INVASION_RATIO: shallow-to-deep resistivity ratio (Rxo/Rt); a model output from a shallow or medium resistivity over RDEP (the invasion step says which)
+  RXO_RDEP_RATIO: flushed-to-deep resistivity ratio; a model output from RXO and RDEP, RXO / RDEP
+  VP_VS_RATIO: compressional to shear velocity ratio; a model output from DTS and DTC, DTS / DTC
+  # flags of the workflow
+  NET_ROCK: flag, 1 where VCL is below the cutoff; a flag from VCL
+  NET_RES: flag, NET_ROCK and effective porosity above the cutoff; a flag from VCL and porosity
+  NET_PAY: flag, NET_RES and SW below the cutoff; a flag from VCL, porosity and SW
+  RESFLAG: flag, reservoir-quality rock (NET_ROCK and porosity above the lithology cutoff); a flag from VCL and porosity
+  SEALFLAG: flag, VCL at or above the seal cutoff; a flag from VCL
+  CROSSOVER_FLAG: flag, neutron-density crossover (PHID - PHIN above the threshold) in clean, porous, good-hole rock; a flag from PHID, PHIN, VCL, porosity and BAD_HOLE
+  BAD_HOLE: flag, washout (CALI - BS above the limit) or |DRHO| above the limit; a flag from CALI, BS and DRHO
+  BADHOLEFLAG: bad-hole flag, set before the workflow; a flag from CALI and BS, 1 where CALI - BS is above the limit
+  PRIME_GAS_TARGET: screening flag, gas indication with good or excellent reservoir quality; a flag from the gas indicators and the reservoir classes
+  PRIME_OIL_TARGET: screening flag, pay flag with excellent reservoir quality; a flag from NET_PAY and the reservoir classes
+  # permeability and rock quality
+  PERM: permeability, mD; a model output of the permeability step's transform (it names it) from porosity, and SWIRR_APP where the transform uses it
+  PERM_CC: core-calibrated permeability, mD; a model output from log porosity through a porosity-permeability fit to core plugs
+  RQI: reservoir quality index, micrometre; a model output from permeability and porosity, 0.0314 x sqrt(k / phi)
+  FZI: flow zone indicator, micrometre; a model output from RQI and PHI_Z, RQI / PHI_Z
+  KH: 'flow capacity, mD x depth unit; a model output from PERM (PERM_CC where the analyzer reads it) times each sample''s depth step'
+  PERM_QUALITY_INDEX: permeability quality index; a model output from PERM, RQI and FZI, their weighted mean (0.5 PERM, 0.3 x 10 RQI, 0.2 x 5 FZI)
+  # numerical analysis: coverage, gradients, consistency, elastic and stress curves
+  DATA_COMPLETENESS: data completeness (0-1); a model output from the logs present, the share of the numerical logs with a value at each sample
+  GR_GRAD: GR gradient; a model output from GR, its change per depth unit
+  RHOB_GRAD: RHOB gradient; a model output from RHOB, its change per depth unit
+  RDEP_GRAD: RDEP gradient; a model output from RDEP, its change per depth unit
+  NPHI_GRAD: NPHI gradient; a model output from NPHI, its change per depth unit
+  DTC_GRAD: DTC gradient; a model output from DTC, its change per depth unit
+  CONSISTENCY_RATIO: log consistency ratio (0-1); a model output from GR, VCL, RHOB, NPHI, porosity, RDEP, SW and PERM, the share of five log pairs on their expected side of the means at a sample
+  ACOUSTIC_IMPEDANCE: acoustic impedance, kg/m2/s; a model output from RHOB and DTC, RHOB x compressional velocity
+  POISSON_RATIO: dynamic Poisson's ratio; a model output from DTC and DTS
+  YOUNG_MOD: dynamic Young's modulus, GPa; a model output from RHOB, DTC and DTS
+  BRITTLENESS_INDEX: brittleness index (0-1); a model output from YOUNG_MOD and POISSON_RATIO, the mean of the two each scaled to 0-1
+  S_V: overburden stress, MPa; a model output from RHOB integrated over depth, an increment from the top of the analysed interval
+  PP_HYDROSTATIC: hydrostatic pore pressure, MPa; a model output from depth (a water gradient)
+  SH_MIN: minimum horizontal stress, MPa; a model output from POISSON_RATIO, S_V and PP_HYDROSTATIC (from the S_V increment, not absolute)
+  # LAS curves the record names without a step
+  DCAL: differential caliper, in; a measurement (caliper minus bit size where the record defines it so)
+  RMIC: micro-resistivity (flushed zone), ohm.m; a measurement
+  # core plugs
+  PHIC: core plug porosity, v/v; a measurement
+  GDEN: core plug grain density, g/cc (not a porosity); a measurement
+  KH_CORE: core plug horizontal permeability, mD; a measurement
+  KV_CORE: core plug vertical permeability, mD; a measurement
+  SWC: core water saturation, v/v; a measurement
+  SOC: core oil saturation, v/v; a measurement
+
+# The catalog's line for the lithology log, whatever the LAS calls it (the curve the view detects as the lithology log,
+# or the one the data config names): its codes are classes.
+lithology_log: lithology code; a class, one integer per rock type (the lithology log's own codes)
+
+# How the workflow of record computed a derived curve from other curves, read from the step record, never assumed (a
+# curve whose record states nothing has no entry here at run time). correlation() uses it to label a pair related by
+# construction: one curve computed from the other, or both from the same curve. Their co-variation is then arithmetic,
+# not independent evidence, and cannot name what controls either curve.
+#   steps: where to look (a step re-run later counts as that step); parameter: dotted path of a step parameter that
+#   holds the equation; decision: the start of the decision clause that holds it (up to `stop`); core_model: a key the
+#   record's core models carry when the transform was fitted (the model's input_curve is the input); parameters: step
+#   parameter -> curves it brings in when set; inputs: the curves the recorded method implies (used only when the
+#   record states the method); constants: equation names the record shows to be one value for the well (name -> the
+#   parameter holding that value); aliases: equation names -> curve mnemonics; clip: parameter holding a recorded clip.
+#   sxo_quicklook: SXO is computed from these curves where the interval's SXO route is the quicklook transform.
+# In an equation, PHIE+PHIT means PHIE (PHIT only where PHIE is missing): the first curve is the input.
+construction:
+  PERM: {steps: [permeability], parameter: empirical_method_metadata.equation, constants: {SWIRR: swirr},
+         aliases: {SWIRR: SWIRR_APP}, clip: perm_max_clip_md}
+  PERM_CC: {steps: [core_correction, permeability], core_model: perm_transform, inputs: [PHIE_CC]}
+  PHIE_CC: {steps: [core_correction, permeability], core_model: porosity_correction}
+  RQI: {steps: [rock_quality], decision: "RQI = "}
+  PHI_Z: {steps: [rock_quality], decision: "PHI_Z = "}
+  FZI: {steps: [rock_quality], decision: "FZI = "}
+  BVW: {steps: [bvw], decision: "BVW = "}
+  MHI: {steps: [mhi], decision: "MHI = ", stop: " for "}
+  PHIE: {steps: [porosity], decision: "PHIE = ", stop: " ("}
+  PHIT: {steps: [porosity], decision: "PHIT = ", stop: " with "}
+  PHID: {steps: [porosity], decision: "PHID = "}
+  PHIN: {steps: [porosity], decision: "PHIN = ", stop: " using "}
+  PHIS: {steps: [porosity], decision: "PHIS from Wyllie", inputs: [DTC]}
+  VCL: {steps: [vclay], parameters: {gr_method: [GR], use_sp: [SP], use_nd: [NPHI, RHOB]}}
+  SXO: {sxo_quicklook: [SW]}
+# The inputs a "what controls it" contrast compares between zones with higher and lower values of a curve
+# (zone_contrast, and correlation for a pair related by construction), besides lithology: shale volume and porosity
+# are what the derived reservoir curves are computed from.
+control_inputs: [VCL, PHIE]
+
+# How the card names the method identifiers of the interpretation's step record. An identifier not listed is shown
+# as recorded. A name here never stands in for a method the record does not state.
+method_names:
+  archie: Archie
+  indonesia: Indonesia
+  simandoux: Simandoux
+  dual_water: Dual Water
+  north_sea: North Sea shaly-sand
+  waxman_smits: Waxman-Smits
+  nigeria_schlumberger: Nigeria (Schlumberger)
+  archie_rxo_rmf: invaded-zone Archie (Rxo, Rmf)
+  fifth_root_quicklook: quicklook SW^(1/5)
+  coates: Coates-Denoo
+  timur: Timur
+  lith_vcl: lithology-VCL transform
+  adaptive_nd: adaptive neutron-density
+  caliper_drho_flags: caliper and DRHO flags
+  same_well_core: this well's core plugs
+  same_well_core_formation: this well's core plugs (per formation)
+  peer_field_formation: core plugs of peer wells in the same field (per formation)
+
+# SXO methods that transform SW itself: their SXO is not independent evidence.
+sxo_quicklook_methods: [fifth_root_quicklook]
+
+# Saturation-model parameters the card quotes from the step record, for each model the well used: key -> label.
+sw_model_parameters:
+  indonesia: {rcl: "RCL {} ohm.m"}
+  simandoux: {rcl: "RCL {} ohm.m"}
+  north_sea: {rtsh: "RTSH {} ohm.m", vsh_exp: "shale exponent {}"}
+
+# Words that name a curve (the vocabulary of what a question names, src/petroharness/agent/vocabulary.py; and check V2).
+# Curves not listed are matched by their mnemonic.
+synonyms:
+  SW: [sw, water saturation]
+  PHIE: [phie, effective porosity]
+  PHIE_CC: [phie_cc, core-calibrated porosity, core-calibrated phie, core-calibrated effective porosity]
+  VCL: [vcl, shale volume, clay volume, vsh]
+  PERM: [perm, permeability]
+  PERM_CC: [perm_cc, core-calibrated permeability]
+  RDEP: [rdep, deep resistivity]
+  RMED: [rmed, medium resistivity]
+  SXO: [sxo, flushed-zone saturation, flushed zone saturation]
+  BVW: [bvw, bulk volume water]
+  FZI: [fzi, flow zone indicator]
+  GR: [gr, gamma ray, gamma-ray]
+  MHI: [mhi, moveable hydrocarbon index, movable hydrocarbon index]
+  SWIRR_APP: [swirr, swirr_app, irreducible water saturation]
+  VP_VS_RATIO: [vp/vs, vp_vs_ratio]
+  DRHO: [drho, density correction]
+  BS: [bs, bit size]
+  INVASION_RATIO: [invasion_ratio, invasion ratio]
+
+# Log names a question may use for measured curves -> curve tokens: "measured" (every measured log, by family), a
+# family name from `families`, or mnemonics. With the mnemonics, the `synonyms` above and `named_measurements`, the
+# vocabulary of what a question names (src/petroharness/agent/vocabulary.py: the first look's named curves and the
+# note of what is named but not in the record). General logging vocabulary, not dataset-specific: another dataset
+# adds its own names here.
+question_terms:
+  primary logs: [measured]
+  raw logs: [measured]
+  basic logs: [measured]
+  measured logs: [measured]
+  conventional logs: [measured]
+  sonic: [DTC, DT]              # compressional; shear only when named
+  acoustic: [DTC, DT]
+  transit time: [DTC, DT]
+  shear: [DTS]
+  spectral gamma: [spectral gamma ray]
+  bulk density: [RHOB]
+  density log: [RHOB]
+  neutron: [NPHI]
+  caliper: [caliper]
+  photoelectric: [PEF]
+  sonic porosity: [PHIS]
+  shallow resistivity: [RSHA, RXO, RESS, RMIC, MSFL]
+
+# Mineral-volume curves: the mineral names they make legitimate in an answer (check V5lith).
+minerals:
+  VQUAR: [quartz]
+  VCALC: [calcite, limestone]
+  VDOLO: [dolomite]
+  VANHY: [anhydrite]

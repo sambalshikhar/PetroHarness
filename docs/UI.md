@@ -1,0 +1,147 @@
+# Web UI
+
+`petroharness ui` serves a page where you ask about a LAS file in the browser: choose the well, the interval and the
+question, follow the investigation as it happens, then read the answer with the claims, the results and the record
+behind it. Every run is saved, so you can come back to it, rate it and replay it. The page asks the same harness as
+the `petroharness` command (`petroharness.ask`), with the same inputs, and changes no prompt.
+
+## Start it
+
+```bash
+export K2H_TOOL_URLS=http://host-a:8100/v1              # the model servers; several: comma-separated
+petroharness ui                                         # http://127.0.0.1:7860
+```
+
+The server needs nothing beyond the package (it uses the Python standard library). It prints where it listens, the
+runs folder and the model endpoints, and runs until you stop it (Ctrl+C).
+
+| option | meaning |
+|---|---|
+| `--host ADDRESS` | where to listen (default `127.0.0.1`, this machine only); `localhost` listens on both `127.0.0.1` and `::1`; `0.0.0.0` on every interface, so anyone who can reach the port can ask questions and read the saved runs |
+| `--port N` | the port (default 7860) |
+| `--runs DIR` | the folder for saved runs and uploads (default `./petroharness-ui-runs`) |
+| `--workers N` | questions answered at once (default 4); more wait in a queue |
+| `--model-url URLS` | the model endpoints, comma-separated (default `K2H_TOOL_URLS`) |
+
+As for the command, a data settings file in `PETROHARNESS_DATA` is the base the settings start from, and
+`PETROHARNESS_SKILLS` chooses the default skill library; unset them to ask about a new well with the defaults.
+
+## Open it from another machine
+
+The server listens on `127.0.0.1` by default. When it runs on a remote machine, forward the port:
+
+- **SSH:** `ssh -L 7860:localhost:7860 HOST`, then open http://localhost:7860 on your own machine.
+- **Your editor's port forwarding:** in VS Code, *Ports* → *Forward a Port* → `7860` (it often offers the port by
+  itself once the server prints its address), then open http://localhost:7860.
+
+## Asking a question
+
+The panel on the left (the menu button shows or hides it):
+
+1. **Well (LAS file).** A path on the server (*Load*), or *Upload a LAS…* from your machine. Once a file is chosen,
+   the page shows its header: the well's name, the depth range and unit, the depth step, the samples and every curve
+   (hover a curve for its unit and description; curves that look like a lithology log are marked).
+2. **Interval.** One of:
+   - **Whole well** (the default): from the log's first sample to its last. Near the top of a log, often behind
+     casing, only some curves may be recorded, and porosity and saturation there are not meaningful: a named
+     interval gets a more focused and more reliable answer.
+   - **Formation (tops):** a tops file (a path, or *Upload a tops file…*), then a formation from the names the tops
+     reader finds in it, each with the interval it would use (its top to its stated base, else to the next deeper
+     top, else to the end of the log). A table with a well column is read for this well only. A name the file lists
+     twice (a repeated section) cannot be chosen: ask about it by its depths. When the file states no depth unit,
+     choose it (default: the LAS file's).
+   - **Depths:** a top and a base (both included), their unit (default: the LAS file's) and an optional name. An
+     empty top starts at the top of the log, an empty base runs to its end.
+3. **Question,** in your own words. *Ask* (or Ctrl+Enter) sends it.
+4. **More options** (all optional): the lithology curve (default: detected; with none, the zones are shale-volume
+   bands), the formation's lithology as you know it (it reaches the model with the question, marked as your
+   statement), a Petrophys context profile (for wells of a known context package), the skill library (the packaged
+   one, none, or a library folder) and the investigation's step cap.
+
+What is wrong in the inputs (a missing file, a formation the tops file lacks, a base above the top) is said at once,
+with what to change, before the question waits for a worker.
+
+## Following a run
+
+The run's header shows the question, its status (queued, running, done, error), the LAS file, the interval, the time
+so far and the model endpoint, with a bar of its phases: queue, interpret, read, investigate, settle, write, check.
+The **Progress** tab follows each model call as it happens, with its timing and token counts:
+
+- **Reading the LAS:** Petrophys interprets the well (the first question about a well; later ones reuse it).
+- **READ:** the topics the model chose for the question and the measurements it names.
+- **Step 1, 2, ...:** what the question asks and the points to settle (step 1), each step's focus, its edits to the
+  claims, the actions it runs and the results they opened (click a result id to read it).
+- **Settle:** the claims made final with every result in view.
+- **Writing the answer:** the writer's draft.
+- **The checker's findings, repair round N:** what the code found in the draft (numbers no result shows, words about
+  the process, statements the data contradicts) and the repaired draft.
+
+While all workers are busy, a new question shows its place in the queue.
+
+## The result
+
+- **Answer:** the answer as written (markdown, with the zone table), the interval used, the topics the model read,
+  the skill library and the status. Below it, rate the answer (good, partly or wrong) with a note.
+- **Claims:** for each point the model set out to settle, its claims, each with its grade, what it means, where it is
+  weak and the results it cites.
+- **Results:** every opened result, as the model read it, computed by Petrophys. Filter them by a curve, a zone or a
+  word.
+- **Details:** the run in numbers (steps, model calls, tokens, time); the interval and its zones; the topics, the
+  named measurements and the skills used; the data settings and the Petrophys version; each model call's usage; the
+  checker's rounds; the inputs.
+
+`answer.md` and `trace.json` (the full record) can be opened from the run's header.
+
+## Saved runs
+
+Each run is a folder in the runs folder:
+
+| file | what it holds |
+|---|---|
+| `<run id>/run.json` | the inputs, every live event, the answer, what the page shows of the trace, the rating |
+| `<run id>/answer.md` | the answer with its header, as the command writes it |
+| `<run id>/trace.json` | the full trace, as the command writes it |
+| `uploads/` | the uploaded LAS and tops files |
+| `.cache/` | the interpreted wells, shared by every run |
+
+The **Runs** tab lists them, newest first, with their status and rating; filter by any word. *Ask again or edit*
+puts a run's inputs back in the form. Runs a stopped server left unfinished are marked interrupted when it starts
+again.
+
+**Replay.** A finished run's *Replay* (or the address `#replay=<run id>&speed=8`) plays the run again from its saved
+events, `speed` times faster: the READ, each step with its actions and results, the settle step, the writer and the
+checker, then the answer. Nothing is recomputed and no model is called, so it works with the model servers down. In
+the browser console, `__replay.open(id, 0)` then `__replay.seek(t)` shows the run as it stood `t` seconds in.
+
+## Model endpoints and the queue
+
+The dots in the top bar are the model endpoints, green when one answers `/v1/models` with the model the harness
+asks for (hover for its address and how many questions it is answering). Each question goes to the least busy
+endpoint that answers; `--workers` questions run at once, and the top bar counts the ones running and waiting.
+
+## The API
+
+The page uses a small JSON API, which also serves scripts:
+
+| request | what it does |
+|---|---|
+| `GET /api/config` | the endpoints and their health, workers, queue, defaults, topic areas, context profiles |
+| `GET /api/las?path=P` | a LAS file's header |
+| `GET /api/tops?path=P&las=L[&unit=m]` | the formations a tops file names, with the interval each would use |
+| `POST /api/upload?kind=las\|tops` | the file's bytes, its name in the `X-Filename` header; returns its path |
+| `POST /api/ask` | the inputs (below); returns the run id |
+| `GET /api/job/ID?since=N` | the status and the events from N on; the answer and the result when done |
+| `GET /api/runs` | the runs, newest first |
+| `GET /api/run/ID` | a run in full; `/api/run/ID/answer.md` and `/api/run/ID/trace.json` its files |
+| `POST /api/rate/ID` | `{"verdict": "good" \| "partly" \| "wrong", "note": "..."}` |
+
+```bash
+curl -s -X POST localhost:7860/api/ask -H 'Content-Type: application/json' -d '{
+  "las": "/data/wells/tuhua-7.las",
+  "question": "What are the porosity and water saturation in this formation?",
+  "interval": {"mode": "tops", "tops": "/data/wells/formations_tuhua-7.csv", "formation": "Mount Messenger"}}'
+```
+
+`interval` is `{"mode": "whole"}` (the default), `{"mode": "tops", "tops": PATH, "formation": NAME[, "unit": "m"]}`
+or `{"mode": "depths", "top": D, "base": D[, "unit": "ft"][, "name": LABEL]}`; the other inputs are
+`lithology_curve`, `formation_lithology`, `profile`, `skills` (`default`, `none` or a folder) and `max_steps`.

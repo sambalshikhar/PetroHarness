@@ -1,0 +1,185 @@
+# Provenance of water_saturation's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - SLB-SatEq
+  - Archie1942
+  - Worthington1985
+  note: 'SLB entry opened: Archie valid for very little clay or very high salinity with regular pore structure.'
+- class: a
+  refs:
+  - SLB-SatEq
+  - Simandoux1963
+  - BardonPied1969
+  - PouponLeveaux1971
+  - WaxmanSmits1968
+  - Clavier1984
+  - Worthington1985
+  note: SLB groups Vsh models (Simandoux, laminated, Indonesian) vs counter-ion models (Waxman-Smits, Dual Water, SGS).
+- class: a
+  refs:
+  - Poupon1954
+  - ThomasStieber1975
+  - Worthington1985
+  note: Laminated vs dispersed shale models; distribution from density-neutron (Thomas-Stieber).
+- class: a
+  refs:
+  - AK2004
+  - SLB-Pickett
+  - SLB-EWR
+  - KGS-PfEFFER3
+  note: 'Rw sources; order of directness is a general judgement (class g element). KGS: check Pickett Rw against measured
+    water resistivities.'
+- class: a
+  refs:
+  - SLB-Archie
+  - Winsauer1952
+  - AK2004
+  - FockeMunn1987
+  - Aguilera1976
+  - SLB-PorExp
+  verified: textbook
+  note: 'Humble a=0.62 m=2.15 (Winsauer et al.); Tixier a=0.81 m=2 (AK2004); vugs raise m (Focke and Munn); fractures lower
+    m (Aguilera). SLB porosity exponent (snippet): different m per pore type.'
+- class: a
+  refs:
+  - SLB-SatExp
+  - Anderson1986
+  verified: opened
+  note: 'SLB entry opened: typical n 2; n increases if any pores are oil-wet; up to 8 reported. Reviewer opened SLB ''saturation
+    exponent'': typical 2; n increases if any pores are oil-wet; up to 8 in very oil-wet rocks.'
+- class: a
+  refs:
+  - Arps1953
+  - AK2004
+  verified: textbook
+  note: Arps formula in F (+6.77) and C (+21.5) forms; BHT under-reading is textbook.
+- class: a
+  refs:
+  - Buckles1965
+  - KGS-PfEFFER4
+  - KGS-PfEFFER7
+  - SLB-IrrWater
+  note: 'KGS opened: BVWi constant for limited pore-size range; capillary-pressure mapping. NMR bound fluid is a general alternative.'
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - Archie1942
+  - SLB-Archie
+  - SLB-SatExp
+  note: Archie relations.
+- class: a
+  refs:
+  - SLB-Archie
+  - SEG-Archie
+  - SLB-SatExp
+  - FockeMunn1987
+  verified: softened
+  note: 'SLB ''Archie equation'' (opened by reviewer): m 1.8-2.0 consolidated sandstones, close to 1.3 loosely consolidated.
+    Carbonate range from Focke and Munn 1987 and SLB porosity exponent (snippet); worded as varying.'
+- class: a
+  refs:
+  - Archie1942
+  verified: textbook
+  note: 'Computed from Archie: 1.2^0.5 = 1.095; (0.11/0.10)^-1 = 0.91. Arithmetic checked by reviewer.'
+- class: a
+  refs:
+  - Archie1942
+  verified: textbook
+  note: 'Computed from Archie: 0.10^-0.1 = 1.26. 0.10^-0.1 = 1.259, checked by reviewer.'
+- class: a
+  refs:
+  - Simandoux1963
+  - PouponLeveaux1971
+  - WaxmanSmits1968
+  - Clavier1984
+  - SLB-DualWater
+  - SLB-SatEq
+  note: Model inputs as in SLB 'saturation equation' and 'dual water' (opened by drafter).
+- class: a
+  refs:
+  - Worthington1985
+  - SLB-SatEq
+  note: Clay effect relative to free-water conductivity.
+- class: a
+  refs:
+  - SLB-Pickett
+  - KGS-PfEFFER3
+  - Pickett1966
+  - Pickett1973
+  verified: textbook
+  note: 'SLB and KGS opened: slope -m, intercept a Rw, parallel constant-Sw lines; KGS: BVW lines straight.'
+- class: a
+  refs:
+  - SLB-EWR
+  - AK2004
+  verified: textbook
+  note: 'SLB opened: Ec = -K log10(Rmfe/Rwe), Rmfe = 0.85 Rmf for fresh filtrate; K = 61 + 0.133 T(F) from AK2004.'
+- class: a
+  refs:
+  - Buckles1965
+  - FertlVercellino1978
+  - AK2004
+  - KGS-PfEFFER4
+  verified: softened
+  note: Ranges from the Fertl and Vercellino table as reproduced in AK2004 (from prior knowledge); KGS cites 0.04 as a carbonate
+    production discriminator. UNSURE on exact table limits.
+- class: a
+  refs:
+  - SLB-IrrWater
+  - KGS-PfEFFER4
+  - KGS-PfEFFER7
+  note: 'SLB opened: Swi depends on drive pressure or centrifuge speed; connate = lowest in situ. KGS: not absolutely irreducible.'
+misread:
+- class: g
+  refs: []
+  note: Input checks before interpreting low SW.
+- class: a
+  refs:
+  - Boyd1995
+  - Worthington1985
+  note: Low-resistivity pay causes.
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  note: Rt must be the uninvaded resistivity.
+- class: a
+  refs:
+  - AK2004
+  - SLB-Rwa
+  note: Rwa minimum method assumes water-bearing rock is present; follows from Archie.
+- class: a
+  refs:
+  - KGS-PfEFFER4
+  - Buckles1965
+  note: 'KGS opened: transition zones displaced to higher BVW and can be mistaken for producible zones if judged on Sw alone.'
+- class: a
+  refs:
+  - SLB-PorExp
+  - SLB-SatExp
+  note: Multiple pore types and wettability change m and n.
+ceiling:
+- class: g
+  refs: []
+  note: Assumed parameters must be named as assumed.
+- class: g
+  refs:
+  - KGS-PfEFFER3
+  note: 'KGS opened: water-free hydrocarbons, water-cut hydrocarbons or water alone are all possible for a point''s location.'
+- class: g
+  refs:
+  - SLB-IrrWater
+  note: Irreducible water is a lab/capillary quantity.
+- class: g
+  refs:
+  - SLB-SatEq
+  note: Many saturation equations; choice is conditional.

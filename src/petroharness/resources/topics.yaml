@@ -1,0 +1,64 @@
+# The topic areas (the harness owns them; a skill library does not). The READ call chooses from them, in this
+# order. Each area has:
+#   when      what it covers (shown to the READ call);
+#   families  the workflow's analyzer families it reads (the workflow's own grouping);
+#   overview  its key curves for the first look (each zone's statistics, opened before step 1), at most 8.
+# A skill library's guides declare the areas they serve (SKILL.md frontmatter `areas`); the DIRECTION index lists each
+# guide under them, the chosen areas first (src/petroharness/resources/skills/README.md).
+areas:
+  data_quality:
+    when: hole condition, tool and environmental effects, spikes, gaps, depth matching, log quality
+    families: [numerical]
+    overview: [CALI, BS, DRHO, BAD_HOLE, GR, RHOB, NPHI, DTC]
+  lithology_mineralogy:
+    when: rock types, mineral content, log responses of rocks, lithology logs
+    families: [lithology]
+    overview: [GR, RHOB, NPHI, PEF, DTC, VCL]
+  shale_clay:
+    when: shale or clay volume, its distribution and its effects on other logs
+    families: [lithology, porosity]
+    overview: [GR, VCL, NPHI, RHOB, PHIT, PHIE]
+  porosity:
+    when: how much pore space, from which tools, total vs effective, secondary porosity
+    families: [porosity]
+    overview: [PHIT, PHIE, PHIE_CC, PHID, PHIN, PHIS, PHI_SEC, VCL]
+  water_saturation:
+    when: water saturation, its model and parameters, irreducible water, bulk volume water
+    families: [saturation]
+    overview: [SW, RDEP, RW, PHIE, VCL, BVW]
+  hydrocarbon_detection:
+    when: whether and where hydrocarbons are indicated, and which kind
+    families: [hydrocarbon, saturation]
+    overview: [SW, RDEP, PHIE, BVW, CROSSOVER_FLAG, NET_PAY]
+  fluid_contacts:
+    when: fluid contacts and transition zones
+    families: [saturation, hydrocarbon]
+    overview: [SW, RDEP, PHIE, VCL, BVW]
+  invasion_movability:
+    when: invasion profiles, flushed zone, whether hydrocarbons moved
+    families: [saturation, permeability, hydrocarbon]
+    overview: [RDEP, RMED, RSHA, RXO, SXO, MHI, SW]
+  permeability_rock_quality:
+    when: permeability, its level and controls, rock quality and flow units
+    families: [permeability]
+    overview: [PERM, PERM_CC, PHIE, FZI, RQI, VCL]
+  net_reservoir_pay:
+    when: net reservoir and pay, cutoffs and thickness
+    families: [hydrocarbon, permeability]
+    overview: [NET_PAY, NET_RES, VCL, PHIE, SW, PERM]
+  log_facies_stratigraphy:
+    when: log facies, vertical sequences, boundaries and trends
+    families: [lithology]
+    overview: [GR, RHOB, NPHI, DTC, VCL]
+  elastic_properties:
+    when: velocities, Vp/Vs, moduli, mechanical properties
+    families: [numerical]
+    overview: [DTC, DTS, RHOB, VP_VS_RATIO]
+  statistics_data_analysis:
+    when: statistics, distributions, correlations, comparisons and trends of curves
+    families: [numerical]
+    overview: []                # the curves the question names
+  core_log_integration:
+    when: comparing logs with core, core-calibrated curves
+    families: [porosity, permeability]
+    overview: [PHIE_CC, PHIT, PHIE, PERM_CC, PERM]

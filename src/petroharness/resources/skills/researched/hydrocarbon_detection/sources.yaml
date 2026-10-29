@@ -1,0 +1,158 @@
+# Provenance of hydrocarbon_detection's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - Archie1942
+  - AK2004
+  - SLB-Archie
+  note: 'Resistivity index I = Rt/Ro from Archie. The closest tool here is named (a guide names only methods the harness
+    can run).'
+- class: a
+  refs:
+  - KGS-PfEFFER3
+  - AK2004
+  note: 'KGS opened: compare zones at similar porosity (pay plots at much higher resistivity than water leg at similar porosity).
+    Zone-matching rule is a general guideline.'
+- class: a
+  refs:
+  - SLB-Rwa
+  - AK2004
+  verified: opened
+  note: 'SLB opened: Rwa = phi^m Rt; Rwa > 3 Rw rule of thumb for producible hydrocarbons. Reviewer re-opened SLB
+    ''Rwa'': ''if Rwa > 3 * Rw, then there are producible hydrocarbons'' (rule of thumb). The guide says ''a
+    service-company glossary'' for SLB (the name stays in refs) and ''values vary''. The closest tool here is named (a
+    guide names only methods the harness can run).'
+- class: a
+  refs:
+  - AAPG-DN
+  - SLB-NeutronPor
+  - GaymardPoupon1968
+  - ES2007
+  note: Crossover as gas indicator (AAPG snippet); controls on its size.
+- class: a
+  refs:
+  - Pickett1963
+  - CREWES-VpVs
+  - ES2007
+  note: Vp/Vs lowered by gas, raised by shale (CREWES and other snippets); gas thresholds in the literature vary (about 1.58-1.8),
+    so a same-zone trend is used instead.
+- class: a
+  refs:
+  - Buckles1965
+  - KGS-PfEFFER4
+  - KGS-PfEFFER7
+  note: 'KGS opened: zones on the BVWi trend expected water-free; higher BVW water-cut; transition displaced to higher BVW.'
+- class: g
+  refs: []
+  note: Independence-weighted evidence and verbal confidence grading are harness reasoning guidelines, not a published standard.
+- class: a
+  refs:
+  - Worthington2010
+  - VOCAB
+  note: Cutoff-based flags; cutoff choice varies (Worthington 2010, not opened; Crain net pay pages login-gated).
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - SLB-ResLog
+  - Archie1942
+  note: 'SLB resistivity log (snippet): hydrocarbons do not conduct, formation waters do.'
+- class: a
+  refs:
+  - SLB-Rwa
+  - Archie1942
+  verified: textbook
+  note: 'Computed: (1/4)^(1/2) = 0.5. Arithmetic checked by reviewer.'
+- class: a
+  refs:
+  - VOCAB
+  - AAPG-DN
+  - SLB-NeutronPor
+  note: Gas effect on density and neutron; record definition of CROSSOVER_FLAG.
+- class: a
+  refs:
+  - ES2007
+  - US-NuclearInv
+  - US-GasLWD
+  - IODP180
+  verified: opened
+  note: Depth of investigation from IODP Leg 180 Table T8 (opened by reviewer). Time-lapse gas effect from patent snippets
+    only, hence 'can'.
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  note: Shale masking of gas effect.
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  - SLB-Contact
+  note: Resistivity measures conductivity of water only; fluid density contrasts via pressure gradients.
+- class: a
+  refs:
+  - Boyd1995
+  - Worthington1985
+  note: Low-resistivity pay causes.
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  - SLB-MovHC
+  note: 'High-resistivity non-pay causes; residual vs moveable hydrocarbon (SLB opened: moved is not moveable).'
+- class: a
+  refs:
+  - GaymardPoupon1968
+  - ES2007
+  note: Hydrocarbon density and hydrogen index effects on density and neutron.
+misread:
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  - SLB-charts
+  note: Crossover mimics and masks.
+- class: g
+  refs:
+  - VOCAB
+  note: 'Record: these quantities are derived from the same Rt, porosity and RW.'
+- class: g
+  refs:
+  - Archie1942
+  note: Follows from Archie; common-mode error.
+- class: g
+  refs: []
+  note: Continuity and sample count as evidence strength.
+- class: a
+  refs:
+  - ES2007
+  - Boyd1995
+  note: Vertical resolution and shoulder effects.
+- class: a
+  refs:
+  - SLB-MovHC
+  note: 'SLB opened: moveable hydrocarbons are not necessarily moved hydrocarbons.'
+ceiling:
+- class: g
+  refs:
+  - SLB-Rwa
+  note: Even the SLB Rwa rule says 'producible' only as a rule of thumb; production needs tests.
+- class: g
+  refs:
+  - AK2004
+  note: Fluid typing needs pressure or samples.
+- class: g
+  refs: []
+  note: Evidence naming guideline.
+- class: g
+  refs:
+  - SLB-MovHC
+  - KGS-PfEFFER9
+  note: Residual vs moveable needs flushed-zone comparison or tests.

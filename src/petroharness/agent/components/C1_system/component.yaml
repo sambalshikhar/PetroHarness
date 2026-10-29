@@ -1,0 +1,8 @@
+id: C1
+name: system
+purpose: the role, the protocol and the reply format every investigation step and the settle step read
+texts:
+  brief: brief.md
+  brief_direction: brief_direction.md     # with a skill library only
+  brief_guide: brief_guide.md             # with a skill library only
+frames: []

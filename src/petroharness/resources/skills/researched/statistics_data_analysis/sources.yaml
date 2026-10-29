@@ -1,0 +1,157 @@
+# Provenance of statistics_data_analysis's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - Jensen2000
+  - Davis2002
+  - Law1944
+  note: Choice of location estimator by distribution shape; geometric mean as the natural centre of log-normal data.
+- class: a
+  refs:
+  - Jensen2000
+  - Davis2002
+  - WikiMAD
+  - SPE_PRMS2018
+  note: Spread measures; percentile conventions differ between statistics and reserves practice (see Easily misread 5).
+- class: a
+  refs:
+  - Davis2002
+  - Jensen2000
+  note: Pearson vs Spearman; rank methods robust to outliers and monotone transforms.
+- class: a
+  refs:
+  - MaleJensen2022
+  - Delfiner2007
+  - Jensen2000
+  note: 'Male and Jensen: rearranging an LSLR model to swap explanatory and response variables biases predictions.
+    Worded ''assess'', not ''judge'' (the G5 word lint bans ''judge'').'
+- class: a
+  refs:
+  - Wilks2011
+  - Jensen2000
+  - ES2007
+  verified: textbook
+  note: 'AR(1) effective sample size n(1-r1)/(1+r1) (Wilks, chapter on time-series dependence); ''thickness over
+    resolution'' is a reasoning approximation. The closest tool here is named (a guide names only methods the harness
+    can run).'
+- class: a
+  refs:
+  - Davis2002
+  note: 'One-way ANOVA, eta-squared and Kruskal-Wallis as standard group-comparison tools; zones as groups. The closest
+    tool here is named (a guide names only methods the harness can run).'
+- class: g
+  refs:
+  - Davis2002
+  note: Regression of a property on depth; step-vs-trend check is a reasoning guideline.
+- class: a
+  refs:
+  - IglewiczHoaglin1993
+  - Tukey1977
+  - Davis2002
+  verified: textbook
+  note: Modified z-score with 3.5 threshold (Iglewicz and Hoaglin); 1.5 and 3 IQR fences (Tukey); 3 SD rule assumes normality.
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - Jensen2000
+  verified: textbook
+  note: AM-GM-HM inequality; log-normal moments.
+- class: a
+  refs:
+  - Law1944
+  - Jensen2000
+  note: Log-normal permeability; mixtures give multimodal distributions.
+- class: a
+  refs:
+  - Jensen2000
+  - AK2004
+  note: Weighted-average formulas used in reservoir averaging and volumetrics.
+- class: a
+  refs:
+  - CorbettJensen1992
+  - Jensen2000
+  verified: softened
+  note: Cv heterogeneity bands as given for permeability; quoted from memory of the paper and Jensen et al., not verified
+    online (see report).
+- class: a
+  refs:
+  - CorbettJensen1992
+  - Jensen2000
+  verified: textbook
+  note: 'N-zero = (10 Cv)^2 for +/-20% at about 95%; general form follows from the standard error of the mean with t about
+    2. Reviewer: follows from the standard error of the mean with t about 2; arithmetic checked.'
+- class: a
+  refs:
+  - Davis2002
+  verified: textbook
+  note: Standard error of the mean.
+- class: a
+  refs:
+  - WikiMAD
+  - IglewiczHoaglin1993
+  - Tukey1977
+  verified: textbook
+  note: 1.4826 = 1/Phi^-1(3/4) (Wikipedia MAD page, opened).
+- class: a
+  refs:
+  - ES2007
+  - IODP180
+  verified: opened
+  note: Standard 0.5 ft sampling; approximate tool vertical resolutions.
+- class: a
+  refs:
+  - MaleJensen2022
+  note: 'Male and Jensen: R2 misleading with a multimodal explanatory variable.'
+- class: a
+  refs:
+  - MaleJensen2022
+  - Delfiner2007
+  verified: textbook
+  note: 'Detransformed log-log LSLR underpredicts the mean; factor exp((ln10)^2 s^2 / 2) = exp(2.65 s^2) for normal residuals.
+    Reviewer: (ln 10)^2 / 2 = 2.651, checked.'
+misread:
+- class: g
+  refs:
+  - Davis2002
+  note: Simpson's paradox / ecological correlation applied to zones.
+- class: g
+  refs: []
+  note: Aggregation arithmetic.
+- class: g
+  refs: []
+  note: Spurious correlation by shared inputs; examples from the record vocabulary (FZI from RQI, BVW from SW).
+- class: a
+  refs:
+  - Wilks2011
+  - CorbettJensen1992
+  note: 'Autocorrelation inflates apparent significance. Worded ''assess'', not ''judge'' (the G5 word lint bans
+    ''judge'').'
+- class: a
+  refs:
+  - SPE_PRMS2018
+  verified: textbook
+  note: 'PRMS: P90 = at least 90% probability that quantities equal or exceed the low estimate.'
+- class: g
+  refs: []
+  verified: textbook
+  note: LAS null value convention -999.25.
+ceiling:
+- class: g
+  refs: []
+  note: Correlation vs causation.
+- class: g
+  refs:
+  - Jensen2000
+  note: Single-well sampling of a 3D reservoir.
+- class: g
+  refs:
+  - Wilks2011
+  note: Effective n is itself estimated.

@@ -1,0 +1,16 @@
+id: C2
+name: guardrails
+purpose: 'what the code checks and says when a check fails: the syntax fix, done issues, the writer checker''s repair requests'
+texts:
+  fix: fix.md
+  skip: skip.md
+  not_done: not_done.md
+  repair_contradictions: repair_contradictions.md
+  repair_numbers: repair_numbers.md
+  repair_words: repair_words.md
+  repair_keep: repair_keep.md
+  flags: flags.json
+  repair_leaks: repair_leaks.md    # working notes left in the answer
+frames:
+- agent/claims.py
+- agent/checks.py

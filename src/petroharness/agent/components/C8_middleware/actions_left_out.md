@@ -1,0 +1,1 @@
+Only the first {cap} actions ran ({dropped} left out): one focus, at most {cap} actions a step.

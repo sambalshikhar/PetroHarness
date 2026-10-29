@@ -1,0 +1,84 @@
+# Interpretation policy: the workflow of record for the single-formation benchmark. The curves come from the engine
+# that generated the benchmark's reference context, run unchanged on the raw LAS, so the policy needs no corrections
+# (GR endpoints, Rw) of its own.
+name: reference_v2
+
+# Pinned interpretation engine (a directory under data.engines_dir): petrophys c41417f with its SWIRR reservoir-flag
+# rule, followed by the exporter's value-range QC. Omit it, or write "installed", to interpret with the installed
+# library and the corrections the policy lists (gr_endpoints, rw).
+engine: petrophys-c41417f-swirr-all-shale-phit
+
+# An engine interprets the whole well once.
+interpretation_scope: full_well
+
+# Value-range QC: the library's physical-plausibility rules per curve family (e.g. PHIE outside [0, 0.45] and PERM
+# outside [1e-4, 2e4] mD become NaN; SW is clipped to [0, 1]); the engine's own exporter applied it before computing
+# the reference statistics. The samples it changes are recorded and the card states how many fall in the interval.
+value_range_qc: true
+
+# Net-pay cutoffs: the engine's own; checked against what it used (src/petroharness/well/prepare.py).
+cutoffs:
+  vcl_max: 0.30
+  phie_min_clastic: 0.08
+  phie_min_carbonate: 0.045
+  sw_max: 0.70
+
+# Depths, thicknesses and zone limits are shown in this unit (metres); LAS depths in feet are converted.
+depth_unit: m
+
+# Report style: the answer format (sections, length, the by-interval zone table, the limitations rule); it never sets a
+# basis or a conclusion.
+reporting:
+  profile: profiles/report_style.yaml
+
+# Lithology code table for the lithology log (library = the library's built-in table, overridden by the lithology
+# nomenclature workbook in the data settings). Which LAS curve is the lithology log is the data's: data.lithology_curve.
+lithology:
+  codes: library
+
+# Class tables of the petrophys analyzers: the set the reference contexts classified with - the eval packages' frozen
+# tables and rule texts; "current" (the library's default) uses its canonical tables. Libraries without the choice
+# ignore it.
+analyzers:
+  class_tables: geolink
+
+zones:
+  min_thickness_m: 2.0
+  # Used only when a LAS has no lithology curve: zones are runs of shale-volume bands.
+  fallback_vcl_bands: [0.3, 0.6]
+
+
+# Confidence grading of screen flags (pay, reservoir, crossover, target flags).
+# Reason: a screen flag in non-reservoir rock, in washed-out hole, or thinner than tool resolution is
+# an anomaly, not a pay call. Lithology comes from the interval's own lithology-log samples; an interval
+# without a label is graded "lithology unknown" with no penalty.
+confidence:
+  applies_to: [NET_PAY, NET_RES, RESFLAG, CROSSOVER_FLAG, PRIME_GAS_TARGET, PRIME_OIL_TARGET]
+  # Rock that cannot hold producible hydrocarbons (shale family, evaporites, coal, igneous). Matched on the label or
+  # its head noun (CALCAREOUS SHALE is a shale; SHALY SANDSTONE is a sandstone), so modifiers need no entries.
+  non_reservoir_lithologies: [SHALE, CLAYSTONE, MUDSTONE, CLAY, MARL, COAL, LIGNITE, ANHYDRITE, HALITE, SALT, GYPSUM,
+                              TUFF, INTRUSIVE, EXTRUSIVE]
+  # Fine-grained rock where log-derived low SW is often a clay effect; treated as low confidence.
+  marginal_lithologies: [SILT, SILTSTONE]
+  max_bad_hole_fraction: 0.5
+  min_thickness_m: 1.0
+  # V3 fires only when less higher-confidence NET_PAY than this exists.
+  min_higher_pay_m: 1.0
+
+
+# Zones with bad hole above the confidence limit are skipped and named.
+# Flow roles (evidence.unit_roles, permeability track): a zone is a possible baffle when shale-dominated (seal flag
+# fraction), poor (permeability at or below poor_perm_md) or this many decades below the strongest zone; a zone that
+# fails the shale cutoff with at least good_perm_md modelled permeability is qualified as shaly (the model likely
+# overstates it), not called a baffle. Library permeability classes: POOR <= 1 mD, GOOD > 10 mD.
+flow_roles:
+  good_perm_md: 10.0
+  poor_perm_md: 1.0
+  baffle_decades_below_strongest: 2.0
+  seal_fraction: 0.5
+
+
+# Default QC thresholds for threshold_exceedance when the question gives none (standard log-QC warning levels).
+qc_thresholds:
+  DRHO: {threshold: 0.05, absolute: true, unit: g/cc}
+  DCAL: {threshold: 1.5, absolute: false, unit: in}          # differential caliper (CALI - bit size)

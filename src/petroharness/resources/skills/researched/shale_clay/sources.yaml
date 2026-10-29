@@ -1,0 +1,152 @@
+# Provenance of shale_clay's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - AK2004 ch. 3 (gamma ray index)
+  - Crain (shale volume chapter)
+  verified: softened
+  note: 'IGR definition from AK2004 ch. 3. Percentile and histogram baseline picks are common practice; the choice of percentiles
+    varies. Reviewer: 5th and 95th percentiles given as an example of practice, not a standard.'
+- class: a
+  refs:
+  - AK2004 ch. 3 (Larionov)
+  - Larionov1969
+  - Stieber1970
+  - Clavier1971
+  - Bassiouni1994 (shaly formations)
+  note: Equations in Know line 1.
+- class: a
+  refs:
+  - BhuyanPassey1994
+  - Bassiouni1994 (shaly formations)
+  - Crain (shale volume chapter)
+  note: Neutron-density shale indicator; gas and matrix caveats follow from neutron and density physics.
+- class: a
+  refs:
+  - 'AK2004 ch. 2 (SP: shale volume from SP)'
+  - Bassiouni1994 (SP chapter)
+  note: PSP = pseudo-static SP; SSP = static SP.
+- class: a
+  refs:
+  - RK2011 (spectral gamma ray chapter)
+  - ES2007 (gamma ray devices)
+  - Serra1984 (natural gamma ray spectrometry)
+  - IODP180 (CGR = total GR minus uranium)
+- class: a
+  refs:
+  - 'Crain (shale volume chapter: minimum of reliable indicators)'
+  - Bassiouni1994
+  - AK2004 ch. 3
+  note: Crain's 'minimum of reliable estimates' practice is cited from the handbook as known; its page needed a login on 2026-10-27
+    and was not re-read.
+- class: a
+  refs:
+  - ThomasStieber1975
+  - Bassiouni1994 (shale distribution models)
+  - SLB-structural-shale
+  - SLB-dispersed-clay
+  note: Formulas in Know line 8.
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - AK2004 ch. 3 (Larionov equations)
+  - Larionov1969
+  - Stieber1970
+  - Clavier1971
+  verified: textbook
+- class: a
+  refs:
+  - SLB-shale
+  - Wentworth1922
+  verified: textbook
+  note: 'Wentworth: clay < 1/256 mm (3.9 um), silt 1/256-1/16 mm (3.9-62.5 um). Clay mineralogists often use < 2 um.'
+- class: a
+  refs:
+  - ES2007 (neutron porosity devices)
+  - AK2004 ch. 4
+  - RK2011 (neutron chapter)
+  verified: softened
+  note: 'UNSURE on range ends: 0.25-0.6 is a broad rule of thumb.'
+- class: a
+  refs:
+  - 'RK2011 (density chapter: shale compaction)'
+  - AK2004 ch. 4
+  verified: softened
+  note: 'UNSURE on range ends: 2.2-2.75 g/cc. Reviewer: the line already says ''about'' and ''ranges widely''; same range
+    as lithology_mineralogy.'
+- class: a
+  refs:
+  - AK2004 ch. 4 (sonic porosity and compaction correction)
+  - RK2011 (sonic chapter)
+- class: a
+  refs:
+  - WaxmanSmits1968
+  - ES2007 (shaly sand interpretation)
+  - Bassiouni1994
+  note: CEC order is approximate; typical ranges overlap for illite and chlorite.
+- class: a
+  refs:
+  - ThomasStieber1975
+  verified: textbook
+  note: Dispersed form assumes dispersed clay has porosity phi_sh and fills pores.
+- class: a
+  refs:
+  - SLB-dispersed-clay
+  - Neasham1977
+- class: a
+  refs:
+  - RK2011 (spectral gamma ray chapter)
+  - ES2007 (gamma ray devices)
+  - Serra1984
+  note: Th/K ranking only; chart boundaries vary and overlap.
+- class: a
+  refs:
+  - ES2007 (thin beds and anisotropy)
+  - IODP180
+  - SLB-laminated-sand
+  verified: opened
+misread:
+- class: a
+  refs:
+  - RK2011 (gamma ray chapter)
+  - ES2007 (gamma ray devices)
+- class: g
+  refs:
+  - RK2011 (gamma ray chapter)
+  note: General caution; low-K clays (kaolinite, some chlorite) give lower GR than illite-rich shale.
+- class: a
+  refs:
+  - AK2004 (crossplot chapter)
+  - Bassiouni1994
+- class: g
+  refs:
+  - Crain (shale volume chapter)
+- class: g
+  refs:
+  - SLB-shale
+- class: a
+  refs:
+  - ThomasStieber1975
+ceiling:
+- class: a
+  refs:
+  - ES2007
+  - RK2011 (spectral gamma ray chapter)
+- class: g
+  refs:
+  - ThomasStieber1975
+- class: g
+  refs:
+  - WaxmanSmits1968
+  note: Qv/CEC is measured on core in Waxman-Smits.
+- class: g
+  refs: []
+  note: Refers to the record's SEALFLAG definition (VCL at or above a seal cutoff).

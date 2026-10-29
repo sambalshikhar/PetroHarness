@@ -1,0 +1,144 @@
+# Provenance of elastic_properties's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - Castagna1985
+  - GreenbergCastagna1992
+  - Mavko2009 (Vp-Vs relations)
+- class: g
+  refs:
+  - Pickett1963
+  - Castagna1985
+  - Mavko2009
+  note: Lithology-first, then fluid reasoning; the evidence combination is a guideline.
+- class: a
+  refs:
+  - Castagna1985
+  - Mavko2009 (Vp-Vs relations)
+  verified: textbook
+  note: 'The closest tool here is named (a guide names only methods the harness can run).'
+- class: a
+  refs:
+  - Mavko2009 (AVO and impedance)
+  - Mavko2009 (reflectivity)
+  verified: textbook
+- class: a
+  refs:
+  - Fjaer2008 (static and dynamic moduli)
+  - Zoback2007 ch. 3 (basic constitutive laws)
+  - EissaKazi1988
+  - Chang2006
+  - Zoback2007 ch. 4 (rock failure; empirical strength relations)
+  note: 'UNSURE: Eissa and Kazi (1988) is cited only as one example of a published transform; its coefficients are not given
+    in the guide.'
+- class: a
+  refs:
+  - Zoback2007 (overburden, pore pressure and horizontal stress estimation)
+  - Eaton1975
+  - Fjaer2008
+  note: 'Uniaxial-strain stress model: Sh = nu/(1-nu)(Sv - alpha Pp) + alpha Pp (+ tectonic term).'
+- class: a
+  refs:
+  - Rickman2008
+  - Jarvie2007
+  note: Elastic (Rickman) and mineralogical (Jarvie) brittleness definitions differ.
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - ES2007 (acoustic logging)
+  - SLB-poisson
+  verified: textbook
+  note: 304,800 = 1e6 us/s x 0.3048 m/ft.
+- class: a
+  refs:
+  - SLB-poisson
+  - Mavko2009 (elastic moduli relations)
+  verified: opened
+  note: SLB glossary gives sigma = 1/2 (Vp^2 - 2Vs^2)/(Vp^2 - Vs^2); the R-form is the same expression. Reviewer opened SLB
+    'Poisson's ratio' formula; worked values re-computed.
+- class: a
+  refs:
+  - Mavko2009 (isotropic elastic moduli)
+  - Fjaer2008
+  verified: textbook
+  note: kg/m3 x (m/s)^2 = Pa; g/cc x (km/s)^2 = GPa.
+- class: a
+  refs:
+  - Pickett1963
+  - SLB-poisson
+  verified: opened
+  note: Poisson's ratio values from SLB glossary (opened by reviewer). Pickett 1963 values seen in several independent secondary
+    sources (CREWES reports, a short-course handout) via search; original paper not opened.
+- class: a
+  refs:
+  - Gardner1974
+  - Mavko2009 (velocity-density relations)
+  verified: textbook
+  note: 'Equivalent: 0.23 Vp^0.25 with Vp in ft/s; 1.741 Vp^0.25 with Vp in km/s.'
+- class: a
+  refs:
+  - Gassmann1951
+  - Mavko2009 (Gassmann fluid substitution)
+  - Domenico1976
+- class: a
+  refs:
+  - Mavko2009 (velocity-porosity relations)
+- class: a
+  refs:
+  - Fjaer2008 (static and dynamic moduli)
+  - Zoback2007 ch. 3
+  note: 'UNSURE: ''more so in weak, porous or microcracked rock'' rests on Fjaer et al. and Zoback as known texts; the review
+    found online lists microcracks and pores as the main cause but was not opened in full.'
+- class: a
+  refs:
+  - 'ES2007 (acoustic logging: dipole tools)'
+  - RK2011 (sonic chapter)
+- class: a
+  refs:
+  - Thomsen1986
+  - Zoback2007
+misread:
+- class: a
+  refs:
+  - Pickett1963
+  - Castagna1985
+- class: a
+  refs:
+  - Domenico1976
+  - Mavko2009
+  note: Patchy against uniform saturation also changes this; the drop at low gas saturation holds for uniform mixing.
+- class: g
+  refs:
+  - Castagna1985
+- class: g
+  refs:
+  - SLB-cycle-skip
+- class: a
+  refs:
+  - Fjaer2008
+  - Zoback2007
+- class: a
+  refs:
+  - Mavko2009 (velocity dispersion)
+ceiling:
+- class: a
+  refs:
+  - Zoback2007
+- class: a
+  refs:
+  - Chang2006
+  - Zoback2007
+- class: g
+  refs:
+  - Domenico1976
+- class: g
+  refs:
+  - Zoback2007

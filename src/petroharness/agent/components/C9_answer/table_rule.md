@@ -1,0 +1,1 @@
+In list and report shapes, put the line {{ZONE_TABLE}} on its own where the zone-by-zone table belongs; the system inserts a table of every zone's values of the curves your claims use, computed from the data. Do not write that table yourself; discuss what it shows. (Code-composed values are exact.)

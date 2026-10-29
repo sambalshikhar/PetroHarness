@@ -1,0 +1,158 @@
+# Provenance of porosity's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - SLB-EffPor
+  - SLB-TotalPor
+  - APIRP40
+  note: 'SLB ''effective porosity'' (opened by reviewer): log effective = total less clay-bound water; dried-core effective
+    is close to log total; humidity-dried cores keep part of the clay-bound water.'
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  - SLB-CrossplotPor
+  note: 'AK2004 porosity-log chapter: density and neutron agree on the right matrix in clean water-filled rock; crossplot
+    porosity is largely lithology-independent (SLB).'
+- class: a
+  refs:
+  - GaymardPoupon1968
+  - AK2004
+  - AAPG-DN
+  - SLB-charts
+  verified: textbook
+  note: RMS form for gas-bearing rock from Gaymard and Poupon, given in AK2004; AAPG wiki DN page (snippet) gives the same
+    formula; charts give crossplot solutions.
+- class: a
+  refs:
+  - Bassiouni1994
+  - ES2007
+  - Crain
+  note: Shale-corrected density/neutron and total-minus-shale-bound-water forms both in use; Crain shale-corrected porosity
+    chapter cited from prior knowledge (site login-gated).
+- class: a
+  refs:
+  - Wyllie1956
+  - Raymer1980
+  - AK2004
+  - Crain-Sonic
+  note: 'Crain sonic page (snippet): 2-4 p.u. errors common, up to 8, with wrong assumptions.'
+- class: a
+  refs:
+  - SLB-SPI
+  - AK2004
+  note: 'SLB secondary porosity index entry opened: sonic little affected by vugs and fractures; difference attributed to
+    secondary porosity.'
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  - SLB-charts
+  - KGS-LA
+  verified: opened
+  note: 'KGS Geological Log Analysis, nuclear porosity page (opened by reviewer): quartz 2.65, calcite 2.71, dolomite 2.87
+    g/cc. Fluid densities 1.0-1.1 are textbook (AK2004).'
+- class: a
+  refs:
+  - AK2004
+  verified: textbook
+  note: 'Computed from the PHID equation: dPHID/drho_ma = (RHOB - rho_f)/(rho_ma - rho_f)^2, about 0.48-0.59 per g/cc for
+    RHOB 2.3-2.6. Derived arithmetic, checked by reviewer.'
+- class: a
+  refs:
+  - ES2007
+  - SLB-LimeScale
+  - SLB-NeutronPor
+  note: Limestone-compatible scale and matrix effects; SLB entries seen as snippets.
+- class: a
+  refs:
+  - SLB-NeutronPor
+  - SLB-excavation-effect
+  - AAPG-DN
+  - GaymardPoupon1968
+  note: Gas effect on density and neutron; excavation effect (SLB snippet); AAPG DN page (snippet) attributes crossover to
+    gas.
+- class: a
+  refs:
+  - AK2004
+  - Wyllie1956
+  verified: textbook
+  note: Matrix and fluid transit times and compaction correction as tabulated in AK2004 (after Schlumberger).
+- class: a
+  refs:
+  - Raymer1980
+  - AK2004
+  verified: softened
+  note: C = 5/8 in AK2004; 0.67-0.70 used in some chartbooks.
+- class: a
+  refs:
+  - Hilchie1978
+  - AK2004
+  verified: textbook
+  note: Hilchie empirical hydrocarbon corrections as quoted in AK2004.
+- class: a
+  refs:
+  - SLB-SPI
+  note: 'SLB entry opened: vugs, fractures, spherical pores affect transit time less.'
+- class: a
+  refs:
+  - ES2007
+  - IODP180
+  verified: opened
+  note: Approximate vertical resolutions; tool-dependent.
+misread:
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  - SLB-charts
+  note: Halite (RHOB about 2.04) and coal (very low RHOB) give PHID above PHIN; sandstone on limestone matrix gives several
+    p.u. apparent crossover.
+- class: a
+  refs:
+  - AK2004
+  - ES2007
+  note: Dolomite and gypsum density-neutron positions on limestone-scaled crossplots.
+- class: a
+  refs:
+  - SLB-SPI
+  - AK2004
+  - Crain-Sonic
+  note: Sources of PHIS error that inflate PHIT - PHIS.
+- class: g
+  refs:
+  - ES2007
+  - AK2004
+  note: Pad-density washout bias is textbook; the averaging advice is a general guideline.
+- class: g
+  refs:
+  - VOCAB
+  note: 'Record vocabulary: GDEN is grain density, not a porosity.'
+- class: g
+  refs:
+  - Crain
+  note: A curve fitted to core cannot validate itself against that core.
+ceiling:
+- class: g
+  refs:
+  - ES2007
+  note: Pore type needs direct observation or imaging.
+- class: g
+  refs: []
+  note: Connectivity and flow need permeability or flow data.
+- class: g
+  refs: []
+  note: State assumptions behind a computed porosity.
+- class: g
+  refs:
+  - APIRP40
+  note: Checks before attributing a core-log gap to the tool.

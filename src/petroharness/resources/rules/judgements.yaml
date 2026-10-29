@@ -1,0 +1,6 @@
+# Core substitution: the core-calibrated curve that stands beside each log curve (the inventory ranks X_CC beside X;
+# the catalog labels a curve as core-calibrated from these pairs).
+expansion:
+  core_substitution:
+    why: Core-calibrated porosity and permeability are preferred where they exist and must be labelled as core-calibrated.
+    pairs: {PHIE: PHIE_CC, PERM: PERM_CC}

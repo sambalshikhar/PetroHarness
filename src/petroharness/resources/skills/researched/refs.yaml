@@ -1,0 +1,540 @@
+# The literature the skills' provenance cites: one entry per key (a sources.yaml row cites the key, optionally followed
+# by the chapter or topic cited: "Mavko2009 (Vp-Vs relations)"). Not model-facing.
+# The area guides' references and the common guides' (answer: gum2008, Jensen2000), in one file.
+# - An entry is the reference, or, where areas cite one work with different entries (the chapters cited, what the
+#   reviewer opened), each citing guide's entry under its name.
+# - One key per work: AsquithKrygowski2004 = AK2004, EllisSinger2007 = ES2007, API_RP40_1998 = APIRP40, SLB-Excavation =
+#   SLB-excavation-effect, SLB-Charts = SLB-charts, SLB1989 = SLB-LIP1989, jensen2000 = Jensen2000.
+# - Access, as the reviewer recorded it: [opened] the page was fetched and read ('[opened by reviewer: ...]' says
+#   what was checked); [snippet] seen only as a search-result summary; [text] a standard text cited by chapter or
+#   topic from prior knowledge.
+AAPG-CapPressure: 'AAPG Wiki, "Capillary pressure", https://wiki.aapg.org/Capillary_pressure (HTTP 522; search summary: greater
+  column height lets hydrocarbon enter smaller pore throats). [snippet]'
+AAPG-DN:
+  porosity: 'AAPG Wiki, "Density-neutron log porosity", https://wiki.aapg.org/Density-neutron_log_porosity (site returned
+    HTTP 522; content seen in search summary: RMS formula, crossover attributed to gas, use chartbook for tool and mud type).
+    [snippet]'
+  hydrocarbon_detection: 'AAPG Wiki, "Density-neutron log porosity", https://wiki.aapg.org/Density-neutron_log_porosity (HTTP
+    522 on fetch; search summary: crossover attributed to gas). [snippet]'
+AAPG-FluidContacts: 'AAPG Wiki, "Fluid contacts", https://wiki.aapg.org/Fluid_contacts (HTTP 522 on fetch; search summary:
+  FWL = highest elevation of equal oil and water pressure, zero capillary pressure; OWC corresponds to displacement pressure;
+  transition zone produces both fluids). [snippet]'
+AAPG_netpay: 'AAPG Wiki, "Net pay" article (revision text citing Poston 1987, Petroleum Engineering Handbook): net pay excludes
+  thickness below an oil-water contact or below porosity/permeability cutoffs; not all net pay is productive at a given well
+  spacing; net pay to net connected pay ratio. https://wiki.aapg.org/Special:MobileDiff/1602 (search excerpt, 2026-10-27;
+  full page returned HTTP 522).'
+Acronyms-FWL: 'petroleumacronyms.com, "FWL", https://www.petroleumacronyms.com/glossary/fwl (search summary: FWL is not the
+  OWC/GWC; derived from intercept of oil and water pressure gradients in formation-tester data). [snippet]'
+Aguilera1976: 'Aguilera, R., 1976, Analysis of naturally fractured reservoirs from conventional well logs: Journal of Petroleum
+  Technology, v. 28, no. 7. [text]'
+AK2004:
+  data_quality: Asquith, G., and Krygowski, D., 2004, Basic Well Log Analysis, 2nd ed. AAPG Methods in Exploration 16, Tulsa.
+    Ch. 1 (basic relationships, borehole environment), ch. 2 (SP), ch. 4 (porosity logs), ch. 5 (resistivity logs).
+  lithology_mineralogy: 'Asquith, G., and Krygowski, D., 2004, Basic Well Log Analysis, 2nd ed. AAPG Methods in Exploration
+    16, Tulsa. Ch. 4 (porosity logs: matrix densities, sonic matrix velocities, secondary porosity index); chapter on lithology
+    and porosity crossplots (neutron-density, M-N, MID).'
+  shale_clay: 'Asquith, G., and Krygowski, D., 2004, Basic Well Log Analysis, 2nd ed. AAPG Methods in Exploration 16, Tulsa.
+    Ch. 2 (SP), ch. 3 (gamma ray: gamma ray index, Larionov), ch. 4 (porosity logs), chapter on lithology and porosity crossplots.'
+  porosity: 'Asquith, G., and Krygowski, D., 2004, Basic Well Log Analysis, 2nd ed.: AAPG Methods in Exploration Series 16,
+    Tulsa. Chapters on porosity logs (density, neutron, sonic, combination). [text]'
+  water_saturation: 'Asquith, G., and Krygowski, D., 2004, Basic Well Log Analysis, 2nd ed.: AAPG Methods in Exploration Series
+    16, Tulsa. Chapters on SP, resistivity, Archie water saturation, Pickett and BVW methods. [text]'
+  hydrocarbon_detection: 'Asquith, G., and Krygowski, D., 2004, Basic Well Log Analysis, 2nd ed.: AAPG Methods in Exploration
+    Series 16, Tulsa. Chapters on resistivity, porosity logs, Archie/Rwa and BVW methods. [text]'
+  fluid_contacts: 'Asquith, G., and Krygowski, D., 2004, Basic Well Log Analysis, 2nd ed.: AAPG Methods in Exploration Series
+    16, Tulsa. Chapters on resistivity profiles, porosity logs and log interpretation. [text]'
+  invasion_movability: 'Asquith, G., and Krygowski, D., 2004, Basic Well Log Analysis, 2nd ed.: AAPG Methods in Exploration
+    Series 16, Tulsa. Chapter 1 (invasion and resistivity profiles) and the Archie/moveable hydrocarbon sections. [text]'
+  permeability_rock_quality: Asquith, G., Krygowski, D. 2004. Basic Well Log Analysis, 2nd ed. AAPG Methods in Exploration
+    16. Chapters on porosity, permeability (Wyllie-Rose family) and invasion indicators.
+  net_reservoir_pay: Asquith, G., Krygowski, D. 2004. Basic Well Log Analysis, 2nd ed. AAPG Methods in Exploration 16. Sections
+    on bulk volume water and moveable hydrocarbon index (Sw/Sxo).
+  log_facies_stratigraphy: Asquith, G., and Krygowski, D., 2004, Basic Well Log Analysis, 2nd ed. AAPG Methods in Exploration
+    16, Tulsa. Fluid effects on resistivity, density and neutron logs.
+  statistics_data_analysis: Asquith, G., Krygowski, D. 2004. Basic Well Log Analysis, 2nd ed. AAPG Methods in Exploration
+    16.
+  core_log_integration: Asquith, G., Krygowski, D. 2004. Basic Well Log Analysis, 2nd ed. AAPG Methods in Exploration 16.
+    Chapter on porosity logs (density-porosity equation, matrix densities).
+Amaefule1993: 'Amaefule, J.O., Altunbay, M., Tiab, D., Kersey, D.G., Keelan, D.K. 1993. Enhanced reservoir description: using
+  core and log data to identify hydraulic (flow) units and predict permeability in uncored intervals/wells. SPE Annual Technical
+  Conference and Exhibition, Houston. SPE-26436-MS. doi:10.2118/26436-MS.'
+Anderson1986: 'Anderson, W.G., 1986, Wettability literature survey, Part 3: the effects of wettability on the electrical properties
+  of porous media: Journal of Petroleum Technology, v. 38, no. 12. [text]'
+APIRP40:
+  porosity: 'American Petroleum Institute, 1998, Recommended Practices for Core Analysis, RP 40, 2nd ed.: API, Washington
+    DC (porosity measurement, sample handling). [text]'
+  core_log_integration: American Petroleum Institute. 1998. Recommended Practices for Core Analysis, API RP 40, 2nd ed. Sections
+    on sample cleaning and drying, porosity (Boyle's law), permeability (Klinkenberg), fluid saturations (Dean-Stark, retort)
+    and core gamma logging.
+Archie1942: 'Archie, G.E., 1942, The electrical resistivity log as an aid in determining some reservoir characteristics: Transactions
+  of the AIME, v. 146, p. 54-62. [text]'
+Arps1953: 'Arps, J.J., 1953, The effect of temperature on the density and electrical resistivity of sodium chloride solutions:
+  Transactions of the AIME, v. 198. [text]'
+AsquithGibson1982: 'Asquith, G.B., and Gibson, C.R., 1982, Basic Well Log Analysis for Geologists: AAPG Methods in Exploration
+  Series 3, Tulsa (moveable hydrocarbon index). [text]'
+BardonPied1969: 'Bardon, C., and Pied, B., 1969, Formation water saturation in shaly sands: SPWLA 10th Annual Logging Symposium.
+  [text]'
+Bassiouni1994:
+  shale_clay: 'Bassiouni, Z., 1994, Theory, Measurement, and Interpretation of Well Logs. SPE Textbook Series vol. 4, Richardson,
+    Texas. Cited chapters: SP; shaly formations (shale indicators, distribution models, saturation models).'
+  porosity: 'Bassiouni, Z., 1994, Theory, Measurement, and Interpretation of Well Logs: SPE Textbook Series vol. 4, Richardson,
+    Texas. Chapters on porosity logs and shaly formations. [text]'
+BeardWeyl1973: 'Beard, D.C., Weyl, P.K. 1973. Influence of texture on porosity and permeability of unconsolidated sand. AAPG
+  Bulletin 57(2): 349-369.'
+BEG_Lucia:
+  permeability_rock_quality: Bureau of Economic Geology, University of Texas at Austin. Lucia, F.J., carbonate reservoir characterization
+    course, "Estimating permeability in carbonates using the rock-fabric method". https://www.beg.utexas.edu/lmod/_IOL-CM07/cm07-step01a.htm
+    and https://www.beg.utexas.edu/lmod/_IOL-CM07/cm07-step04.htm (opened 2026-10-27).
+  net_reservoir_pay: Bureau of Economic Geology, University of Texas at Austin. Lucia, F.J., rock-fabric method pages. https://www.beg.utexas.edu/lmod/_IOL-CM07/cm07-step04.htm
+    (opened 2026-10-27).
+BEG_mod14:
+  permeability_rock_quality: Bureau of Economic Geology, University of Texas at Austin. Reservoir characterization module
+    14 (net pay and permeability exercise pages). https://www.beg.utexas.edu/lmod/mod14/m14-ae09.htm (Coates-Denoo C factor,
+    BVWirr, NMR calibration) (opened 2026-10-27).
+  core_log_integration: Bureau of Economic Geology, University of Texas at Austin. Reservoir characterization module 14. https://www.beg.utexas.edu/lmod/mod14/m14-ae09.htm
+    (NMR permeability requires calibration to real data) (opened 2026-10-27).
+BEG_mod14_kb01: 'Bureau of Economic Geology, University of Texas at Austin. Reservoir characterization module 14, net pay
+  page. https://www.beg.utexas.edu/lmod/mod14/m14-kb01.htm (opened 2026-10-27). [opened by reviewer: critical Sw 50-70% for
+  most light oil and gas, 25-30% heavy oil; cutoff based on effective permeability to reservoir fluids]'
+BhuyanPassey1994: Bhuyan, K., and Passey, Q.R., 1994, Clay estimation from GR and neutron-density porosity logs. SPWLA 35th
+  Annual Logging Symposium.
+Boyd1995: 'Boyd, A., Darling, H., Tabanou, J., and others, 1995, The lowdown on low-resistivity pay: Oilfield Review, v. 7,
+  no. 3 (Schlumberger). [text]'
+Buckles1965:
+  water_saturation: 'Buckles, R.S., 1965, Correlating and averaging connate water saturation data: Journal of Canadian Petroleum
+    Technology, p. 42-52 (as listed in KGS-PfEFFER13). [text]'
+  hydrocarbon_detection: 'Buckles, R.S., 1965, Correlating and averaging connate water saturation data: Journal of Canadian
+    Petroleum Technology, p. 42-52 (as listed in KGS PfEFFER references). [text]'
+  fluid_contacts: 'Buckles, R.S., 1965, Correlating and averaging connate water saturation data: Journal of Canadian Petroleum
+    Technology, p. 42-52 (as listed in KGS PfEFFER references). [text]'
+Cant1992: 'Cant, D.J., 1992, Subsurface facies analysis. In Walker, R.G., and James, N.P. (eds.), Facies Models: Response
+  to Sea Level Change. Geological Association of Canada, St. John''s, 27-45.'
+CardwellParsons1945: 'Cardwell, W.T., Parsons, R.L. 1945. Average permeabilities of heterogeneous oil sands. Transactions
+  AIME 160: 34-42.'
+Castagna1985: Castagna, J.P., Batzle, M.L., and Eastwood, R.L., 1985, Relationships between compressional-wave and shear-wave
+  velocities in clastic silicate rocks. Geophysics 50(4), 571-581.
+Chang2006: Chang, C., Zoback, M.D., and Khaksar, A., 2006, Empirical relations between rock strength and physical properties
+  in sedimentary rocks. Journal of Petroleum Science and Engineering 51(3-4), 223-237.
+ClavelRuelland2013: 'Clavel, J., Ruelland, P. 2013. Thin beds and cutoffs: a probabilistic approach for an improved assessment
+  and modeling of the net porous volume. SPE Reservoir Characterisation and Simulation Conference, Abu Dhabi, SPE-166045-MS.
+  Summary: Carpenter, C., JPT July 2014, https://jpt.spe.org/formation-evaluation-thin-beds-and-cutoffs-improved-assessment-and-modeling-net-porous-volume
+  (opened 2026-10-27).'
+Clavier1971: 'Clavier, C., Hoyle, W., and Meunier, D., 1971, Quantitative interpretation of thermal neutron decay time logs:
+  Part I. Fundamentals and techniques. Journal of Petroleum Technology 23(6), 743-755.'
+Clavier1984: 'Clavier, C., Coates, G., and Dumanoir, J., 1984, Theoretical and experimental bases for the dual-water model
+  for interpretation of shaly sands: SPE Journal, v. 24, no. 2 (first presented 1977 as SPE 6859, as listed in KGS-PfEFFER13).
+  [text]'
+CoatesDenoo1981: 'Coates, G.R., Denoo, S. 1981. The producibility answer product. The Technical Review (Schlumberger) 29(2):
+  55-63.'
+CobbMarek1998: Cobb, W.M., Marek, F.J. 1998. Net pay determination for primary and waterflood depletion mechanisms. SPE Annual
+  Technical Conference and Exhibition, New Orleans, SPE-48952-MS.
+CorbettJensen1992:
+  statistics_data_analysis: 'Corbett, P.W.M., Jensen, J.L. 1992. Estimating the mean permeability: how many measurements do
+    you need? First Break 10(3): 89-94. doi:10.3997/1365-2397.1992006. https://researchportal.hw.ac.uk/en/publications/estimating-the-mean-permeability-how-many-measurements-do-you-nee/
+    (abstract opened 2026-10-27).'
+  core_log_integration: 'Corbett, P.W.M., Jensen, J.L. 1992. Estimating the mean permeability: how many measurements do you
+    need? First Break 10(3): 89-94. doi:10.3997/1365-2397.1992006. https://researchportal.hw.ac.uk/en/publications/estimating-the-mean-permeability-how-many-measurements-do-you-nee/
+    (abstract opened 2026-10-27). [opened by reviewer: abstract: plugs 2.5-3.8 cm at about 0.3 m spacing]'
+CorbettPotter2004: 'Corbett, P.W.M., Potter, D.K. 2004. Petrotyping: a basemap and atlas for navigating through permeability
+  and porosity data for reservoir comparison and permeability prediction. International Symposium of the Society of Core Analysts,
+  Abu Dhabi, paper SCA2004-30.'
+Crain:
+  shale_clay: Crain, E.R., Crain's Petrophysical Handbook, spec2000.net (online). Shale volume and porosity chapters. Technical
+    pages required a login on 2026-10-27 and were not re-read for this guide.
+  porosity: Crain, E.R., Crain's Petrophysical Handbook, https://www.spec2000.net (porosity, shale-corrected porosity and
+    core-calibration chapters). Technical pages are login-gated; not opened. [text]
+Crain-Sonic: 'Crain, E.R., "Porosity from the Sonic Log", https://spec2000.net/12-phidt.htm (login-gated; summary of content
+  seen in search results: errors up to 8 p.u., 2-4 common with wrong assumptions). [snippet]'
+Crain_netpay: Crain, E.R. Crain's Petrophysical Handbook, "Calculating net pay with cutoffs". https://www.spec2000.net/16-netpay.htm
+  (login-gated; typical ranges from search-engine excerpt, 2026-10-27).
+Crain_perm:
+  permeability_rock_quality: Crain, E.R. Crain's Petrophysical Handbook, permeability chapters ("Permeability calculations";
+    "Crain's usage rules for permeability methods"). https://spec2000.net/01-permeability.htm and https://www.spec2000.net/15-permselect.htm.
+    Pages are login-gated; content used from search-engine excerpts (2026-10-27).
+  core_log_integration: Crain, E.R. Crain's Petrophysical Handbook, "Crain's usage rules for permeability methods". https://www.spec2000.net/15-permselect.htm
+    (login-gated; content from search-engine excerpt, 2026-10-27).
+CREWES-VpVs: CREWES Research Report 1989, https://www.crewes.org/Documents/ResearchReports/1989/1989-12.pdf (PDF not readable
+  here; search summary attributes Vp/Vs 1.9 limestone, 1.8 dolomite, 1.6-1.7 sandstone to Pickett 1963, and notes Vp/Vs falls
+  with gas). [snippet]
+CWLS-LAS2: Canadian Well Logging Society, LAS (Log ASCII Standard) Version 2.0 specification.
+Dake1978: 'Dake, L.P., 1978, Fundamentals of Reservoir Engineering: Elsevier, Developments in Petroleum Science 8. Chapter
+  1 (pressure regimes and fluid gradients). Example gradient values recalled from memory; UNSURE. [text]'
+Davis2002: Davis, J.C. 2002. Statistics and Data Analysis in Geology, 3rd ed. Wiley. Chapters on elementary statistics (estimation,
+  tests, analysis of variance), sequences (autocorrelation) and regression/correlation.
+Delfiner2007: 'Delfiner, P. 2007. Three statistical pitfalls of phi-k transforms. SPE Reservoir Evaluation and Engineering
+  10(6): 609-617.'
+Domenico1976: Domenico, S.N., 1976, Effect of brine-gas mixture on velocity in an unconsolidated sand reservoir. Geophysics
+  41(5), 882-894.
+Doveton1994:
+  lithology_mineralogy: Doveton, J.H., 1994, Geologic Log Analysis Using Computer Methods. AAPG Computer Applications in Geology
+    2, Tulsa. Lithology crossplots; compositional analysis as a linear system and its determinacy.
+  log_facies_stratigraphy: Doveton, J.H., 1994, Geologic Log Analysis Using Computer Methods. AAPG Computer Applications in
+    Geology 2, Tulsa. Electrofacies and multivariate classification.
+Eaton1975: Eaton, B.A., 1975, The equation for geopressure prediction from well logs. SPE 5544, SPE Annual Fall Meeting.
+Ebanks1987: 'Ebanks, W.J. Jr. 1987. Flow unit concept: integrated approach to reservoir description for engineering projects
+  (abstract). AAPG Bulletin 71(5): 551-552.'
+EissaKazi1988: Eissa, E.A., and Kazi, A., 1988, Relation between static and dynamic Young's moduli of rocks. International
+  Journal of Rock Mechanics and Mining Sciences and Geomechanics Abstracts 25(6), 479-482.
+EmeryMyers1996: Emery, D., and Myers, K.J. (eds.), 1996, Sequence Stratigraphy. Blackwell Science, Oxford. Well-log chapters.
+ES2007:
+  data_quality: 'Ellis, D.V., and Singer, J.M., 2007, Well Logging for Earth Scientists, 2nd ed. Springer, Dordrecht. Cited
+    chapters: gamma ray devices; density (gamma-ray scattering and absorption) measurement; neutron porosity devices; acoustic
+    logging; resistivity and induction devices; counting statistics.'
+  lithology_mineralogy: 'Ellis, D.V., and Singer, J.M., 2007, Well Logging for Earth Scientists, 2nd ed. Springer, Dordrecht.
+    Cited chapters: gamma ray devices; litho-density (density and photoelectric) measurement and interpretation; neutron porosity
+    devices; mineral property tables.'
+  shale_clay: 'Ellis, D.V., and Singer, J.M., 2007, Well Logging for Earth Scientists, 2nd ed. Springer, Dordrecht. Cited
+    chapters: gamma ray devices (spectral GR); neutron porosity devices; shaly sand interpretation; thin beds and anisotropy.'
+  porosity: 'Ellis, D.V., and Singer, J.M., 2007, Well Logging for Earth Scientists, 2nd ed.: Springer, Dordrecht. Chapters
+    on density, neutron, acoustic logging and porosity/lithology interpretation. [text]'
+  water_saturation: 'Ellis, D.V., and Singer, J.M., 2007, Well Logging for Earth Scientists, 2nd ed.: Springer, Dordrecht.
+    Chapters on resistivity and saturation interpretation. [text]'
+  hydrocarbon_detection: 'Ellis, D.V., and Singer, J.M., 2007, Well Logging for Earth Scientists, 2nd ed.: Springer, Dordrecht.
+    Chapters on density, neutron, acoustic and resistivity interpretation. [text]'
+  fluid_contacts: 'Ellis, D.V., and Singer, J.M., 2007, Well Logging for Earth Scientists, 2nd ed.: Springer, Dordrecht. Chapters
+    on resistivity, nuclear logs and vertical resolution. [text]'
+  invasion_movability: 'Ellis, D.V., and Singer, J.M., 2007, Well Logging for Earth Scientists, 2nd ed.: Springer, Dordrecht.
+    Chapters on invasion, resistivity tools and oil-based mud. [text]'
+  permeability_rock_quality: Ellis, D.V., Singer, J.M. 2007. Well Logging for Earth Scientists, 2nd ed. Springer. Tool chapters
+    (vertical resolution, invasion) and the chapter on permeability estimation.
+  net_reservoir_pay: Ellis, D.V., Singer, J.M. 2007. Well Logging for Earth Scientists, 2nd ed. Springer. Tool chapters (vertical
+    resolution, depth of investigation).
+  elastic_properties: Ellis, D.V., and Singer, J.M., 2007, Well Logging for Earth Scientists, 2nd ed. Springer, Dordrecht.
+    Acoustic logging chapters (slowness, monopole and dipole tools, slow formations).
+  statistics_data_analysis: Ellis, D.V., Singer, J.M. 2007. Well Logging for Earth Scientists, 2nd ed. Springer. Tool chapters
+    (sampling, vertical resolution).
+  core_log_integration: Ellis, D.V., Singer, J.M. 2007. Well Logging for Earth Scientists, 2nd ed. Springer. Tool chapters
+    (density, vertical resolution, invasion) and core-log comparison discussion.
+FertlVercellino1978: 'Fertl, W.H., and Vercellino, W.C., 1978, Predict water cut from well logs: Oil and Gas Journal, Practical
+  Log Analysis series (bulk-volume-water table as reproduced in AK2004). Title and series details from memory; UNSURE. [text]'
+Fjaer2008: Fjaer, E., Holt, R.M., Horsrud, P., Raaen, A.M., and Risnes, R., 2008, Petroleum Related Rock Mechanics, 2nd ed.
+  Elsevier, Amsterdam (Developments in Petroleum Science 53). Elasticity; rock acoustics; static and dynamic moduli; stresses
+  around boreholes.
+FockeMunn1987: 'Focke, J.W., and Munn, D., 1987, Cementation exponents in Middle Eastern carbonate reservoirs: SPE Formation
+  Evaluation, v. 2, no. 2. [text]'
+Gardner1974: 'Gardner, G.H.F., Gardner, L.W., and Gregory, A.R., 1974, Formation velocity and density: the diagnostic basics
+  for stratigraphic traps. Geophysics 39(6), 770-780.'
+Gassmann1951: Gassmann, F., 1951, Uber die Elastizitat poroser Medien. Vierteljahrsschrift der Naturforschenden Gesellschaft
+  in Zurich 96, 1-23.
+GaymardPoupon1968: 'Gaymard, R., and Poupon, A., 1968, Response of neutron and formation density logs in hydrocarbon bearing
+  formations: The Log Analyst, v. 9, no. 5. [text]'
+GreenbergCastagna1992: 'Greenberg, M.L., and Castagna, J.P., 1992, Shear-wave velocity estimation in porous rocks: theoretical
+  formulation, preliminary verification and applications. Geophysical Prospecting 40(2), 195-209.'
+gum2008: JCGM 100:2008, Evaluation of measurement data - Guide to the expression of uncertainty in measurement.
+Hilchie1978: 'Hilchie, D.W., 1978, Applied Openhole Log Interpretation: D.W. Hilchie Inc., Golden, Colorado (empirical hydrocarbon
+  corrections to sonic porosity, as quoted in AK2004). [text]'
+IglewiczHoaglin1993: Iglewicz, B., Hoaglin, D.C. 1993. How to Detect and Handle Outliers. ASQC Basic References in Quality
+  Control, vol. 16. ASQC Quality Press.
+IHRDC-FWL: IHRDC Energy Glossary, "free water level (FWL)", https://ihrdc.com/glossary/term/free%20water%20level%20(FWL) [opened]
+IODP180:
+  data_quality: 'Shipboard Scientific Party, 1999, Ocean Drilling Program Leg 180 Initial Reports, ch. 4 (explanatory notes),
+    Table T8, "Logging acronyms and measurements" (vertical resolution and depth of investigation of each tool). https://www.iodp.tamu.edu/publications/180_IR/chap_04/ch4_t8.htm
+    (opened). [opened by reviewer: density 40/20 cm, neutron 30-60/20-50 cm, GR 45 cm, sonic 61-107 cm, deep induction 200/120-150
+    cm (vertical resolution / depth of investigation)]'
+  shale_clay: Ocean Drilling Program Leg 180 Initial Reports, ch. 4, Table T8 (CGR = total gamma ray minus uranium; tool resolutions).
+    https://www.iodp.tamu.edu/publications/180_IR/chap_04/ch4_t8.htm (opened).
+  porosity: 'Shipboard Scientific Party, 1999, Ocean Drilling Program Leg 180 Initial Reports, ch. 4, Table T8, https://www.iodp.tamu.edu/publications/180_IR/chap_04/ch4_t8.htm
+    [opened by reviewer: density 40 cm, neutron 30-60 cm, GR 45 cm vertical resolution]'
+  hydrocarbon_detection: 'Shipboard Scientific Party, 1999, Ocean Drilling Program Leg 180 Initial Reports, ch. 4, Table T8,
+    https://www.iodp.tamu.edu/publications/180_IR/chap_04/ch4_t8.htm [opened by reviewer: depth of investigation density 20
+    cm, neutron 20-50 cm]'
+  fluid_contacts: 'Shipboard Scientific Party, 1999, Ocean Drilling Program Leg 180 Initial Reports, ch. 4, Table T8, https://www.iodp.tamu.edu/publications/180_IR/chap_04/ch4_t8.htm
+    [opened by reviewer: vertical resolution density 40 cm, neutron 30-60 cm, GR 45 cm, deep induction 200 cm]'
+  invasion_movability: 'Shipboard Scientific Party, 1999, Ocean Drilling Program Leg 180 Initial Reports, ch. 4, Table T8,
+    https://www.iodp.tamu.edu/publications/180_IR/chap_04/ch4_t8.htm [opened by reviewer: depth of investigation button ~5
+    cm, SFL 30-40 cm, medium induction 60-80 cm, deep induction 120-150 cm]'
+  net_reservoir_pay: 'Shipboard Scientific Party, 1999, Ocean Drilling Program Leg 180 Initial Reports, ch. 4, Table T8 (vertical
+    resolution and depth of investigation of each tool). https://www.iodp.tamu.edu/publications/180_IR/chap_04/ch4_t8.htm
+    [opened by reviewer: density 40 cm, neutron 30-60 cm, GR 45 cm, sonic 61-107 cm, deep induction 200 cm]'
+  log_facies_stratigraphy: 'Ocean Drilling Program Leg 180 Initial Reports, ch. 4, Table T8 (vertical resolution of logging
+    tools). https://www.iodp.tamu.edu/publications/180_IR/chap_04/ch4_t8.htm (opened). [opened by reviewer: vertical resolution
+    GR 45 cm, density 40 cm]'
+  statistics_data_analysis: 'Shipboard Scientific Party, 1999, Ocean Drilling Program Leg 180 Initial Reports, ch. 4, Table
+    T8, https://www.iodp.tamu.edu/publications/180_IR/chap_04/ch4_t8.htm [opened by reviewer: vertical resolution GR 45 cm,
+    density 40 cm, neutron 30-60 cm]'
+  core_log_integration: 'Shipboard Scientific Party, 1999, Ocean Drilling Program Leg 180 Initial Reports, ch. 4, Table T8,
+    https://www.iodp.tamu.edu/publications/180_IR/chap_04/ch4_t8.htm [opened by reviewer: density 40 cm, neutron 30-60 cm,
+    GR 45 cm, sonic 61-107 cm vertical resolution]'
+Jarvie2007: 'Jarvie, D.M., Hill, R.J., Ruble, T.E., and Pollastro, R.M., 2007, Unconventional shale-gas systems: the Mississippian
+  Barnett Shale of north-central Texas as one model for thermogenic shale-gas assessment. AAPG Bulletin 91(4), 475-499.'
+Jensen2000:
+  answer: Jensen, J.L., Lake, L.W., Corbett, P.W.M. and Goggin, D.J. (2000) Statistics for Petroleum Engineers and Geoscientists,
+    2nd ed. Elsevier.
+  data_quality: 'Jensen, J.L., Lake, L.W., Corbett, P.W.M., and Goggin, D.J., 2000, Statistics for Petroleum Engineers and
+    Geoscientists, 2nd ed. Elsevier, Amsterdam (Handbook of Petroleum Exploration and Production 2). Cited chapters: univariate
+    distributions and estimators.'
+  permeability_rock_quality: Jensen, J.L., Lake, L.W., Corbett, P.W.M., Goggin, D.J. 2000. Statistics for Petroleum Engineers
+    and Geoscientists, 2nd ed. Elsevier (Developments in Petroleum Science 48). Chapters on distributions, averaging of permeability
+    and heterogeneity measures.
+  log_facies_stratigraphy: Jensen, J.L., Lake, L.W., Corbett, P.W.M., and Goggin, D.J., 2000, Statistics for Petroleum Engineers
+    and Geoscientists, 2nd ed. Elsevier, Amsterdam. Regression and comparing samples.
+  statistics_data_analysis: Jensen, J.L., Lake, L.W., Corbett, P.W.M., Goggin, D.J. 2000. Statistics for Petroleum Engineers
+    and Geoscientists, 2nd ed. Elsevier (Developments in Petroleum Science 48). Chapters on distributions, estimators and
+    sample size, correlation and regression, heterogeneity measures and averaging.
+  core_log_integration: Jensen, J.L., Lake, L.W., Corbett, P.W.M., Goggin, D.J. 2000. Statistics for Petroleum Engineers and
+    Geoscientists, 2nd ed. Elsevier (Developments in Petroleum Science 48). Chapters on correlation and regression, and on
+    sampling and measurement scale.
+JonesOwens1980: 'Jones, F.O., Owens, W.W. 1980. A laboratory study of low-permeability gas sands. Journal of Petroleum Technology
+  32(9): 1631-1640.'
+KGS-LA:
+  lithology_mineralogy: 'Kansas Geological Survey, Geological Log Analysis, "Nuclear porosity logs", https://www.kgs.ku.edu/Publications/Bulletins/LA/04_nuclear.html
+    [opened by reviewer: quartz 2.65/1.81, calcite 2.71/5.08, dolomite 2.87/3.14 (density g/cc / PEF); halite real density
+    2.16, log apparent 2.03 (Z/A 0.4799)]'
+  porosity: 'Kansas Geological Survey, Geological Log Analysis, "Nuclear porosity logs" page, https://www.kgs.ku.edu/Publications/Bulletins/LA/04_nuclear.html
+    [opened by reviewer: quartz 2.65, calcite 2.71, dolomite 2.87 g/cc; PEF quartz 1.81, calcite 5.08, dolomite 3.14; halite
+    real density 2.16, log apparent 2.03]'
+KGS-LA-evap: 'Kansas Geological Survey, Geological Log Analysis, "Evaporites", https://www.kgs.ku.edu/Publications/Bulletins/LA/07_evaporites.html
+  [opened by reviewer: anhydrite 2.98 g/cc, neutron 0, PEF 5.05; gypsum 2.35, neutron over 60 p.u., PEF 4.0; halite log density
+  2.04, neutron -3 p.u., PEF about 4.7; fresh-mud washouts]'
+KGS-PfEFFER3: Kansas Geological Survey, PfEFFER Concepts (Pickett plot), https://www.kgs.ku.edu/software/PfEFFER-java/HELP/PfEFFER/Pfeffer-theory3.html
+  [opened]
+KGS-PfEFFER4: Kansas Geological Survey, PfEFFER Concepts (bulk volume water, Buckles), https://www.kgs.ku.edu/software/PfEFFER-java/HELP/PfEFFER/Pfeffer-theory4.html
+  [opened]
+KGS-PfEFFER7:
+  water_saturation: Kansas Geological Survey, PfEFFER Concepts (capillary pressure, critical BVW), https://www.kgs.ku.edu/software/PfEFFER-java/HELP/PfEFFER/Pfeffer-theory7.html
+    [opened]
+  hydrocarbon_detection: Kansas Geological Survey, PfEFFER Concepts (capillary pressure, critical BVW), https://www.kgs.ku.edu/software/PfEFFER-java/HELP/PfEFFER/Pfeffer-theory7.html
+    [opened]
+  fluid_contacts: Kansas Geological Survey, PfEFFER Concepts (capillary pressure, petrofacies, height conversion), https://www.kgs.ku.edu/software/PfEFFER-java/HELP/PfEFFER/Pfeffer-theory7.html
+    [opened]
+KGS-PfEFFER9: Kansas Geological Survey, PfEFFER Concepts (movable hydrocarbons), https://www.kgs.ku.edu/software/PfEFFER-java/HELP/PfEFFER/Pfeffer-theory9.html
+  [opened]
+KGS_PfEFFER: 'Kansas Geological Survey. PfEFFER help, theory: permeability estimation. https://www.kgs.ku.edu/software/PfEFFER-java/HELP/PfEFFER/Pfeffer-theory6.html
+  (opened 2026-10-27).'
+Klinkenberg1941: 'Klinkenberg, L.J. 1941. The permeability of porous media to liquids and gases. API Drilling and Production
+  Practice: 200-213.'
+Kolodzie1980: Kolodzie, S. Jr. 1980. Analysis of pore throat size and use of the Waxman-Smits equation to determine OOIP in
+  Spindle Field, Colorado. SPE Annual Technical Conference and Exhibition, SPE-9382-MS (publishes the Winland R35 equation).
+KrumbeinMonk1943: 'Krumbein, W.C., Monk, G.D. 1943. Permeability as a function of the size parameters of unconsolidated sand.
+  Transactions AIME 151: 153-163.'
+Larionov1969: Larionov, V.V., 1969, Borehole Radiometry. Nedra, Moscow (in Russian).
+Law1944: 'Law, J. 1944. A statistical approach to the interstitial heterogeneity of sand reservoirs. Transactions AIME 155:
+  202-222.'
+Li2025: 'Li, L., Yu, J., Huang, T., Tang, L., Wei, D., Li, M., Nie, X. 2025. Integrated net pay cut-off evaluation workflow
+  for tight sandstone reservoirs: a case study of the Linxing gas field, Ordos Basin. Frontiers in Earth Science 13. doi:10.3389/feart.2025.1488079.
+  https://www.frontiersin.org/journals/earth-science/articles/10.3389/feart.2025.1488079/full (opened 2026-10-27).'
+Lucia1995: 'Lucia, F.J. 1995. Rock-fabric/petrophysical classification of carbonate pore space for reservoir characterization.
+  AAPG Bulletin 79(9): 1275-1300.'
+Lucia2007:
+  permeability_rock_quality: 'Lucia, F.J. 2007. Carbonate Reservoir Characterization: An Integrated Approach, 2nd ed. Springer.
+    Chapters on rock-fabric/petrophysical classes and the rock-fabric number.'
+  log_facies_stratigraphy: 'Lucia, F.J., 2007, Carbonate Reservoir Characterization: An Integrated Approach, 2nd ed. Springer,
+    Berlin.'
+MaleJensen2022:
+  permeability_rock_quality: 'Male, F., Jensen, J.L. 2022. Three common statistical missteps we make in reservoir characterization.
+    AAPG Bulletin 106(11): 2149-2161. doi:10.1306/07202120076. https://pure.psu.edu/en/publications/three-common-statistical-missteps-we-make-in-reservoir-characteri/
+    (opened).'
+  statistics_data_analysis: 'Male, F., Jensen, J.L. 2022. Three common statistical missteps we make in reservoir characterization.
+    AAPG Bulletin 106(11): 2149-2161. doi:10.1306/07202120076. https://pure.psu.edu/en/publications/three-common-statistical-missteps-we-make-in-reservoir-characteri/
+    (opened).'
+  core_log_integration: 'Male, F., Jensen, J.L. 2022. Three common statistical missteps we make in reservoir characterization.
+    AAPG Bulletin 106(11): 2149-2161. doi:10.1306/07202120076 (abstract page opened).'
+Martin1997: 'Martin, A.J., Solomon, S.T., Hartmann, D.J. 1997. Characterization of petrophysical flow units in carbonate reservoirs.
+  AAPG Bulletin 81(5): 734-759.'
+Mavko2009: 'Mavko, G., Mukerji, T., and Dvorkin, J., 2009, The Rock Physics Handbook, 2nd ed. Cambridge University Press.
+  Cited sections: elastic moduli relations; Vp-Vs relations (Castagna, Greenberg-Castagna); velocity-density relations (Gardner);
+  Gassmann fluid substitution; velocity-porosity relations; velocity dispersion; AVO and reflectivity.'
+MayerSibbit1980: Mayer, C., and Sibbit, A., 1980, GLOBAL, a new approach to computer-processed log interpretation. SPE 9341,
+  SPE Annual Technical Conference and Exhibition.
+MorrisBiggs1967: Morris, R.L., Biggs, W.P. 1967. Using log-derived values of water saturation and porosity. SPWLA 8th Annual
+  Logging Symposium.
+ND-GI48: 'North Dakota Geological Survey, Geologic Investigations No. 48, https://dmr.nd.gov/ndgs/Publication_List/pdf/geoinv/GI_48.pdf
+  (PDF not readable here; search summary: moveable hydrocarbon index Sw/Sxo per Asquith 1982, below 0.7 for sandstone and
+  0.6 for carbonate indicates moveable hydrocarbons). [snippet] [opened by reviewer: PDF text extracted: MHI >= 1 no hydrocarbons
+  moved; < 0.7 sandstone and < 0.6 carbonates moveable hydrocarbons indicated (Asquith 1982)]'
+Neasham1977: Neasham, J.W., 1977, The morphology of dispersed clay in sandstone reservoirs and its effect on sandstone shaliness,
+  pore space and fluid flow properties. SPE 6858, SPE Annual Fall Technical Conference.
+Nelson1994: 'Nelson, P.H. 1994. Permeability-porosity relationships in sedimentary rocks. The Log Analyst 35(3): 38-62.'
+Passey2006: Passey, Q.R., Dahlberg, K.E., Sullivan, K.B., Yin, H., Brackett, R.A., Xiao, Y.H., Guzman-Garcia, A.G. 2006. Petrophysical
+  Evaluation of Hydrocarbon Pore-Thickness in Thinly Bedded Clastic Reservoirs. AAPG Archie Series 1.
+Pickett1963:
+  hydrocarbon_detection: 'Pickett, G.R., 1963, Acoustic character logs and their applications in formation evaluation: Journal
+    of Petroleum Technology, v. 15, no. 6 (values seen via CREWES-VpVs snippet). [text]'
+  elastic_properties: Pickett, G.R., 1963, Acoustic character logs and their applications in formation evaluation. Journal
+    of Petroleum Technology 15(6), 659-667. (Values 1.9 limestone, 1.8 dolomite, 1.6-1.7 sandstone also seen quoted in CREWES
+    research reports found by search on 2026-10-27.)
+Pickett1966: 'Pickett, G.R., 1966, A review of current techniques for determination of water saturation from logs: Journal
+  of Petroleum Technology (KGS-PfEFFER13 lists this title as 1968, JPT p. 1425-1433). [text]'
+Pickett1973: 'Pickett, G.R., 1973, Pattern recognition as a means of formation evaluation: The Log Analyst, v. 14, no. 4,
+  p. 3-11 (as listed in KGS-PfEFFER13). [text]'
+Pittman1992: 'Pittman, E.D. 1992. Relationship of porosity and permeability to various parameters derived from mercury injection-capillary
+  pressure curves for sandstone. AAPG Bulletin 76(2): 191-198.'
+Poupon1954: 'Poupon, A., Loy, M.E., and Tixier, M.P., 1954, A contribution to electrical log interpretation in shaly sands:
+  Transactions of the AIME, v. 201 (laminated shale model). [text]'
+PouponLeveaux1971: 'Poupon, A., and Leveaux, J., 1971, Evaluation of water saturation in shaly formations: SPWLA 12th Annual
+  Logging Symposium (the "Indonesia" equation). [text]'
+Raymer1980: 'Raymer, L.L., Hunt, E.R., and Gardner, J.S., 1980, An improved sonic transit time-to-porosity transform: SPWLA
+  21st Annual Logging Symposium. [text]'
+Rickman2008: 'Rickman, R., Mullen, M., Petre, E., Grieser, B., and Kundert, D., 2008, A practical use of shale petrophysics
+  for stimulation design optimization: all shale plays are not clones of the Barnett Shale. SPE 115258, SPE Annual Technical
+  Conference and Exhibition.'
+RK2011:
+  data_quality: 'Rider, M., and Kennedy, M., 2011, The Geological Interpretation of Well Logs, 3rd ed. Rider-French Consulting,
+    Glasgow. Cited chapters: log data and depth; caliper; gamma ray; sonic; lithology responses.'
+  lithology_mineralogy: 'Rider, M., and Kennedy, M., 2011, The Geological Interpretation of Well Logs, 3rd ed. Rider-French
+    Consulting, Glasgow. Cited chapters: gamma ray; density and PEF; neutron; sonic; lithology identification (evaporites,
+    coal, heavy minerals); cuttings and logs.'
+  shale_clay: 'Rider, M., and Kennedy, M., 2011, The Geological Interpretation of Well Logs, 3rd ed. Rider-French Consulting,
+    Glasgow. Cited chapters: gamma ray; spectral gamma ray; density; neutron; sonic.'
+  log_facies_stratigraphy: 'Rider, M., and Kennedy, M., 2011, The Geological Interpretation of Well Logs, 3rd ed. Rider-French
+    Consulting, Glasgow. Cited chapters: gamma ray; facies, sequences and depositional environments from logs; sequence stratigraphy
+    and correlation; bed boundaries and resolution.'
+  elastic_properties: Rider, M., and Kennedy, M., 2011, The Geological Interpretation of Well Logs, 3rd ed. Rider-French Consulting,
+    Glasgow. Sonic chapter.
+SEG-Archie: 'SEG Wiki, "Dictionary: Archie''s formulas", https://wiki.seg.org/wiki/Dictionary:Archie%E2%80%99s_formulas (HTTP
+  403 on fetch; values from search summary: a 0.6-1.5, m 1.3-3, n often 2). [snippet]'
+Selley1985: Selley, R.C., 1985, Ancient Sedimentary Environments, 3rd ed. Chapman and Hall, London. Chapter on subsurface
+  diagnosis from log shapes.
+SEPM-log-response: SEPM Strata, "Character of Log Response". https://sepmstrata.org/page.aspx?pageid=168 (opened). Cleaning-up,
+  dirtying-up, boxcar, bow, irregular and serrated trends; sharp and gradual contacts; use of core.
+Serra1984: 'Serra, O., 1984, Fundamentals of Well-Log Interpretation, vol. 1: The Acquisition of Logging Data. Elsevier, Amsterdam.
+  Natural gamma ray spectrometry.'
+Serra1985: Serra, O., 1985, Sedimentary Environments from Wireline Logs. Schlumberger, Houston.
+SerraAbbott1982: Serra, O., and Abbott, H.T., 1982, The contribution of logging data to sedimentology and stratigraphy. SPE
+  Journal 22(1), 117-131 (first presented as SPE 9270, 1980).
+Simandoux1963: 'Simandoux, P., 1963, Dielectric measurements of porous media: application to measurement of water saturations,
+  study of the behavior of argillaceous formations: Revue de l''Institut Français du Pétrole, Supplementary Issue (citation
+  as listed in KGS-PfEFFER13). [text]'
+SLB-Annulus: SLB Energy Glossary, "annulus", https://glossary.slb.com/terms/a/annulus [opened]
+SLB-Archie:
+  water_saturation: 'SLB Energy Glossary, "Archie equation", https://glossary.slb.com/terms/a/archie_equation [opened] [opened
+    by reviewer: m 1.8-2.0 consolidated sandstones; close to 1.3 loosely consolidated]'
+  hydrocarbon_detection: SLB Energy Glossary, "Archie equation", https://glossary.slb.com/terms/a/archie_equation [opened]
+SLB-charts:
+  data_quality: Schlumberger, Log Interpretation Charts (chartbook; editions 2005 and 2009). Mineral property table; borehole
+    and environmental correction charts.
+  lithology_mineralogy: Schlumberger, Log Interpretation Charts (chartbook; editions 2005 and 2009). Mineral property table
+    (density, PEF, U, neutron, sonic); density-neutron, M-N and MID crossplots.
+  porosity: 'Schlumberger, Log Interpretation Charts (various editions): porosity and crossplot (Por-, CP-) chart sections.
+    [text]'
+  hydrocarbon_detection: 'Schlumberger, Log Interpretation Charts (various editions): density-neutron crossplot charts. [text]'
+SLB-Contact: SLB Energy Glossary, "contact", https://glossary.slb.com/en/terms/c/contact [opened]
+SLB-CrossplotPor: SLB Energy Glossary, "crossplot porosity", https://glossary.slb.com/en/terms/c/crossplot_porosity [opened]
+SLB-cycle-skip: SLB Energy Glossary, "cycle skip". https://glossary.slb.com/en/terms/c/cycle_skip (opened).
+SLB-delta-rho: 'SLB Energy Glossary, "delta rho". https://glossary.slb.com/terms/d/delta_rho (opened). [opened by reviewer:
+  typical threshold about +/-0.15 g/cm3; above it the correction may not be accurate]'
+SLB-dispersed-clay: SLB Energy Glossary, "dispersed clay" (pore lining, pore filling, pore bridging). https://glossary.slb.com/en/Terms/d/dispersed_clay.aspx
+  (opened).
+SLB-DualWater: SLB Energy Glossary, "dual water", https://glossary.slb.com/en/terms/d/dual_water [opened]
+SLB-EffPor:
+  porosity: 'SLB Energy Glossary, "effective porosity", https://glossary.slb.com/terms/e/effective_porosity [opened] [opened
+    by reviewer: log vs core effective porosity, humidity drying]'
+  core_log_integration: 'SLB Energy Glossary, "effective porosity", https://glossary.slb.com/terms/e/effective_porosity [opened
+    by reviewer: dried-core porosity close to log total porosity; humidity-dried cores keep part of the clay-bound water]'
+SLB-EWR: SLB Energy Glossary, "equivalent water resistivity", https://glossary.slb.com/terms/e/equivalent_water_resistivity
+  [opened]
+SLB-excavation-effect:
+  data_quality: SLB Energy Glossary, "excavation effect". https://glossary.slb.com/en/terms/e/excavation_effect (opened).
+  lithology_mineralogy: SLB Energy Glossary, "excavation effect" (gas effect on neutron beyond hydrogen index). https://glossary.slb.com/en/terms/e/excavation_effect
+    (opened).
+  porosity: SLB Energy Glossary, "excavation effect", https://glossary.slb.com/en/Terms/e/excavation_effect.aspx [snippet]
+SLB-FlushedZone: SLB Energy Glossary, "flushed zone", https://glossary.slb.com/en/Terms/f/flushed_zone.aspx [snippet]
+SLB-Invasion: SLB Energy Glossary, "invasion", https://glossary.slb.com/en/terms/i/invasion [opened]
+SLB-IrrWater: SLB Energy Glossary, "irreducible water", https://glossary.slb.com/terms/i/irreducible_water [opened]
+SLB-laminated-sand: SLB Energy Glossary, "laminated sand" (parallel sand and shale conduction model). https://glossary.slb.com/en/terms/l/laminated_sand
+  (opened).
+SLB-LimeScale: SLB Energy Glossary, "limestone-compatible scale", https://glossary.slb.com/en/Terms/l/limestone-compatible_scale.aspx
+  [snippet]
+SLB-LIP1989:
+  lithology_mineralogy: Schlumberger, 1989, Log Interpretation Principles/Applications. Schlumberger Educational Services,
+    Houston. Lithology and porosity determination.
+  invasion_movability: 'Schlumberger, 1989, Log Interpretation Principles/Applications: Schlumberger Educational Services,
+    Houston (resistivity interpretation, Rxo/Rt and ratio method). [text]'
+SLB-MovHC: SLB Energy Glossary, "moveable hydrocarbons", https://glossary.slb.com/Terms/m/moveable_hydrocarbons.aspx [opened]
+SLB-NeutronPor: SLB Energy Glossary, "neutron porosity", https://glossary.slb.com/en/terms/n/neutron_porosity [snippet]
+SLB-OWC: SLB Energy Glossary, "oil-water contact", https://glossary.slb.com/en/terms/o/oil-water_contact.aspx [opened]
+SLB-photoelectric: SLB Energy Glossary, "photoelectric effect" (the principle behind the PEF log, which identifies lithology).
+  https://glossary.slb.com/en/terms/p/photoelectric_effect (opened).
+SLB-Pickett: SLB Energy Glossary, "Pickett plot", https://glossary.slb.com/terms/p/pickett_plot [opened]
+SLB-poisson: 'SLB Energy Glossary, "Poisson''s ratio" (formula from Vp and Vs; typical values: carbonates about 0.3, sandstones
+  about 0.2, shale above 0.3, coal about 0.4). https://glossary.slb.com/terms/p/poissons_ratio (opened). [opened by reviewer:
+  formula sigma = 1/2 (Vp^2 - 2Vs^2)/(Vp^2 - Vs^2); carbonates about 0.3, sandstones about 0.2, shale above 0.3, coal about
+  0.4]'
+SLB-PorExp: SLB Energy Glossary, "porosity exponent", https://glossary.slb.com/Terms/p/porosity_exponent.aspx [snippet]
+SLB-ResLog: SLB Energy Glossary, "resistivity log", https://glossary.slb.com/en/terms/r/resistivity_log [snippet]
+SLB-Rwa:
+  water_saturation: SLB Energy Glossary, "Rwa", https://glossary.slb.com/en/terms/r/rwa [opened]
+  hydrocarbon_detection: 'SLB Energy Glossary, "Rwa", https://glossary.slb.com/en/terms/r/rwa [opened] [opened by reviewer:
+    Rwa = phi^m Rt; rule of thumb Rwa > 3 Rw suggests producible hydrocarbons]'
+SLB-SatEq: SLB Energy Glossary, "saturation equation", https://glossary.slb.com/terms/s/saturation_equation [opened]
+SLB-SatExp: 'SLB Energy Glossary, "saturation exponent", https://glossary.slb.com/en/terms/s/saturation_exponent [opened]
+  [opened by reviewer: typical n = 2; up to 8 in very oil-wet rocks]'
+SLB-shale: SLB Energy Glossary, "shale" (fine-grained, fissile, detrital rock of clay- and silt-size particles). https://glossary.slb.com/en/terms/s/shale
+  (opened).
+SLB-SPI: SLB Energy Glossary, "secondary porosity index", https://glossary.slb.com/terms/s/secondary_porosity_index [opened]
+SLB-standoff: SLB Energy Glossary, "standoff". https://glossary.slb.com/en/terms/s/standoff (opened).
+SLB-structural-shale: SLB Energy Glossary, "structural shale". https://glossary.slb.com/en/terms/s/structural_shale (opened).
+SLB-TotalPor: SLB Energy Glossary, "total porosity", https://glossary.slb.com/en/terms/t/total_porosity [snippet]
+SLB-TransZone: SLB Energy Glossary, "transition zone", https://glossary.slb.com/Terms/t/transition_zone.aspx [opened]
+SPE_PRMS2018: Society of Petroleum Engineers, World Petroleum Council, AAPG, SPEE, SEG, SPWLA, EAGE. 2018. Petroleum Resources
+  Management System (PRMS), revised June 2018. Section on deterministic and probabilistic methods (P90/P50/P10 definitions).
+Stieber1970: Stieber, S.J., 1970, Pulsed neutron capture log evaluation in the Louisiana Gulf Coast. SPE 2961, SPE Annual
+  Fall Meeting.
+Theys1999: Theys, P., 1999, Log Data Acquisition and Quality Control, 2nd ed. Editions Technip, Paris.
+ThomasStieber1975:
+  shale_clay: Thomas, E.C., and Stieber, S.J., 1975, The distribution of shale in sandstones and its effect upon porosity.
+    SPWLA 16th Annual Logging Symposium.
+  water_saturation: 'Thomas, E.C., and Stieber, S.J., 1975, The distribution of shale in sandstones and its effect upon porosity:
+    SPWLA 16th Annual Logging Symposium. [text]'
+  net_reservoir_pay: Thomas, E.C., Stieber, S.J. 1975. The distribution of shale in sandstones and its effect upon porosity.
+    SPWLA 16th Annual Logging Symposium.
+Thomsen1986: Thomsen, L., 1986, Weak elastic anisotropy. Geophysics 51(10), 1954-1966.
+Timur1968: 'Timur, A. 1968. An investigation of permeability, porosity, and residual water saturation relationships for sandstone
+  reservoirs. The Log Analyst 9(4): 8-17.'
+Tukey1977: Tukey, J.W. 1977. Exploratory Data Analysis. Addison-Wesley. Chapter on box plots and fences.
+US-GasLWD: 'US patent 9103926, "Corrected porosity measurements of underground formations", https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/9103926
+  (search summary: in gas zones density porosity reads high and neutron low; separation larger on LWD than on later wireline).
+  [snippet]'
+US-GradContact: 'US patent 7444242, "Method and system for statistical pressure gradient and fluid contact analysis", https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/7444242
+  (search summary: contact indicated by intersection of gradients of two adjacent zones). [snippet]'
+US-NuclearInv: 'US patent 8558165, "Nuclear tool", https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/8558165
+  (search summary: nuclear depth of investigation typically under 30 cm, sensitive to invasion of gas zones). [snippet]'
+US-Supercharge: 'US patents 8132453 and 5602334 on formation-tester supercharging, https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/8132453
+  and https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/5602334 (search summary: near-wellbore pressure above
+  formation pressure; tester reads high). [snippet]'
+VanWagoner1990: Van Wagoner, J.C., Mitchum, R.M., Campion, K.M., and Rahmanian, V.D., 1990, Siliciclastic Sequence Stratigraphy
+  in Well Logs, Cores, and Outcrops. AAPG Methods in Exploration 7, Tulsa.
+VOCAB:
+  porosity: the harness's record vocabulary (its curve registry, resources/rules/curves.yaml), curve meanings only.
+  hydrocarbon_detection: the harness's record vocabulary (its curve registry, resources/rules/curves.yaml), curve and
+    flag meanings only.
+  fluid_contacts: the harness's record vocabulary (its curve registry, resources/rules/curves.yaml), curve and flag
+    meanings only.
+  invasion_movability: the harness's record vocabulary (its curve registry, resources/rules/curves.yaml), curve meanings
+    only, including MHI = SW/SXO.
+WarrenPrice1961: 'Warren, J.E., Price, H.S. 1961. Flow in heterogeneous porous media. SPE Journal 1(3): 153-169.'
+WaxmanSmits1968:
+  shale_clay: Waxman, M.H., and Smits, L.J.M., 1968, Electrical conductivities in oil-bearing shaly sands. SPE Journal 8(2),
+    107-122.
+  water_saturation: 'Waxman, M.H., and Smits, L.J.M., 1968, Electrical conductivities in oil-bearing shaly sands: SPE Journal,
+    v. 8, no. 2. [text]'
+Wentworth1922: Wentworth, C.K., 1922, A scale of grade and class terms for clastic sediments. Journal of Geology 30(5), 377-392.
+WikiMAD: Wikipedia, "Median absolute deviation". https://en.wikipedia.org/wiki/Median_absolute_deviation (opened 2026-10-27).
+Wilks2011: Wilks, D.S. 2011. Statistical Methods in the Atmospheric Sciences, 3rd ed. Academic Press. Section on serial dependence
+  and the variance inflation of the sample mean (effective sample size).
+Winsauer1952: 'Winsauer, W.O., Shearin, H.M., Masson, P.H., and Williams, M., 1952, Resistivity of brine-saturated sands in
+  relation to pore geometry: AAPG Bulletin, v. 36, no. 2 (the "Humble" formula). [text]'
+WorldOil2011: Worthington, P.F. 2011. A data-driven approach to identify net-pay cutoffs. World Oil, September 2011. https://www.worldoil.com/magazine/2011/september-2011/special-focus/a-data-driven-approach-to-identify-net-pay-cutoffs
+  (preview only).
+Worthington1985:
+  water_saturation: 'Worthington, P.F., 1985, The evolution of shaly-sand concepts in reservoir evaluation: The Log Analyst,
+    v. 26, no. 1, p. 23-40 (as listed in KGS-PfEFFER13). [text]'
+  hydrocarbon_detection: 'Worthington, P.F., 1985, The evolution of shaly-sand concepts in reservoir evaluation: The Log Analyst,
+    v. 26, no. 1, p. 23-40 (as listed in KGS PfEFFER references). [text]'
+Worthington2010:
+  hydrocarbon_detection: 'Worthington, P.F., 2010, Net pay: what is it? What does it do? How do we quantify it? How do we
+    use it?: SPE Reservoir Evaluation and Engineering, v. 13, no. 5. Not opened. [text]'
+  net_reservoir_pay: 'Worthington, P.F. 2010. Net pay: what is it? what does it do? how do we quantify it? how do we use it?
+    SPE Reservoir Evaluation and Engineering 13(5): 812-822.'
+WorthingtonCosentino2005: 'Worthington, P.F., Cosentino, L. 2005. The role of cut-offs in integrated reservoir studies. SPE
+  Reservoir Evaluation and Engineering 8(4): 276-290. SPE-84387-PA (first presented 2003 as SPE 84387, per Li et al. 2025).'
+Wyllie1956: 'Wyllie, M.R.J., Gregory, A.R., and Gardner, L.W., 1956, Elastic wave velocities in heterogeneous and porous media:
+  Geophysics, v. 21, no. 1. [text]'
+WyllieRose1950: 'Wyllie, M.R.J., Rose, W.D. 1950. Some theoretical considerations related to the quantitative evaluation of
+  the physical characteristics of reservoir rock from electrical log data. Journal of Petroleum Technology 2(4): 105-118 (Transactions
+  AIME 189).'
+YeRabiller2000: 'Ye, S.-J., and Rabiller, P., 2000, A new tool for electro-facies analysis: multi-resolution graph-based clustering.
+  SPWLA 41st Annual Logging Symposium.'
+Zoback2007: Zoback, M.D., 2007, Reservoir Geomechanics. Cambridge University Press. Ch. 3 (basic constitutive laws, including
+  static and dynamic moduli); ch. 4 (rock failure; empirical strength relations); chapters on pore pressure, horizontal stress
+  estimation, wellbore failure and image-log breakouts.

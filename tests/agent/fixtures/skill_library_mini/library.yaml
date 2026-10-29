@@ -1,0 +1,5 @@
+# A second skill library for tests/agent/test_skill_library.py: two short guides on two topic areas, no common guides.
+# Not for runs.
+name: mini
+description: Two short guides on two topic areas, for the tests.
+common: []

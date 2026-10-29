@@ -1,0 +1,1 @@
+If the question asks for something this well's record does not have, say so once, early. Then answer with what the data allow, labelled for what it is. Never present another measurement as the one asked for.

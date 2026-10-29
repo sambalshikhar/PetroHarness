@@ -1,0 +1,1042 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PetroHarness</title>
+<link rel="icon" type="image/png" href="/img/petroharness_mark.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* PetroHarness brand: navy #011e3f, orange #ef6719, on a warm paper background */
+  --navy: #011e3f; --navy-soft: #e6ecf4; --orange: #ef6719;
+  --bg: #f8f7f4; --surface: #ffffff; --surface-2: #f6f5f1; --ink: #1c2433; --ink-2: #353a44; --muted: #636a76;
+  --faint: #9aa0aa; --line: #e4e3df; --line-2: #eeede9; --code: #f0eeea;
+  --accent: #ef6719; --accent-ink: #b84e12; --accent-soft: #fdeee4;
+  --look: #285aa6; --look-soft: #e3ebf8; --note: #8f5300; --note-soft: #f6ead6;
+  --done: #2b7536; --done-soft: #e0efe2; --warn: #a5401b; --warn-soft: #f6e1d8; --bad: #b42318; --bad-soft: #fbe5e2;
+  --pp: #197e6f; --pp-soft: #e3f2ee;   /* Petrophys teal: only where Petrophys is named */
+  --logo-light: inline-block; --logo-dark: none;
+  --shadow: 0 1px 2px rgba(1,30,63,.04), 0 2px 8px rgba(1,30,63,.05);
+  --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: Geist, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --navy: #a9c1e8; --navy-soft: #1d2a3d; --orange: #ff7a2e;
+    --bg: #0e1219; --surface: #151a23; --surface-2: #11161e; --ink: #eef1f6; --ink-2: #cfd5df; --muted: #9aa3b1;
+    --faint: #6e7787; --line: #262d39; --line-2: #1d232d; --code: #1c222d;
+    --accent: #ff7a2e; --accent-ink: #ff8a45; --accent-soft: #3a2414;
+    --look: #82a9ee; --look-soft: #1b2941; --note: #e4a650; --note-soft: #382a13;
+    --done: #77c582; --done-soft: #1a321f; --warn: #ee8c66; --warn-soft: #3b2119; --bad: #f87171; --bad-soft: #2f1819;
+    --pp: #2fa58c; --pp-soft: #143029; --logo-light: none; --logo-dark: inline-block; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --navy: #a9c1e8; --navy-soft: #1d2a3d; --orange: #ff7a2e;
+  --bg: #0e1219; --surface: #151a23; --surface-2: #11161e; --ink: #eef1f6; --ink-2: #cfd5df; --muted: #9aa3b1;
+  --faint: #6e7787; --line: #262d39; --line-2: #1d232d; --code: #1c222d;
+  --accent: #ff7a2e; --accent-ink: #ff8a45; --accent-soft: #3a2414;
+  --look: #82a9ee; --look-soft: #1b2941; --note: #e4a650; --note-soft: #382a13;
+  --done: #77c582; --done-soft: #1a321f; --warn: #ee8c66; --warn-soft: #3b2119; --bad: #f87171; --bad-soft: #2f1819;
+  --pp: #2fa58c; --pp-soft: #143029; --logo-light: none; --logo-dark: inline-block; --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent-ink); }
+[hidden] { display: none !important; }
+
+/* top bar */
+.top { position: sticky; top: 0; z-index: 30; height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: var(--surface); border-bottom: 1px solid var(--line); }
+.logo { display: flex; align-items: center; height: 100%; }
+.logo img { height: 26px; width: auto; }
+.logo .logo-light { display: var(--logo-light); } .logo .logo-dark { display: var(--logo-dark); }
+.divider { width: 1px; height: 22px; background: var(--line); }
+.sub { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.grow { flex: 1; }
+.health { display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; background: var(--faint); }
+.dot.ok { background: var(--done); } .dot.bad { background: var(--bad); }
+.iconbtn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: grid; place-items: center; flex: none; }
+.iconbtn:hover { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 760px) { .health .hname, .health .q { display: none; } .sub, .divider { display: none; } .logo img { height: 22px; } }
+
+/* shell */
+.shell { display: grid; grid-template-columns: 380px minmax(0, 1fr); min-height: calc(100vh - 52px); }
+body.panel-closed .shell { grid-template-columns: 0 minmax(0, 1fr); }
+body.panel-closed .side { visibility: hidden; }
+.side { background: var(--surface); border-right: 1px solid var(--line); position: sticky; top: 52px; height: calc(100vh - 52px);
+  display: flex; flex-direction: column; overflow: hidden; z-index: 20; }
+.scrim { display: none; }
+@media (max-width: 1180px) {
+  .shell, body.panel-closed .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { position: fixed; left: 0; top: 52px; width: min(400px, 94vw); box-shadow: 0 10px 40px rgba(0,0,0,.25); transition: transform .18s ease; }
+  body.panel-closed .side { transform: translateX(-102%); visibility: visible; box-shadow: none; }
+  body:not(.panel-closed) .scrim { display: block; position: fixed; inset: 52px 0 0 0; background: rgba(0,0,0,.25); z-index: 15; }
+}
+.sidetabs { display: flex; gap: 4px; padding: 10px 12px 0; border-bottom: 1px solid var(--line); }
+.sidetabs button { border: 0; background: none; padding: 8px 12px; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font-weight: 500; }
+.sidetabs button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 650; }
+.count { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 4px; border-radius: 9px; background: var(--code); color: var(--muted); font-size: 11px; font-weight: 600; text-align: center; }
+.sidebody { overflow-y: auto; padding: 18px 18px 28px; flex: 1; }
+.field { margin-bottom: 22px; }
+.flabel { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 13px; margin-bottom: 8px; }
+.n { width: 20px; height: 20px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; }
+.lab { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+select, input[type=text], input[type=number], textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+select:focus, input:focus, textarea:focus { outline: 3px solid var(--accent-soft); border-color: var(--accent); }
+.row { display: flex; gap: 8px; align-items: center; } .row > * { flex: 1; min-width: 0; } .row > .fix { flex: 0 0 auto; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 12px; cursor: pointer; white-space: nowrap; text-decoration: none; color: var(--ink); display: inline-block; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 650; padding: 10px 16px; width: 100%; }
+.btn.primary:hover { filter: brightness(1.06); color: #fff; }
+.btn.primary:disabled { opacity: .55; cursor: default; }
+.btn.small { padding: 4px 10px; font-size: 12px; }
+.link { border: 0; background: none; color: var(--accent-ink); cursor: pointer; padding: 0; font-size: 12.5px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); flex-wrap: wrap; }
+.seg button { border: 0; background: none; padding: 6px 12px; font-size: 13px; cursor: pointer; color: var(--muted); }
+.seg button.on { background: var(--surface); color: var(--accent-ink); font-weight: 650; box-shadow: inset 0 0 0 1px var(--accent); border-radius: 7px; }
+.card0 { margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface-2); font-size: 12.5px; color: var(--muted); }
+.card0 b { color: var(--ink); font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.chip { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--code); color: var(--ink-2); }
+.chip.lith { background: var(--navy-soft); color: var(--navy); }
+.err { color: var(--bad); font-size: 13px; white-space: pre-wrap; margin-top: 8px; line-height: 1.45; }
+details.more > summary { font-weight: 650; font-size: 13px; color: var(--ink-2); padding: 4px 0; }
+details > summary { cursor: pointer; list-style: none; user-select: none; }
+details > summary::-webkit-details-marker { display: none; }
+.caret { display: inline-block; transition: transform .12s; color: var(--faint); margin-right: 6px; font-size: 10px; }
+details[open] > summary .caret { transform: rotate(90deg); }
+
+/* runs list */
+.runitem { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; background: var(--surface); }
+.runitem:hover { border-color: var(--accent); }
+.runitem.cur { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.runitem .rq { font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.runitem .rm { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 11.5px; color: var(--muted); align-items: center; }
+
+/* main */
+.main { min-width: 0; padding: 20px 28px 60px; }
+@media (max-width: 760px) { .main { padding: 14px 16px 48px; } }
+.wrap { max-width: 1120px; margin: 0 auto; }
+.empty { color: var(--muted); text-align: center; padding: 70px 20px; }
+.empty h2 { color: var(--navy); font-size: 22px; margin: 0 0 8px; letter-spacing: -.01em; }
+.steps3 { display: inline-grid; gap: 10px; text-align: left; margin-top: 20px; font-size: 14px; }
+.steps3 div { display: flex; gap: 10px; align-items: center; }
+.tagline { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; margin-top: 22px; font-size: 14px; color: var(--muted); }
+.tagline b { color: var(--navy); font-weight: 600; } .tagline .pp b { color: var(--pp); }
+.tagline .pp { display: inline-flex; align-items: center; gap: 6px; }
+.tagline .pp img { height: 16px; }
+.tagline .sep { color: var(--faint); }
+
+.runhead { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px 16px; box-shadow: var(--shadow); }
+.runhead h1 { font-size: 19px; line-height: 1.4; margin: 0 0 12px; font-weight: 650; color: var(--navy); letter-spacing: -.005em; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pill .k { color: var(--muted); }
+.status { font-weight: 650; }
+.status.running { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
+.status.queued { background: var(--code); }
+.status.done { background: var(--done-soft); color: var(--done); border-color: transparent; }
+.status.error, .status.interrupted { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 12px; }
+
+/* progress phases */
+.progress { display: flex; align-items: center; margin-top: 16px; overflow-x: auto; padding-bottom: 2px; }
+.ph { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--faint); white-space: nowrap; }
+.ph .b { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--surface); }
+.ph.done { color: var(--ink-2); } .ph.done .b { background: var(--done); border-color: var(--done); color: #fff; }
+.ph.cur { color: var(--accent-ink); font-weight: 650; } .ph.cur .b { border-color: var(--accent); }
+.ph.fail { color: var(--bad); } .ph.fail .b { background: var(--bad); border-color: var(--bad); color: #fff; }
+.bar { flex: 1; min-width: 14px; height: 2px; background: var(--line); margin: 0 8px; }
+.bar.done { background: var(--done); }
+.spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: sp .9s linear infinite; flex: none; }
+@keyframes sp { to { transform: rotate(360deg); } }
+
+/* tabs */
+.tabs { position: sticky; top: 52px; z-index: 10; display: flex; gap: 2px; margin: 18px 0 0; padding: 0 4px; background: var(--bg); border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabs button { border: 0; background: none; padding: 11px 12px 10px; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; white-space: nowrap; font-weight: 500; }
+.tabs button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 650; }
+.pane { padding-top: 22px; }
+
+/* summary strip */
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.sbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-width: 0; }
+.sbox .sl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 4px; }
+.sbox .sv { font-size: 13.5px; color: var(--ink); line-height: 1.45; overflow-wrap: anywhere; }
+.sbox .sv small { color: var(--muted); font-size: 12px; }
+.topic { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--navy-soft); color: var(--navy); margin: 2px 4px 2px 0; font-weight: 600; }
+
+/* prose (the answer) */
+.prose { font-size: 15px; line-height: 1.72; color: var(--ink-2); overflow-wrap: break-word; }
+.prose p { margin: 0 0 14px; max-width: 80ch; }
+.prose strong { color: var(--ink); font-weight: 650; }
+.prose h1, .prose h2, .prose h3, .prose h4 { color: var(--navy); line-height: 1.35; scroll-margin-top: 110px; letter-spacing: -.005em; max-width: 80ch; }
+.prose h2 { font-size: 18px; margin: 30px 0 12px; padding-top: 20px; border-top: 1px solid var(--line); }
+.prose h3 { font-size: 16px; margin: 24px 0 10px; }
+.prose h4 { font-size: 15px; margin: 20px 0 8px; }
+.prose > :first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.prose ul, .prose ol { margin: 0 0 14px; padding-left: 22px; max-width: 80ch; }
+.prose li { margin: 5px 0; }
+.prose code { font-family: var(--mono); font-size: .86em; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 26px 30px; box-shadow: var(--shadow); }
+@media (max-width: 760px) { .answer { padding: 18px 16px; } .prose { font-size: 14.5px; } }
+.ansbar { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
+.zone { font-family: var(--mono); font-size: .8em; font-weight: 600; padding: 1px 5px; border-radius: 4px; background: var(--navy-soft); color: var(--navy); white-space: nowrap; }
+.eid { font-family: var(--mono); font-size: .76em; font-weight: 600; padding: 0 5px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); cursor: pointer; white-space: nowrap; background: var(--surface); }
+.eid:hover { border-color: var(--accent); color: var(--accent-ink); }
+.eidb { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--navy); background: var(--navy-soft); padding: 1px 6px; border-radius: 6px; flex: none; }
+
+/* tables */
+.tblwrap { overflow: auto; margin: 6px 0 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); max-width: 100%; }
+table.t { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; line-height: 1.45; }
+table.t th { position: sticky; top: 0; background: var(--surface-2); color: var(--muted); font-weight: 650; font-size: 12px; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.t td { padding: 7px 12px; border-bottom: 1px solid var(--line-2); vertical-align: top; color: var(--ink-2); }
+table.t tr:last-child td { border-bottom: 0; }
+table.t td.num, table.t th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.t td.nw { white-space: nowrap; }
+
+/* timeline */
+.tl { position: relative; padding-left: 28px; }
+.tl::before { content: ""; position: absolute; left: 9px; top: 6px; bottom: 6px; width: 2px; background: var(--line); border-radius: 2px; }
+.ti { position: relative; margin-bottom: 16px; }
+.ti::before { content: ""; position: absolute; left: -24px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 2px solid var(--faint); }
+.ti.k-read::before { border-color: var(--navy); } .ti.k-step::before { border-color: var(--look); }
+.ti.k-settle::before { border-color: var(--note); } .ti.k-writer::before { border-color: var(--accent); }
+.ti.k-repair::before { border-color: var(--warn); } .ti.k-end::before { border-color: var(--done); background: var(--done); }
+.ti.k-fail::before { border-color: var(--bad); background: var(--bad); }
+.ti.phase { margin-bottom: 10px; } .ti.phase::before { top: 6px; width: 8px; height: 8px; left: -22px; background: var(--faint); border: 0; }
+.ti.live::before { border-color: var(--accent); background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.phtext { font-size: 13px; color: var(--muted); }
+.phtext b { color: var(--ink-2); font-weight: 600; }
+.tt { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-right: 8px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+.ch { display: flex; align-items: center; gap: 6px 10px; padding: 10px 16px; border-bottom: 1px solid var(--line-2); flex-wrap: wrap; }
+.ch .title { font-weight: 650; font-size: 14px; color: var(--ink); }
+.ch .right { margin-left: auto; display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.cb { padding: 12px 16px 14px; display: grid; gap: 10px; }
+.kind { font-size: 11px; font-weight: 650; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.kind.read { background: var(--navy-soft); color: var(--navy); } .kind.step { background: var(--look-soft); color: var(--look); }
+.kind.settle { background: var(--note-soft); color: var(--note); } .kind.writer { background: var(--accent-soft); color: var(--accent-ink); }
+.kind.repair { background: var(--warn-soft); color: var(--warn); } .kind.done { background: var(--done-soft); color: var(--done); }
+.kv { display: grid; grid-template-columns: 74px 1fr; gap: 6px 12px; font-size: 13px; line-height: 1.55; }
+.kv .l { color: var(--muted); font-size: 12px; padding-top: 1px; }
+.kv .v { color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .kv { grid-template-columns: 1fr; gap: 2px; } .kv .v { margin-bottom: 6px; } }
+.acts { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.acts li { font-family: var(--mono); font-size: 12px; background: var(--code); border-radius: 6px; padding: 3px 8px; color: var(--ink); overflow-wrap: anywhere; }
+.edits { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.edits li { font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.op { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 4px; background: var(--code); color: var(--ink); margin-right: 6px; }
+.op.add { background: var(--done-soft); color: var(--done); } .op.drop { background: var(--bad-soft); color: var(--bad); }
+.op.revise { background: var(--look-soft); color: var(--look); }
+.points { margin: 0; padding-left: 20px; } .points li { margin: 3px 0; }
+.callout { padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.callout.warn { background: var(--warn-soft); color: var(--ink-2); }
+.callout.plain { background: var(--surface-2); color: var(--ink-2); }
+.thinking { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; }
+pre.txt { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; line-height: 1.55; margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+
+/* claims */
+.ptcard { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.pthead { display: flex; gap: 12px; padding: 12px 18px; align-items: flex-start; border-bottom: 1px solid var(--line-2); background: var(--surface-2); }
+.ptnum { width: 26px; height: 26px; border-radius: 50%; background: var(--navy-soft); color: var(--navy); font-weight: 700; font-size: 12px; display: grid; place-items: center; flex: none; }
+.pttext { font-size: 14.5px; font-weight: 600; line-height: 1.5; color: var(--ink); padding-top: 2px; }
+.claim { padding: 16px 20px 16px 56px; display: grid; gap: 8px; }
+.claim + .claim { border-top: 1px dashed var(--line); }
+@media (max-width: 760px) { .claim { padding-left: 18px; } }
+.chead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ctext { font-size: 14.5px; line-height: 1.65; color: var(--ink); }
+.grade { font-size: 11.5px; font-weight: 650; padding: 1px 9px; border-radius: 999px; white-space: nowrap; }
+.grade.high { background: var(--done-soft); color: var(--done); }
+.grade.moderate { background: var(--look-soft); color: var(--look); }
+.grade.low { background: var(--warn-soft); color: var(--warn); }
+.grade.hypothesis, .grade.undetermined { background: var(--code); color: var(--muted); }
+.grade.not-indicated { background: var(--navy-soft); color: var(--navy); }
+.flag { font-size: 12.5px; color: var(--warn); }
+
+/* results */
+.rtools { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.rtools input { max-width: 320px; }
+details.ritem { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; box-shadow: var(--shadow); }
+details.ritem > summary { padding: 10px 14px; display: flex; gap: 10px; align-items: baseline; }
+details.ritem > summary .t1 { font-size: 13px; color: var(--ink); font-family: var(--mono); line-height: 1.45; overflow-wrap: anywhere; min-width: 0; }
+details.ritem > summary .t2 { font-size: 12px; color: var(--faint); margin-left: auto; white-space: nowrap; padding-left: 8px; }
+details.ritem .rbody { padding: 0 16px 14px; overflow-x: auto; }
+details.ritem.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: var(--shadow); } }
+.pp-by { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--pp); font-weight: 600; margin-left: auto; }
+.pp-by img { height: 16px; width: auto; }
+
+/* details */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 22px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.tile .tv { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.tile .tl2 { font-size: 12px; color: var(--muted); }
+h3.sec { font-size: 12px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); margin: 26px 0 10px; }
+h3.sec:first-child { margin-top: 0; }
+
+/* rating */
+.rate { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+.rate .q { font-weight: 650; margin-bottom: 10px; }
+.rate .opts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.rate .opts button { border: 1px solid var(--line); border-radius: 8px; padding: 6px 16px; background: var(--surface); cursor: pointer; }
+.rate .opts button.on.good { background: var(--done-soft); border-color: var(--done); color: var(--done); font-weight: 650; }
+.rate .opts button.on.partly { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); font-weight: 650; }
+.rate .opts button.on.wrong { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); font-weight: 650; }
+.rate textarea { min-height: 64px; }
+.v-good { color: var(--done); font-weight: 650; } .v-partly { color: var(--warn); font-weight: 650; } .v-wrong { color: var(--bad); font-weight: 650; }
+.errbox { background: var(--bad-soft); color: var(--bad); border-radius: 10px; padding: 12px 16px; font-size: 13.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.errbox pre { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; margin: 8px 0 0; color: var(--ink-2); }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 50; }
+</style>
+</head>
+<body>
+<header class="top">
+  <button class="iconbtn" id="panelbtn" title="Show or hide the question panel" aria-label="Toggle the question panel">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>
+  </button>
+  <a class="logo" href="/" title="PetroHarness"><img class="logo-light" src="/img/petroharness_logo.svg" alt="PetroHarness"><img class="logo-dark" src="/img/petroharness_logo_dark.png" alt="PetroHarness"></a>
+  <span class="divider"></span>
+  <div class="sub">Ask about a LAS file · K2-Horizon-7B</div>
+  <div class="grow"></div>
+  <div class="health" id="health">checking endpoints…</div>
+</header>
+
+<div class="shell">
+  <aside class="side" id="side">
+    <div class="sidetabs">
+      <button data-side="ask" class="on">Ask</button>
+      <button data-side="runs">Runs<span class="count" id="runcount">0</span></button>
+    </div>
+    <div class="sidebody" id="side-ask">
+      <div class="field">
+        <div class="flabel"><span class="n">1</span>Well (LAS file)</div>
+        <div class="row">
+          <input type="text" id="laspath" class="mono" placeholder="path of a .las file on the server" list="recentlas">
+          <button class="btn fix" id="lasload">Load</button>
+        </div>
+        <datalist id="recentlas"></datalist>
+        <div class="row" style="margin-top:8px">
+          <button class="btn fix" id="lasup">Upload a LAS…</button>
+          <input type="file" id="lasfile" accept=".las,.LAS" hidden>
+          <span class="hint" id="lasmsg" style="margin:0"></span>
+        </div>
+        <div class="card0" id="wellinfo" hidden></div>
+      </div>
+
+      <div class="field">
+        <div class="flabel"><span class="n">2</span>Interval</div>
+        <div class="seg" id="ivmode"><button data-m="whole" class="on">Whole well</button><button data-m="tops">Formation (tops)</button><button data-m="depths">Depths</button></div>
+        <div id="iv-whole" class="hint">From the log's first sample to its last. Near the top of a log, often behind casing, only some curves may be recorded, and porosity and saturation there are not meaningful: a named interval gets a more focused and more reliable answer.</div>
+        <div id="iv-tops" hidden>
+          <div class="row" style="margin-top:10px">
+            <input type="text" id="topspath" class="mono" placeholder="path of a tops file (.csv, .xlsx)">
+            <button class="btn fix" id="topsload">Load</button>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn fix" id="topsup">Upload a tops file…</button>
+            <input type="file" id="topsfile" accept=".csv,.tsv,.txt,.xlsx,.xls" hidden>
+            <span class="hint" id="topsmsg" style="margin:0"></span>
+          </div>
+          <label class="lab" for="formation">Formation</label>
+          <select id="formation"><option value="">Load a tops file first</option></select>
+          <div class="hint" id="formnote">The interval runs from the formation's top to its stated base, else to the next deeper top, else to the end of the log.</div>
+          <label class="lab" for="topsunit">Depth unit of a file that states none</label>
+          <select id="topsunit"><option value="">the LAS file's</option><option value="m">m</option><option value="ft">ft</option></select>
+        </div>
+        <div id="iv-depths" hidden>
+          <div class="row" style="margin-top:10px">
+            <input type="number" id="top" placeholder="top" step="any">
+            <input type="number" id="base" placeholder="base" step="any">
+            <select id="unit" class="fix" style="width:auto"><option value="">LAS unit</option><option value="m">m</option><option value="ft">ft</option></select>
+          </div>
+          <input type="text" id="ivname" placeholder="name (optional), e.g. lower sand" style="margin-top:8px">
+          <div class="hint">Measured depths; both are included. Leave the top empty to start at the top of the log, or the base to run to its end.</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="flabel"><span class="n">3</span>Question</div>
+        <textarea id="question" placeholder="e.g. Where are the best reservoir intervals? Give their porosity, shale volume and water saturation, and say whether any looks hydrocarbon-bearing."></textarea>
+      </div>
+
+      <div class="field">
+        <details class="more" id="more">
+          <summary><span class="caret">▶</span>More options</summary>
+          <label class="lab" for="lithcurve">Lithology curve</label>
+          <select id="lithcurve"><option value="">Detect (none: zones from shale-volume bands)</option></select>
+          <label class="lab" for="lithtext">The formation's lithology, as you know it</label>
+          <input type="text" id="lithtext" placeholder="e.g. fine sandstone with siltstone">
+          <label class="lab" for="profile">Petrophys context profile</label>
+          <select id="profile"><option value="">None (Petrophys's default interpretation)</option></select>
+          <label class="lab" for="skills">Skill library</label>
+          <select id="skills"><option value="default">The packaged library</option><option value="none">None (no guides)</option><option value="path">A library folder…</option></select>
+          <input type="text" id="skillspath" class="mono" placeholder="path of a skill library folder" style="margin-top:8px" hidden>
+          <label class="lab" for="maxsteps">Investigation steps, at most</label>
+          <input type="number" id="maxsteps" min="1" max="30" step="1">
+        </details>
+      </div>
+
+      <button class="btn primary" id="ask">Ask</button>
+      <div class="hint">Ctrl+Enter asks. A question takes a few minutes; several can run at once, and the rest wait their turn.</div>
+      <div class="hint" id="envnote" hidden></div>
+      <div class="err" id="formerr"></div>
+    </div>
+    <div class="sidebody" id="side-runs" hidden>
+      <div class="row" style="margin-bottom:12px"><input type="text" id="runfilter" placeholder="Filter runs"><button class="link fix" id="refresh">Refresh</button></div>
+      <div id="history"></div>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+  <main class="main"><div class="wrap" id="run"></div></main>
+</div>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({error: `HTTP ${r.status}`}));
+  if (!r.ok || (j && j.error)) throw new Error((j && j.error) || `HTTP ${r.status}`);
+  return j;
+}
+const post = (path, body) => api(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+const fmtS = s => s == null ? "" : s < 90 ? `${Math.round(s)} s` : `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, "0")} s`;
+const fmtN = n => n == null ? "–" : Number(n).toLocaleString("en-US");
+const fmtD = v => v == null ? "–" : String(+(+v).toFixed(4));
+const host = u => { try { return new URL(u).host; } catch (e) { return u || ""; } };
+const hostname = u => { try { return new URL(u).hostname.split(".")[0]; } catch (e) { return u || ""; } };
+const narrow = () => window.matchMedia("(max-width: 1180px)").matches;
+function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 1800); }
+const S = {cfg: null, las: null, tops: null, mode: "whole", job: null, since: 0, events: [], last: null, tab: "progress", pinned: false, sig: "", poll: null, runs: [], det: {}};
+
+// ---------- inline text: evidence ids, zones, code, bold ----------
+const HL = /(\[?\bE\d{1,3}\b\]?)|(\bZ\d{1,3}\b)/g;
+function hl(escaped) {
+  return escaped.replace(HL, (m, e, z) => {
+    if (e) { const id = e.replace(/[\[\]]/g, ""); return `<span class="eid" data-e="${id}" title="Show ${id} in Results">${id}</span>`; }
+    if (z) return `<span class="zone">${z}</span>`;
+    return m;
+  });
+}
+function inline(s) {
+  return String(s ?? "").split(/(`[^`]+`)/g).map(part => {
+    if (/^`[^`]+`$/.test(part)) return `<code>${esc(part.slice(1, -1))}</code>`;
+    return hl(esc(part)).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, "$1<em>$2</em>");
+  }).join("");
+}
+const isNum = v => /^[-+]?(\d[\d,]*)(\.\d+)?(e[-+]?\d+)?\s?%?$/i.test(String(v).trim()) || /^[-+]?\d+(\.\d+)?\s?[–-]\s?\d+(\.\d+)?$/.test(String(v).trim());
+function table(head, rows) {
+  const num = head.map((_, i) => rows.length > 0 && rows.every(r => !r[i] || r[i] === "-" || isNum(r[i])));
+  return `<div class="tblwrap"><table class="t"><thead><tr>${head.map((h, i) => `<th class="${num[i] ? "num" : ""}">${inline(h)}</th>`).join("")}</tr></thead><tbody>` +
+    rows.map(r => `<tr>${head.map((_, i) => `<td class="${num[i] ? "num" : String(r[i] ?? "").length <= 28 ? "nw" : ""}">${inline(r[i] ?? "")}</td>`).join("")}</tr>`).join("") + `</tbody></table></div>`;
+}
+// markdown: the writer's subset (headings, paragraphs, lists, pipe tables, bold, code)
+function md(text) {
+  const lines = String(text || "").replace(/\r/g, "").split("\n");
+  const out = [];
+  const isRow = l => /^\s*\|.*\|\s*$/.test(l);
+  const cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+  const isItem = l => /^\s*([-*+]|\d+[.)])\s+/.test(l);
+  let i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (!l.trim()) { i++; continue; }
+    let m;
+    if ((m = l.match(/^(#{1,6})\s+(.*)$/))) { const n = Math.min(Math.max(m[1].length, 2), 4); out.push(`<h${n}>${inline(m[2])}</h${n}>`); i++; continue; }
+    if (/^\s*([-*_])\s*\1\s*\1[\s\1]*$/.test(l)) { i++; continue; }
+    if (isRow(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
+      const head = cells(l); i += 2; const rows = [];
+      while (i < lines.length && isRow(lines[i])) rows.push(cells(lines[i++]));
+      out.push(table(head, rows)); continue;
+    }
+    if (isItem(l)) {
+      const ordered = /^\s*\d+[.)]/.test(l), items = [];
+      while (i < lines.length && isItem(lines[i])) {
+        let item = lines[i].replace(/^\s*([-*+]|\d+[.)])\s+/, ""); i++;
+        while (i < lines.length && lines[i].trim() && !isItem(lines[i]) && !/^#/.test(lines[i]) && !isRow(lines[i])) item += " " + lines[i++].trim();
+        items.push(`<li>${inline(item)}</li>`);
+      }
+      out.push(`<${ordered ? "ol" : "ul"}>${items.join("")}</${ordered ? "ol" : "ul"}>`); continue;
+    }
+    const para = [l]; i++;
+    while (i < lines.length && lines[i].trim() && !/^#{1,6}\s/.test(lines[i]) && !isRow(lines[i]) && !isItem(lines[i])) para.push(lines[i++]);
+    out.push(`<p>${inline(para.join(" "))}</p>`);
+  }
+  return out.join("\n");
+}
+
+// ---------- the side panel ----------
+function setPanel(open) { document.body.classList.toggle("panel-closed", !open); }
+$("#panelbtn").onclick = () => setPanel(document.body.classList.contains("panel-closed"));
+$("#scrim").onclick = () => setPanel(false);
+$$(".sidetabs button").forEach(b => b.onclick = () => {
+  $$(".sidetabs button").forEach(x => x.classList.toggle("on", x === b));
+  $("#side-ask").hidden = b.dataset.side !== "ask"; $("#side-runs").hidden = b.dataset.side !== "runs";
+  if (b.dataset.side === "runs") loadRuns();
+});
+function setMode(m) {
+  S.mode = m;
+  $$("#ivmode button").forEach(b => b.classList.toggle("on", b.dataset.m === m));
+  $("#iv-whole").hidden = m !== "whole"; $("#iv-tops").hidden = m !== "tops"; $("#iv-depths").hidden = m !== "depths";
+}
+$$("#ivmode button").forEach(b => b.onclick = () => setMode(b.dataset.m));
+$("#skills").onchange = () => { $("#skillspath").hidden = $("#skills").value !== "path"; };
+
+// ---------- the LAS file ----------
+async function loadLas(path) {
+  $("#lasmsg").textContent = ""; $("#formerr").textContent = "";
+  if (!path) return;
+  try { showLas(await api(`/api/las?path=${encodeURIComponent(path)}`)); }
+  catch (e) { S.las = null; $("#wellinfo").hidden = true; $("#formerr").textContent = e.message; }
+}
+function showLas(info) {
+  S.las = info; $("#laspath").value = info.path;
+  const unit = info.depth_unit || info.depth_unit_raw || "";
+  const lith = new Set(info.lithology_candidates || []);
+  const names = [...new Set([info.well, info.uwi].filter(x => x && x !== info.name.replace(/\.las$/i, "")))];
+  $("#wellinfo").innerHTML = `<b>${esc(info.name)}</b>${names.length ? ` · ${esc(names.join(" · "))}` : ""}<br>` +
+    `${fmtD(info.top)} – ${fmtD(info.base)} ${esc(unit)}${info.step ? ` · step ${fmtD(info.step)} ${esc(unit)}` : ""} · ${fmtN(info.samples)} samples · ${info.curves.length} curves` +
+    `<div class="chips">${info.curves.map(c => `<span class="chip${lith.has(c.mnemonic) ? " lith" : ""}" title="${esc([c.unit, c.description].filter(Boolean).join(" · "))}${lith.has(c.mnemonic) ? " · looks like a lithology log" : ""}">${esc(c.mnemonic)}</span>`).join("")}</div>`;
+  $("#wellinfo").hidden = false;
+  $("#unit").options[0].textContent = unit ? `${unit} (LAS)` : "LAS unit";
+  $("#topsunit").options[0].textContent = unit ? `the LAS file's (${unit})` : "the LAS file's";
+  const keep = $("#lithcurve").value;
+  $("#lithcurve").innerHTML = `<option value="">Detect (none: zones from shale-volume bands)</option>` +
+    [...info.curves].sort((a, b) => lith.has(b.mnemonic) - lith.has(a.mnemonic)).map(c => `<option value="${esc(c.mnemonic)}">${esc(c.mnemonic)}${lith.has(c.mnemonic) ? " (looks like a lithology log)" : ""}</option>`).join("");
+  if (info.curves.some(c => c.mnemonic === keep)) $("#lithcurve").value = keep;
+  if ($("#topspath").value.trim()) loadTops($("#topspath").value.trim());
+}
+$("#lasload").onclick = () => loadLas($("#laspath").value.trim());
+$("#laspath").addEventListener("keydown", e => { if (e.key === "Enter") loadLas($("#laspath").value.trim()); });
+async function upload(kind, file, msg) {
+  msg.textContent = `Uploading ${file.name}…`;
+  const r = await fetch(`/api/upload?kind=${kind}`, {method: "POST", headers: {"X-Filename": file.name}, body: file});
+  const j = await r.json().catch(() => ({error: `HTTP ${r.status}`}));
+  if (!r.ok || j.error) { msg.textContent = ""; throw new Error(j.error || `HTTP ${r.status}`); }
+  msg.textContent = `Uploaded ${j.name}`;
+  return j;
+}
+$("#lasup").onclick = () => $("#lasfile").click();
+$("#lasfile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { showLas(await upload("las", f, $("#lasmsg"))); } catch (err) { $("#formerr").textContent = err.message; }
+  e.target.value = "";
+};
+
+// ---------- the tops file ----------
+async function loadTops(path) {
+  $("#topsmsg").textContent = ""; $("#formerr").textContent = "";
+  if (!path) return;
+  const q = new URLSearchParams({path});
+  if (S.las) q.set("las", S.las.path);
+  if ($("#topsunit").value) q.set("unit", $("#topsunit").value);
+  try { showTops(await api(`/api/tops?${q}`)); }
+  catch (e) { S.tops = null; $("#formation").innerHTML = `<option value="">No formations read</option>`; $("#formerr").textContent = e.message; }
+}
+function showTops(info) {
+  S.tops = info; $("#topspath").value = info.path;
+  const keep = $("#formation").value;
+  $("#formation").innerHTML = `<option value="">Choose a formation (${info.formations.length})</option>` + info.formations.map(f => {
+    if (f.repeated) return `<option value="" disabled>${esc(f.name)} (listed ${f.repeated.length} times: ask by its depths)</option>`;
+    if (f.error) return `<option value="" disabled>${esc(f.name)} (${esc(f.error.slice(0, 60))})</option>`;
+    const span = `${fmtD(f.top)} – ${f.base == null ? "end of log" : fmtD(f.base)}${f.unit ? " " + f.unit : ""}`;
+    return `<option value="${esc(f.name)}">${esc(f.name)} · ${esc(span)}</option>`;
+  }).join("");
+  if (info.formations.some(f => f.name === keep)) $("#formation").value = keep;
+  $("#topsmsg").textContent = `${info.name}: ${info.formations.length} formations${info.wells.length ? ` for ${info.wells.join(", ")}` : ""}`;
+  showFormation();
+}
+function showFormation() {
+  const f = S.tops && S.tops.formations.find(x => x.name === $("#formation").value);
+  $("#formnote").textContent = f ? `${f.name}: ${fmtD(f.top)} – ${f.base == null ? "the end of the log" : fmtD(f.base)}${f.unit ? " " + f.unit : ""} (base: ${f.base_from}).` :
+    "The interval runs from the formation's top to its stated base, else to the next deeper top, else to the end of the log.";
+}
+$("#formation").onchange = showFormation;
+$("#topsunit").onchange = () => { if ($("#topspath").value.trim()) loadTops($("#topspath").value.trim()); };
+$("#topsload").onclick = () => loadTops($("#topspath").value.trim());
+$("#topspath").addEventListener("keydown", e => { if (e.key === "Enter") loadTops($("#topspath").value.trim()); });
+$("#topsup").onclick = () => $("#topsfile").click();
+$("#topsfile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const j = await upload("tops", f, $("#topsmsg")); $("#topspath").value = j.path; await loadTops(j.path); } catch (err) { $("#formerr").textContent = err.message; }
+  e.target.value = "";
+};
+
+// ---------- ask ----------
+function formInputs() {
+  const inputs = {las: (S.las && S.las.path) || $("#laspath").value.trim(), question: $("#question").value.trim()};
+  if (S.mode === "tops") inputs.interval = {mode: "tops", tops: $("#topspath").value.trim(), formation: $("#formation").value, unit: $("#topsunit").value};
+  else if (S.mode === "depths") inputs.interval = {mode: "depths", top: $("#top").value, base: $("#base").value, unit: $("#unit").value, name: $("#ivname").value.trim()};
+  else inputs.interval = {mode: "whole"};
+  if ($("#lithcurve").value) inputs.lithology_curve = $("#lithcurve").value;
+  if ($("#lithtext").value.trim()) inputs.formation_lithology = $("#lithtext").value.trim();
+  if ($("#profile").value) inputs.profile = $("#profile").value;
+  inputs.skills = $("#skills").value === "path" ? $("#skillspath").value.trim() : $("#skills").value;
+  if ($("#maxsteps").value) inputs.max_steps = +$("#maxsteps").value;
+  return inputs;
+}
+async function ask() {
+  $("#formerr").textContent = "";
+  const btn = $("#ask"); btn.disabled = true;
+  try {
+    const {id} = await post("/api/ask", formInputs());
+    if (narrow()) setPanel(false);
+    S.pinned = false; openRun(id); loadRuns();
+  } catch (e) { $("#formerr").textContent = e.message; }
+  finally { btn.disabled = false; }
+}
+$("#ask").onclick = ask;
+$("#question").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) ask(); });
+async function fillForm(inputs) {
+  setPanel(true);
+  $$(".sidetabs button")[0].click();
+  $("#question").value = inputs.question || "";
+  if (inputs.las) { $("#laspath").value = inputs.las; await loadLas(inputs.las); }
+  const iv = inputs.interval || {mode: "whole"};
+  setMode(iv.mode || "whole");
+  if (iv.mode === "tops") { $("#topsunit").value = iv.unit || ""; $("#topspath").value = iv.tops || ""; await loadTops(iv.tops); $("#formation").value = iv.formation || ""; showFormation(); }
+  if (iv.mode === "depths") { $("#top").value = iv.top ?? ""; $("#base").value = iv.base ?? ""; $("#unit").value = iv.unit || ""; $("#ivname").value = iv.name || ""; }
+  $("#lithcurve").value = inputs.lithology_curve || ""; $("#lithtext").value = inputs.formation_lithology || "";
+  $("#profile").value = inputs.profile || "";
+  const sk = inputs.skills || "default";
+  $("#skills").value = ["default", "none"].includes(sk) ? sk : "path"; $("#skillspath").value = ["default", "none"].includes(sk) ? "" : sk; $("#skills").onchange();
+  $("#maxsteps").value = inputs.max_steps || "";
+  if (inputs.lithology_curve || inputs.formation_lithology || inputs.profile || inputs.max_steps || sk !== "default") $("#more").open = true;
+  $("#question").focus();
+}
+
+// ---------- endpoints and the queue ----------
+async function loadConfig() {
+  try {
+    const c = await api("/api/config"); S.cfg = c;
+    const eps = c.endpoints || [];
+    const dots = eps.map(e => `<span title="${esc(e.url)}: ${e.ok ? `serves ${esc(c.model)}${e.ms != null ? ` (${e.ms} ms)` : ""}; answering ${e.busy}` : esc(e.error || "not reachable")}"><span class="dot ${e.ok ? "ok" : "bad"}"></span><span class="hname">${esc(hostname(e.url))}</span></span>`).join("");
+    $("#health").innerHTML = (eps.length ? dots : `<span title="Set K2H_TOOL_URLS or start with --model-url"><span class="dot bad"></span>no model endpoint</span>`) +
+      `<span class="q">${c.running} running · ${c.queued} waiting · ${c.workers} at once</span>`;
+    if (!$("#maxsteps").placeholder) $("#maxsteps").placeholder = `default ${c.max_steps}`;
+    const env = [c.settings_env && `PETROHARNESS_DATA (${c.settings_env}) is the base of the data settings`, c.skills_env && `PETROHARNESS_SKILLS (${c.skills_env}) is the default skill library`].filter(Boolean);
+    $("#envnote").hidden = !env.length; $("#envnote").textContent = env.length ? `On this server, ${env.join("; ")}.` : "";
+    if ($("#profile").options.length === 1) $("#profile").innerHTML += (c.profiles || []).map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
+  } catch (e) { $("#health").innerHTML = `<span><span class="dot bad"></span>server not answering</span>`; }
+}
+
+// ---------- the run list ----------
+async function loadRuns() {
+  try { S.runs = await api("/api/runs"); } catch (e) { return; }
+  $("#runcount").textContent = S.runs.length;
+  $("#recentlas").innerHTML = [...new Set(S.runs.map(r => r.las_path).filter(Boolean))].slice(0, 20).map(p => `<option value="${esc(p)}">`).join("");
+  showRuns();
+}
+function showRuns() {
+  const f = $("#runfilter").value.trim().toLowerCase();
+  const rows = S.runs.filter(r => !f || `${r.question} ${r.las} ${r.label} ${r.verdict}`.toLowerCase().includes(f));
+  $("#history").innerHTML = rows.length ? rows.map(r => `<div class="runitem${r.id === S.job ? " cur" : ""}" data-id="${esc(r.id)}"><div class="rq">${esc(r.question)}</div>
+    <div class="rm"><span class="pill status ${esc(r.status)}" style="padding:0 8px">${esc(r.status)}</span><span>${esc(r.las)}</span><span>${esc(r.label)}</span>
+    ${r.elapsed ? `<span>${fmtS(r.elapsed)}</span>` : ""}${r.verdict ? `<span class="v-${esc(r.verdict)}">${esc(r.verdict)}</span>` : ""}</div></div>`).join("") :
+    `<div class="hint">No runs yet.</div>`;
+  $$(".runitem").forEach(x => x.onclick = () => { if (narrow()) setPanel(false); S.pinned = false; openRun(x.dataset.id); });
+}
+$("#runfilter").oninput = showRuns;
+$("#refresh").onclick = loadRuns;
+
+// ---------- a run: polling ----------
+function resetRun(id) {
+  clearTimeout(S.poll); replayStop();
+  Object.assign(S, {job: id, since: 0, events: [], last: null, sig: "", det: {}, tab: S.pinned ? S.tab : "progress"});
+  $$(".runitem").forEach(x => x.classList.toggle("cur", x.dataset.id === id));
+  $("#run").innerHTML = `<div class="empty"><span class="spin"></span></div>`;
+}
+function openRun(id) {
+  resetRun(id);
+  if (location.hash !== "#run=" + id) history.replaceState(null, "", "#run=" + id);
+  tick();
+}
+async function tick() {
+  const id = S.job;
+  try {
+    const j = await api(`/api/job/${id}?since=${S.since}`);
+    if (id !== S.job || R.run) return;
+    if (j.events && j.events.length) { S.events.push(...j.events); S.since = j.n_events ?? S.events.length; }
+    const finished = !["queued", "running"].includes(j.status);
+    if (finished && !S.pinned && S.tab === "progress" && j.answer) S.tab = "answer";
+    S.last = j;
+    render();
+    if (finished) { loadRuns(); loadConfig(); return; }
+  } catch (e) { $("#run").innerHTML = `<div class="empty"><div class="errbox">${esc(e.message)}</div></div>`; return; }
+  S.poll = setTimeout(tick, 1500);
+}
+
+// ---------- replay: a saved run played back from its events (#replay=<id>&speed=N) ----------
+// Nothing is recomputed and no model is called. window.__replay.seek(t) shows the run as it stood t seconds in.
+const R = {run: null, t: 0, speed: 8, timer: null};
+function replayStop() { clearInterval(R.timer); R.timer = null; R.run = null; }
+function replayEnd() { return R.run ? Math.max(R.run.elapsed || 0, ...(R.run.events || []).map(e => e.t || 0)) : 0; }
+function replaySeek(t) {
+  const run = R.run; if (!run) return;
+  const end = replayEnd(); R.t = Math.min(Math.max(t, 0), end);
+  const done = R.t >= end;
+  S.events = (run.events || []).filter(e => (e.t || 0) <= R.t);
+  if (done && !S.pinned && S.tab === "progress" && run.answer) S.tab = "answer";
+  S.last = {...run, status: done ? run.status : "running", elapsed: done ? run.elapsed : Math.round(R.t * 10) / 10,
+    answer: done ? run.answer : "", result: done ? run.result : null, error: done ? run.error : ""};
+  render();
+}
+async function openReplay(id, speed) {
+  resetRun(id);
+  const run = await api(`/api/run/${id}`);
+  if (S.job !== id) return run;
+  R.run = run; R.speed = speed > 0 ? speed : 0;
+  replaySeek(0);
+  if (R.speed) R.timer = setInterval(() => { replaySeek(R.t + 0.1 * R.speed); if (R.t >= replayEnd()) { clearInterval(R.timer); R.timer = null; } }, 100);
+  return run;
+}
+window.__replay = {open: openReplay, seek: replaySeek, end: replayEnd};
+
+// ---------- what the events say ----------
+function digest(events) {
+  const m = {phase: {}, calls: [], byN: new Map(), results: new Map(), resultStep: new Map(), lastStep: 0};
+  for (const e of events) {
+    if (e.kind === "phase") m.phase[e.name] = e;
+    else if (e.kind === "call") { const c = {...e, reply: null}; m.calls.push(c); m.byN.set(e.n, c); if (e.type === "step") m.lastStep = Math.max(m.lastStep, e.number); }
+    else if (e.kind === "reply") { const c = m.byN.get(e.n); if (c) c.reply = e; }
+    else if (e.kind === "results") for (const it of e.items) {
+      const k = /^step_(\d+)/.exec(e.stage);
+      // the step whose actions opened it: results a step's prompt shows first were opened by the step before
+      // (step 1's: the first look, 0); the settle step's, by the last step
+      if (!m.resultStep.has(it.id)) m.resultStep.set(it.id, k ? +k[1] - 1 : e.stage === "settle" ? m.lastStep : null);
+      m.results.set(it.id, {...(m.results.get(it.id) || {}), ...it});
+    }
+  }
+  return m;
+}
+function phases(j, m) {
+  const finished = !["queued", "running"].includes(j.status);
+  const has = t => m.calls.some(c => c.type === t);
+  const list = [["Queue", !!m.phase.started || finished], ["Interpret", m.calls.length > 0], ["Read", has("step") || has("settle") || has("writer")],
+    [`Investigate${m.lastStep ? ` · ${m.lastStep}` : ""}`, has("settle") || has("writer")], ["Settle", has("writer")],
+    ["Write", m.calls.some(c => c.type === "writer" && c.reply)], [m.calls.some(c => c.type === "repair") ? "Check · repair" : "Check", j.status === "done"]];
+  let html = "", marked = false;
+  list.forEach(([name, done], i) => {
+    let cls = done ? "done" : "";
+    if (!done && !marked) { cls = finished ? (j.status === "done" ? "" : "fail") : "cur"; marked = true; }
+    const badge = cls === "done" ? "✓" : cls === "cur" ? `<span class="spin" style="width:10px;height:10px"></span>` : cls === "fail" ? "!" : i + 1;
+    if (i) html += `<span class="bar ${done ? "done" : ""}"></span>`;
+    html += `<span class="ph ${cls}"><span class="b">${badge}</span>${esc(name)}</span>`;
+  });
+  return `<div class="progress">${html}</div>`;
+}
+
+// ---------- render ----------
+function render() {
+  const j = S.last; if (!j) return;
+  const m = digest(S.events);
+  const finished = !["queued", "running"].includes(j.status);
+  const res = j.result && Array.isArray(j.result.claims) ? j.result : null;   // a run that failed early has none
+  const sig = `${j.status}|${S.events.length}|${S.tab}|${!!res}|${JSON.stringify(j.rating || {})}`;
+  if (sig === S.sig) { const el = $("#elapsed"); if (el) el.textContent = fmtS(j.elapsed); return; }
+  S.sig = sig;
+  const scroll = window.scrollY;
+  const i = j.inputs || {};
+  const nRes = m.results.size || (res ? res.opened.length : 0);
+  const tabs = [["answer", "Answer"], ["progress", "Progress"], ["claims", `Claims${res ? ` · ${res.claims.length}` : ""}`], ["results", `Results${nRes ? ` · ${nRes}` : ""}`], ["details", "Details"]];
+  const qpos = j.queue_position ? `<span class="pill"><span class="k">queue</span>${j.queue_position}</span>` : "";
+  let html = `<div class="runhead"><h1>${esc(i.question)}</h1><div class="meta">
+    <span class="pill status ${esc(j.status)}">${esc(j.status)}</span>
+    <span class="pill" title="${esc(i.las)}"><span class="k">LAS</span>${esc(String(i.las || "").split("/").pop())}</span>
+    <span class="pill"><span class="k">interval</span>${esc(j.label || "")}</span>${qpos}
+    <span class="pill"><span class="k">time</span><span id="elapsed">${fmtS(j.elapsed)}</span></span>
+    ${j.endpoint ? `<span class="pill" title="${esc(j.endpoint)}"><span class="k">model</span>${esc(host(j.endpoint))}</span>` : ""}</div>
+    <div class="actions">${finished && !R.run && S.events.length ? `<button class="link" id="replaybtn" title="Play this run again as it happened, 8 times faster">▶ Replay</button>` : ""}
+    ${R.run ? `<span class="hint" style="margin:0">Replay at ${R.speed}× · ${fmtS(R.t)} of ${fmtS(replayEnd())}</span><button class="link" id="stopreplay">Show the run</button>` : ""}
+    ${finished && !R.run ? `<a class="link" href="/api/run/${esc(j.id)}/answer.md" target="_blank">answer.md</a><a class="link" href="/api/run/${esc(j.id)}/trace.json" target="_blank">trace.json</a>` : ""}
+    <button class="link" id="reuse">Ask again or edit →</button></div>
+    ${phases(j, m)}</div>
+    <div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? "on" : ""}">${esc(l)}</button>`).join("")}</div><div class="pane">`;
+  if (S.tab === "answer") html += answerPane(j, res, finished);
+  else if (S.tab === "progress") html += progressPane(j, m, res, finished);
+  else if (S.tab === "claims") html += claimsPane(res, finished);
+  else if (S.tab === "results") html += resultsPane(m, res);
+  else html += detailsPane(j, res, m);
+  html += `</div>`;
+  $("#run").innerHTML = html;
+  window.scrollTo(0, scroll);
+  wire(j);
+}
+function wire(j) {
+  $$(".tabs button").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; S.pinned = true; S.sig = ""; render(); });
+  $$(".eid").forEach(x => x.onclick = () => gotoResult(x.dataset.e));
+  $$("details[data-k]").forEach(d => d.addEventListener("toggle", () => { S.det[d.dataset.k] = d.open; }));
+  const rb = $("#replaybtn"); if (rb) rb.onclick = () => { history.replaceState(null, "", `#replay=${j.id}&speed=8`); openReplay(j.id, 8); };
+  const sr = $("#stopreplay"); if (sr) sr.onclick = () => { replayStop(); openRun(j.id); };
+  const ru = $("#reuse"); if (ru) ru.onclick = () => fillForm(j.inputs || {});
+  const cp = $("#copyans"); if (cp) cp.onclick = () => navigator.clipboard.writeText(j.answer || "").then(() => toast("Answer copied"));
+  const rf = $("#rfilter"); if (rf) { rf.oninput = () => filterResults(rf.value); rf.value = S.rfilter || ""; filterResults(rf.value); }
+  $$(".rate .opts button").forEach(b => b.onclick = () => { $$(".rate .opts button").forEach(x => x.classList.toggle("on", x === b)); });
+  const rs = $("#ratesave"); if (rs) rs.onclick = async () => {
+    const v = ($(".rate .opts button.on") || {}).dataset;
+    try { const r = await post(`/api/rate/${j.id}`, {verdict: v ? v.v : "", note: $("#ratenote").value}); j.rating = r; if (R.run) R.run.rating = r; $("#ratemsg").textContent = "Saved."; loadRuns(); }
+    catch (e) { $("#ratemsg").textContent = e.message; }
+  };
+}
+function gotoResult(id) {
+  S.tab = "results"; S.pinned = true; S.det["r-" + id] = true; S.sig = ""; render();
+  const el = document.getElementById("r-" + id);
+  if (el) { el.open = true; el.scrollIntoView({block: "center"}); el.classList.add("flash"); }
+}
+function filterResults(q) {
+  S.rfilter = q; q = q.trim().toLowerCase();
+  $$("details.ritem").forEach(d => { d.hidden = q && !d.dataset.text.includes(q); });
+}
+const det = (key, dflt) => (S.det[key] ?? dflt) ? " open" : "";
+
+// ---------- the answer ----------
+function intervalText(iv) {
+  if (!iv) return "";
+  return `<b>${esc(iv.name)}</b><br>${fmtD(iv.top)} – ${fmtD(iv.base)} ${esc(iv.unit || "")} <small>(${fmtN(iv.samples)} samples; ${esc(iv.from || "")})</small>`;
+}
+function topicsHtml(topics) {
+  const when = (S.cfg && S.cfg.topics) || {};
+  return (topics || []).map(t => `<span class="topic" title="${esc(when[t] || "")}">${esc(t.replace(/_/g, " "))}</span>`).join("") || `<small>none read</small>`;
+}
+function skillsText(res) {
+  const s = (res && res.skills) || {};
+  if (!s.library || s.library === "none") return "none (no guides)";
+  return `${esc(s.library)}${s.version ? ` <small>(version ${esc(s.version)})</small>` : ""}${res.guides && res.guides.length ? `<br><small>guides read: ${esc(res.guides.join(", "))}</small>` : ""}`;
+}
+function errorBox(j, res) {
+  const tb = res && res.traceback;
+  return `<div class="errbox">${esc(j.error || (res && res.error) || j.status)}${tb ? `<details><summary><span class="caret">▶</span>Traceback</summary><pre>${esc(tb)}</pre></details>` : ""}</div>`;
+}
+function answerPane(j, res, finished) {
+  if (!finished) return `<div class="card"><div class="cb"><div class="thinking"><span class="spin"></span>The answer appears here when the run ends. The Progress tab follows it as it happens.</div></div></div>`;
+  let html = "";
+  if (res && res.interval) html += `<div class="strip"><div class="sbox"><div class="sl">Interval</div><div class="sv">${intervalText(res.interval)}</div></div>
+    <div class="sbox"><div class="sl">Topics read</div><div class="sv">${topicsHtml(res.read && res.read.topics)}</div></div>
+    <div class="sbox"><div class="sl">Skills</div><div class="sv">${skillsText(res)}</div></div>
+    <div class="sbox"><div class="sl">Status</div><div class="sv">${esc(res.status)}<br><small>${res.steps.length} steps · ${res.usage.calls} model calls · ${fmtS(res.seconds)}</small></div></div></div>`;
+  if (j.status !== "done" && !j.answer) return html + errorBox(j, j.result);
+  if (res && res.status === "unresolved_numbers") html += `<div class="callout warn" style="margin-bottom:12px">The answer kept a number the checker found in no computed result: read numbers with care.</div>`;
+  html += `<div class="ansbar"><button class="btn small" id="copyans">Copy answer</button></div><div class="answer"><div class="prose">${md(j.answer)}</div></div>`;
+  const r = j.rating || {};
+  html += `<div class="rate"><div class="q">Is this answer right?</div><div class="opts">${["good", "partly", "wrong"].map(v => `<button data-v="${v}" class="${v}${r.verdict === v ? " on" : ""}">${v}</button>`).join("")}</div>
+    <textarea id="ratenote" placeholder="What was right or wrong (optional)">${esc(r.note || "")}</textarea>
+    <div class="row" style="margin-top:10px"><button class="btn fix" id="ratesave">Save verdict</button><span class="hint" id="ratemsg" style="margin:0">${r.rated ? `Saved ${esc(r.rated)}` : ""}</span></div></div>`;
+  return html;
+}
+
+// ---------- progress ----------
+function tokens(r) { return r && (r.prompt_tokens != null || r.completion_tokens != null) ? `${fmtN(r.prompt_tokens)} in · ${fmtN(r.completion_tokens)} out` : ""; }
+function editsHtml(edits) {
+  if (!edits || !edits.length) return "";
+  return `<ul class="edits">${edits.map(e => `<li><span class="op ${esc(e.op)}">${esc(e.op)}</span>${e.id ? `<b>${esc(e.id)}</b> ` : ""}${e.point ? `<small>point ${esc(e.point)}</small> ` : ""}${e.grade ? `<span class="grade ${esc(String(e.grade).replace(/ /g, "-"))}">${esc(e.grade)}</span> ` : ""}${inline(e.text || "")}${e.ev ? ` <small>${e.ev.map(x => inline(x)).join(" ")}</small>` : ""}</li>`).join("")}</ul>`;
+}
+function resultChips(ids, m, calls) {
+  return ids.map(id => {
+    const r = m.results.get(id), line = (calls && calls.get(id)) || (r ? r.title : "");
+    return `<li style="font-family:var(--sans)"><span class="eid" data-e="${id}">${id}</span> <span class="mono">${esc(line.length > 120 ? line.slice(0, 117) + "…" : line)}</span></li>`;
+  }).join("");
+}
+function callCard(kind, title, calls, body, live) {
+  const secs = calls.reduce((s, c) => s + ((c.reply && c.reply.seconds) || 0), 0);
+  const tok = calls.reduce((a, c) => [a[0] + ((c.reply && c.reply.prompt_tokens) || 0), a[1] + ((c.reply && c.reply.completion_tokens) || 0)], [0, 0]);
+  const t0 = calls.length ? calls[0].t : null;
+  const extra = calls.length > 1 ? `${calls.length} calls · ` : "";
+  return `<div class="ti k-${kind}${live ? " live" : ""}"><div class="card"><div class="ch"><span class="kind ${kind}">${esc(kind === "read" ? "READ" : kind)}</span><span class="title">${title}</span>
+    <span class="right">${t0 != null ? `<span class="tt">at ${fmtS(t0)}</span>` : ""}${extra}${secs ? `${secs.toFixed(1)} s` : ""}${tok[0] || tok[1] ? ` · ${fmtN(tok[0])} in · ${fmtN(tok[1])} out` : ""}</span></div>
+    <div class="cb">${body}${live ? `<div class="thinking"><span class="spin"></span>Waiting for the model…</div>` : ""}</div></div></div>`;
+}
+function progressPane(j, m, res, finished) {
+  let html = `<div class="tl">`;
+  const ph = (text, t) => `<div class="ti phase"><div class="phtext">${t != null ? `<span class="tt">${fmtS(t)}</span>` : ""}${text}</div></div>`;
+  if (m.phase.queued && !m.phase.started) html += ph(`<b>Waiting for a free worker</b>${j.queue_position ? ` · number ${j.queue_position} in the queue` : ""}`, null);
+  if (m.phase.started) html += ph(`<b>Started</b>${m.phase.started.endpoint ? ` on ${esc(host(m.phase.started.endpoint))}` : ""}`, m.phase.started.t);
+  if (m.phase.interpreting) html += ph(`<b>Reading the LAS</b>; <span style="color:var(--pp)">Petrophys</span> interprets the well${m.calls.length ? "" : " <span class=\"spin\" style=\"width:10px;height:10px;vertical-align:-1px\"></span>"}`, m.phase.interpreting.t);
+  const live = c => !finished && c && !c.reply;
+  // READ
+  const reads = m.calls.filter(c => c.type === "read");
+  if (reads.length) {
+    const r = [...reads].reverse().find(c => c.reply && c.reply.topics) || reads[reads.length - 1];
+    const rep = r.reply || {};
+    let body = rep.topics ? `<div class="kv"><span class="l">topics</span><span class="v">${topicsHtml(rep.topics)}</span>${rep.named && rep.named.length ? `<span class="l">named</span><span class="v">${rep.named.map(esc).join(" · ")}</span>` : ""}</div>` :
+      rep.unreadable ? `<div class="callout warn">The READ reply could not be read${reads.length > 1 ? "" : "; it is asked once more"}.</div>` : "";
+    html += callCard("read", "The question's topics", reads, body, live(reads[reads.length - 1]));
+  }
+  // steps
+  const steps = [...new Set(m.calls.filter(c => c.type === "step").map(c => c.number))].sort((a, b) => a - b);
+  const firstLook = [...m.resultStep].filter(([, k]) => k === 0).map(([id]) => id);
+  const callLine = new Map(((res && res.opened) || []).map(o => [o.id, o.call]));
+  for (const k of steps) {
+    const calls = m.calls.filter(c => c.type === "step" && c.number === k);
+    const main = calls.find(c => c.stage === `step_${k}` && c.reply && !c.reply.empty && !c.reply.unreadable) || calls.find(c => c.reply && (c.reply.focus !== undefined)) || calls[0];
+    const rep = (main && main.reply) || {};
+    const rec = res && res.steps.find(s => s.step === k);
+    let body = "";
+    if (k === 1 && firstLook.length) body += `<div class="kv"><span class="l">first look</span><span class="v"><ul class="acts">${resultChips(firstLook, m, callLine)}</ul></span></div>`;
+    const rows = [];
+    if (rep.asks) rows.push(["asks", inline(rep.asks)]);
+    const asked = m.calls.find(c => c.stage === `step_${k}_points` && c.reply && c.reply.points);
+    const points = (rep.points && rep.points.length && rep.points) || (asked && asked.reply.points) || (k === 1 && res && res.points.length ? res.points : null);
+    if (points) rows.push(["points", `<ol class="points">${points.map(p => `<li>${inline(p)}</li>`).join("")}</ol>`]);
+    if (rep.intent) rows.push(["intent", esc(rep.intent)]);
+    const focus = (rec && rec.focus) || rep.focus;
+    if (focus) rows.push(["focus", inline(focus)]);
+    const edits = rep.edits && rep.edits.length ? rep.edits : (rec ? rec.edits : []);
+    if (edits && edits.length) rows.push(["edits", editsHtml(edits)]);
+    const actions = rec ? rec.actions : (rep.next || []);
+    if (actions.length) rows.push([rec ? "actions" : "asks for", `<ul class="acts">${actions.map(a => `<li>${esc(a)}</li>`).join("")}</ul>`]);
+    const opened = [...m.resultStep].filter(([, s]) => s === k).map(([id]) => id);
+    if (opened.length) rows.push(["opened", `<ul class="acts">${resultChips(opened, m, callLine)}</ul>`]);
+    if (rec && rec.edit_msgs && rec.edit_msgs.length) rows.push(["not applied", `<div class="callout warn">${rec.edit_msgs.map(esc).join("\n")}</div>`]);
+    if (rep.done || (rec && rec.done)) rows.push(["done", "the model says the answer is settled"]);
+    if (rec && rec.stopped) rows.push(["stopped", esc(rec.stopped)]);
+    const fixed = rec && rec.repaired ? {"salvage": "The reply was not one complete JSON object; the harness read the edits and actions it holds.",
+      "salvage, incomplete": "The reply was not complete JSON, nor was its fixed form; the harness read the edits and actions it could recover.",
+      "fix": "The reply was not valid JSON; the model's fixed reply was read."}[rec.repaired] : "";
+    if (fixed) rows.push(["reply", `<div class="callout warn">${esc(fixed)}</div>`]);
+    else if (rec && rec.error) rows.push(["reply", `<div class="callout warn">${esc(rec.error)}</div>`]);
+    else if (rep.unreadable && !(rec && rec.focus !== undefined)) rows.push(["reply", `<div class="callout warn">The reply could not be read as JSON${finished ? "" : "; the harness asks the model to fix it"}.</div>`]);
+    if (rows.length) body += `<div class="kv">${rows.map(([l, v]) => `<span class="l">${l}</span><span class="v">${v}</span>`).join("")}</div>`;
+    const variants = calls.filter(c => c !== main).map(c => c.stage.replace(`step_${k}_`, "")).join(", ");
+    html += callCard("step", `Step ${k}${variants ? ` <small style="font-weight:400;color:var(--muted)">(+ ${esc(variants)})</small>` : ""}`, calls, body, live(calls[calls.length - 1]));
+  }
+  // settle
+  const settles = m.calls.filter(c => c.type === "settle");
+  if (settles.length) {
+    const rep = (settles[0].reply) || {};
+    let body = rep.edits ? (rep.edits.length ? editsHtml(rep.edits) : `<div class="phtext">No edits: the claims stand as they are.</div>`) : "";
+    if (res && res.settle) body += `<div class="phtext">${fmtN(res.settle.claims_before)} claims before, ${fmtN(res.settle.claims_after)} after</div>`;
+    html += callCard("settle", "Settle: the claims made final, every result in view", settles, body, live(settles[settles.length - 1]));
+  }
+  // writer and checker
+  const writers = m.calls.filter(c => c.type === "writer");
+  if (writers.length) {
+    const last = [...writers].reverse().find(c => c.reply) || writers[writers.length - 1];
+    const rep = last.reply || {};
+    const body = rep.draft != null ? `<details data-k="w-draft"${det("w-draft", false)}><summary><span class="caret">▶</span>The draft (${fmtN(rep.chars)} characters)</summary><pre class="txt" style="margin-top:8px">${esc(rep.draft)}${rep.chars > rep.draft.length ? "\n…" : ""}</pre></details>` : "";
+    html += callCard("writer", "Writing the answer", writers, body, live(writers[writers.length - 1]));
+  }
+  const rounds = [...new Set(m.calls.filter(c => c.type === "repair").map(c => c.number))];
+  for (const n of rounds) {
+    const calls = m.calls.filter(c => c.type === "repair" && c.number === n);
+    const body = `<div class="callout warn">${esc(calls[0].findings || "")}</div>` + (calls[calls.length - 1].reply && calls[calls.length - 1].reply.draft != null ?
+      `<details data-k="r-${n}"${det("r-" + n, false)}><summary><span class="caret">▶</span>The repaired draft (${fmtN(calls[calls.length - 1].reply.chars)} characters)</summary><pre class="txt" style="margin-top:8px">${esc(calls[calls.length - 1].reply.draft)}</pre></details>` : "");
+    html += callCard("repair", `The checker's findings, repair round ${n}`, calls, body, live(calls[calls.length - 1]));
+  }
+  if (finished) {
+    const ok = j.status === "done";
+    const vr = res && res.verify_rounds && res.verify_rounds.length ? res.verify_rounds[res.verify_rounds.length - 1] : null;
+    const clean = vr && !(vr.unsupported || []).length && !(vr.process || []).length && !(vr.contradictions || []).length && !(vr.leaks || []).length;
+    html += `<div class="ti ${ok ? "k-end" : "k-fail"}"><div class="phtext"><span class="tt">${fmtS(j.elapsed)}</span><b>${ok ? "Finished" : esc(j.status)}</b>${res ? `: ${esc(res.status)}` : ""}${vr ? (clean ? " · the checker found nothing to repair" : " · the checker's last findings stand") : ""}</div>${ok ? "" : `<div style="margin-top:8px">${errorBox(j, j.result)}</div>`}</div>`;
+  }
+  return html + `</div>`;
+}
+
+// ---------- claims ----------
+function claimsPane(res, finished) {
+  if (!res) return `<div class="card"><div class="cb"><div class="thinking">${finished ? "This run has no claims." : `<span class="spin"></span>The claims appear when the run ends; the Progress tab shows each step's edits as they happen.`}</div></div></div>`;
+  const points = res.points || [];
+  let html = res.intent ? `<div class="hint" style="margin:0 0 12px">Intent: <b>${esc(res.intent)}</b>. Each claim carries its grade and the results it cites.</div>` : "";
+  const byPoint = new Map(points.map((_, i) => [i + 1, []]));
+  for (const c of res.claims) { if (!byPoint.has(c.point)) byPoint.set(c.point, []); byPoint.get(c.point).push(c); }
+  for (const [k, cs] of byPoint) {
+    html += `<div class="ptcard"><div class="pthead"><span class="ptnum">${k}</span><span class="pttext">${inline(points[k - 1] || `Point ${k}`)}</span></div>`;
+    html += cs.length ? cs.map(c => `<div class="claim"><div class="chead"><b class="mono">${esc(c.id)}</b><span class="grade ${esc(String(c.grade).replace(/ /g, "-"))}">${esc(c.grade)}</span>
+      ${(c.ev || []).map(e => /^E\d+$/.test(e) ? `<span class="eid" data-e="${e}">${e}</span>` : `<span class="chip">${esc(e)}</span>`).join(" ")}</div>
+      <div class="ctext">${inline(c.text)}</div>
+      ${c.means ? `<div class="kv"><span class="l">means</span><span class="v">${inline(c.means)}</span></div>` : ""}
+      ${c.weak ? `<div class="kv"><span class="l">weak</span><span class="v">${inline(c.weak)}</span></div>` : ""}
+      ${(c.flags || []).map(f => `<div class="flag">! ${esc(f)}</div>`).join("")}</div>`).join("") : `<div class="claim"><div class="phtext">No claim for this point.</div></div>`;
+    html += `</div>`;
+  }
+  if (res.dropped && res.dropped.length) html += `<details data-k="dropped"${det("dropped", false)}><summary class="hint"><span class="caret">▶</span>${res.dropped.length} dropped claims</summary><ul class="edits" style="margin-top:8px">${res.dropped.map(c => `<li><b class="mono">${esc(c.id)}</b> ${inline(c.text)}</li>`).join("")}</ul></details>`;
+  return html;
+}
+
+// ---------- results ----------
+function resultsPane(m, res) {
+  const calls = new Map(((res && res.opened) || []).map(o => [o.id, o.call]));
+  const ids = [...new Set([...m.results.keys(), ...calls.keys()])].sort((a, b) => +a.slice(1) - +b.slice(1));
+  if (!ids.length) return `<div class="card"><div class="cb"><div class="thinking">No results opened yet.</div></div></div>`;
+  let html = `<div class="rtools"><input type="text" id="rfilter" placeholder="Filter results (curve, zone, class…)"><span class="hint" style="margin:0">${ids.length} results, each as the model read it</span>
+    <span class="pp-by" title="Every result is computed by the Petrophys library"><img src="/img/petrophys_mark.png" alt="">Computed by Petrophys</span></div>`;
+  html += ids.map(id => {
+    const r = m.results.get(id), call = calls.get(id);
+    const body = r ? `<pre class="txt">${esc(r.text)}</pre>${r.digest ? `<div class="hint">The model read this result in short form; the lines left out are listed above.</div>` : ""}` : `<div class="hint">Opened as ${esc(call || id)}; its text did not reach a prompt.</div>`;
+    return `<details class="ritem" id="r-${id}" data-k="r-${id}" data-text="${esc(((call || "") + " " + (r ? r.text : "")).toLowerCase())}"${det("r-" + id, false)}><summary><span class="caret">▶</span><span class="eidb">${id}</span><span class="t1">${esc(call || (r && r.title) || "")}</span><span class="t2">${r ? `${fmtN(r.text.split("\n").length)} lines` : ""}</span></summary><div class="rbody">${body}</div></details>`;
+  }).join("");
+  return html;
+}
+
+// ---------- details ----------
+function detailsPane(j, res, m) {
+  const i = j.inputs || {}, iv = i.interval || {};
+  let html = "";
+  if (res) {
+    const u = res.usage || {};
+    html += `<div class="tiles">${[["status", res.status], ["steps", res.steps.length], ["model calls", u.calls], ["prompt tokens", fmtN(u.prompt_tokens)], ["output tokens", fmtN(u.completion_tokens)], ["model time", fmtS(u.seconds)], ["run time", fmtS(j.elapsed)], ["results opened", res.opened.length]].map(([l, v]) => `<div class="tile"><div class="tv">${esc(v)}</div><div class="tl2">${l}</div></div>`).join("")}</div>`;
+    html += `<h3 class="sec">The interval</h3><div class="card"><div class="cb"><div class="kv"><span class="l">interval</span><span class="v">${intervalText(res.interval)}</span>
+      <span class="l">zones</span><span class="v">${esc(lithText(res.lithology))}</span>
+      ${res.question_sent ? `<span class="l">sent as</span><span class="v">${esc(res.question_sent)}</span>` : ""}</div>
+      ${res.zones.length ? table(["Zone", "Lithology", "Top", "Base"], res.zones.map(z => [z.zone, z.lithology, fmtD(z.top), fmtD(z.base)])) : ""}</div></div>`;
+    html += `<h3 class="sec">The question as read</h3><div class="card"><div class="cb"><div class="kv"><span class="l">topics</span><span class="v">${topicsHtml(res.read && res.read.topics)}</span>
+      ${res.read && res.read.named && res.read.named.length ? `<span class="l">named</span><span class="v">${res.read.named.map(esc).join(" · ")}</span>` : ""}
+      ${res.absent && res.absent.length ? `<span class="l">not in record</span><span class="v">${res.absent.map(a => esc(a.name)).join(", ")}</span>` : ""}
+      <span class="l">skills</span><span class="v">${skillsText(res)}</span></div></div></div>`;
+    html += `<h3 class="sec">How it was computed</h3><div class="card"><div class="cb"><div class="kv">
+      <span class="l">settings</span><span class="v">${esc(res.settings || "")}</span>
+      <span class="l">Petrophys</span><span class="v">${esc(res.petrophys || "")}${res.interpret ? ` <small>${esc(JSON.stringify(res.interpret))}</small>` : ""}</span>
+      ${j.endpoint ? `<span class="l">model</span><span class="v">${esc((S.cfg && S.cfg.model) || "")} on ${esc(j.endpoint)}</span>` : ""}</div></div></div>`;
+    if (u.log && u.log.length) html += `<h3 class="sec">Model calls</h3>` + table(["Call", "Prompt tokens", "Output tokens", "Seconds"], u.log.map(x => [x.stage, fmtN(x.prompt_tokens), fmtN(x.completion_tokens), x.seconds == null ? "–" : String(x.seconds)]));
+    if (res.verify_rounds && res.verify_rounds.length) html += `<h3 class="sec">The checker</h3>` + table(["Round", "Numbers no result shows", "Process words", "Contradictions", "Working notes"], res.verify_rounds.map(r => [String(r.round) + (r.kept_draft ? " (draft kept)" : ""), (r.unsupported || []).join(", ") || "–", (r.process || []).join(", ") || "–", (r.contradictions || []).join(" ") || "–", (r.leaks || []).join(", ") || "–"]));
+  } else html += `<div class="hint" style="margin-bottom:12px">The run's record appears here when it ends.</div>`;
+  html += `<h3 class="sec">Inputs</h3><div class="card"><div class="cb"><div class="kv">
+    <span class="l">LAS</span><span class="v mono">${esc(i.las)}</span>
+    <span class="l">interval</span><span class="v">${esc(iv.mode || "whole")}${iv.mode === "tops" ? `: ${esc(iv.formation)} in <span class="mono">${esc(iv.tops)}</span>` : iv.mode === "depths" ? `: ${esc(iv.top || "log top")} – ${esc(iv.base || "log base")} ${esc(iv.unit || "")} ${esc(iv.name || "")}` : ""}</span>
+    ${i.lithology_curve ? `<span class="l">lithology</span><span class="v">${esc(i.lithology_curve)}</span>` : ""}
+    ${i.formation_lithology ? `<span class="l">stated</span><span class="v">${esc(i.formation_lithology)}</span>` : ""}
+    ${i.profile ? `<span class="l">profile</span><span class="v">${esc(i.profile)}</span>` : ""}
+    <span class="l">skills</span><span class="v">${esc(i.skills || "default")}</span>
+    ${i.max_steps ? `<span class="l">max steps</span><span class="v">${esc(i.max_steps)}</span>` : ""}
+    <span class="l">run</span><span class="v mono">${esc(j.id)}</span></div></div></div>`;
+  return html;
+}
+function lithText(l) {
+  if (!l) return "";
+  if (l.source === "lithology log") return `from the lithology log ${l.curve} (${l.how})`;
+  if (l.source === "shale-volume bands") return `no lithology log: shale-volume bands (VCL below ${l.bands[0]}, ${l.bands[0]}–${l.bands[1]}, above ${l.bands[1]})`;
+  return "no lithology log and no shale volume: not zoned by lithology";
+}
+
+// ---------- the empty page ----------
+function emptyPage() {
+  $("#run").innerHTML = `<div class="empty"><h2>Ask about a LAS file</h2><div>Choose a well, the interval and the question on the left.</div>
+    <div class="steps3"><div><span class="n">1</span>A LAS file: a path on the server, or an upload</div><div><span class="n">2</span>The interval: a formation from a tops file, depths, or the whole well</div><div><span class="n">3</span>The question, in your own words</div></div>
+    <div class="tagline"><span class="pp"><img src="/img/petrophys_mark.png" alt=""><b>Petrophys</b>&nbsp;calculates</span><span class="sep">·</span><span><b>PetroHarness</b> investigates and records</span><span class="sep">·</span><span><b>K2-Horizon-7B</b> interprets</span></div></div>`;
+}
+
+// ---------- start ----------
+function route() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("replay")) { if (narrow()) setPanel(false); openReplay(h.get("replay"), +(h.get("speed") || 8)); }
+  else if (h.get("run")) openRun(h.get("run"));
+  else emptyPage();
+}
+window.addEventListener("hashchange", route);
+if (narrow()) setPanel(false);
+loadConfig(); loadRuns(); route();
+setInterval(loadConfig, 20000);
+</script>
+</body>
+</html>

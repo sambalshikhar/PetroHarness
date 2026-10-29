@@ -1,0 +1,255 @@
+# The test-to-recipe review of the researched library's area guides. Every Consider and Decide line has an entry, by
+# part and number:
+#   calls: the guide's Compare calls that run the test the line describes (the call as written before its note);
+#   none: why the line has no recipe: "not a test: ..." (a question about the record the map answers, or method
+#         knowledge), or "data: ..." (the test needs data no record of the configured datasets holds; kept as what
+#         would settle the reading).
+# A line whose test no tool can run on the record says the closest tool ("Closest here: ...": a guide names only methods
+# the harness can run); its entry pairs that tool where the guide lists it. tests/agent/test_recipes.py checks every
+# entry against the guides.
+data_quality:
+  consider:
+    1: {starts: "Which curves exist in", calls: [data_record, section numerical.statistical_data_coverage_analysis]}
+    2: {starts: "Where does CALI depart", calls: ["stats CALI, BS, DRHO", runs BAD_HOLE, "spike_flags GR, RHOB, NPHI, DTC"]}
+    3: {starts: "Which curves come from", calls: [stats CURVES where CONDITION]}
+    4: {starts: "What mud was used", none: "not a test: the mud type is a header fact the map shows where the LAS states it"}
+    5: {starts: "Do curves from different", calls: ["lag_correlation GR, RHOB, NPHI, DTC"], none: "data: a repeat pass, which no record holds"}
+    6: {starts: "Which derived curves (PHID,", calls: [stats CURVES where CONDITION]}
+  decide:
+    1: {starts: "Screen hole condition with", calls: ["stats CALI, BS, DRHO", runs BAD_HOLE, section numerical.log_quality_control_assessment]}
+    2: {starts: "Assess zone statistics by", calls: [data_record, stats CURVES where CONDITION]}
+    3: {starts: "Tell artefacts from thin", calls: ["spike_flags GR, RHOB, NPHI, DTC"]}
+    4: {starts: "Flag outliers per zone", calls: ["spike_flags GR, RHOB, NPHI, DTC", section numerical.statistical_deviation_detection]}
+    5: {starts: "Screen sonic: DTC slower", calls: [adjacent_jumps CURVE threshold=VALUE, "spike_flags GR, RHOB, NPHI, DTC"]}
+    6: {starts: "Depth-match against one reference", calls: ["lag_correlation GR, RHOB, NPHI, DTC"]}
+    7: {starts: "Compare curves at a", calls: [runs BAD_HOLE]}
+    8: {starts: "Trace a data problem", calls: [stats CURVES where CONDITION, runs BAD_HOLE]}
+    9: {starts: "Answer shape: locate (depth", none: "not a test: the shape of the answer beside the criteria (format)"}
+lithology_mineralogy:
+  consider:
+    1: {starts: "What label does each", calls: ["stats GR, RHOB, NPHI, PEF, DTC", "lithology_stats GR, RHOB, NPHI, PEF"]}
+    2: {starts: "Is PEF usable here", calls: ["stats GR, RHOB, NPHI, PEF, DTC"], none: "data: the mud weight and type where the header lacks them"}
+    3: {starts: "On neutron-density, PEF-density, M-N", calls: [crossplot RHOB NPHI, crossplot PEF RHOB]}
+    4: {starts: "How much shale (VCL)", calls: [compare PHID PHIN]}
+    5: {starts: "Which minerals did the", calls: [step lithology, "stats VQUAR, VCALC, VDOLO, VANHY"]}
+    6: {starts: "Between zones, do medians", calls: ["stats GR, RHOB, NPHI, PEF, DTC", crossplot RHOB NPHI]}
+  decide:
+    1: {starts: "Neutron-density crossplot with matched", calls: [crossplot RHOB NPHI, compare PHID PHIN]}
+    2: {starts: "Break neutron-density ambiguity with", calls: [crossplot PEF RHOB, "lithology_stats GR, RHOB, NPHI, PEF"]}
+    3: {starts: "Apparent matrix values, with", calls: ["stats GR, RHOB, NPHI, PEF, DTC"], none: "no tool computes it sample by sample; the line names calc on zone means"}
+    4: {starts: "M-N plot: M =", calls: ["stats GR, RHOB, NPHI, PEF, DTC"], none: "no tool computes it sample by sample; the line names calc on zone means"}
+    5: {starts: "Mineral solver output: treat", calls: [step lithology, "stats VQUAR, VCALC, VDOLO, VANHY"]}
+    6: {starts: "Checking a label against", calls: [section lithology.lithology_log_consistency, "lithology_stats GR, RHOB, NPHI, PEF"]}
+    7: {starts: "Carbonate against clastic: PEF,", calls: [section lithology.carbonate_analysis, crossplot PEF RHOB]}
+    8: {starts: "Evaporites, coal and heavy", calls: ["stats GR, RHOB, NPHI, PEF, DTC"]}
+    9: {starts: "Answer shape: classify (units", none: "not a test: the shape of the answer beside the criteria (format)"}
+shale_clay:
+  consider:
+    1: {starts: "Which method produced VCL", calls: [step vclay]}
+    2: {starts: "Could GR be raised", calls: ["stats GR, SGR, CGR, THOR, POTA, URAN"]}
+    3: {starts: "Do independent indicators (GR,", calls: ["stats VCL, GR, NPHI", compare PHIN PHID, section lithology.clay_content_indicators]}
+    4: {starts: "How does porosity (PHIT,", calls: [crossplot PHIT VCL, "stats PHIT, PHIE, VCL"]}
+    5: {starts: "Is gas present? It", calls: [compare PHIN PHID]}
+    6: {starts: "Is the 'shale' a", calls: [zone_contrast PHIE, "stats VCL, GR, NPHI"]}
+  decide:
+    1: {starts: "Gamma ray index IGR", calls: ["stats VCL, GR, NPHI", step vclay]}
+    2: {starts: "Linear Vsh = IGR", none: "not a test: method knowledge on Vsh transforms (the record's is in step vclay)"}
+    3: {starts: "Neutron-density: Vsh ≈", calls: [compare PHIN PHID]}
+    4: {starts: "SP: Vsh ≈", calls: [step vclay], none: "the SP estimate is the vclay step's where it used SP"}
+    5: {starts: "Where uranium is high,", calls: ["stats GR, SGR, CGR, THOR, POTA, URAN"]}
+    6: {starts: "Combine indicators: each is", calls: [step vclay, section lithology.clay_content_indicators]}
+    7: {starts: "Clay distribution: plot PHIT", calls: [crossplot PHIT VCL]}
+    8: {starts: "Answer shape: quantify (values", none: "not a test: the shape of the answer beside the criteria (format)"}
+porosity:
+  consider:
+    1: {starts: "Which porosity does the", calls: ["stats PHIT, PHIE, PHIE_CC, BAD_HOLE", "stats PHID, PHIN, PHIS, PHIT, PEF"]}
+    2: {starts: "How was each curve", calls: [step porosity]}
+    3: {starts: "Is the hole good", calls: ["stats PHIT, PHIE, PHIE_CC, BAD_HOLE", stats CURVES where CONDITION]}
+    4: {starts: "In each zone, do", calls: [compare PHID PHIN, crossplot RHOB NPHI]}
+    5: {starts: "Is core present (PHIC,", calls: [core_vs_log]}
+    6: {starts: "Between zones, compare the", calls: [stats CURVES where CONDITION]}
+  decide:
+    1: {starts: "Log effective porosity is", calls: [core_vs_log, "stats PHIT, PHIE, PHIE_CC, BAD_HOLE"]}
+    2: {starts: "In clean, liquid-filled rock", calls: [compare PHID PHIN]}
+    3: {starts: "Density-neutron combinations: arithmetic", calls: ["stats PHID, PHIN, PHIS, PHIT, PEF", step porosity]}
+    4: {starts: "Shale corrections: subtract VCL", calls: [step porosity]}
+    5: {starts: "Sonic transforms: Wyllie time-average", calls: [step porosity]}
+    6: {starts: "Read PHI_SEC (PHIT −", calls: ["stats DS_SEPARATION, PHI_SEC", section porosity.pore_system_architecture_classification]}
+    7: {starts: "Answer shape: quantify (values", none: "not a test: the shape of the answer beside the criteria (format)"}
+water_saturation:
+  consider:
+    1: {starts: "Which model made SW", calls: [step saturation]}
+    2: {starts: "Where did RW come", calls: [step rw, crossplot RDEP PHIE log_y log_x]}
+    3: {starts: "Does the interval hold", calls: [crossplot RDEP PHIE log_y log_x]}
+    4: {starts: "Which porosity feeds SW:", calls: [step saturation]}
+    5: {starts: "Within a zone, how", calls: [crossplot BVW PHIE, "stats BVW, PHIE, SW"]}
+    6: {starts: "Is there core water", calls: [compare SW SWC], none: "data: capillary-pressure curves and tests, which no record holds"}
+  decide:
+    1: {starts: "Archie suits clean rock,", calls: ["stats SW, RDEP, PHIE, VCL", step saturation]}
+    2: {starts: "Shaly-sand choices: shale-volume models", calls: [step saturation]}
+    3: {starts: "Laminated shale (thin shale", calls: [crossplot PHIT VCL]}
+    4: {starts: "RW sources, from most", calls: [step rw, crossplot RDEP PHIE log_y log_x]}
+    5: {starts: "m choices: 2 for", calls: [crossplot RDEP PHIE log_y log_x, step saturation]}
+    6: {starts: "n: 2 is the", calls: [step saturation], none: "data: core resistivity-index measurements, which no record holds"}
+    7: {starts: "Correct RW and RMF", calls: [step rw]}
+    8: {starts: "Irreducible water estimates: zones", calls: [crossplot BVW PHIE], none: "data: core capillary pressure and NMR, which no record holds"}
+    9: {starts: "Answer shape: quantify (values", none: "not a test: the shape of the answer beside the criteria (format)"}
+hydrocarbon_detection:
+  consider:
+    1: {starts: "Is there a water-bearing", calls: [crossplot RDEP PHIE log_y log_x]}
+    2: {starts: "Within each lithology zone,", calls: [crossplot RDEP PHIE log_y log_x]}
+    3: {starts: "Where CROSSOVER_FLAG is set,", calls: ["stats PHID, PHIN, DRHO, SW, VCL where CROSSOVER_FLAG", runs CROSSOVER_FLAG, overlap A B]}
+    4: {starts: "Do shallow and deep", see: invasion_movability, calls: ["curve_order RSHA, RMED, RDEP"]}
+    5: {starts: "How strong is each", calls: ["stats PHID, PHIN, DRHO, SW, VCL where CROSSOVER_FLAG"]}
+    6: {starts: "What fraction of the", calls: [runs CROSSOVER_FLAG, runs NET_PAY]}
+  decide:
+    1: {starts: "Resistivity test: compare RDEP", calls: [crossplot RDEP PHIE log_y log_x], none: "no tool computes Ro sample by sample; the line names calc on a zone's values"}
+    2: {starts: "Compare like with like.", calls: [crossplot RDEP PHIE log_y log_x]}
+    3: {starts: "Apparent water resistivity Rwa", calls: [crossplot RDEP PHIE log_y log_x], none: "no tool computes Rwa sample by sample; the line names calc on a zone's values"}
+    4: {starts: "Read density-neutron crossover as", calls: [runs NPHI < PHID, "stats PHID, PHIN, DRHO, SW, VCL where CROSSOVER_FLAG", section saturation.gas_indicator_analysis_methods]}
+    5: {starts: "Other gas indicators: compressional/shear", calls: [section hydrocarbon.geophysical_hydrocarbon_indicators]}
+    6: {starts: "Buckles test within a", calls: [crossplot BVW PHIE]}
+    7: {starts: "Weigh indicators by independence,", none: "not a test: how to weigh the indicators the other lines test"}
+    8: {starts: "Screening flags (NET_PAY, PRIME_GAS_TARGET,", calls: [runs NET_PAY, section hydrocarbon.integrated_hydrocarbon_potential]}
+    9: {starts: "Answer shape: locate (depth", none: "not a test: the shape of the answer beside the criteria (format)"}
+fluid_contacts:
+  consider:
+    1: {starts: "Within one zone of", calls: [profile SW, profile RDEP, crossplot SW DEPTH]}
+    2: {starts: "Does the change line", calls: [profile VCL, profile PHIE, runs SEALFLAG, overlap A B]}
+    3: {starts: "Is there a gas-liquid", calls: [runs CROSSOVER_FLAG]}
+    4: {starts: "Does the well reach", calls: [profile SW, runs CONDITION]}
+    5: {starts: "Are there several porous", calls: [runs SEALFLAG]}
+    6: {starts: "Are depths measured depth", none: "data: a deviation survey for true vertical depth, which no record holds"}
+  decide:
+    1: {starts: "Log contact: look for", calls: [crossplot SW DEPTH, runs CONDITION, section saturation.fluid_contact_detection_indicators]}
+    2: {starts: "A log contact lies", calls: [runs CONDITION]}
+    3: {starts: "Separate contact from transition:", calls: [crossplot SW DEPTH, section saturation.fluid_contact_detection_indicators]}
+    4: {starts: "Pressure data: fit a", none: "data: formation pressure tests, which no record holds"}
+    5: {starts: "Gas-oil contact: look for", calls: [runs CROSSOVER_FLAG]}
+    6: {starts: "Compare between zones: rocks", calls: [profile SW]}
+    7: {starts: "Where no water-bearing reservoir", calls: [runs CONDITION]}
+    8: {starts: "The pick's precision is", none: "not a test: the precision of a pick (tool resolution and sample spacing are on the map)"}
+    9: {starts: "Answer shape: locate (depth", none: "not a test: the shape of the answer beside the criteria (format)"}
+invasion_movability:
+  consider:
+    1: {starts: "Which mud was used:", calls: [compare RMF RW]}
+    2: {starts: "Which curves read which", calls: ["stats RDEP, RMED, RSHA, RXO, INVASION_RATIO"]}
+    3: {starts: "In each zone, what", calls: ["curve_order RSHA, RMED, RDEP"]}
+    4: {starts: "How was SXO (flushed-zone", calls: [step mhi]}
+    5: {starts: "Is the separation steady", calls: [runs RSHA > RMED and RMED > RDEP, runs RDEP > RMED]}
+    6: {starts: "Is there independent sign", calls: [compare CALI BS]}
+  decide:
+    1: {starts: "Water-zone reference: with SW", calls: [compare RMF RW, "stats RDEP, RMED, RSHA, RXO, INVASION_RATIO"]}
+    2: {starts: "In hydrocarbon-bearing rock, Rxo/Rt", calls: ["stats RDEP, RMED, RSHA, RXO, INVASION_RATIO", step invasion]}
+    3: {starts: "Flushed-zone saturation from Archie:", calls: [step mhi, section saturation.hydrocarbon_movability_invasion_characteristics]}
+    4: {starts: "If SXO came from", calls: [step mhi]}
+    5: {starts: "Separation within one tool", calls: [runs RSHA > RMED and RMED > RDEP, compare CALI BS, overlap A B]}
+    6: {starts: "No separation is ambiguous:", calls: [compare RMF RW]}
+    7: {starts: "Annulus: on induction logs,", calls: ["curve_order RSHA, RMED, RDEP"]}
+    8: {starts: "Oil-based mud: the filtrate", none: "not a test: what holds under oil-based mud (the mud type is a header fact)"}
+    9: {starts: "Answer shape: locate (depth", none: "not a test: the shape of the answer beside the criteria (format)"}
+permeability_rock_quality:
+  consider:
+    1: {starts: "How was PERM computed", none: "not a test: the permeability step's line on the map gives its method and inputs"}
+    2: {starts: "If PERM comes from", calls: [crossplot PERM PHIE log_y, crossplot RQI PHI_Z log_y log_x]}
+    3: {starts: "Is SW at irreducible", calls: ["stats FZI, RQI, PHIE, PERM, KH"], none: "the transition evidence is fluid_contacts' and water_saturation's"}
+    4: {starts: "Does permeability span orders", calls: [profile PERM]}
+    5: {starts: "Do zones differ more", calls: [profile PERM, "stats FZI, RQI, PHIE, PERM, KH"]}
+    6: {starts: "Which controls are visible:", calls: [zone_contrast PERM, "lithology_stats PERM, PHIE, FZI"]}
+  decide:
+    1: {starts: "Choose or assess a", calls: [crossplot PERM PHIE log_y, "lithology_stats PERM, PHIE, FZI"]}
+    2: {starts: "Rank zones by median", calls: [profile PERM, "stats FZI, RQI, PHIE, PERM, KH"]}
+    3: {starts: "Flow units (rock volumes", calls: [crossplot RQI PHI_Z log_y log_x, "stats FZI, RQI, PHIE, PERM, KH", section permeability.flow_unit_classification_system]}
+    4: {starts: "Alternatives give different units:", calls: [section permeability.flow_unit_classification_system], none: "method knowledge on unit schemes; the record's FZI classes are the one it computes"}
+    5: {starts: "Use the fewest units", calls: [section permeability.flow_unit_classification_system]}
+    6: {starts: "Zones are distinct flow", calls: ["stats FZI, RQI, PHIE, PERM, KH", profile PERM, overlap A B]}
+    7: {starts: "Baffles and barriers show", calls: [runs SEALFLAG]}
+    8: {starts: "kv/kh (vertical over horizontal", none: "data: paired KV_CORE and KH_CORE plugs, in a few records only (the stats tool reads them)"}
+    9: {starts: "Answer shape: classify (units", none: "not a test: the shape of the answer beside the criteria (format)"}
+net_reservoir_pay:
+  consider:
+    1: {starts: "Which cutoffs define NET_ROCK,", calls: [step net_pay, pay_summary]}
+    2: {starts: "How many samples sit", calls: [runs CONDITION]}
+    3: {starts: "What is gross here", calls: [pay_summary], none: "measured or true vertical: a deviation survey no record holds"}
+    4: {starts: "Is SW trustworthy where", calls: ["stats PHIE, PERM, VCL, SW, RDEP where NET_PAY"]}
+    5: {starts: "Is pay thick and", calls: [runs NET_PAY]}
+    6: {starts: "What independent evidence exists:", calls: [section hydrocarbon.integrated_hydrocarbon_potential], none: "data: tests, which no record holds"}
+  decide:
+    1: {starts: "Usual sequence: a VCL", calls: [step net_pay, pay_summary, overlap A B]}
+    2: {starts: "Cutoffs are set field", calls: [crossplot PERM PHIE log_y]}
+    3: {starts: "Another method sets cutoffs", calls: [stats PERM where NET_RES, runs CONDITION]}
+    4: {starts: "Permeability, or mobility (permeability", none: "not a test: what cutoffs stand for"}
+    5: {starts: "Test sensitivity: move each", calls: [runs CONDITION]}
+    6: {starts: "Thin beds: below tool", calls: [runs NET_PAY, runs NET_RES]}
+    7: {starts: "Pay confidence rests on", calls: [runs NET_PAY, "stats PHIE, PERM, VCL, SW, RDEP where NET_PAY"]}
+    8: {starts: "Compare zones by net", calls: [pay_summary, "stats PHIE, PERM, VCL, SW, RDEP where NET_PAY"]}
+    9: {starts: "Answer shape: quantify (values", none: "not a test: the shape of the answer beside the criteria (format)"}
+log_facies_stratigraphy:
+  consider:
+    1: {starts: "For each zone: thickness,", calls: [profile GR, crossplot GR DEPTH]}
+    2: {starts: "Is a trend larger", calls: [crossplot GR DEPTH, "stats GR_GRAD, RHOB_GRAD, RDEP_GRAD, NPHI_GRAD, DTC_GRAD", section numerical.log_gradient_trend_analysis]}
+    3: {starts: "Does GR here track", calls: [profile VCL]}
+    4: {starts: "How do successive units", calls: [vertical_sequence]}
+    5: {starts: "Do zone boundaries sit", calls: [adjacent_jumps CURVE threshold=VALUE]}
+  decide:
+    1: {starts: "Describe each unit by", calls: [profile GR, crossplot GR DEPTH]}
+    2: {starts: "Test a trend: fit", calls: [crossplot GR DEPTH]}
+    3: {starts: "Contacts: sharp where the", calls: [adjacent_jumps CURVE threshold=VALUE]}
+    4: {starts: "Electrofacies: group samples with", calls: [section numerical.advanced_parameter_characterization]}
+    5: {starts: "Stacking: units that each", calls: [vertical_sequence]}
+    6: {starts: "Treat environment as hypotheses:", calls: [profile GR, vertical_sequence, "lithology_stats PHIE, PERM, VCL"]}
+    7: {starts: "Correlate within the well", calls: [adjacent_jumps CURVE threshold=VALUE, profile GR]}
+    8: {starts: "Answer shape: relate (direction,", none: "not a test: the shape of the answer beside the criteria (format)"}
+elastic_properties:
+  consider:
+    1: {starts: "Which sonic curves exist", calls: ["stats DTC, DTS, VP_VS_RATIO, RHOB", "spike_flags DTC, DTS"]}
+    2: {starts: "Is VP_VS_RATIO physically possible", calls: ["stats DTC, DTS, VP_VS_RATIO, RHOB"]}
+    3: {starts: "What lithology, porosity, shale", calls: ["stats DTC, DTS, VP_VS_RATIO, RHOB"]}
+    4: {starts: "Does the sonic see", none: "not a test: what the sonic reads near the hole"}
+    5: {starts: "Is RHOB reliable where", calls: ["stats DTC, DTS, VP_VS_RATIO, RHOB"]}
+    6: {starts: "Are core tests, leak-off", none: "data: core tests, leak-off or minifrac tests and image logs, which no record holds"}
+  decide:
+    1: {starts: "Use measured DTS where", calls: ["stats DTC, DTS, VP_VS_RATIO, RHOB"]}
+    2: {starts: "Separate lithology from fluid:", calls: ["stats DTC, DTS, VP_VS_RATIO, RHOB"]}
+    3: {starts: "Crossplot Vp against Vs", calls: [crossplot DTC DTS]}
+    4: {starts: "Compare acoustic impedance (AI", calls: [profile ACOUSTIC_IMPEDANCE]}
+    5: {starts: "Static moduli and rock", none: "data: core tests to calibrate static moduli, which no record holds"}
+    6: {starts: "Stress estimates need overburden", calls: ["stats ACOUSTIC_IMPEDANCE, POISSON_RATIO, YOUNG_MOD, BRITTLENESS_INDEX, S_V, PP_HYDROSTATIC", section numerical.geomechanical_stress_analysis]}
+    7: {starts: "Brittleness indices (elastic, from", calls: ["stats ACOUSTIC_IMPEDANCE, POISSON_RATIO, YOUNG_MOD, BRITTLENESS_INDEX, S_V, PP_HYDROSTATIC"]}
+    8: {starts: "Answer shape: quantify (values", none: "not a test: the shape of the answer beside the criteria (format)"}
+statistics_data_analysis:
+  consider:
+    1: {starts: "Over what set is", calls: [stats CURVES statistics NAMES where CONDITION, formation_summary]}
+    2: {starts: "How many valid samples", calls: [stats CURVES statistics NAMES where CONDITION]}
+    3: {starts: "What is the shape", calls: [stats CURVES statistics NAMES where CONDITION, lithology_stats CURVES]}
+    4: {starts: "Are the samples independent?", none: "not a test: the resolution to set against the sample step (both on the map)"}
+    5: {starts: "Is a relation over", calls: [crossplot A B]}
+    6: {starts: "Are extreme values errors", calls: [spike_flags CURVES, section numerical.statistical_deviation_detection]}
+  decide:
+    1: {starts: "Centre: mean for near-symmetric", calls: [stats CURVES statistics NAMES where CONDITION]}
+    2: {starts: "Spread: standard deviation (SD)", calls: [stats CURVES statistics NAMES where CONDITION]}
+    3: {starts: "Correlation: Pearson r for", calls: [crossplot A B, compare A B]}
+    4: {starts: "Regression: regress the variable", calls: [crossplot A B]}
+    5: {starts: "Significance: replace n by", calls: [stats CURVES statistics NAMES where CONDITION], none: "no tool computes an effective n; the line names stats with calc"}
+    6: {starts: "Comparing zones: compare between-zone", calls: [stats CURVES statistics NAMES where CONDITION], none: "no tool computes ANOVA or Kruskal-Wallis; the line names stats with calc"}
+    7: {starts: "Depth trends: fit value", calls: [crossplot A B, "stats GR_GRAD, RHOB_GRAD, RDEP_GRAD, NPHI_GRAD, DTC_GRAD"]}
+    8: {starts: "Outliers: screen with quality", calls: [spike_flags CURVES, section numerical.statistical_deviation_detection]}
+    9: {starts: "Answer shape: quantify (values", none: "not a test: the shape of the answer beside the criteria (format)"}
+core_log_integration:
+  consider:
+    1: {starts: "Which core data exist", calls: [core_vs_log]}
+    2: {starts: "Are core and log", calls: ["lag_correlation PHIC, PHIT"]}
+    3: {starts: "Which log porosity matches", calls: [compare PHIT PHIC, compare PHIE PHIC]}
+    4: {starts: "Were core values measured", none: "data: the core analysis conditions, which no record holds"}
+    5: {starts: "Are PHIE_CC and PERM_CC", calls: [step core_correction, compare PHIE PHIE_CC, compare PHIT PHIE_CC, compare PERM PERM_CC]}
+    6: {starts: "Do log and core", calls: [core_vs_log]}
+  decide:
+    1: {starts: "Depth-match first: shift core", calls: ["lag_correlation PHIC, PHIT"]}
+    2: {starts: "Match scales: compare logs", calls: [core_vs_log]}
+    3: {starts: "Pair like with like:", calls: [compare PHIT PHIC, compare PHIE PHIC]}
+    4: {starts: "Measure agreement on matched", calls: [compare PHIT PHIC, compare PERM KH_CORE]}
+    5: {starts: "A bias matters most", calls: [core_vs_log]}
+    6: {starts: "To calibrate porosity, prefer", calls: [step porosity, step core_correction]}
+    7: {starts: "Apply a calibration only", calls: [core_vs_log, step core_correction]}
+    8: {starts: "Before fitting, remove plugs", calls: [core_vs_log], none: "the plugs' condition is core data no record holds"}
+    9: {starts: "Answer shape: relate (direction,", none: "not a test: the shape of the answer beside the criteria (format)"}

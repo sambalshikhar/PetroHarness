@@ -1,0 +1,1 @@
+These statements contradict this interval's data; correct each: 

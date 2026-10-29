@@ -1,0 +1,1 @@
+This interval is one zone: report where things change inside it by depth - the runs of a condition with their depths, its upper, middle and lower thirds, its trend with depth - and not zone-mean or zone-by-zone verdicts, which one zone cannot give. (A single zone's mean hides the intervals the question asks for.)

@@ -1,0 +1,178 @@
+# Provenance of permeability_rock_quality's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - Crain_perm
+  - KGS_PfEFFER
+  - Timur1968
+  - CoatesDenoo1981
+  - WyllieRose1950
+  note: 'Crain ranks a core-calibrated porosity model first and porosity+Swi models second, tuned to core (search
+    excerpt of gated page); KGS: Timur developed for sandstones, Swi restricts use to hydrocarbon zones. Worded
+    ''assess'', not ''judge'' (the G5 word lint bans ''judge'').'
+- class: a
+  refs:
+  - Jensen2000
+  - Law1944
+  note: Different averages answer different questions; log-normal data make mean and median diverge. Choice of ranking measure
+    left to the model.
+- class: a
+  refs:
+  - Amaefule1993
+  - Ebanks1987
+  note: 'Amaefule et al. identify hydraulic units from FZI using histogram, probability plot and log RQI vs log phi_z;
+    Ebanks gives the flow-unit definition paraphrased in brackets. The closest tool here is named (a guide names only
+    methods the harness can run).'
+- class: a
+  refs:
+  - CorbettPotter2004
+  - Kolodzie1980
+  - Martin1997
+  - Lucia1995
+  verified: textbook
+  note: Global hydraulic elements = fixed FZI bands with doubling bounds; R35 classes; Lucia classes. Several schemes, none
+    preferred.
+- class: g
+  refs:
+  - ES2007
+  note: Parsimony and resolution limit; tool resolution from Ellis and Singer tool chapters. 'Two resolution lengths' is a
+    reasoning rule of thumb, not a published constant.
+- class: g
+  refs:
+  - Amaefule1993
+  - Jensen2000
+  note: Between- vs within-group comparison applied to zones; general reasoning built on the HFU method.
+- class: g
+  refs:
+  - ES2007
+  - Jensen2000
+  note: Logs see beds near tool resolution; lateral extent of baffles cannot be seen from one vertical well.
+- class: a
+  refs:
+  - Jensen2000
+  - CardwellParsons1945
+  note: Series layers give harmonic-mean kv, dominated by the lowest-k layers; plug pairs give local ratios.
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - Timur1968
+  - ES2007
+  verified: textbook
+  note: 'Constant converted: 0.136 x 100^4.4 / 100^2 = 8581. Another chart form k^0.5 = 100 phi^2.25 / Swi is also attributed
+    to Timur (see notes.md). Unit conversion re-checked by reviewer: 0.136 x 10^4.8 = 8581.'
+- class: a
+  refs:
+  - WyllieRose1950
+  - MorrisBiggs1967
+  - AK2004
+  - CoatesDenoo1981
+  - BEG_mod14
+  verified: textbook
+  note: Morris-Biggs constants 250 (oil) and 79 (dry gas) as reproduced in log-analysis texts.
+- class: g
+  refs:
+  - Timur1968
+  verified: textbook
+  note: 'Derived: 1.1^4.4 = 1.52, 1.1^-2 = 0.83. KGS notes porosity-only errors commonly span orders of magnitude in carbonates.
+    1.1^4.4 = 1.52, 1.1^-2 = 0.83, checked by reviewer.'
+- class: a
+  refs:
+  - Amaefule1993
+  verified: textbook
+  note: RQI constant 0.0314 for k in mD and RQI in micrometres; phi_z and FZI definitions; Kozeny-Carman basis. Matches VOCAB
+    definitions.
+- class: a
+  refs:
+  - Kolodzie1980
+  - Pittman1992
+  - MaleJensen2022
+  verified: textbook
+  note: 'Winland (1972, unpublished Amoco work) published through Kolodzie 1980; porosity in percent. Male and Jensen: solving
+    Winland/Pittman fits for k is a biased inversion.'
+- class: a
+  refs:
+  - Martin1997
+  - Pittman1992
+  verified: softened
+  note: Class names and bounds vary slightly between papers (some use microport below 0.5 with no nanoport); see notes.md.
+    Not verified against the original online.
+- class: a
+  refs:
+  - Lucia1995
+  - Lucia2007
+  - BEG_Lucia
+  verified: textbook
+  note: 'BEG: particle-size boundaries 100 and 20 micrometres; valid for nonvuggy carbonates, particle size below 500 micrometres,
+    k above 0.1 mD.'
+- class: a
+  refs:
+  - KrumbeinMonk1943
+  - BeardWeyl1973
+  - Nelson1994
+  note: 'Krumbein-Monk: k proportional to d^2 times a sorting term; Nelson reviews clay, cement and pore-throat controls.'
+- class: a
+  refs:
+  - Law1944
+  - Nelson1994
+  - Jensen2000
+  note: Log-normal permeability; within-rock-type log k vs phi trends; scatter at fixed porosity across rock types.
+- class: a
+  refs:
+  - CardwellParsons1945
+  - WarrenPrice1961
+  - Jensen2000
+  note: Arithmetic and harmonic means bound effective permeability; geometric mean for random 2D/3D heterogeneity.
+misread:
+- class: g
+  refs:
+  - Crain_perm
+  note: Log permeability is a transform result; calibration to core is required.
+- class: g
+  refs:
+  - Amaefule1993
+  note: 'Logical consequence: FZI = 0.0314 sqrt(k/phi)(1-phi)/phi; if k = f(phi), FZI = g(phi).'
+- class: a
+  refs:
+  - Jensen2000
+  - Law1944
+  note: Arithmetic mean of a skewed (log-normal) variable is pulled by the upper tail.
+- class: a
+  refs:
+  - Lucia1995
+  - BEG_Lucia
+  - Lucia2007
+  note: Separate vugs add porosity, not permeability; touching vugs dominate flow and are not porosity-predictable.
+- class: g
+  refs: []
+  note: 'Record vocabulary: analyzers return classes with thresholds. General caution about conventional class bounds.'
+- class: g
+  refs:
+  - ES2007
+  note: Shoulder-bed and borehole effects on porosity tools.
+ceiling:
+- class: g
+  refs:
+  - Crain_perm
+  - BEG_mod14
+  note: 'Calibration needs core or flow data; BEG: NMR permeability requires calibration to real data.'
+- class: g
+  refs: []
+  note: Barrier status needs pressure or dynamic evidence.
+- class: g
+  refs:
+  - Jensen2000
+  note: kv comes from vertical plugs or vertical interference tests.
+- class: a
+  refs:
+  - Kolodzie1980
+  - Pittman1992
+  - Lucia1995
+  note: R35 is defined on mercury injection curves; Lucia classes on rock fabric from core or thin section.

@@ -1,0 +1,92 @@
+# Classification topics: domain names for the library's threshold classes.
+# Each topic lists (analyzer family, sections). Aliases map other names (judgement and family names) to topics,
+# so a call that uses one of them still gets the right classes.
+topics:
+  hc_indicators:        [[hydrocarbon, [petrophysical_hydrocarbon_indicators, geophysical_hydrocarbon_indicators]]]
+  hc_reservoir_quality: [[hydrocarbon, [reservoir_quality_for_hydrocarbons]]]
+  hc_potential:         [[hydrocarbon, [integrated_hydrocarbon_potential]]]
+  saturation_classes:   [[saturation, [water_saturation_estimation_analysis]]]
+  bvw:                  [[saturation, [bulk_volume_water_porosity_integration]]]
+  movability:           [[saturation, [hydrocarbon_movability_invasion_characteristics]]]
+  contact:              [[saturation, [fluid_contact_detection_indicators]]]
+  gas:                  [[saturation, [gas_indicator_analysis_methods]], [hydrocarbon, [geophysical_hydrocarbon_indicators]]]
+  perm_distribution:    [[permeability, [permeability_distribution_analysis]]]
+  flow_units:           [[permeability, [flow_unit_classification_system]]]
+  perm_controls:        [[permeability, [permeability_variation_controls]]]
+  invasion_perm:        [[permeability, [invasion_profile_permeability_indicators]]]
+  porosity_quality:     [[porosity, [total_porosity_quality_distribution, porosity_quality_assessment_characteristics]]]
+  pore_system:          [[porosity, [pore_system_architecture_classification]]]
+  clay_impact:          [[porosity, [clay_content_impact_on_porosity_variation]]]
+  lithology_classes:    [[lithology, [lithology_distribution_classification, overall_interpretation]]]
+  carbonate:            [[lithology, [carbonate_analysis]]]
+  clay_indicators:      [[lithology, [clay_content_indicators]]]
+  lithology_consistency: [[lithology, [lithology_log_consistency, lithology_petrophysics_relationships]]]
+  data_coverage:        [[numerical, [statistical_data_coverage_analysis]]]
+  trend:                [[numerical, [log_gradient_trend_analysis]]]
+  deviation:            [[numerical, [statistical_deviation_detection]]]
+  log_consistency:      [[numerical, [log_correlation_consistency_evaluation]]]
+  log_qc:               [[numerical, [log_quality_control_assessment]]]
+  # Verdict-level sections: each analyzer family's integrated reading of the zone. Two are summaries (values per
+  # zone) rather than classes: formation_level_summary, mhi_confirmation (classify reports them one line per zone). A
+  # verdict often needs the family's integrated reading (e.g. the reservoir class from permeability), which no other
+  # topic fetches.
+  perm_verdict:         [[permeability, [overall_permeability_interpretation]]]
+  mhi_check:            [[permeability, [mhi_confirmation]]]
+  saturation_verdict:   [[saturation, [integrated_saturation_interpretation]]]
+  porosity_verdict:     [[porosity, [integrated_porosity_reservoir_assessment]]]
+  lithology_verdict:    [[lithology, [formation_level_summary]]]
+  numerical_verdict:    [[numerical, [integrated_numerical_assessment]]]
+  net_pay_flags:        [[numerical, [net_pay_flag_analysis]]]
+# Topics whose classes grade reservoir quality of one property (porosity, permeability, flow-unit, reservoir-for-
+# hydrocarbon classes). Their zone-level view also shows each zone's net-rock status by the policy cutoffs, so a class
+# label (e.g. an excellent flow-unit class) is not read as a reservoir verdict on rock that fails the shale cutoff.
+reservoir_grading: [porosity_quality, perm_distribution, flow_units, hc_reservoir_quality]
+
+# Classes that mark the absence or the background state of a condition (no indication, stable water, normal, good
+# quality). flagged_runs leaves them out: the flagged-interval block lists where a condition is flagged, not where it is not.
+background_classes: [NO_INDICATION, NO_CONTACT_INDICATORS, STABLE_WATER_ZONE, NORMAL_ZONE, NO_GAS_EFFECT, NO_GAS_INDICATORS,
+                     MINIMAL_MOVEABLE_HC, GOOD_LOG_QUALITY, NON_RESERVOIR, UNDETERMINED, EXCELLENT_DATA_COVERAGE,
+                     GOOD_DATA_COVERAGE]
+
+aliases:
+  hydrocarbon: [hc_indicators, hc_reservoir_quality, hc_potential]
+  pay: [hc_indicators, hc_reservoir_quality, hc_potential]
+  saturation: [saturation_classes, bvw]
+  mobility: [movability]
+  invasion: [invasion_perm]
+  fluid_type: [gas]
+  fluid_contact: [contact]
+  permeability: [perm_distribution, flow_units]
+  reservoir_quality: [porosity_quality, perm_distribution]
+  porosity: [porosity_quality, pore_system]
+  pore_type: [pore_system, clay_impact]
+  lithology: [lithology_classes, carbonate]
+  numerical: [deviation, trend, log_qc]
+  outliers: [deviation, trend]
+  data_quality: [log_qc, data_coverage]
+  statistics: [deviation]
+
+# Provenance topics: what provenance(topics) reports, as workflow steps from the interpretation's step record.
+provenance:
+  rw: [rw, temperature]
+  saturation: [saturation]
+  sxo: [invasion, mhi]
+  permeability: [permeability]
+  porosity: [porosity]
+  vcl: [vclay]
+  net_pay: [net_pay]
+  bad_hole: [bad_hole]
+  lithology: [lithology]
+provenance_aliases:
+  invasion: sxo
+  mobility: sxo
+  mhi: sxo
+  flow_units: permeability
+  perm: permeability
+  pore_type: porosity
+  pay: net_pay
+  cutoffs: net_pay
+  shale: vcl
+  clay: vcl
+  temperature: rw
+  data_quality: bad_hole

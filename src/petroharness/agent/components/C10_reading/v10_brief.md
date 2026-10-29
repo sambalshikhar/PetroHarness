@@ -1,0 +1,1 @@
+Levels and rankings: where a question asks whether zones are high or low in a property, read each zone's level against the workflow's class thresholds for it (or the curve's usual range) as well as against the other zones; a zone can be low without being the lowest.

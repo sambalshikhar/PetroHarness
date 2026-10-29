@@ -1,0 +1,23 @@
+# Data settings: where your data is. Copy to configs/data.local.yaml (untracked) and fill in, or point the
+# environment variable PETROHARNESS_DATA at a file like this one. src/petroharness/config.py documents every key.
+data:
+  las_dir: /path/to/las            # one LAS file per well, named <well>.las
+  tops_csv: /path/to/formation_tops.csv
+  # tops_columns: {well: uwi, name: form, top: top}    # the tops table's column names
+  # top_name_pattern: null                            # which top names count (a regex on the upper-cased name; null keeps every top)
+  # tops_depth_unit: null                              # m or ft; null: the LAS file's own depth unit
+  lithology_nomenclature: null     # optional workbook mapping lithology codes to labels (overrides the library's table)
+  # lithology_columns: {code: code, label: lithology}  # the workbook's code column and the label column to use
+  # The lithology log: its LAS mnemonic (or a list; the first a well has is used). Null: each LAS's own curve whose
+  # mnemonic or description names a lithology or facies log; wells without one are zoned by shale-volume bands.
+  lithology_curve: null
+  # interpret: {}                  # petrophys.interpret options; e.g. {context_profile: costa} for a context package's wells
+  engines_dir: null                # the pinned interpretation engines, when the policy names one (README.md)
+
+# Evaluation only (tests, diagnostics, scoring); a task never sees these.
+eval:
+  questions: null                  # the question file
+  reference_context_dir: null
+  category_context_dir: null
+  gt_dir: null
+  v0_repo: null

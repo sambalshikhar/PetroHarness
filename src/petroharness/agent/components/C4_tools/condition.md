@@ -1,0 +1,1 @@
+a condition: terms joined by 'and' / 'or'; a term is CURVE OP NUMBER or CURVE OP CURVE (OP one of < <= > >= = !=), or a flag curve's name (NET_PAY), or a curve's name alone (where it has a value), or an analyzer class as section:CLASS; e.g. 'SW < 0.5 and PHIE > 0.1', 'NPHI < PHID', 'NET_PAY and VCL < 0.3'

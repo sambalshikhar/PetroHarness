@@ -1,0 +1,152 @@
+# Provenance of net_reservoir_pay's lines (skills/README.md, 'Provenance'): one row per Decide, Know, Easily misread and Do not state line, in order.
+# class: a literature (refs required) | g general guideline | b workflow fact. verified (rows with numbers, where the review set it):
+#   textbook (a widely documented value) | opened (checked in the opened source) | softened (worded as varying by source).
+# refs: keys of skills/refs.yaml, with the chapter or topic cited.
+# Written from the literature and reviewed line by line against rules A-G (skills/README.md).
+decide:
+- class: a
+  refs:
+  - WorthingtonCosentino2005
+  - Worthington2010
+  - Crain_netpay
+  note: 'Vsh -> net sand, phi -> net reservoir, Sw -> net pay hierarchy (also in the World Oil 2011 excerpt); Crain: a layer
+    fails if it fails any one cutoff.'
+- class: a
+  refs:
+  - WorthingtonCosentino2005
+  - Worthington2010
+  - Li2025
+  - BEG_mod14_kb01
+  note: Crossplot-linked cutoffs, capillary/relative-permeability Sw limits and test-boundary methods; Li et al. 2025 list
+    and compare these methods side by side.
+- class: a
+  refs:
+  - Li2025
+  verified: softened
+  note: 'Li et al. 2025, section 3.1: cutoff where accumulated loss of storage and production capacity is about 5% of
+    the total (credited to core-analysis practice). The closest tool here is named (a guide names only methods the
+    harness can run).'
+- class: a
+  refs:
+  - BEG_mod14_kb01
+  - WorthingtonCosentino2005
+  - CobbMarek1998
+  note: 'BEG: cutoff should be based on effective permeability to reservoir fluids under reservoir conditions; porosity alone
+    can mislead. Cobb and Marek: cutoffs depend on depletion mechanism.'
+- class: g
+  refs:
+  - Worthington2010
+  verified: softened
+  note: 'Sensitivity of net to cutoff choice; the step sizes are illustrative, not published standards. Reviewer: step sizes
+    are examples, marked ''for example'' in the line.'
+- class: a
+  refs:
+  - ClavelRuelland2013
+  - Passey2006
+  note: 'Clavel and Ruelland: deterministic cutoff overestimates porous volume in sand-rich thin beds and underestimates it
+    in clay-rich ones; Passey et al. on thin-bed pay.'
+- class: g
+  refs: []
+  note: Evidence-weighing guideline; no single published grading scheme is assumed.
+- class: g
+  refs:
+  - Worthington2010
+  note: Different reservoir measures (h, phi-h, HPT) rank zones differently; choice left to the model.
+- class: g
+  refs: []
+  note: 'Harness format line: the answer''s shape beside this guide''s criteria, in the five ask forms (format only: how
+    a finding and a criterion not met are reported, with their grade); no conclusion.'
+know:
+- class: a
+  refs:
+  - WorthingtonCosentino2005
+  - Worthington2010
+  note: Standard gross/net sand/net reservoir/net pay terminology.
+- class: a
+  refs:
+  - Worthington2010
+  - WorldOil2011
+  note: 'World Oil 2011 excerpt: no universal definition of net pay and no general acceptance of its role.'
+- class: a
+  refs:
+  - Crain_netpay
+  - WorthingtonCosentino2005
+  - CobbMarek1998
+  - Li2025
+  note: 'No numeric cutoff ranges: the ones found rested on a search excerpt of a login-gated page and on conventions
+    not found in an opened source. The line states that cutoffs are set per field and that published values vary by rock
+    and fluid.'
+- class: a
+  refs:
+  - BEG_mod14_kb01
+  verified: opened
+  note: 'BEG: ''critical Sw is typically 50 to 70 percent for most light oil and gas reservoirs''; heavy oil 25 to 30
+    percent. Reviewer opened BEG m14-kb01: ''typically in the 50- to 70-percent range in most light oil and gas
+    reservoirs''; heavy oil 25-30%. The guide says ''values vary''.'
+- class: a
+  refs:
+  - AK2004
+  - Worthington2010
+  note: Pore-volume weighting for saturation; hydrocarbon pore thickness as used in volumetrics.
+- class: a
+  refs:
+  - ES2007
+  - IODP180
+  verified: opened
+  note: 'IODP Leg 180 Table T8 (opened by reviewer): density 40 cm, neutron 30-60 cm, GR 45 cm, deep induction 200 cm; values
+    vary by tool generation.'
+- class: a
+  refs:
+  - Passey2006
+  - ThomasStieber1975
+  note: Low-resistivity low-contrast pay in laminated sequences; laminated vs dispersed shale.
+- class: a
+  refs:
+  - Worthington2010
+  - BEG_mod14_kb01
+  note: 'BEG: cutoffs depend on completion type, skin, viscosity and pressure.'
+- class: g
+  refs: []
+  note: 'Geometry: MD thickness = TVT / cos(deviation) for horizontal beds.'
+misread:
+- class: g
+  refs:
+  - Worthington2010
+  note: Flags encode cutoff passes, not fluid or flow.
+- class: g
+  refs:
+  - Worthington2010
+  note: Aggregation of ratios.
+- class: g
+  refs:
+  - ES2007
+  note: Sample step vs resolution.
+- class: a
+  refs:
+  - WorthingtonCosentino2005
+  note: 'Net reservoir vs net pay distinction. Worded ''assessed'', not ''judged'' (the G5 word lint bans ''judge'').'
+- class: g
+  refs: []
+  note: Total vs effective porosity differ by clay-bound water; record vocabulary has both.
+- class: a
+  refs:
+  - Lucia1995
+  - BEG_Lucia
+  note: Touching vugs and fractures are not related to matrix porosity (BEG Lucia pages).
+ceiling:
+- class: a
+  refs:
+  - AAPG_netpay
+  note: 'AAPG wiki excerpt (Poston 1987): not all net pay is necessarily productive at a given well spacing.'
+- class: g
+  refs: []
+  note: Fluid identity and contacts need pressure or fluid evidence.
+- class: a
+  refs:
+  - WorthingtonCosentino2005
+  - BEG_mod14_kb01
+  note: 'BEG: cutoffs established by reservoir engineer and petrophysicist for the field.'
+- class: g
+  refs:
+  - AAPG_netpay
+  note: Net vs net connected pay distinction for discontinuous horizons.

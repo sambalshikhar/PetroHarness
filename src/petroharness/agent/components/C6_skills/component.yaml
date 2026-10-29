@@ -1,0 +1,10 @@
+id: C6
+name: skills
+purpose: the DIRECTION index over the topic areas (resources/topics.yaml) and the guides of the plugged skill library
+  (a library is data, resources/skills/README.md; its version is the trace's skills)
+texts:
+  guides_head: guides_head.md     # the GUIDES block of a step's prompt: guides outside NEW and its budget
+  guide_short: guide_short.md     # a guide read at an earlier step, short: its Compare calls
+frames:
+- resources/topics.yaml
+- agent/direction.py

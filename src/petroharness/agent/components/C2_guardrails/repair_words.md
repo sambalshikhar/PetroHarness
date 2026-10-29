@@ -1,0 +1,1 @@
+These words talk about the investigation, not the formation: {words}. Say each as a fact about this well's data (what it shows, or which data it lacks), or remove it.

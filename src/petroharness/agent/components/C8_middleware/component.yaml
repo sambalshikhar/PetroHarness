@@ -1,0 +1,14 @@
+id: C8
+name: middleware
+purpose: 'what the hooks around each call say: actions left out, results held for the next step, edits not applied'
+texts:
+  not_run: not_run.md
+  not_run_guide: not_run_guide.md         # with a skill library only
+  actions_left_out: actions_left_out.md
+  withheld: withheld.md         # results over NEW's budget, shown first at the next step
+  withheld_last: withheld_last.md   # the same before the last step: settle shows every result
+  shown_above: shown_above.md   # a result asked for again in the step that already shows it
+  nothing_new: nothing_new.md
+  edits_not_applied: edits_not_applied.md
+frames:
+- agent/graph.py

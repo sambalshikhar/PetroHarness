@@ -1,0 +1,1 @@
+These numbers are not shown by any result, the map or the question: {numbers}. Take each exactly as a claim or a result shows it (with its id in brackets), or remove it.

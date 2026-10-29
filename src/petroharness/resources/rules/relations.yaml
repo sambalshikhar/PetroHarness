@@ -1,0 +1,161 @@
+# Relation registry: what the correlation call (src/petroharness/record/catalog.py) states about how two curves relate,
+# besides the numbers it computes (zone means ranked, zone-level direction, zone separation, the sample coefficient).
+# Construction (one curve computed from the other) is read from the step record with rules/curves.yaml `construction`,
+# not stated here. Domain knowledge as data, each entry with its source or reason. Another workflow or field edits
+# this file, not the code. No well names, depths or benchmark values.
+
+# classes: curve -> the library class section that grades it. Used for the class concordance of two curves (one class
+# per zone from its zone means, as zone_classes) and for the class width in the range-restriction note.
+#   topic, section  the rules/topics.yaml topic and the library section (petrophys evaluation.diagnostics analyzers)
+#   reads           the section's input curves in the library's priority order. Its classes are this curve's only when
+#                   this curve is the first one present; otherwise the curve has no classes (the harness does not
+#                   grade a curve the library does not grade). Empty: the section forms the quantity itself (e.g. the
+#                   invasion ratio from shallow and deep resistivity) and its classes are this curve's.
+#   bands           the petrophys Bands the section classifies with (Analyzer.NAME): its classes, edges and on which
+#                   side of an edge an equal value falls come from the library, not from this file
+#   scale           log: a log-normal curve; class widths are compared in decades
+#   high, names     the classes counted as high for "both high / both low / discordant", and words for high and low
+classes:
+  PERM:
+    topic: perm_distribution
+    section: permeability_distribution_analysis
+    reads: [PERM_CC, PERM, PERM_CORE, PERM_TIMUR]
+    bands: PermeabilityAnalysis.DISTRIBUTION_BANDS
+    scale: log
+    high: [GOOD_PERMEABILITY, VERY_GOOD_PERMEABILITY, EXCELLENT_PERMEABILITY]   # GOOD_RESERVOIR and better in the library's overall reading
+    names: {high: GOOD or better, low: FAIR or POOR}
+  PERM_CC:
+    topic: perm_distribution
+    section: permeability_distribution_analysis
+    reads: [PERM_CC, PERM, PERM_CORE, PERM_TIMUR]
+    bands: PermeabilityAnalysis.DISTRIBUTION_BANDS
+    scale: log
+    high: [GOOD_PERMEABILITY, VERY_GOOD_PERMEABILITY, EXCELLENT_PERMEABILITY]
+    names: {high: GOOD or better, low: FAIR or POOR}
+  FZI:
+    topic: flow_units
+    section: flow_unit_classification_system
+    reads: [FZI]
+    bands: PermeabilityAnalysis.FLOW_UNIT_BANDS
+    scale: log
+    high: [MACRO_PORES, MEGA_PORES]          # pore-throat size classes of the hydraulic flow unit method
+    names: {high: macro or mega pores, low: meso or micro pores}
+  INVASION_RATIO:
+    topic: invasion_perm
+    section: invasion_profile_permeability_indicators
+    reads: []                                # the library forms the shallow/deep ratio itself from RXO, RSHA or RESS
+    bands: PermeabilityAnalysis.INVASION_BANDS
+    high: [CONDUCTIVE_INVASION, RESISTIVE_INVASION]   # shallow and deep readings separate either way where filtrate invaded
+    names: {high: invaded, low: minimal invasion}
+  VCL:
+    topic: perm_controls
+    section: permeability_variation_controls
+    reads: [VSH, VCL, VCLAY]
+    bands: PermeabilityAnalysis.VARIATION_BANDS
+    high: [SHALE_DOMINATED]
+    names: {high: shale-dominated, low: clean or mixed}
+  PHIE:
+    topic: porosity_quality
+    section: total_porosity_quality_distribution
+    reads: [PHIE_CC, PHIT, PHID, PHIS, PHIN, NPHI]
+    bands: PorosityAnalysis.TOTAL_POROSITY_BANDS
+    high: [GOOD_POROSITY, EXCELLENT_POROSITY]
+    names: {high: good or excellent porosity, low: fair or poor porosity}
+  PHIT:
+    topic: porosity_quality
+    section: total_porosity_quality_distribution
+    reads: [PHIE_CC, PHIT, PHID, PHIS, PHIN, NPHI]
+    bands: PorosityAnalysis.TOTAL_POROSITY_BANDS
+    high: [GOOD_POROSITY, EXCELLENT_POROSITY]
+    names: {high: good or excellent porosity, low: fair or poor porosity}
+  PHIE_CC:
+    topic: porosity_quality
+    section: total_porosity_quality_distribution
+    reads: [PHIE_CC, PHIT, PHID, PHIS, PHIN, NPHI]
+    bands: PorosityAnalysis.TOTAL_POROSITY_BANDS
+    high: [GOOD_POROSITY, EXCELLENT_POROSITY]
+    names: {high: good or excellent porosity, low: fair or poor porosity}
+  SW:
+    topic: saturation_classes
+    section: water_saturation_estimation_analysis
+    reads: [SWA, SW, SWT-LOG]
+    bands: SaturationAnalysis.WATER_SATURATION_BANDS
+    high: [WATER_BEARING]
+    names: {high: water-bearing, low: in a hydrocarbon-saturation class}
+  BVW:
+    topic: bvw
+    section: bulk_volume_water_porosity_integration
+    reads: [BVW]
+    bands: SaturationAnalysis.BVW_BANDS
+    high: [UNDETERMINED]
+    names: {high: in the UNDETERMINED class, low: in a moveable-HC class}
+# Curves graded by another curve's classes: a shallow resistivity reading is read through the invasion ratio it forms
+# with the deep reading (the library's invasion section uses exactly that ratio).
+class_from:
+  RSHA: INVASION_RATIO
+  RXO: INVASION_RATIO
+
+# mechanisms: physical reasons two curve groups relate; a pair matches when one curve is in each group. fact: what the
+# evidence states; source: where the principle comes from (kept here, not shown, to spare the pack budget).
+# direction: the expected relation, which reads the class concordance (never for a pair related by construction: its
+# co-variation is arithmetic; without a direction the concordance stays neutral: both high, both low, discordant):
+#   positive / inverse  as the first group rises; stated at zone level with whether the zone ranking agrees. The
+#                       concordance gives the classed thickness consistent with it (positive: both high or both low;
+#                       inverse: one high, the other low) and the thickness against it.
+#   requires            a necessary condition, not a ranking: a high `dependent` curve requires a high `required` curve
+#                       (pairs of the entry outside these two lists get no direction). Only a dependent-high zone with
+#                       a low `required` curve is against it; a required-high zone with a low dependent is not, as
+#                       `caveat` says. `words` name the four states in the rendering. No zone-level direction is tested.
+mechanisms:
+  - between: [[INVASION_RATIO, RXO, RSHA, RMED, SXO, MHI], [PERM, PERM_CC, FZI, RQI, PHIE, PHIE_CC]]
+    fact: "filtrate invades only permeable, connected pores: invaded zones (shallow and deep resistivity apart, ratio away from 1) are permeable and tight rock stays uninvaded; the separation also depends on mud-filtrate and water resistivity and on fluids, so it grades permeability only roughly"
+    source: "the invasion profile of a permeable bed: flushed, transition and uninvaded zones"
+    direction: requires
+    requires:                  # invasion (the shallow/deep separation and its classes) requires permeable rock
+      dependent: [INVASION_RATIO, RXO, RSHA, RMED]
+      required: [PERM, PERM_CC]
+      words: {dependent_high: invaded, dependent_low: not invaded, required_high: permeable, required_low: tight}
+      caveat: "invasion also depends on the mud-filtrate and formation-water contrast and on fluids"
+  - between: [[VCL, GR], [PERM, PERM_CC, FZI, RQI]]
+    direction: inverse
+    fact: "clay fills and bridges pore throats: more clay, lower permeability and FZI at the same porosity"
+    source: "pore-throat control of permeability, Kozeny-Carman and the flow-unit concept"
+  - between: [[PHIE, PHIE_CC, PHIT], [PERM, PERM_CC]]
+    direction: positive
+    fact: "permeability rises with connected porosity; at one porosity it varies with pore-throat size (grain size, sorting, cement, clay), which FZI separates into flow units"
+    source: "porosity-permeability transforms and the hydraulic flow unit method of Amaefule et al."
+  - between: [[VCL], [PHIE, PHIE_CC]]
+    direction: inverse
+    fact: "clay-bound water is not effective porosity: PHIE falls as clay volume rises"
+    source: "shaly-sand porosity model: PHIE = PHIT minus the clay-bound part"
+  - between: [[SW, BVW], [PERM, PERM_CC, FZI, RQI]]
+    direction: inverse
+    fact: "finer pore throats hold more capillary-bound water: lower-permeability rock carries higher SW at the same height above free water"
+    source: "capillary pressure and irreducible water saturation"
+  - between: [[VCL, GR], [RDEP, RMED, RSHA]]
+    direction: inverse
+    fact: "clay minerals conduct: shaly rock reads lower resistivity whatever its fluid"
+    source: "clay conductivity in the shaly-sand saturation models, e.g. Simandoux and Indonesia"
+  - between: [[RDEP, RMED, RSHA, RXO], [RDEP, RMED, RSHA, RXO]]
+    fact: "shallow, medium and deep readings separate where filtrate replaced formation fluid near the borehole; they overlay in impermeable rock or where filtrate and formation water resistivities are alike"
+    source: "invasion profile and the resistivity tool depths of investigation"
+  - between: [[PEF], [VCALC, VDOLO, VANHY, VQUAR, VCL]]
+    fact: "PEF reads mean atomic number: calcite and anhydrite high, dolomite intermediate, quartz low, clays with their iron content; barite in the mud raises PEF without a change in the rock"
+    source: "photoelectric absorption of common minerals, log-interpretation chart books"
+  - between: [[PHID, PHIN, PHIS, PHIT], [PHID, PHIN, PHIS, PHIT]]
+    fact: "density, neutron and sonic porosity respond differently to shale (neutron high), gas (neutron low, density high) and secondary pores (sonic sees mainly intergranular porosity): their separation is the signal"
+    source: "porosity tool responses, log-interpretation principles"
+  - between: [[RDEP], [SW]]
+    direction: inverse
+    fact: "at given porosity and water resistivity, higher deep resistivity means lower water saturation (Archie)"
+    source: "Archie's equation"
+
+limits:
+  min_separated_share: 0.5      # the zone order is informative only where the zones' p25-p75 ranges separate in at
+                                # least this share of zone pairs (and the zone means span two classes and one class width)
+  max_class_pairs: 4             # class pairs listed in the class concordance (thickest first; the rest summed)
+  direction_words: [[0.5, generally have], [0.2, weakly tend to have]]   # |Spearman over zones| at or above -> words;
+                                # below the last: the ranking is said to follow only weakly (never "no relationship")
+  rock_type_min_share: 0.1      # a rock type counts toward a mixed sample at this share of the zoned thickness
+  zone_range_percentiles: [25, 75]   # each zone's range of a curve, compared between zones for overlap
+  sample_range_percentiles: [10, 90] # the sample range compared with one class width

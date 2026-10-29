@@ -1,0 +1,18 @@
+id: C5
+name: orchestration
+purpose: 'what each stage asks: the reading, step 1, step k, the points request, settle (with its bookkeeping lists)'
+texts:
+  read: read.md
+  step1: step1.md
+  step1_guides: step1_guides.md           # with a skill library only
+  step1_guide_call: step1_guide_call.md   # with a skill library only
+  points_scope: points_scope.md
+  settle: settle.md
+  settle_lists: settle_lists.json      # the settle step's bookkeeping lists
+  step_last: step_last.md
+  step_next: step_next.md
+  step_settled: step_settled.md
+  section_owners: section_owners.json
+frames:
+- agent/graph.py
+- agent/loop.py

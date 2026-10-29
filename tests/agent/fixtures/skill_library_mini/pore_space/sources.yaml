@@ -1,0 +1,9 @@
+# Provenance of the guide's lines (one row per Decide, Know, Easily misread and Do not state line).
+decide:
+- class: g
+know:
+- class: a
+  refs:
+  - AK2004
+ceiling:
+- class: g

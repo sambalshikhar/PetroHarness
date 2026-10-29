@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "petroharness"
+version = "3.5.0"
+description = "Answers petrophysics questions about an interval of a well from its raw LAS: Petrophys calculates, the harness investigates and records, K2-Horizon-7B interprets"
+requires-python = ">=3.10"
+dependencies = [
+    "petrophys>=3.0",        # pinned at 916ca46 (README: install)
+    "langgraph>=1.2",
+    "lasio",                 # LAS header read (depth unit) without the data section
+    "numpy",
+    "pandas",
+    "pydantic>=2.6",
+    "pyyaml",
+    "openai>=1.40",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-xdist", "ruff"]
+
+[project.scripts]
+petroharness = "petroharness.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+petroharness = ["py.typed", "resources/**/*", "agent/components/**/*", "ui/static/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests", "tests/agent"]
+addopts = "-q"
+markers = [
+    "data: needs the data files named in the data config (configs/data.local.yaml or PETROHARNESS_DATA)",
+    "llm: needs a live model endpoint",
+]
