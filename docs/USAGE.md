@@ -205,6 +205,28 @@ petroharness --las $S/tuhua-7.las --tops $S/formations_tuhua-7.csv --formation "
     --skills none --question "What is the average porosity of this formation?"
 ```
 
+## Asking for other methods
+
+The record holds the interpretation Petrophys ran with its defaults. Ask for another method, parameter or
+calculation, and the model has Petrophys compute it:
+
+```bash
+petroharness --las $S/1046123714.las --tops $S/1046123714_formation_tops.csv --formation Topeka \
+    --question "Can you compute saturation with Simandoux and give me the statistics?"
+petroharness --las $S/1046123714.las --tops $S/1046123714_formation_tops.csv --formation Oread \
+    --question "What would the water saturation be if Rw were 0.03 ohm.m at 105 degF?"
+petroharness --las $S/tuhua-7.las --tops $S/formations_tuhua-7.csv --formation "Mount Messenger" \
+    --question "Fit a saturation-height function assuming the free-water level is at 870 m."
+```
+
+- **Other inputs come from the record.** Every input the question does not change is taken from the record, and the
+  answer says where each one came from.
+- **New curves.** A recomputed curve gets its own name, such as `SW_SIMANDOUX`, beside the record's.
+- **Missing inputs.** When Petrophys needs an input the well does not carry, the answer says what to provide: Rwb
+  for dual water, CEC for Waxman-Smits, TVD for a pressure method.
+
+Every verb and how a call is bound: `docs/TOOLS.md`.
+
 ## Curve names
 
 LAS files from different companies and decades name the same log differently: the samples use RILD, RESD and ILD for

@@ -8,6 +8,7 @@ texts:
   argument_texts: argument_texts.json
   grammar: grammar.md
   tool_descriptions: tool_descriptions.json
+  library: library.md      # Petrophys's functions are searched before a hand calculation
 frames:
 - agent/schemas.py
 - agent/engine.py

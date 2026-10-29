@@ -535,8 +535,10 @@ class Ledger:
                 else:
                     unshown.append(raw)
             if unshown:
-                raise ToolError(f"calc inputs must be numbers an opened result shows, as shown: {', '.join(unshown)} "
-                                "is in none (open the result that shows it, or use the number as a result shows it)")
+                raise ToolError(f"calc inputs must be numbers an opened result shows, as shown: {', '.join(unshown)} is "
+                                "in none (open the result that shows it, or use the number as a result shows it). A "
+                                "quantity Petrophys computes (a volume in place, a conversion, a fit) comes from its "
+                                "function: search for it (e.g. {\"summarize\": {\"search\": \"<words>\"}}) and run it.")
             if not any_shown:
                 raise ToolError("calc needs at least one number an opened result shows")
         except ToolError as e:

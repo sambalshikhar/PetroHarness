@@ -1,5 +1,31 @@
 # Changelog
 
+## 3.5.2 (2026-10-29)
+
+- **Petrophys on request.** The model can now ask Petrophys for what the record does not hold.
+  - `calculate` recomputes a property with another method or parameters, through Petrophys's own workflow step,
+    with the steps that read its outputs. Examples: SW with Simandoux, VCL with Larionov, porosity with a
+    limestone matrix, permeability with Timur, a stated Rw.
+  - `what_if` tries several values of one input against a target.
+  - `estimate` reads a parameter from the well's own logs: Rw, Archie m, GR endpoints, the clay point, apparent
+    matrix, temperature.
+  - `check` adds held readings, the parts of bad hole and core depth shift.
+  - `classify` adds gas, minerals, flow units, electrofacies and moveable hydrocarbons.
+  - `summarize` adds pay with HCPT at any cutoffs.
+  - `calibrate` adds the core fit, poro-perm transforms, predicted shear and elastic properties.
+- **Every Petrophys function by request.**
+  - Each verb takes `search` and `run` over about 300 public Petrophys functions, from a registry generated from
+    the installed library.
+  - One binder fills each function's inputs: curves by role or name, conditions as masks, the record's numbers, the
+    interval's limits.
+  - Outputs become curves of the question, values and tables.
+- **The record as the default.** Every input not given comes from the record, and each result says where each
+  input came from.
+- **Tools grouped by request.** The model sees its tools under seven verbs: describe, compare and group, check,
+  calculate, classify, summarize, calibrate.
+- **Own wells:** a well whose default interpretation sets the porosity cutoff per lithology no longer stops the run.
+- **Documentation:** `docs/TOOLS.md`.
+
 ## 3.5.1 (2026-10-29)
 
 - **Any chat model.** PetroHarness runs on any chat model behind an OpenAI-compatible endpoint (vLLM, SGLang, Ollama,

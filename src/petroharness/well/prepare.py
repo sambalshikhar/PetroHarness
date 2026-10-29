@@ -354,6 +354,11 @@ def _step_record(steps_executed) -> dict:
     return steps
 
 
+def _numeric(v) -> bool:
+    """A recorded cutoff that is one number (a cutoff set per depth by lithology is recorded as text)."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
 def _check_engine_cutoffs(steps: dict, cut: dict, well=None) -> None:
     """A policy that names an engine must state the cutoffs that engine used (the card and the checks quote them).
 
@@ -361,12 +366,12 @@ def _check_engine_cutoffs(steps: dict, cut: dict, well=None) -> None:
     lithology) is checked on its curves: no NET_RES sample may have porosity at or below the policy's lowest PHIE
     cutoff, and no net-rock sample above its highest cutoff may be left out of NET_RES."""
     p = (steps.get("net_pay") or {}).get("parameters") or {}
-    if well is not None and p.get("phie_cutoff") is None:
+    if well is not None and not _numeric(p.get("phie_cutoff")):     # none, or per depth ("lithology_dependent")
         _check_porosity_cutoff_on_curves(steps, cut, well)
     domain = p.get("lithology_domain", "clastic")
     want = {"vcl_cutoff": cut.get("vcl_max"), "sw_cutoff": cut.get("sw_max"),
             "phie_cutoff": cut.get("phie_min_carbonate" if domain == "carbonate" else "phie_min_clastic")}
-    bad = {k: (p.get(k), v) for k, v in want.items() if v is not None and p.get(k) is not None and abs(float(p[k]) - float(v)) > 1e-12}
+    bad = {k: (p.get(k), v) for k, v in want.items() if v is not None and _numeric(p.get(k)) and abs(float(p[k]) - float(v)) > 1e-12}
     if bad:
         raise RuntimeError(f"WHAT: the engine used cutoffs {bad} (engine, policy). WHY: the policy describes the engine's "
                            "workflow. FIX: make the policy's cutoffs match the engine.")
@@ -405,7 +410,7 @@ def _check_cutoffs(result, cut: dict) -> None:
     domain = p.get("lithology_domain", "clastic")
     want = {"vcl_cutoff": cut.get("vcl_max"), "sw_cutoff": cut.get("sw_max"),
             "phie_cutoff": cut.get("phie_min_carbonate" if domain == "carbonate" else "phie_min_clastic")}
-    bad = {k: (p.get(k), v) for k, v in want.items() if v is not None and p.get(k) is not None and abs(float(p[k]) - float(v)) > 1e-12}
+    bad = {k: (p.get(k), v) for k, v in want.items() if v is not None and _numeric(p.get(k)) and abs(float(p[k]) - float(v)) > 1e-12}
     if bad:
         raise RuntimeError(f"WHAT: the interpretation used cutoffs {bad} (used, policy). WHY: net pay must follow the "
                            "policy. FIX: check the policy's cutoffs and the library's cutoff handling.")

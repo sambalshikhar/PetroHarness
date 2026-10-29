@@ -194,6 +194,9 @@ class FormationView:
     # petroharness.well.derived), name -> values over the well's samples: values() reads them only where the workflow's
     # curve has no value
     analyzer_fills: dict = field(default_factory=dict)
+    # curves Petrophys calculated during the question on the model's request (agent/library.py: calculate), name ->
+    # values over the well's samples; read like the workflow's own curves
+    calculated: dict = field(default_factory=dict)
 
     @classmethod
     def build(cls, task: Task, cfg: Optional[HarnessConfig] = None) -> "FormationView":
@@ -265,6 +268,8 @@ class FormationView:
         data = self.prep.curve(curve)
         if data is None and curve in self.analyzer_curves:
             data = self.analyzer_curves[curve][0]
+        if data is None:
+            data = self.calculated.get(curve)
         return None if data is None else data[self.mask]
 
     def well_values(self, curve: str) -> Optional[np.ndarray]:
@@ -273,6 +278,8 @@ class FormationView:
         data = self.prep.curve(curve)
         if data is None and curve in self.analyzer_curves:
             data = self.analyzer_curves[curve][0]
+        if data is None:
+            data = self.calculated.get(curve)
         fill = self.analyzer_fills.get(curve)
         return data if data is None or fill is None else filled(data, fill)
 

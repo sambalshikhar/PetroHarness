@@ -961,3 +961,11 @@ TOOLS = {"stats": stats, "runs": runs, "section": section, "step": step, "compar
 
 from petroharness.agent.compute import COMPUTED  # noqa: E402  (the named computations, agent/compute.py)
 TOOLS.update(COMPUTED)
+from petroharness.agent.library import LIBRARY  # noqa: E402  (the verbs over Petrophys, agent/library*.py: shown while
+from petroharness.agent.library_calibrate import calibrate  # noqa: E402  (docs/TOOLS.md)
+from petroharness.agent.library_check import check  # noqa: E402
+from petroharness.agent.library_classify import classify  # noqa: E402
+from petroharness.agent.library_summarize import summarize  # noqa: E402
+from petroharness.agent.library_api import verb_tool  # noqa: E402  (find / run over every Petrophys function)
+TOOLS.update({v: verb_tool(v, fn) for v, fn in {**LIBRARY, "check": check, "classify": classify, "summarize": summarize,
+                                                "calibrate": calibrate}.items()})

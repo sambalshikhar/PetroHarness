@@ -10,7 +10,7 @@ Every number in the answer traces back to the log.
 
 **Petrophys calculates · the model investigates · the harness records · you decide**
 
-[![Version](https://img.shields.io/badge/version-3.5.1-011e3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.5.2-011e3f)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.10-011e3f)](#install)
 [![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](docs/MODELS.md)
 [![Default model](https://img.shields.io/badge/default-K2--Horizon--7B-ef6719)](docs/MODELS.md)
@@ -59,7 +59,8 @@ well is zoned by shale volume. Depths can be in feet or metres, even mixed.
 
 #### Petrophys calculates
 Clay volume, porosity, saturation, permeability, net pay, analyzer classes and statistics all come from
-[Petrophys](https://github.com/sambalshikhar/petrophys). A number that no result shows is sent back for repair.
+[Petrophys](https://github.com/sambalshikhar/petrophys). Ask for another method (Simandoux, Timur, a new Rw, other
+cutoffs) and the model has Petrophys compute it, from about 300 of its functions.
 
 </td>
 <td valign="top">
@@ -114,6 +115,10 @@ For example:
 > *How reliable are the density and neutron logs over this interval, and where is the hole washed out?*
 >
 > *Is there a fluid contact in this sand, and at what depth?*
+>
+> *Can you compute saturation with Simandoux and give me the statistics?*
+>
+> *How does net pay change if the water saturation cutoff is 0.5?*
 
 ## How it works
 
@@ -150,7 +155,7 @@ flowchart LR
 |---|---|
 | **1 · The well** | Petrophys interprets the raw LAS and cuts it to your interval. The interval is zoned by its lithology log, or by shale-volume bands when there is none. |
 | **2 · Read** | The model chooses the topic areas the question touches, and lists the measurements the question names. |
-| **3 · Investigate** | Up to eight steps, each one model call rebuilt from the state. The model opens results with tools (statistics zone by zone, analyzer classes as located depth runs, profiles, comparisons, crossplots, overlaps, arithmetic) and adds, revises or drops claims that cite them. Code checks each claim as it arrives. |
+| **3 · Investigate** | Up to eight steps, each one model call rebuilt from the state. The model opens results with tools (statistics zone by zone, analyzer classes as located depth runs, profiles, comparisons, crossplots, overlaps, arithmetic), has Petrophys compute what the record does not hold (another method, an estimate, a what-if, any of its functions), and adds, revises or drops claims that cite them. Code checks each claim as it arrives. |
 | **4 · Settle** | With every opened result in view, the claims become final. |
 | **5 · Write and check** | The writer composes the answer from the settled claims. A checker sends back numbers no result shows, statements the record contradicts and leftover working notes, for repair. |
 
@@ -234,6 +239,7 @@ print(result.answer)          # result.trace: every call and every result opened
 | Part | How to change it |
 |---|---|
 | **Models** | Any chat model, by name or by a model card with its own request settings. See [docs/MODELS.md](docs/MODELS.md). |
+| **Petrophys tools** | Every public Petrophys function is reachable by request; a function added to Petrophys appears with no change here. See [docs/TOOLS.md](docs/TOOLS.md). |
 | **Skill library** | Plug in your own guides with `--skills PATH`, or run with none (`--skills none`). A library is checked as it loads. See [skills/README.md](src/petroharness/resources/skills/README.md). |
 | **Interpretation** | Petrophys's default workflow, a Petrophys context profile (`--profile`), or an interpreter of your own. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#configuration). |
 | **Benchmark mode** | Run a question file with reference answers in parallel, for validation (`petroharness benchmark`). See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#benchmark-mode). |
@@ -263,6 +269,7 @@ never recomputes petrophysics on its own. Documentation: [petrophys.netlify.app]
 | Guide | What it covers |
 |---|---|
 | [docs/USAGE.md](docs/USAGE.md) | asking about your own wells: intervals, tops files, units, lithology, output, the Python API |
+| [docs/TOOLS.md](docs/TOOLS.md) | the tools by request, and Petrophys's functions: calculate, estimate, what_if, check, classify, summarize, calibrate |
 | [docs/MODELS.md](docs/MODELS.md) | models: serving, model cards, reasoning models, hosted APIs |
 | [docs/UI.md](docs/UI.md) | the web UI: options, the parts of the page, its API |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the parts, and how a question flows through them |

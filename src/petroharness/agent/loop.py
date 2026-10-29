@@ -15,7 +15,7 @@ from petroharness.agent.claims import Claims, coerce_edit
 from petroharness.agent.engine import Formation, ToolError
 from petroharness.agent.ledger import Ledger, _terms
 from petroharness.agent.map import render
-from petroharness.agent.schemas import CROSSPLOT, LAG, NAMED, named
+from petroharness.agent.schemas import CROSSPLOT, LAG, LIBRARY_NAMES, NAMED, named
 
 NEW_CHARS = 12000          # NEW's results at most (about 3k tokens); results beyond come first at the next step (the
 #   guides read are not in NEW: they have their own block, GUIDES)
@@ -26,26 +26,54 @@ MAX_CALCS = 3              # calculations in a step, beside the actions
 MAX_STEPS = 8
 POLISH_STEPS = 2           # settled and only rephrasing this many steps in a row: converged
 STEP_KEYS = {"asks", "points", "intent", "focus", "edits", "next", "done"}
-TOOLS = {t["function"]["name"] for t in NAMED + [CROSSPLOT, LAG]}   # every lookup the model can be shown (named()
+TOOLS = {t["function"]["name"] for t in NAMED + [CROSSPLOT, LAG]} | set(LIBRARY_NAMES)   # every lookup the model can be shown (named()
 #   adds the optional ones while their switch is on; a shown tool the parser does not know is dropped unread)
 from petroharness.agent.compute import MAIN as _COMPUTED_MAIN  # noqa: E402
 from petroharness.agent import components as C  # noqa: E402  (the texts: src/petroharness/agent/components)
 _MAIN = {"section": "key", "step": "name", "runs": "condition", "profile": "curve", "crossplot": "y",
-         **_COMPUTED_MAIN}
+         "calculate": "property", "estimate": "parameter", "check": "what", "classify": "what",
+         "summarize": "what", "calibrate": "what", **_COMPUTED_MAIN}
 _EDIT_KEY = re.compile(r'"op"\s*:')
 _ACT_KEY = re.compile(r'\{\s*"(?:' + "|".join(sorted(TOOLS | {"get", "find", "guide", "calc", "tool", "action"}, key=len, reverse=True))
                       + r')"\s*:')
 _WRAPS = ("step", "reply", "response", "answer", "output", "result")
 
 
+# the tools by what users ask (docs/TOOLS.md), as the brief groups them: the record's lookups are members of their
+# verb, and the verbs over Petrophys fill what they lack
+VERBS = (("DESCRIBE: what the record holds", ("stats", "profile", "runs", "section", "step", "formation_summary")),
+         ("COMPARE AND GROUP", ("compare", "crossplot", "overlap", "lithology_stats", "zone_contrast", "curve_order",
+                                "vertical_sequence")),
+         ("CHECK: data quality", ("check", "spike_flags", "adjacent_jumps", "threshold_exceedance", "data_record",
+                                  "lag_correlation")),
+         ("CALCULATE: recompute with Petrophys", ("calculate", "what_if", "estimate")),
+         ("CLASSIFY", ("classify", "zone_classes", "unit_roles")),
+         ("SUMMARIZE", ("summarize", "pay_summary")),
+         ("CALIBRATE: against core, elastic properties", ("calibrate", "core_vs_log")))
+
+
+def _tool_line(t: dict) -> str:
+    fn = t["function"]
+    args = ", ".join(f'"{k}": ...' for k in fn["parameters"]["properties"])
+    return f'  {{"{fn["name"]}": {{{args}}}}}   {fn["description"]}'
+
+
 def tools_text() -> str:
-    """The tools as the brief lists them, from the tool schemas (src/petroharness/agent/schemas.py)."""
-    out = []
-    for t in named():
-        fn = t["function"]
-        props = fn["parameters"]["properties"]
-        args = ", ".join(f'"{k}": ...' for k in props)
-        out.append(f'  {{"{fn["name"]}": {{{args}}}}}   {fn["description"]}')
+    """The tools as the brief lists them, from the tool schemas (src/petroharness/agent/schemas.py), grouped by verb
+    under the line that says where Petrophys's functions are."""
+    tools = named()
+    by = {t["function"]["name"]: t for t in tools}
+    out, placed = [C.text("C4", "library")], set()
+    for head, names in VERBS:
+        here = [by[n] for n in names if n in by]
+        if here:
+            out.append(f"  {head}")
+            out += [_tool_line(t) for t in here]
+            placed |= {t["function"]["name"] for t in here}
+    rest = [t for t in tools if t["function"]["name"] not in placed]
+    if rest:
+        out.append("  OTHER")
+        out += [_tool_line(t) for t in rest]
     # the zone selector the engine reads
     out.append('  zones (any lookup that takes them): zone ids ["Z2", "Z3"], a lithology ["SILT"] for its zones, '
                'or ["ALL"]; left out, every zone')

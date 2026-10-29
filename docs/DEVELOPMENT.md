@@ -187,7 +187,8 @@ src/petroharness/
   well/         the raw LAS read and interpreted by Petrophys, viewed interval by interval; the summary layer;
                 the tops reader (well/tops.py)
   record/       the workflow's record as evidence: analyzer sections, the evidence catalog, the record's facts
-  agent/        the map, the tools, the ledger and claims, the question graph, the writer
+  agent/        the map, the tools, the ledger and claims, the question graph, the writer; library*.py: the
+                verbs over Petrophys and the registry of its functions (docs/TOOLS.md)
   agent/components/   every fixed text the model reads, by component (C1-C10)
   resources/    the policy, the report style, the registries, the topic areas, the skill libraries, the model cards
 configs/        data.example.yaml

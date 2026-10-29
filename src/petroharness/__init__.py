@@ -2,4 +2,4 @@
 Petrophys calculates; the harness investigates and records; the model (any chat model on an OpenAI-compatible
 endpoint; K2-Horizon-7B by default) interprets and writes."""
 
-__version__ = "3.5.1"
+__version__ = "3.5.2"

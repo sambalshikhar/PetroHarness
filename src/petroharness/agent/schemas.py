@@ -107,9 +107,97 @@ LAG = _fn("lag_correlation", D["lag_correlation"],
                                                                             "left out)"}, "zones": _ZONES_OPT}, ["curves"])
 
 
+LIBRARY_NAMES = ("calculate", "estimate", "what_if", "check", "classify", "summarize", "calibrate")
+_VERB_MODULES = {"check": "library_check", "classify": "library_classify", "summarize": "library_summarize",
+                 "calibrate": "library_calibrate"}
+
+
+def _objects(verb: str) -> tuple:
+    """A verb's objects (its module's OBJECTS): their names, and one line each for the description."""
+    import importlib
+    objects = importlib.import_module(f"petroharness.agent.{_VERB_MODULES[verb]}").OBJECTS
+    return list(objects), "\n".join(f"    {k}: {v}" for k, v in objects.items())
+
+
+def library_schemas() -> list:
+    """The verbs over Petrophys (agent/library*.py): calculate's description lists the properties
+    and their methods from the library's own catalog."""
+    from petroharness.agent.library import ESTIMATES, menu_text
+    out = [
+        _fn("calculate", D["calculate"] + "\n" + menu_text(),
+            {"property": {"type": "string", "description": "the property, e.g. saturation"},
+             "method": {"type": "string", "description": "one of the methods the property lists, e.g. simandoux"},
+             "parameters": {"type": "object", "description": "parameter values, e.g. {\"rcl\": 4.0, \"m\": 2.2}"},
+             "label": {"type": "string", "description": "the new curves' suffix (default: the method), e.g. SIMANDOUX"},
+             "downstream": {"type": "boolean", "description": "also recompute the steps that read its outputs (true)"}},
+            ["property"]),
+        _fn("estimate", D["estimate"] + "\n" + "\n".join(f"    {k}: {' | '.join(v)}" for k, v in ESTIMATES.items()),
+            {"parameter": {"type": "string", "enum": list(ESTIMATES)},
+             "method": {"type": "string", "description": "one of the parameter's methods below (the first by default)"},
+             "zones": _ZONES,
+             "rmf": {"type": "number", "description": "mud-filtrate resistivity, ohm.m (rw by sp; else the LAS header's)"},
+             "rmf_temp_f": {"type": "number", "description": "the temperature of rmf, degF"},
+             "bht_f": {"type": "number", "description": "bottom-hole temperature, degF (temperature; else the header's)"},
+             "td": {"type": "number", "description": "the depth of bht_f, in the well's depth unit"},
+             "vcl_max": {"type": "number", "description": "the clean samples' VCL limit (0.3)"},
+             "phie_min": {"type": "number", "description": "the porous samples' PHIE floor for rwa (0.05)"}}, ["parameter"]),
+        _fn("what_if", D["what_if"],
+            {"property": {"type": "string", "description": "the property whose input changes, e.g. net_pay"},
+             "parameter": {"type": "string", "description": "the input, e.g. sw_cutoff, m, rcl, or model / method"},
+             "values": {"type": "array", "items": {"type": ["number", "string"]}, "description": "the values to try (6 at most)"},
+             "target": {"type": "string", "description": "the curve to report, e.g. NET_PAY"},
+             "parameters": {"type": "object", "description": "inputs held fixed for every value, e.g. {\"rw_temp_f\": 105}"}},
+            ["property", "parameter", "values"]),
+        *_verbs(),
+    ]
+    return [_library_access(t) for t in out]
+
+
+def _library_access(t: dict) -> dict:
+    """A verb's schema with search / run over every Petrophys function it serves: their arguments added, its own
+    arguments optional (search and run need none of them), and its description ending with what search reaches."""
+    from petroharness.agent.library_api import menu_line
+    fn = t["function"]
+    fn["description"] += "\n" + menu_line(fn["name"])
+    fn["parameters"]["properties"].update({
+        "search": {"type": "string", "description": "words to search this verb's Petrophys functions, e.g. gas"},
+        "run": {"type": "string", "description": "a Petrophys function's name, as search lists it"},
+        "args": {"type": "object", "description": "run's arguments: a curve name, a condition (VCL > 0.6) or a value"}})
+    fn["parameters"]["properties"].setdefault("label", {"type": "string", "description": "the new curves' prefix"})
+    fn["parameters"]["required"] = []
+    return t
+
+
+def _verbs() -> list:
+    """check, classify, summarize and calibrate: each takes `what`, one of its module's objects."""
+    out = []
+    names, text = _objects("check")
+    out.append(_fn("check", D["check"] + "\n" + text,
+                   {"what": {"type": "string", "enum": names}, "curves": {"type": "array", "items": {"type": "string"},
+                    "description": "the curves to check (default: the object's own)"}, "zones": _ZONES,
+                    "threshold": {"type": "number", "description": "the object's limit, where it takes one"}}, ["what"]))
+    names, text = _objects("classify")
+    out.append(_fn("classify", D["classify"] + "\n" + text,
+                   {"what": {"type": "string", "enum": names}, "method": {"type": "string"},
+                    "curves": {"type": "array", "items": {"type": "string"}, "description": "the curves to classify on"},
+                    "zones": _ZONES, "k": {"type": "integer", "description": "the number of classes or units"}}, ["what"]))
+    names, text = _objects("summarize")
+    out.append(_fn("summarize", D["summarize"] + "\n" + text,
+                   {"what": {"type": "string", "enum": names}, "zones": _ZONES,
+                    "vcl_cutoff": {"type": "number"}, "phie_cutoff": {"type": "number"}, "sw_cutoff": {"type": "number"}},
+                   ["what"]))
+    names, text = _objects("calibrate")
+    out.append(_fn("calibrate", D["calibrate"] + "\n" + text,
+                   {"what": {"type": "string", "enum": names},
+                    "curves": {"type": "array", "items": {"type": "string"}, "description": "the curves to use"},
+                    "zones": _ZONES}, ["what"]))
+    return out
+
+
 def named() -> list:
-    """The lookups the model is shown: NAMED, the crossplot and the lag correlation, with their descriptions."""
-    out = NAMED + [CROSSPLOT, LAG]
+    """The lookups the model is shown: NAMED, the crossplot and the lag correlation, with their descriptions, and the
+    verbs over Petrophys."""
+    out = NAMED + [CROSSPLOT, LAG] + library_schemas()
     import copy
     out = copy.deepcopy(out)
     for t in out:
@@ -127,7 +215,9 @@ def named() -> list:
 
 
 _NUMERIC = {"limit": int, "min_thickness": float, "max_thickness": float, "tolerance": float, "threshold": float, "k": float,
-            "min_change": float, "window": int, "max_lag": float}
+            "min_change": float, "window": int, "max_lag": float, "vcl_max": float, "phie_min": float,
+            "vcl_cutoff": float, "phie_cutoff": float, "sw_cutoff": float, "rmf": float, "rmf_temp_f": float,
+            "bht_f": float, "td": float}
 
 
 def arguments(raw) -> dict:

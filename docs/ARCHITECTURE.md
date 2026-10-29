@@ -70,7 +70,14 @@ conversation inside the investigation.
     `adjacent_jumps`, `vertical_sequence`, `pay_summary`, `core_vs_log`, `zone_classes`, `formation_summary`,
     `data_record`, `unit_roles`;
   - on the ledger: `get` (an item, or its lines matching a term), `find` (a term across every item) and `calc`
-    (arithmetic on shown numbers, kept as an item of its own so the result can be cited).
+    (arithmetic on shown numbers, kept as an item of its own so the result can be cited);
+  - over Petrophys (`library.py`, `library_check.py`, `library_classify.py`, `library_summarize.py`,
+    `library_calibrate.py`, `library_api.py`): the verbs `calculate` (a property recomputed by Petrophys's workflow
+    step with another method or parameters, and the steps that read its outputs), `what_if`, `estimate`, `check`,
+    `classify`, `summarize` and `calibrate`, each with its shortcuts and with `search` and `run` over every public
+    Petrophys function. The registry is generated from the installed library; one binder fills a function's inputs
+    (curves by role or name, conditions as masks, the record's numbers, the interval's limits) and turns its outputs
+    into curves of the question, values and parts. The brief lists every tool under its verb. `docs/TOOLS.md`.
 
   A call goes through one door (`schemas.call`) that reads its arguments and says back what it could not use. Every
   summary comes from the summary layer; the workflow's own outputs (analyzer classes, flow roles, its curves) pass
@@ -126,7 +133,7 @@ the change reaches.
 ### Switches
 
 `agent/options.py` holds the switches under test. A switch exists only while a comparison needs it: it defaults off,
-and once measured it becomes the default or goes. this release defines none. `PETROHARNESS_SET` sets them for one run, and
+and once measured it becomes the default or goes. This release defines none. `PETROHARNESS_SET` sets them for one run, and
 every trace records the options in force.
 
 ## Resources (`petroharness/resources`)

@@ -1,0 +1,1 @@
+  Petrophys's functions are within reach: when the question asks for a method, a calculation, a fit or a quantity the record does not hold, search for it ({"<verb>": {"search": "<words>"}}; a search finds functions under every verb) and run the one that fits, rather than working it out with calc or saying it is not available.
