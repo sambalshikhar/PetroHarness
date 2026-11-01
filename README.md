@@ -10,7 +10,7 @@ Every number in the answer traces back to the log.
 
 **Petrophys calculates · the model investigates · the harness records · you decide**
 
-[![Version](https://img.shields.io/badge/version-3.5.2-011e3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.5.3-011e3f)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.10-011e3f)](#install)
 [![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](docs/MODELS.md)
 [![Default model](https://img.shields.io/badge/default-K2--Horizon--7B-ef6719)](docs/MODELS.md)
@@ -19,7 +19,7 @@ Every number in the answer traces back to the log.
 
 [Quick start](#quick-start) · [How it works](#how-it-works) · [Your own wells](docs/USAGE.md) · [Models](docs/MODELS.md) · [Web UI](docs/UI.md) · [Architecture](docs/ARCHITECTURE.md) · [Citation](#citation)
 
-<img src="docs/images/ui-answer.png" alt="The PetroHarness web UI: a question about the Mount Messenger formation of a well, answered, with the interval used, the topic areas read, the skills used and the zone table" width="100%">
+<img src="docs/images/ui-answer.png" alt="The PetroHarness web UI: a question about the Mount Messenger formation of a well, answered conclusion first: the answer and how sure it is, then the well as Petrophys interpreted it, with the zones the answer names marked" width="100%">
 
 </div>
 
@@ -80,16 +80,22 @@ K2-Horizon-7B is the default. Serve the model yourself and the well data stays o
 </tr>
 </table>
 
-## See the investigation
+## See how the answer was reached
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="docs/images/ui-progress.png" alt="The progress tab: the topic areas the model read, then each step with its points, the tools it called and the results it opened"></td>
-<td width="50%" valign="top"><img src="docs/images/ui-claims.png" alt="The claims tab: each claim with its grade, what it means, what weakens it, and the results it cites"></td>
+<td width="50%" valign="top"><img src="docs/images/ui-progress.png" alt="How the answer was reached: each part of the question with its finding, its confidence, a chart of the zone values it rests on with the net-pay cutoff, why it matters and what could change it"></td>
+<td width="50%" valign="top"><img src="docs/images/ui-claims.png" alt="Evidence: each claim with its grade, what it means, what weakens it and the results it rests on, one of them opened under it as tables"></td>
 </tr>
 <tr>
-<td valign="top"><b>Follow it live.</b> You can see the topic areas the model chose, and each step's working points, tool calls and opened results, as they happen.</td>
-<td valign="top"><b>Check every claim.</b> Each claim shows its grade, what it means, what weakens it and the results it cites. Code's fact checks appear beside it.</td>
+<td valign="top"><b>Follow the reasoning.</b> The answer comes first, then each part of the question: its finding, how sure it is, a chart of the zone values it rests on against the cutoff, and what could change it.</td>
+<td valign="top"><b>Check every claim.</b> Each claim shows what it means, what weakens it and the computed results it rests on; open them under the claim. Click any number in the answer to see the results that show it.</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><img src="docs/images/ui-logs.png" alt="Well logs: the interval as Petrophys interpreted it, gamma ray, resistivity, density and neutron, sonic, shale volume, porosity, water saturation and permeability, the flags and the lithology zones, with the values at the cursor's depth"></td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><b>See the well.</b> The interval as Petrophys interpreted it, track by track, with the lithology zones the investigation works in. Move over the logs to read every curve at a depth; click a zone to pick it.</td>
 </tr>
 </table>
 
@@ -138,7 +144,7 @@ flowchart LR
     inv["Investigate<br/>up to 8 steps: tools,<br/>ledger, cited claims"]:::model
     skills[("Skill library<br/>sourced guides")]:::record
     settle["Settle<br/>final claims"]:::model
-    write["Write and check<br/>repairs"]:::model
+    write["Write from the evidence<br/>claims + every result;<br/>code checks, repairs"]:::model
     out["Answer and<br/>full trace"]:::output
 
     las --> pp
@@ -162,7 +168,7 @@ flowchart LR
 | **2 · Read** | The model chooses the topic areas the question touches, and lists the measurements the question names. |
 | **3 · Investigate** | Up to eight steps, each one model call rebuilt from the state. The model opens results with tools (statistics zone by zone, analyzer classes as located depth runs, profiles, comparisons, crossplots, overlaps, arithmetic), has Petrophys compute what the record does not hold (another method, an estimate, a what-if, any of its functions), and adds, revises or drops claims that cite them. Code checks each claim as it arrives. |
 | **4 · Settle** | With every opened result in view, the claims become final. |
-| **5 · Write and check** | The writer composes the answer from the settled claims. A checker sends back numbers no result shows, statements the record contradicts and leftover working notes, for repair. |
+| **5 · Write and check** | The writer concludes once, from all the evidence: the settled claims, every result the investigation opened (where they differ, the results decide) and a card of what each curve is and how its values were made. A checker sends back numbers no result shows, statements the record contradicts and leftover working notes, for repair. |
 
 The parts in detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The question graph, node by node:
 [docs/GRAPH.md](docs/GRAPH.md). The design rules: [docs/DESIGN.md](docs/DESIGN.md).
@@ -224,8 +230,11 @@ petroharness ui                      # http://127.0.0.1:7860
 In the browser you can:
 
 - pick a LAS file and the interval, and ask your question;
-- follow every model call live;
-- read the answer with its claims, its citations and the record behind it.
+- read the answer as a story: the conclusion, the well with the zones it names, and each finding with the zone values
+  it rests on;
+- see the interval's logs as Petrophys interpreted them;
+- trace any number in the answer to the results that show it, check each claim against its evidence, and follow
+  every step of the investigation in its log.
 
 Runs are saved, and can be rated and replayed. See [docs/UI.md](docs/UI.md).
 
@@ -246,6 +255,7 @@ print(result.answer)          # result.trace: every call and every result opened
 | **Models** | Any chat model, by name or by a model card with its own request settings. See [docs/MODELS.md](docs/MODELS.md). |
 | **Petrophys tools** | Every public Petrophys function is reachable by request; a function added to Petrophys appears with no change here. See [docs/TOOLS.md](docs/TOOLS.md). |
 | **Skill library** | Plug in your own guides with `--skills PATH`, or run with none (`--skills none`). A library is checked as it loads. See [skills/README.md](src/petroharness/resources/skills/README.md). |
+| **Reporting conventions** | Your data's own conventions (a basis, how units are named) go in its data config, never in the code. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-data-config). |
 | **Interpretation** | Petrophys's default workflow, a Petrophys context profile (`--profile`), or an interpreter of your own. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#configuration). |
 | **Benchmark mode** | Run a question file with reference answers in parallel, for validation (`petroharness benchmark`). See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#benchmark-mode). |
 

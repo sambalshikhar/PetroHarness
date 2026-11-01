@@ -61,8 +61,8 @@ retried, so the tapes, not LangGraph's checkpoints, are how a run is reproduced.
 | `close` | code | the investigation's record (steps, points, opened, claims) |
 | `no_answer` | code | the question fails: step 1 was unreadable, so there are no claims to write from |
 | `settle` | model | the final step with every opened result; the claims made final |
-| `write` | model | the writer's draft, with a retry after an empty reply and the working-notes check |
-| `verify` | code | the checker: numbers no result shows, words about the process, statements the record contradicts, working notes left in the text |
+| `write` | model | the writer's draft from the settled claims, every opened result (the results decide where they differ), the provenance card of the curves they name, the zone table and the map; a retry after an empty reply, and the working-notes check |
+| `verify` | code | the checker: numbers no result (or the card, the map, the zone table, the question) shows, words about the process, statements the record contradicts, working notes left in the text |
 | `repair` | model | one repair round on the checker's findings (at most two with the `open` writer, one otherwise) |
 | `finalize` | code | the zone table placed, numbers as the results show them, the status |
 

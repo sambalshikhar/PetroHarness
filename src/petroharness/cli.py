@@ -93,7 +93,7 @@ def benchmark(argv=None):
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--max-steps", type=int, default=MAX_STEPS)
     ap.add_argument("--gt-dir", type=Path, required=True)
-    ap.add_argument("--writer", default="open", help="the writer's variant (petroharness.agent.writer): open or ''")
+    ap.add_argument("--writer", default="open", help="the writer's repair rounds: open (two, the default) or '' (one)")
     ap.add_argument("--format", default="profile", choices=["profile", "default"],
                     help="the answer format: the reporting profile's format block, or the writer's own")
     args = ap.parse_args(argv)

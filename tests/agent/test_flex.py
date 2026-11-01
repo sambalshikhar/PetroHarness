@@ -106,20 +106,6 @@ def test_one_zone_drops_zone_mean_lines_and_the_map_says_how_to_read_it():
 
 
 @pytest.mark.data
-def test_the_writer_gets_the_one_zone_rule_only_for_one_zone():
-    from types import SimpleNamespace as NS
-
-    from petroharness.agent.writer import ONE_ZONE_RULE, prompt
-    from test_b7_writer import _real_claims, _session
-    s = _session(["Where is net pay?"], [])
-    for c in _real_claims(s):
-        s.claims.claims[c.id] = c
-    system, _, _, _ = prompt(s, "open", "default")
-    assert (ONE_ZONE_RULE in system) == (len(s.f.view.zones) == 1)
-    assert ONE_ZONE_RULE not in system
-
-
-@pytest.mark.data
 def test_the_lithology_first_look_reads_the_mineral_volumes():
     from petroharness.llm import Usage
     from test_b5_loop import Script, _session, chose
@@ -161,7 +147,6 @@ def test_a_log_in_the_input_without_values_here_is_not_called_missing():
             assert re.search(rf"\b{re.escape(c)}\b", nodata) and not re.search(rf"\b{re.escape(c)}\b", missing), (t.well, c)
     if not seen:
         pytest.skip("no interval here lacks values of a log its well has")
-
 
 
 @pytest.mark.data

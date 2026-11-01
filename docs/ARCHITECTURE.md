@@ -7,8 +7,77 @@ the layer below it.
 well      raw LAS -> Petrophys interpretation -> prepared well -> interval view (samples, zones, curves)
 record    the interpretation's record as evidence: analyzer sections, the evidence catalog, the record's facts
 agent     the map; the investigation (tools, ledger, claims, skills) as a graph of single-turn model calls; the writer
-cli       a batch of questions run, saved, resumed
+cli       one question, the web UI, or a batch of questions run, saved, resumed
 ```
+
+```mermaid
+flowchart TB
+    subgraph IN["Inputs"]
+        direction LR
+        las["Raw LAS"]:::input
+        itv["Interval<br/>tops, depths or the whole well"]:::input
+        q["Question"]:::input
+        cfg["Data config<br/>paths; optional reporting<br/>conventions"]:::input
+    end
+
+    subgraph WELL["well + record (code)"]
+        direction LR
+        pp["Petrophys interprets<br/>VCL, PHIE, SW, PERM, pay,<br/>analyzers, step record"]:::petrophys
+        view["Interval view<br/>lithology zones Z1..Zn"]:::record
+        map["Map<br/>curves, steps, sections,<br/>zones, notes"]:::record
+        pp --> view --> map
+    end
+
+    subgraph INV["Investigation (one model call per step, rebuilt from the state)"]
+        direction LR
+        read["READ<br/>topics, named<br/>measurements"]:::model
+        look["First look<br/>key curves<br/>zone by zone"]:::code
+        step["Step k of at most 8<br/>points, claim edits,<br/>actions"]:::model
+        act["Tools + Petrophys<br/>stats, runs, compare,<br/>sections, calculate ..."]:::code
+        led[("Ledger<br/>E1..En kept whole")]:::record
+        cl[("Claims<br/>cite E ids;<br/>code flags facts")]:::record
+        sk[("Skill library<br/>sourced guides")]:::record
+        read --> look --> step
+        step -- "actions" --> act --> led
+        led -- "NEW + OPENED" --> step
+        step -- "edits" --> cl
+        cl -- "flags" --> step
+        sk -. "guides on request" .-> step
+    end
+
+    subgraph OUT["Conclusion"]
+        direction LR
+        settle["Settle<br/>every result in view;<br/>claims final"]:::model
+        write["Write<br/>claims + every result<br/>+ provenance card<br/>+ zone table + map"]:::model
+        verify["Verify (code)<br/>numbers, record,<br/>working notes"]:::code
+        fin["Answer + trace"]:::output
+        settle --> write --> verify
+        verify -- "findings, at most 2 rounds" --> write
+        verify --> fin
+    end
+
+    las --> pp
+    itv --> view
+    cfg --> pp
+    q --> read
+    map --> read
+    led --> settle
+    cl --> settle
+    led --> write
+    cfg -. "conventions" .-> step
+    cfg -. "conventions" .-> write
+
+    classDef input fill:#ffffff,stroke:#011e3f,color:#011e3f
+    classDef petrophys fill:#e3f2ee,stroke:#197e6f,color:#0f4f45
+    classDef record fill:#f0eeea,stroke:#9aa0aa,color:#1c2433
+    classDef model fill:#e6ecf4,stroke:#011e3f,color:#011e3f
+    classDef code fill:#ffffff,stroke:#9aa0aa,color:#1c2433
+    classDef output fill:#fdeee4,stroke:#ef6719,color:#7a3410
+```
+
+Blue boxes are model calls, white boxes code, grey the state the harness keeps outside the model, green Petrophys.
+The model sees the data only through the map and the results it opens; code keeps every result and checks every
+number, and never writes a reading for the model.
 
 ## well (`petroharness.well`)
 
@@ -82,11 +151,13 @@ conversation inside the investigation.
   A call goes through one door (`schemas.call`) that reads its arguments and says back what it could not use. Every
   summary comes from the summary layer; the workflow's own outputs (analyzer classes, flow roles, its curves) pass
   through as the workflow's. An analyzer section shows each class as located runs: its criterion, its runs from top
-  to base zone by zone, then its thickness and share; a long list cut to its thickest runs says so and names the
-  `get` of every run. Each curve's label says what it is and what the record knows about it (`engine.status`:
-  measured, model output, parameter, uncalibrated, quicklook or fallback input, not computed). `compare` and
-  `crossplot` lead with the zone level and label each coefficient with its n, ranges and transform. A text cut to the
-  size limit ends with a line naming what is not shown and the `get` that fetches it.
+  to base zone by zone, each zone with its rock (`Z2 (SAND) 4245.0-4253.6`), then its thickness and share; a long
+  list cut to its thickest runs says so and names the `get` of every run. Each curve's label says what it is and what
+  the record knows about it (`engine.status`: measured, model output, parameter, uncalibrated, quicklook or fallback
+  input, not computed). `compare` and `crossplot` lead with the zone level and label each coefficient with its n,
+  ranges and transform; on one scale, `compare` gives each difference with its size against its spread (the zone
+  means' mean difference against the sd of a - b, and `mean / sd` on each row). A text cut to the size limit ends
+  with a line naming what is not shown and the `get` that fetches it.
 - **Ledger** (`ledger.py`). Every opened result is kept in full outside the model, with an id (`E1`, `E2`, ...). The
   same call opens the same item. A step's prompt shows the new results whole within a budget (NEW), the earlier ones
   as digests (OPENED), and a result held back for the budget comes first at the next step.
@@ -112,12 +183,33 @@ conversation inside the investigation.
   `plan` at step 1, `decide`, `act`), `close`, `settle`, then the writer (`write`, `verify`, `repair`, `finalize`).
   Code nodes route; the model never judges its own completion. Every node, state field and route:
   `docs/GRAPH.md`, drawn from the code in `docs/graph.mmd`.
-- **Writer** (`writer.py`, `compose.py`, `checks.py`). The answer is written from the points, the settled claims, the
-  result lines they cite, every opened result (the default `open` writer), the zone table and the map. The checker is
-  code: numbers no opened result, the map, the zone table or the question shows; words about the investigation rather
-  than the formation; statements the record contradicts; working notes left in the text. Each finding goes back to
-  the model as a repair request (up to two rounds); a repair much shorter than the draft keeps the draft. `finalize`
-  places the code-composed zone table and removes citation ids.
+- **Writer** (`writer.py`, `compose.py`, `checks.py`). The investigation finds the evidence; the writer concludes
+  once, from all of it. Its prompt holds the question (and what it names that the record lacks), the data's
+  reporting conventions when its config sets any, the settled claims under their points (readings made as the results
+  came in), every result the investigation opened, in full up to 60,000 characters, and a provenance card of the
+  curves they name: each curve's meaning, status and the record's cautions, and what its zoned values show about how
+  they were made (constant, or held at a limit). Then the zone table and the map. Where the claims and the results
+  differ, the results decide. C9's write text sets the reporting rules; with a zone table inserted, its rule says
+  the table is not to be repeated. The checker is code: numbers no opened result, the card, the map, the zone table
+  or the question shows; words about the investigation rather than the formation; statements the record
+  contradicts; working notes left in the text. Each finding goes back to the model as a repair request (up to two
+  rounds); a repair much shorter than the draft keeps the draft. `finalize` places the code-composed zone table and
+  removes citation ids.
+
+### Reporting settings
+
+Two optional keys of the data config set how a dataset's own reports are made. Both are empty by default, and then
+every prompt is the general one.
+
+- `data.basis: zones` gives the tools' statistics on the lithology zones only (each zone and the zones pooled; the
+  whole interval is left out of the tool output, and stays in the record).
+- `data.conventions` is a list of sentences, each a reporting convention of the data ("Flow units are reported per
+  lithology zone ..."). They are shown in the head of every step prompt and to the writer, as the data's
+  conventions, to be followed in the answer without being named.
+
+They live in the data config, never in the package: a company's reporting standard, or a benchmark's, belongs to
+its data. Setting them for a benchmark is benchmark mode, and results with them are reported as such.
+`docs/DEVELOPMENT.md` has an example.
 
 ### Components
 
@@ -133,8 +225,8 @@ the change reaches.
 ### Switches
 
 `agent/options.py` holds the switches under test. A switch exists only while a comparison needs it: it defaults off,
-and once measured it becomes the default or goes. This release defines none. `PETROHARNESS_SET` sets them for one run, and
-every trace records the options in force.
+and once measured it becomes the default or goes. This release defines none. `PETROHARNESS_SET` sets them for one
+run, and every trace records the options in force.
 
 ## Resources (`petroharness/resources`)
 
@@ -159,7 +251,8 @@ every trace records the options in force.
 4. **steps 1..k**, one call each: read the reply (JSON; an unreadable one is salvaged, or the model fixes its own
    syntax), apply the claim edits, run the actions into the ledger, check the done rule;
 5. **settle**: one call with every opened result; the claims become final;
-6. **write**, **verify**, **repair** (at most twice), **finalize**;
+6. **write** (the claims, every opened result, the provenance card, the zone table, the map), **verify**, **repair**
+   (at most twice), **finalize**;
 7. the answer, its status and the trace.
 
 ## The trace
@@ -171,7 +264,8 @@ Each question's trace holds what it needs to be audited and replayed:
 - every step: its prompt size, its reply, the edits and their messages, the actions run, the results withheld, the
   guides read, the done issues;
 - the points, every opened result's call (`opened`), the claims with their history, the dropped claims;
-- the settle step, the writer's rounds and findings (`verify_rounds`), the zone table;
+- the settle step, the writer's rounds and findings (`verify_rounds`), the zone table; the writer's prompt with the
+  provenance card is in its call;
 - every model call (`calls`) with its spans attributed to components, and token use per call (`usage`);
 - the status, the time taken, and on a failure the error and its traceback.
 

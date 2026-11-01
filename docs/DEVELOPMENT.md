@@ -23,6 +23,8 @@ key; the main ones:
 | `data.interpreter` | a Petrophys batch interpreter, `module:function` or `/path/adapter.py:function`, that interprets the data instead |
 | `data.engines_dir` | the folder of pinned interpretation engines, when the policy names one |
 | `data.cache_dir` | where interpreted wells are cached (default `.cache/wells`), keyed by the LAS content and the interpretation settings |
+| `data.basis` | `all` (default: each zone, the zones pooled and the whole interval) or `zones` (the tools' statistics on the zones only; the record keeps all three) |
+| `data.conventions` | the data's reporting conventions, each a sentence, shown to the investigation and the writer (default none; below) |
 | `eval.*` | question and reference files, read only by benchmark mode, the tests and evaluation scripts; a task never sees them |
 
 **How each LAS is interpreted.** With `interpret` set, `petrophys.interpret` interprets the LAS with those options
@@ -115,7 +117,7 @@ export PETROHARNESS_MODEL_URL=http://host-a:8100/v1,http://host-b:8100/v1
 | `--model-card CARD` | a model card: a YAML file or a packaged card's name (instead of `--models`; `docs/MODELS.md`) |
 | `--workers N` | questions run at once (default 12) |
 | `--max-steps N` | the step cap (default 8) |
-| `--writer open` | the writer's variant: `open` (default; everything opened in view, up to two repair rounds) or `''` |
+| `--writer open` | the writer's repair rounds: `open` (default) allows two, `''` one |
 | `--format profile` | the answer format: the report style's (`profile`, default) or the writer's own (`default`) |
 
 **The output**, under `runs/` in the checkout:
@@ -128,6 +130,20 @@ runs/gt_subsets/<arm>_<model>[r<rep>]/single_formation_<group>_qa_pairs.json
                                                                  the reference rows of the run's questions
 runs/summaries/run_<arm>_r<rep>.json                             counts: ok, unresolved numbers, errors; mean steps
                                                                  and opened results per question
+```
+
+**A benchmark's reporting settings.** A benchmark whose reference answers follow reporting conventions of their
+own (a basis, a way of naming units) states them in its data config, never in the package. The answers are then
+benchmark mode's, and are reported apart from the general harness's:
+
+```yaml
+data:
+  las_dir: /path/to/las
+  tops_csv: /path/to/formation_tops.csv
+  basis: zones                     # the tools' statistics on the lithology zones (the whole interval left out)
+  conventions:                     # shown in every step prompt and to the writer, to be followed without being named
+    - "Flow units are reported per lithology zone: each zone is named as a flow unit with its FZI class, porosity,
+      permeability and quality."
 ```
 
 A question's status is `ok`, `unresolved_numbers` (the checker still found numbers no result shows after the

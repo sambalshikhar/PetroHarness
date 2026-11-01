@@ -1,1 +1,0 @@
-Write each number as the claim or the result shows it, with the same digits: do not round, truncate or re-express it (a fraction stays a fraction, 0.2612 stays 0.2612); depths keep their record's precision. (A value written as computed can be checked against the record.)

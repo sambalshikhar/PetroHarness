@@ -1,6 +1,7 @@
-"""The writer: the answer written from the checked claims, the zone table and the results the claims cite (C9);
-its checker's repair requests (C2): numbers no result shows, words about the investigation, and statements the
-record contradicts. The checker shows facts; it never asks for a different verdict (docs/DESIGN.md, G8)."""
+"""The writer: the answer written from the investigation's claims, every result it opened, the provenance card of the
+curves those name, the zone table and the map (C9); its checker's repair requests (C2): numbers no result shows, words
+about the investigation, and statements the record contradicts. The checker shows facts; it never asks for a different
+verdict (docs/DESIGN.md, G8)."""
 
 from __future__ import annotations
 
@@ -20,7 +21,6 @@ from petroharness.agent import vocabulary
 
 LINES_CHARS = 9000
 
-RULES = C.text("C9", "rules")
 _NAMES = re.compile(r"(?<![A-Za-z0-9_])(Z\d+(?:\s*[-–]\s*Z\d+)?|[A-Z][A-Z0-9]*_[A-Z0-9_]+|[A-Z]{2,}[A-Z0-9]*)(?![A-Za-z0-9_])")
 
 
@@ -178,27 +178,11 @@ def unsupported(text: str, s, table: str = "") -> list:
     items = [_Item(e) for e in s.ledger.items]
     text = _DASH_MINUS.sub("-", text)
     items = [_Magnitudes(i) for i in items]
-    card = s.map + ("\n" + table if table else "")
+    card = s.map + ("\n" + table if table else "") + ("\n" + getattr(s, "card", "") if getattr(s, "card", "") else "")
     bad, _ = number_provenance(text, card, items, s.f.view.reg.checks, (s.task.well,), s.task.question)
     return list(dict.fromkeys(bad))
 
 
-
-
-# where the way a number is summarised changes the answer: the results that differ, and which leads and why (G6)
-ASPECTS_RULE = C.text("C9", "aspects_rule")
-# the limitations name what limits the findings, not a catalogue of logs
-LIMITS_RULE = C.text("C9", "limits_rule")
-# what the question names that this well's record lacks: said once, then what the data allow
-ABSENT_RULE = C.text("C9", "absent_rule")
-# a weakness qualifies a reading, it does not reverse it; a negative with its zone counts
-NO_REVERSAL_RULE = C.text("C10", "no_reversal_rule")
-# "low"/"high" in a question is a level, and also a ranking; the answers ranked three zones of low BVW
-# and answered "No" because the zone with the highest permeability did not have the lowest of three low values
-HIGH_LOW_RULE = C.text("C10", "high_low_rule")
-# a formation of one zone has no zone-by-zone or zone-mean reading; its variation is by depth
-ONE_ZONE_RULE = C.text("C9", "one_zone_rule")
-EXACT_RULE = C.text("C9", "exact_rule")
 
 
 def report_numbers(text: str) -> str:
@@ -307,9 +291,22 @@ DISPLAY = re.compile(r"\bleft out to keep (?:this|it) short\b|\b(?:display|view|
 LEAK = re.compile(r"(?:\.\.\.|…)\s*(?:wait|hmm|oops|sorry|no wait)\b|\b(?:wait|hmm|oops)\s*[,!:]|\bscratch that\b", re.I)
 
 
+# the writer's own drafting left in the reply ("We need answer per rules.", "Need ensure ...", "Need include ..."): lines
+# that open on "need" and a verb; two or more mark a draft (in 2,501 v3.5 answers only one, a drafted answer, had any)
+DRAFT = re.compile(r"^\s*(?:we )?need (?!to\b|for\b|of\b|not\b)[a-z]+\b", re.I | re.M)
+
+
+def drafting(text: str) -> list:
+    """The drafting lines of a reply (DRAFT), when there are two or more; [] otherwise."""
+    found = [m.group(0).strip() for m in DRAFT.finditer(text or "")]
+    return found if len(found) >= 2 else []
+
+
 def leaks(text: str) -> list:
-    """The working notes left in an answer, each with a little of the text around it, in order, once each."""
+    """The working notes left in an answer, each with a little of the text around it, in order, once each: the
+    self-corrections (LEAK) and the drafting lines (DRAFT, two or more)."""
     out = [text[max(0, m.start() - 12):m.end() + 24].strip() for m in LEAK.finditer(text or "")]
+    out += [ln for ln in drafting(text)[:4]]
     return list(dict.fromkeys(out))
 
 
@@ -334,29 +331,18 @@ META = re.compile(r"\bThe user\b|\bLet me\b|\bI need to\b|\bI will (?:now )?(?:r
 def clean_reply(text: str, draft: str = "") -> str:
     """The answer in a reply, without the model's working notes: from the last occurrence of the draft's first heading
     (or the reply's last first-level section start) when notes precede it; "" when notes remain."""
-    if not text or not META.search(text):
+    notes = lambda t: bool(META.search(t) or drafting(t))
+    if not text or not notes(text):
         return text
     heads = re.findall(r"^#{1,3} .+$", draft or "", re.M) or re.findall(r"^#{1,3} .+$", text, re.M)
     if heads:
         i = text.rfind(heads[0])
-        if i > 0 and not META.search(text[i:]):
+        if i > 0 and not notes(text[i:]):
             return text[i:]
     return ""
 
 
-# variant "open": no word caps, everything opened in view, zones by record name, data availability
-OPEN_SHAPES = C.text("C9", "open_shapes")
-OPEN_RULES = C.text("C9", "open_rules")
-_OPEN_DROP = ("Respect the length for the shape", "Limitations are the weaknesses", "State each finding's grade once")
-
-# The general reporting rules, in this harness's terms (map, results, claims). Class a: reporting practice. In order:
-# readings off the question are context; the class rule; rank, never deny; mixed readings; controls; negatives; the
-# grade rule without its ban on naming a likely fluid (the gas facet asks for the favoured fluid, graded).
-V5_RULES = C.text("C9", "v5_rules")
-
-# Style: prose dense with numbers, machine digits and class codes in sentences, and every interval restated across
-# sections read poorly. Numbers go to four significant figures in code; these rules keep the findings and move the
-# zone values to the table the answer already carries.
+# the settle step's view of every opened result (whole while the budget lasts, then digests)
 OPEN_CHARS = 24000
 
 
@@ -377,12 +363,7 @@ def opened_results(s, budget: int = OPEN_CHARS) -> str:
     return "\n\n".join(f"[{e.id}] {e.text}" if e.id in whole_ids else s.ledger.digest(e) for e in items)
 
 
-# --- the reader's format (the reporting profile's `format` block; the writer's own format without one) -------------
-
-ZONE_RULE_PREFIXES = ("Refer to zones by id and depth range", "Name each zone at first mention")
-LITH_ZONES = C.text("C9", "lith_zones")
-LENGTH_PREFIX = "Length follows the content"
-
+# --- the reader's format (the reporting profile's `format` block: the zone table's style) ------------------------
 
 def reader_format(policy, fmt: str = "profile") -> dict:
     """The profile's format block, or {} (the writer's own format) when there is none or the run asks for the default."""
@@ -391,71 +372,51 @@ def reader_format(policy, fmt: str = "profile") -> dict:
     return dict(profile(policy).get("format") or {})
 
 
-def apply_format(rules: list, shapes: dict, f: dict) -> tuple:
-    """(rules, shapes) under a format: its shapes over the writer's, its length, its way of naming zones."""
-    if not f:
-        return rules, shapes
-    shapes = {**shapes, **{k: " ".join(str(v).split()) for k, v in (f.get("shapes") or {}).items()}}
-    out = []
-    for r in rules:
-        if r.startswith(ZONE_RULE_PREFIXES) and f.get("zone_names") == "lithology_and_depth":
-            if LITH_ZONES not in out:
-                out.append(LITH_ZONES)
-            continue
-        if r.startswith(LENGTH_PREFIX) and f.get("words"):
-            lo, hi = f["words"]
-            out.append(f"Length: about {lo}-{hi} words. Cover every point with the intervals and values that settle it; "
-                       "leave out what does not bear on the question. (The reader's format.)")
-            continue
-        out.append(r)
-    if f.get("words") and not any(r.startswith("Length: about") for r in out):
-        lo, hi = f["words"]
-        out.append(f"Length: about {lo}-{hi} words. (The reader's format.)")
-    out += [" ".join(str(r).split()) for r in f.get("rules") or []]
-    return out, shapes
+def conventions_block(s) -> str:
+    """The data's reporting conventions (data.conventions), as the prompts show them; "" when it has none."""
+    conv = list(getattr(getattr(getattr(s, "f", None), "view", None), "conventions", None) or [])
+    return ("THIS DATA'S REPORTING CONVENTIONS (how its reports name and group what the record holds; follow them in "
+            "the answer without naming them):\n" + "\n".join(f"- {c}" for c in conv)) if conv else ""
 
 
+# --- the writer's prompt -----------------------------------------------------------------------------------------------
+# The claims carry the investigation's judgement; every opened result lets the writer set a claim right where a result
+# says otherwise; the provenance card states what each curve is and what its values show.
+RESULTS_CHARS = 60000
+_MNEMONIC = re.compile(r"\b[A-Z][A-Z0-9_]{1,}\b")
 
-def prompt(s, variant: str = "", fmt: str = "profile") -> tuple:
-    """(system, user, table, shape): the writer's prompt. It always holds the points and every settled claim (the
-    gate checks it)."""
+
+def curve_card(s) -> str:
+    """The provenance card (engine.provenance) of the curves the opened results and the claims name, in order of first
+    mention."""
+    from petroharness.agent import engine as E
+    text = "\n".join(e.text for e in s.ledger.items) + "\n" + claims_block(s.claims, confidence=True)
+    return E.provenance(s.f, [m for m in _MNEMONIC.findall(text) if m in s.f.inv.curves])
+
+
+def prompt(s, fmt: str = "profile") -> tuple:
+    """(system, user, table, shape): the question (and what it names that the record lacks), the data's conventions,
+    the claims, every opened result in full (cut at RESULTS_CHARS), what the curves are, the zone table and the map,
+    under C9's write text (with the table rule when a zone table is inserted)."""
     view = s.f.view
     shape = view.reg.shape_for(s.intent)
-    open_ = variant == "open"
     form = reader_format(view.policy, fmt)
-    style = form.get("zone_table") or "by_curve"
-    table = zone_table(s, s.claims, wide=open_, style=style) if shape in ("list", "report") else ""
-    rules = ([r for r in RULES if not r.startswith(_OPEN_DROP)] + OPEN_RULES) if open_ else list(RULES)
-    rules = rules + V5_RULES
-    rules = [EXACT_RULE if r.startswith("Round numbers to the precision") else r for r in rules]   # numbers as computed
-    rules = rules + [ASPECTS_RULE, NO_REVERSAL_RULE, HIGH_LOW_RULE]
-    zs = getattr(getattr(getattr(s, "f", None), "view", None), "zones", None)
-    if zs is not None and len(zs) == 1:                 # one zone: no zone-level verdicts to give
-        rules = rules + [ONE_ZONE_RULE]
-    # limitations tied to findings; what the question names and the record lacks (the note under the question)
-    rules = [LIMITS_RULE if r.startswith("In the limitations, say once which measured logs") else r for r in rules]
-    absent = vocabulary.note(s)
-    if absent:
-        rules = rules + [ABSENT_RULE]
-    base_shapes = dict(OPEN_SHAPES) if open_ else {n: " ".join(x["instructions"].split()) for n, x in view.reg.shapes.items()}
-    rules, shape_map = apply_format(rules, base_shapes, form)
-    rules = rules + ([TABLE_RULE] if table else [])
-    shapes = "\n".join(f"- {k}: {v}" for k, v in shape_map.items())
-    system = (C.text("C9", "write")
-              .replace("{RULES}", "\n".join(f"{i + 1}. {r}" for i, r in enumerate(rules)))
-              .replace("{SHAPES}", shapes))
-    pack = cited_lines(s.claims)
-    points = "\n".join(f"{i + 1}. {p}" for i, p in enumerate(s.claims.points))
+    table = zone_table(s, s.claims, wide=True, style=form.get("zone_table") or "by_curve") if shape in ("list", "report") else ""
+    results = "\n\n".join(f"[{e.id}] {e.text}" for e in s.ledger.items)
+    if len(results) > RESULTS_CHARS:
+        results = results[:RESULTS_CHARS] + "\n... (cut)"
+    s.card = curve_card(s)
     seen = (f"THE ZONE TABLE (inserted where you write {{{{ZONE_TABLE}}}}; computed from the data, its values are exact "
             f"and are evidence like the results: what you write must agree with it, and an empty cell is a zone without "
             f"that curve):\n{table}") if table else ""
-    parts = [f"QUESTION:\n{s.task.question}", absent, f"THE ANSWER MUST SETTLE:\n{points}",
-             f"YOUR CLAIMS:\n{claims_block(s.claims, confidence=open_)}",
-             f"RESULT LINES (what the claims cite):\n{pack}" if pack else "",
-             f"ALL RESULTS (everything the investigation computed):\n{opened_results(s)}" if open_ else "",
-             seen, f"THE MAP\n{writer_map(s.map)}", f"Write the answer in the '{shape}' shape."]
-    user = "\n\n".join(p for p in parts if p)
-    return system, user, table, shape
+    parts = [f"QUESTION:\n{s.task.question}", vocabulary.note(s), conventions_block(s),
+             f"YOUR CLAIMS (readings made as the results came in; the results decide where they differ):\n"
+             f"{claims_block(s.claims, confidence=True)}",
+             f"RESULTS (everything the investigation computed, by id):\n{results}",
+             f"WHAT THE CURVES ARE (from the record: each curve's meaning, status and what its values show):\n{s.card}",
+             seen, f"THE MAP\n{writer_map(s.map)}"]
+    system = C.text("C9", "write") + (f"\n9. {TABLE_RULE}" if table else "")      # the zone table once, as the writer's
+    return system, "\n\n".join(p for p in parts if p), table, shape
 
 
 def write(llm: LLM, s, cfg, usage: Usage, trace: dict, variant: str = "", fmt: str = "profile") -> tuple:

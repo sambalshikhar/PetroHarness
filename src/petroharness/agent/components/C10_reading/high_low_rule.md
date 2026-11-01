@@ -1,1 +1,0 @@
-Where the question asks whether zones are high or low in a property, read each zone's level against the workflow's class thresholds for it (or the curve's usual range) as well as against the other zones, and give both: a zone can be low in absolute terms without being the lowest zone. Answer the question on that reading. (A ranking alone answers a different question.)

@@ -106,7 +106,7 @@ def _cells(line: str) -> list:
     body = re.sub(r" \.\.\. \(every run: condition [^)]*\)$", "", body)
     out = []
     for part in body.split("; "):
-        m = re.match(r"^(Z\d+) (.*)$", part)
+        m = re.match(r"^(Z\d+)(?: \([^)]*\))? (.*)$", part)          # each zone with its rock
         if not m:
             break
         for cell in m.group(2).split(", "):

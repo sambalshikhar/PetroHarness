@@ -73,14 +73,7 @@ PRESCRIPTIONS = {
     r"the flow units .{0,20}(are|follow) the zones": "flow units = the zones (flow_units decide 1)",
 }
 # (file, matched text) -> why it may stay: the pattern's words in report style, not a conclusion.
-PRESCRIPTION_ALLOWED = {
-    ("src/petroharness/agent/components/C9_answer/open_rules.json", "Name each zone at first"):
-        "report style: how a zone is named at its first mention",
-    ("src/petroharness/agent/components/C9_answer/rules.json", "name both at first"):
-        "report style: a curve's two names at its first mention",
-    ("src/petroharness/agent/components/C9_answer/v5_rules.json", "name the best-supported interval first"):
-        "a general guideline: 'a classed or flagged interval is a candidate ... never deny it'",
-}
+PRESCRIPTION_ALLOWED = {}
 # (file, matched text) -> a match awaiting the user's decision (allowed, or the text rewritten). Empty; a new entry comes
 # with its decision.
 PRESCRIPTION_PENDING = {}
@@ -171,15 +164,15 @@ def test_no_preference_phrases():
     assert all(phrase == phrase.lower() for phrase in NO_PREFERENCE)
 
 
-def test_the_one_guideline_reaches_the_writer_and_the_settle_step():
-    """G6: one writer and settle text covers bases and conventions, and no basis rule exists; the report style holds
-    the format only."""
+def test_the_one_guideline_reaches_the_settle_step():
+    """G6: one settle text covers bases and conventions, and no basis rule exists; the report style holds the format
+    only."""
     import yaml
     from petroharness.agent import components as C, loop, writer
     rule = C.text("C9", "aspects_rule")
     assert rule.startswith("Where the way a number is summarised changes the answer")
     assert "exceeds the spread within them" in rule
-    assert writer.ASPECTS_RULE == rule and loop.ASPECTS_RULE == rule
+    assert loop.ASPECTS_RULE == rule and not hasattr(writer, "ASPECTS_RULE")
     style = yaml.safe_load((ROOT / "src" / "petroharness" / "resources" / "profiles" / "report_style.yaml").read_text())
     assert set(style) == {"format"}
     policy = yaml.safe_load((ROOT / "src" / "petroharness" / "resources" / "policy" / "reference_v2.yaml").read_text())

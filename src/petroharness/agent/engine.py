@@ -288,6 +288,43 @@ def cautions(f: Formation, c: str) -> list:
     return out
 
 
+LIMIT_SHARE = 0.05          # a curve at its own maximum or minimum on at least this share of the zoned samples
+
+
+def limits(f: Formation, c: str) -> list:
+    """What the zoned values of a value curve show about how they were made: constant (one value in every zoned sample),
+    or held at its maximum or minimum on at least LIMIT_SHARE of the zoned samples (a model's limit or a default). From
+    the values alone; [] for a flag or class codes, or a curve without values in the zones."""
+    if f.view is None or not f.view.zones or c not in f.inv.curves or _kind_word(f.inv.curves[c]) in ("flag", "class"):
+        return []
+    idx = np.unique(np.concatenate([np.asarray(z.indices) for z in f.view.zones]))
+    x = np.asarray(f.view.values(c), dtype=float)[idx]
+    x = x[np.isfinite(x)]
+    if x.size < 5:
+        return []
+    lo, hi = float(x.min()), float(x.max())
+    if hi == lo:
+        return [f"constant: {num(hi)} in every zoned sample"]
+    out = []
+    for v, word in ((hi, "maximum"), (lo, "minimum")):
+        share = float((x == v).mean())
+        if share >= LIMIT_SHARE:
+            out.append(f"at its {word} {num(v)} in {100 * share:.0f}% of the zoned samples (a limit or a default value)")
+    return out
+
+
+def provenance(f: Formation, curves) -> str:
+    """One line per curve: what it is (its label: meaning, status and the record's cautions) and what its zoned values
+    show about how they were made (limits); the curves in the order given, those of this interval only."""
+    lines = []
+    for c in dict.fromkeys(curves):
+        if c not in f.inv.curves:
+            continue
+        extra = limits(f, c)
+        lines.append(f"- {label(f, c)}" + (f"; {'; '.join(extra)}" if extra else ""))
+    return "\n".join(lines)
+
+
 def status(f: Formation, c: str) -> str:
     """What a curve is and the cautions the record knows: 'measurement'; 'model output of the porosity step'; 'flag of
     the net_pay step'; 'model output of the analyzers'; 'copy of X'; then each caution ('uncalibrated: ...')."""
@@ -746,8 +783,10 @@ def cut_note(held: list) -> str:
 # --- grouped how ----------------------------------------------------------------------------------------------------
 
 def bases(f: Formation, zs: list = None) -> list:
-    """Each zone, the zones pooled and the whole interval, in that order (petroharness.well.summary.bases)."""
-    return S.bases(f.view, zs)
+    """Each zone, the zones pooled and the whole interval, in that order (petroharness.well.summary.bases); under
+    data.basis "zones" the tools show each zone and the zones pooled only (the record's computations keep all three)."""
+    out = S.bases(f.view, zs)
+    return [b for b in out if b.kind != "whole"] if getattr(f.view, "basis", "all") == "zones" else out
 
 
 # --- measured how ---------------------------------------------------------------------------------------------------
@@ -913,6 +952,8 @@ def pair(out: Out, xa: np.ndarray, xb: np.ndarray, a: str, b: str, same: bool, t
     if same:
         dd = xa[ok] - xb[ok]
         parts += [f"difference mean {out.v(np.mean(dd))}", f"sd {out.v(np.std(dd))}"]
+        if np.std(dd) > 0:                                             # the mean against its spread
+            parts.append(f"mean / sd {out.v(np.mean(dd) / np.std(dd))}")
         # which way the difference goes, and how often
         t = float(tolerance or 0.0)
         tt = num(t)

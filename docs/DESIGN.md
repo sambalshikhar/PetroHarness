@@ -145,6 +145,11 @@ model says which it leads with and why.
 *Why:* the right basis depends on the question and the data. A harness that picks one convention fits whoever chose
 it.
 
+A dataset's own reporting conventions are its owner's choice, and they live in its data config, never in the
+package: `data.basis: zones` (the tools' statistics on the zones only) and `data.conventions` (sentences shown to
+the investigation and the writer as the data's conventions). Both are empty by default, and then every prompt is the
+general one. Results with them set for a benchmark are reported as benchmark mode, apart from the general harness.
+
 *Guard:* `test_no_preference_phrases`: none of a list of phrases that choose a basis for the model is in any text the
 model reads, including the strings of the code that writes tool output, the map and the prompts.
 `test_the_one_guideline_reaches_the_writer_and_the_settle_step`: one guideline for bases and conventions, in the

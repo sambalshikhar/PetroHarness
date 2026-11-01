@@ -251,6 +251,24 @@ def test_working_notes_in_the_text_are_found():
     assert leaks("The test waited for the wait time of the tool; no notes here.") == []
 
 
+DRAFTED = ("We need answer per rules. Need craft the report shape with sections. Must use claims/results only.\n\n"
+           "Need ensure numbers with result ids in brackets during drafting.\n\n"
+           "Need include the intervals and their lithologies.\n\n"
+           "## Formation Overview\n\nThe formation spans 2104.0-2181.0 m.\n\n## Conclusions\n\nShale holds the lowest Rwa.")
+
+
+def test_the_writers_drafting_left_in_its_reply_is_cut_or_sent_back():
+    from petroharness.agent.writer import clean_reply, drafting, leaks
+    assert drafting(DRAFTED) == ["We need answer", "Need ensure", "Need include"]
+    assert clean_reply(DRAFTED).startswith("## Formation Overview") and "Need" not in clean_reply(DRAFTED)
+    body = "## Overview\n\nNeed ensure the units.\nNeed include the zones.\n\n## Conclusions\nDone."
+    assert clean_reply(body) == ""                         # notes inside the answer: it is written again ...
+    assert leaks(body) == ["Need ensure", "Need include"]   # ... and the checker sends any left back
+    prose = ("## Data Limitations\n\nNeed for core data remains: a cored interval would confirm the contact.\n"
+             "We need to stress that RXO is absent.")
+    assert drafting(prose) == [] and leaks(prose) == [] and clean_reply(prose) == prose    # report prose is no draft
+
+
 # --- not computed --------------------------------------------------------------------------------------------------------
 
 @pytest.mark.data

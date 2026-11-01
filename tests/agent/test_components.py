@@ -42,7 +42,7 @@ def test_no_text_is_in_two_components():
 def test_the_former_constants_are_the_entries():
     from petroharness.agent import loop, writer
     assert loop.STEP1 == C.text("C5", "step1") and loop.SETTLE_V9 == C.text("C10", "settle_v9")
-    assert writer.RULES == C.text("C9", "rules") and writer.NO_REVERSAL_RULE == C.text("C10", "no_reversal_rule")
+    assert writer.TABLE_RULE == C.text("C9", "table_rule") and loop.ASPECTS_RULE == C.text("C9", "aspects_rule")
 
 
 @pytest.mark.parametrize("template, values, want", [

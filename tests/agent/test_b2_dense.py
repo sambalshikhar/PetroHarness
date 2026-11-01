@@ -573,8 +573,8 @@ def test_t10_invariants():
     for t, f, tool, kw, r in generated():
         if isinstance(r, ToolError):
             continue
-        # every number handed to the ledger is in the text
-        shown = shown_numbers(r.text)
+        # every number handed to the ledger is in the text (the text shown too: plain() drops the zone-mean lines)
+        shown = shown_numbers(r.text + "\n" + getattr(r, "shown", ""))
         for v in r.numbers:
             if not any(R.agrees(s, float(v)) or abs(s - float(v)) <= 0.0501 for s in shown):   # shares: one decimal
                 bad.append((t.well, tool, "number not shown", v))

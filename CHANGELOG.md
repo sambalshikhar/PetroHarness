@@ -1,5 +1,38 @@
 # Changelog
 
+## 3.5.3 (2026-11-01)
+
+- **The writer concludes from all the evidence.** The investigation still builds its claims as results come in. The
+  writer now reads them with every result the investigation opened, in full, and where the two differ, the results
+  decide. A provenance card goes with them: for each curve they name, its meaning, its status (measured, model
+  output, parameter, fallback input), the record's cautions, and what its zoned values show about how they were made
+  (constant, or held at a limit). One set of reporting rules (C9 `write`). A zone table inserted in the answer is
+  not repeated in the text.
+- **Each run names its rock.** A class's runs list each zone with its lithology (`Z2 (SAND) 4245.0-4253.6`), so a
+  screen's flag is read against the rock it falls in.
+- **Differences with their size.** On one scale, `compare` gives the zone means' mean difference against the spread
+  of a - b, and `mean / sd` on every row.
+- **Reporting settings in the data config.** `data.basis: zones` gives the tools' statistics on the lithology zones
+  only. `data.conventions` lists the data's own reporting conventions, shown to the investigation and the writer.
+  Both are empty by default, and then every prompt is the general one. A benchmark's conventions go in its data
+  config (benchmark mode), never in the package.
+- **Permeability guide:** flow units are reported as depth intervals with their class, starting from the workflow's
+  FZI classes (Ebanks 1987; Amaefule et al. 1993); clustering is an alternative beside them; a porosity-only basis
+  is a limit of the units, not a reason to deny them.
+- **The web UI tells the interpretation as a story.** A run opens on *Interpretation*, conclusion first, the way a
+  petrophysical report reads: the answer and how sure it is; the well as Petrophys interpreted it (a log plot and the
+  zone table, the zones the answer names marked); how the answer was reached, part by part, each finding with a chart
+  of the zone values it rests on, the net-pay cutoff, why it matters and what could change it; what limits the answer;
+  then the whole written answer, where any number traces to the results that show it. The detail sits behind it:
+  *Well logs* (the full plot, values at the cursor's depth), *Evidence* (each claim with the results it rests on, laid
+  out as tables), the *Investigation log* (every stage and step, for audit) and *Details*.
+  - `petroharness.ask` takes `on_view`, called with the interval's view once Petrophys has interpreted the well.
+- **Fixes:** drafting left in the writer's reply ("Need ensure ...") is cut or sent back; `get` by class and zone
+  reads runs written with their zone's rock.
+- **No switches:** `agent/options.py` defines none; `--writer` sets only the repair rounds.
+- **Documentation:** `docs/ARCHITECTURE.md` opens with a diagram of the whole harness and describes the reporting
+  settings.
+
 ## 3.5.2 (2026-10-29)
 
 - **Petrophys on request.** The model can now ask Petrophys for what the record does not hold.

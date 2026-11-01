@@ -109,6 +109,16 @@ def test_the_three_interval_forms(ui, form):
     assert "0.987654" in repair["findings"]
     shown = {i["id"] for e in events if e["kind"] == "results" for i in e["items"]}
     assert {o["id"] for o in res["opened"]} <= shown                    # every opened result reached the page
+    # the interval's logs, once Petrophys has read the well and before the first model call
+    kinds = [e["kind"] for e in events]
+    assert kinds.count("well") == 1 and kinds.index("well") < kinds.index("call")
+    well = next(e for e in events if e["kind"] == "well")
+    assert "error" not in well and well["samples"] == iv["samples"] and well["unit"] == iv["unit"]
+    assert [(z["zone"], z["lithology"]) for z in well["zones"]] == [(z["zone"], z["lithology"]) for z in res["zones"]]
+    plotted = {c["name"]: c for t in well["tracks"] for c in t["curves"]}
+    assert {"VCL", "PHIE", "SW", "PERM"} <= set(plotted) and plotted["PHIE"]["source"] == "Petrophys"
+    assert all(len(c["values"]) == len(well["depth"]) for c in plotted.values())
+    assert well["depth"] == sorted(well["depth"]) and well["lithology"]
     ts = [e["t"] for e in events]
     assert ts == sorted(ts)
     # saved: the run's record, answer.md and trace.json (petroharness.ask's files)
@@ -178,9 +188,14 @@ def test_the_ui_changes_no_prompt(env):
     """The same question with the harness's client as it is and wrapped as the UI wraps it: every request the model
     gets is the same (stage, messages, token cap, schema), and so is the answer."""
     from petroharness.ui.progress import Observed
-    plain, observed, events = [], [], []
+    from petroharness.ask import ask
+    from petroharness.ui.wellplot import payload
+    plain, observed, events, plots = [], [], [], []
     a = _ask_window(lambda cfg: StubModel(cfg, log=plain))
-    b = _ask_window(lambda cfg: Observed(StubModel(cfg, log=observed), events.append))
+    b = ask(LAS, QUESTION, top=600, base=700, depth_unit="m", formation="test window",
+            llm_factory=lambda cfg: Observed(StubModel(cfg, log=observed), events.append),
+            on_view=lambda view: plots.append(payload(view)))
+    assert len(plots) == 1 and plots[0]["tracks"]                       # the plot, built from the view, changes nothing
     assert {c["stage"] for c in plain} >= {"read", "step_1", "step_2", "settle", "writer", "repair_1"}
     assert plain == observed
     assert a.answer == b.answer and a.status == b.status == "ok"

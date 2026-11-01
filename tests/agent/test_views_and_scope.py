@@ -377,7 +377,7 @@ def test_zone_mean_classes_beside_the_sample_shares():
 @pytest.mark.parametrize('on', [True])
 def test_the_writer_is_shown_its_table(real, on):
     from petroharness.agent.writer import prompt, unsupported
-    system, user, table, shape = prompt(real, "open", "default")
+    system, user, table, shape = prompt(real, "default")
     assert table and ("THE ZONE TABLE" in user) is on and (table in user) is on
     n = re.search(r"\| (\d+\.\d{3,})", table)
     if n and on:                                             # a table value quoted alone is shown
@@ -471,13 +471,6 @@ def test_guides_state_no_conclusion_as_a_rule():
 def test_the_brief_carries_the_readings_and_weaknesses_lines():
     from petroharness.agent.loop import V9_BRIEF, brief
     assert V9_BRIEF in brief()
-
-
-@pytest.mark.data
-def test_writer_rule_no_reversal(real):
-    from petroharness.agent.writer import ASPECTS_RULE, NO_REVERSAL_RULE, prompt
-    system, _, _, _ = prompt(real, "open", "default")
-    assert NO_REVERSAL_RULE.split(".")[0] in system and ASPECTS_RULE in system
 
 
 def test_tool_descriptions_say_signs_zone_values_and_the_zone_selector():
@@ -664,11 +657,13 @@ def test_shear_label_checked_against_dtc():
 
 
 @pytest.mark.data
-def test_the_writer_has_the_limits_rule_and_the_absent_rule_where_named(real):
-    from petroharness.agent.writer import ABSENT_RULE, LIMITS_RULE, prompt
-    system, user, _, _ = prompt(real, "open", "default")
-    assert LIMITS_RULE in system and "In the limitations, say once which measured logs" not in system
-    assert (ABSENT_RULE in system) == ("Named but not in this well's record: " in user)      # with what is named but absent
+def test_the_writer_is_told_what_the_question_names_that_the_record_lacks(real):
+    from petroharness.agent import vocabulary
+    from petroharness.agent.writer import prompt
+    system, user, _, _ = prompt(real, "default")
+    note = vocabulary.note(real)
+    assert (note in user) if note else "Named but not in this well's record: " not in user
+    assert "limitations" in system                                  # the limitations rule of the writer's text
 
 
 # --- stopping denials ----------------------------------------------------------------------------------------------

@@ -89,10 +89,8 @@ def test_there_is_no_stand_in_text():
     assert note.startswith(HEAD) and not STAND_IN.search(note) and "\n" not in note
     assert C.text("C10", "absent_note") == HEAD + "{items}"
     assert "absent_form_rule" not in C.meta("C9")["texts"] and "asked_absent" not in C.meta("C10")["texts"]
-    rule = C.text("C9", "absent_rule")
-    assert rule == ("If the question asks for something this well's record does not have, say so once, early. Then answer "
-                    "with what the data allow, labelled for what it is. Never present another measurement as the one "
-                    "asked for.")
+    assert "absent_rule" not in C.meta("C9")["texts"]          # the writer reads the note itself, under the question
+    assert not STAND_IN.search(C.text("C9", "write"))
     brief = C.text("C1", "brief")
     assert "e.g. without SWIRR" not in brief and "ND separation is not a density correction" not in brief
     assert "asked_quantities" not in REG and not any("instead" in str(v) for v in REG.get("named_measurements", {}).values())
@@ -105,7 +103,6 @@ def test_the_note_reaches_step_1_the_settle_step_and_the_writer(monkeypatch):
     from test_read import Stub, _formation, _session as built
     from petroharness.agent import graph
     from petroharness.agent.loop import Session
-    from petroharness.agent.writer import ABSENT_RULE
     raw = REG["inventory"]["raw"]
     t, f = _formation(lambda f: "PHIE" in f.inv.curves and any(not f.view.available(c) for c in raw))
     gone = next(c for c in raw if not f.view.available(c))
@@ -122,17 +119,15 @@ def test_the_note_reaches_step_1_the_settle_step_and_the_writer(monkeypatch):
     assert f"QUESTION:\n{t.question}\n{note}\n" in llm.prompt("settle")
     writer = next(c for c in llm.sent if c["stage"] == "writer")
     assert f"QUESTION:\n{t.question}\n\n{note}\n\n" in writer["messages"][1]["content"]
-    assert ABSENT_RULE in writer["messages"][0]["content"]
     owners = {seg[0] for call in tr["calls"] if call["stage"] == "step_1" for seg in call["messages"][1]["segments"]}
     assert "C10" in owners                                                   # the note's line is C10's
 
 
 @pytest.mark.data
-def test_no_note_and_no_rule_when_everything_named_is_here(monkeypatch):
+def test_no_note_when_everything_named_is_here(monkeypatch):
     from test_read import Stub, _formation, _session as built
     from petroharness.agent import graph
     from petroharness.agent.loop import Session
-    from petroharness.agent.writer import ABSENT_RULE
     t, f = _formation(lambda f: f.view.available("PHIE") and f.view.available("SW"))
     t = t.model_copy(update={"question": "How do PHIE and the water saturation vary by zone?"})
     s = built(t, f)
@@ -140,5 +135,3 @@ def test_no_note_and_no_rule_when_everything_named_is_here(monkeypatch):
     llm = Stub([{"topics": ["porosity"], "named": ["PHIE", "water saturation"]}])
     out = graph.answer(t, "k200t", 1, 2, "open", "profile", llm_factory=lambda cfg: llm)
     assert out["trace"]["absent"] == [] and HEAD not in json.dumps([c["messages"] for c in llm.sent])
-    writer = next(c for c in llm.sent if c["stage"] == "writer")
-    assert ABSENT_RULE not in writer["messages"][0]["content"]

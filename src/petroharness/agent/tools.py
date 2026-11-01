@@ -344,7 +344,7 @@ def runs(f: Formation, condition: str, zones=None, limit: int = 20, min_thicknes
         out.add(f"  all zones: {out.v(total)} {u} ({out.pct(100 * total / zt if zt else 0.0)} of the zoned thickness)")
     n_all = f.depth.size                                          # the whole interval, runs across zone boundaries too
     away = S.outside_mask(f.view)
-    if (sel.mask & away).any():                                    # only where it differs from the zones: then what
+    if (sel.mask & away).any() and getattr(f.view, "basis", "all") != "zones":    # only where it differs: then what
         every = _Whole(f)                                          #   the samples outside them hold, located
         whole_runs = E.extent(f, sel.mask, [every])
         if min_thickness is not None or max_thickness is not None:
@@ -492,9 +492,17 @@ def _zone_level(f: Formation, out: Out, zs: list, xa, xb, a: str, b: str, same: 
     if same:                                                         # each zone by its means, on one scale
         hi = [z.zone_id for z, ma, mb in pts if ma > mb]
         lo = [z.zone_id for z, ma, mb in pts if ma <= mb]
+        ok = np.isfinite(xa) & np.isfinite(xb)                       # the size beside the direction
+        idx = np.unique(np.concatenate([np.asarray(z.indices) for z, _, _ in pts]))
+        dd = (xa - xb)[idx][ok[idx]]
+        md = float(np.mean([ma - mb for _, ma, mb in pts]))
+        sd = float(np.std(dd)) if dd.size > 1 else float("nan")
+        size = (f"; the zone means differ by {out.v(md)} on average, against an sd of {out.v(sd)} of {a} - {b} over the "
+                f"zones' samples (mean / sd {out.v(md / sd)})" if np.isfinite(sd) and sd > 0 else "")
         out.add(f"  by zone mean: {a} above {b} in {len(hi)} of {len(pts)} zones"
                 + (f" ({S.zone_ids(hi)})" if hi and len(hi) <= 12 else "")
-                + (f"; below in {S.zone_ids(lo)}" if lo and len(lo) <= 12 else (f"; below in {len(lo)}" if lo else "")))
+                + (f"; below in {S.zone_ids(lo)}" if lo and len(lo) <= 12 else (f"; below in {len(lo)}" if lo else ""))
+                + size)
 
 
 def profile(f: Formation, curve: str, zones=None, statistics=None, where=None) -> Result:
@@ -832,13 +840,15 @@ def _depth_cell(f: Formation, a: float, b: float) -> str:
 
 
 def _zone_cells(f: Formation, runs: list, sized: bool = False) -> str:
-    """Runs (zone, top, base) top to base, grouped by zone: 'Z1 a, b-c; Z2 d-e' (a single sample is one depth); sized:
-    each run with its thickness ('b-c (1.5 ft)'), for a list cut to its thickest runs."""
+    """Runs (zone, top, base) top to base, grouped by zone, each zone with its rock: 'Z1 (SAND) a, b-c; Z2 (SHALE) d-e'
+    (a single sample is one depth); sized: each run with its thickness ('b-c (1.5 ft)'), for a list cut to its
+    thickest runs."""
     step = float(getattr(f.view, "step", 0.0) or 0.0)
     by = {}
     for z, a, b in sorted(runs, key=lambda r: (r[1], r[2])):
         by.setdefault(z, []).append(_depth_cell(f, a, b) + (f" ({num(b - a + step)} {f.inv.depth_unit})" if sized else ""))
-    return "; ".join(f"{z} {', '.join(cells)}" for z, cells in by.items())
+    lith = {z.zone_id: z.lithology for z in f.view.zones}          # each run's zone with its rock (a screen's gate)
+    return "; ".join(f"{z}{f' ({lith[z]})' if z in lith else ''} {', '.join(cells)}" for z, cells in by.items())
 
 
 def _thickest(f: Formation, every: list, room: int) -> list:

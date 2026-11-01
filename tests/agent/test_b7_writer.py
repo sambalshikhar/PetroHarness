@@ -18,24 +18,12 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(Path(__file__).resolve().paren
 from petroharness.llm import Usage  # noqa: E402
 from petroharness.agent import writer  # noqa: E402
 from petroharness.agent.claims import Claim  # noqa: E402
-from petroharness.agent.writer import OPEN_RULES, RULES, _OPEN_DROP, claims_block, opened_results, prompt  # noqa: E402
+from petroharness.agent.writer import claims_block, opened_results, prompt  # noqa: E402
 
 MEANS = "so the zone holds the formation's hydrocarbon-bearing rock"
 
 
 # --- hand-written ---------------------------------------------------------------------------------------------------
-
-def test_each_dropped_rule_names_exactly_one_rule():
-    for head in _OPEN_DROP:
-        assert sum(r.startswith(head) for r in RULES) == 1, head
-
-
-def test_open_rules_cap_no_length_and_keep_traceability():
-    rules = [r for r in RULES if not r.startswith(_OPEN_DROP)] + OPEN_RULES
-    text = " ".join(rules)
-    assert not re.search(r"\d+\s*(?:-\s*\d+\s*)?words", text) and "Respect the length" not in text
-    assert any(r.startswith("Use only numbers") for r in rules)            # every number still traces
-
 
 class _Claims:
     def __init__(self, points, claims):
@@ -183,25 +171,18 @@ def real():
 
 
 @pytest.mark.data
-@pytest.mark.parametrize("variant", ["", "open"])
-def test_the_prompt_holds_every_point_and_every_settled_claim(real, variant):
-    system, user, table, shape = prompt(real, variant, "default")
+def test_the_prompt_holds_every_point_every_settled_claim_every_result_and_the_card(real):
+    from petroharness.agent import components as C
+    system, user, table, shape = prompt(real, "default")
     for p in real.points:
         assert p in user
     for c in real.claims.claims.values():
         assert (c.text in user) == (c.grade != "hypothesis"), c.id
-    assert "{points}" not in user and "{claims_block" not in user and "{RULES}" not in system and "{SHAPES}" not in system
+    for e in real.ledger.items:                                     # every opened result, whole
+        assert f"[{e.id}] {e.text}" in user
+    assert "WHAT THE CURVES ARE" in user and real.card and real.card in user
+    assert system.startswith(C.text("C9", "write")) and (writer.TABLE_RULE in system) == bool(table)
     assert shape == "list" and table.startswith("| Zone |")
-
-
-@pytest.mark.data
-def test_the_open_prompt_shows_everything_opened_and_sets_no_length(real):
-    system, user, _, _ = prompt(real, "open", "default")
-    assert "ALL RESULTS" in user and all(f"[{e.id}]" in user for e in real.ledger.items)
-    assert not re.search(r"\d+\s*-\s*\d+\s*words|at most \d+ words", system)
-    assert "low confidence" in system and "lithology and depth range" in system
-    _, plain_user, _, _ = prompt(real, "", "default")
-    assert "ALL RESULTS" not in plain_user and len(user) > len(plain_user)
 
 
 @pytest.mark.data
@@ -209,7 +190,7 @@ def test_the_zone_table_names_zones_by_their_record_names(real):
     named = [z for z in real.f.view.zones if getattr(z, "name", "")]
     if not named:
         pytest.skip("no zone record names in this formation")
-    _, _, table, _ = prompt(real, "open", "default")
+    _, _, table, _ = prompt(real, "default")
     assert f"| {named[0].zone_id} ({named[0].name}) |" in table
 
 
@@ -325,7 +306,7 @@ def test_the_replay_rebuilds_saved_investigations_and_its_prompt_holds_them():
         ran = {k: v for k, v in (tr.get("options") or {}).items() if k in asdict(options.Options())}   # the live switches
         with options.use(**ran):                             # the options the traces ran with (not the env's, not today's)
             s, rep = rebuild(tr, by_id[tr["task_id"]], cfg.for_tasks())
-            _, user, _, _ = prompt(s, "open", "default")
+            _, user, _, _ = prompt(s, "default")
         exact += rep["opened_equal"] and rep["flags_equal"]
         for c in tr["claims"]:
             if c["grade"] != "hypothesis":
@@ -391,32 +372,7 @@ def test_the_zone_table_gives_curves_with_the_same_values_one_row():
     assert len(rows) == len(f.view.zones) and all(f"{c} = {twins[0]}" in r for r in rows), table[:600]
 
 
-def test_the_rule_on_curves_with_the_same_values_is_given():
-    assert any(r.startswith("Two curves with the same values") for r in RULES)
-
-
-
 # --- the reader's format (reporting profile `format`) ------------------------------------------------------------------
-
-FORMAT = {"shapes": {"report": "## A, ## B, ## Conclusions"}, "words": [350, 900], "zone_names": "lithology_and_depth",
-          "zone_table": "by_interval"}
-
-
-def test_a_format_sets_shapes_length_and_zone_names():
-    from petroharness.agent.writer import LITH_ZONES, OPEN_SHAPES, apply_format
-    rules = [r for r in RULES if not r.startswith(writer._OPEN_DROP)] + writer.OPEN_RULES
-    out, shapes = apply_format(rules, dict(OPEN_SHAPES), FORMAT)
-    assert shapes["report"] == "## A, ## B, ## Conclusions" and shapes["list"] == OPEN_SHAPES["list"]
-    assert any(r.startswith("Length: about 350-900 words") for r in out) and not any(r.startswith("Length follows") for r in out)
-    assert out.count(LITH_ZONES) == 1 and not any(r.startswith(("Refer to zones by id", "Name each zone at first")) for r in out)
-    assert apply_format(rules, dict(OPEN_SHAPES), {}) == (rules, dict(OPEN_SHAPES))
-
-
-def test_a_format_without_a_length_rule_still_gets_one():
-    from petroharness.agent.writer import apply_format
-    out, _ = apply_format(list(RULES), {}, {"words": [400, 800]})
-    assert sum(r.startswith("Length: about 400-800 words") for r in out) == 1
-
 
 def test_the_profile_format_or_the_default(tmp_path):
     from petroharness.agent.writer import reader_format
@@ -425,19 +381,6 @@ def test_the_profile_format_or_the_default(tmp_path):
     policy = {"reporting": {"profile": str(prof)}}
     assert reader_format(policy)["words"] == [300, 600] and reader_format(policy, "default") == {}
     assert reader_format({}) == {} and reader_format(None) == {}
-
-
-@pytest.mark.data
-def test_the_benchmark_profile_reaches_the_writer(real):
-    if len(real.f.view.zones) < 2:
-        pytest.skip("one zone: the zone table is by curve")
-    system, user, table, _ = prompt(real, "open")
-    system_d, _, table_d, _ = prompt(real, "open", "default")
-    assert "Length: about" in system and "do not write zone ids" in system and "Formation Overview" in system
-    assert table.startswith(f"| Depth Interval ({real.f.inv.depth_unit}) | Lithology |")
-    rows = table.splitlines()[2:]
-    assert len(rows) == len(real.f.view.zones) and not any(re.search(r"\| Z\d+", r) for r in rows)
-    assert "Length: about" not in system_d and table_d.startswith("| Zone |")
 
 
 @pytest.mark.data
@@ -463,25 +406,6 @@ def test_the_interval_table_gives_flag_fractions_and_twin_names(real):
 
 
 # --- the general reporting rules (writer.V5_RULES) -------------------------------------------------------------------
-
-def test_the_general_reporting_rules_name_no_dataset_and_no_verdict():
-    from petroharness.agent.writer import V5_RULES
-    dataset = re.compile(r"geolink|costa|volve|kharaib|equinor|\bnpd\b|norw(ay|egian)|north sea", re.I)
-    verdict = re.compile(r"\b(confirmed|proven|established|commercial)\b", re.I)
-    assert len(V5_RULES) == 7                                       # seven rules, none on a flag's basis
-    assert not [r for r in V5_RULES if dataset.search(r)]
-    assert [i for i, r in enumerate(V5_RULES) if verdict.search(r)] == [len(V5_RULES) - 1]   # only the rule forbidding them
-    assert not [r for r in V5_RULES if re.search(r"\b(card|evidence ids?|readings? \(|the notes)\b", r)]  # terms the prompts do not use
-
-
-@pytest.mark.data
-def test_the_writer_prompt_holds_the_general_rules_and_the_absence_rule(real):
-    """The general reporting rules and the absence rule both reach the writer."""
-    from petroharness.agent.writer import V5_RULES
-    system, user, _, _ = prompt(real, "open")
-    assert all(r in system for r in V5_RULES)
-    assert "If the question asks for a quantity this interval does not have" in system
-    assert "Answer first." in system                                    # with the writer's own rules
 
 
 # --- statements that contradict the data reach the repair round (writer.contradictions) ------------------------------
@@ -556,24 +480,6 @@ def test_exact_numbers_keeps_digits_and_swaps_the_rounding_rule():
 
 
 @pytest.mark.data
-@pytest.mark.parametrize('on', [True])
-def test_exact_numbers_rule_in_the_prompt(real, on):
-    from petroharness.agent import options
-    from petroharness.agent.writer import EXACT_RULE
-    system, _, _, _ = prompt(real, "open")
-    assert (EXACT_RULE in system) is on
-    assert ("Round numbers to the precision" in system) is (not on)
-
-
-@pytest.mark.data
-@pytest.mark.parametrize('absence', [True])
-def test_the_absence_rule_stands_beside_the_general_rules(real, absence):
-    from petroharness.agent import options
-    system, _, _, _ = prompt(real, "open")
-    assert ("If the question asks for a quantity this interval does not have" in system) is absence
-
-
-@pytest.mark.data
 def test_table_core_starts_with_the_topics_key_curves(real):
     from petroharness.agent import direction
     from petroharness.agent.writer import zone_table
@@ -585,11 +491,3 @@ def test_table_core_starts_with_the_topics_key_curves(real):
     assert key and f"Mean {key[0]}" in head
     assert head.count("|") - 1 <= 2 + 9
 
-
-@pytest.mark.data
-def test_the_prompt_has_one_guideline_for_bases_and_no_basis_rule(real):
-    """G6: the writer has one guideline for bases and conventions, once, in its rules; no basis rule."""
-    from petroharness.agent.writer import ASPECTS_RULE
-    system, user, _, _ = prompt(real, "open")
-    assert system.count(ASPECTS_RULE) == 1 and ASPECTS_RULE not in user
-    assert "the record's basis" not in system and "lead with the lithology-zone" not in system.lower()

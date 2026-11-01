@@ -117,7 +117,9 @@ def first_look(state: State, runtime: Runtime[Run]) -> dict:
     r.system = brief(s.library)
     absent = vocabulary.note(s)
     trace["absent"] = [{"name": n, "curves": c} for n, c in vocabulary.absent(s)]
-    r.head = (f"QUESTION:\n{s.task.question}\n" + (f"{absent}\n" if absent else "")
+    from petroharness.agent.writer import conventions_block
+    conv = conventions_block(s)
+    r.head = (f"QUESTION:\n{s.task.question}\n" + (f"{absent}\n" if absent else "") + (f"\n{conv}\n" if conv else "")
               + f"\nTHE MAP\n{s.map}\n\n"
               + (f"DIRECTION\n{s.library.index(s.topics)}\n\n" if s.library is not None else ""))
     look = ""
@@ -372,8 +374,8 @@ def write(state: State, runtime: Runtime[Run]) -> dict:
     from petroharness.agent.writer import clean_reply, cited_lines, prompt, reader_format
     r = runtime.context
     s, llm, usage, trace, cap = r.session, r.llm, r.usage, r.trace, r.max_tokens_writer
-    variant = r.writer
-    system, user, table, shape = prompt(s, variant, r.fmt)
+    variant = r.writer                                  # the repair rounds it allows (route after_verify)
+    system, user, table, shape = prompt(s, r.fmt)
     trace["writer_format"] = "profile" if reader_format(s.f.view.policy, r.fmt) else "default"
     trace["writer_user_chars"], trace["shape"], trace["writer_variant"] = len(user), shape, variant
     trace["cited_lines_chars"] = len(cited_lines(s.claims))

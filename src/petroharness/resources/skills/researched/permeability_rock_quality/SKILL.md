@@ -31,10 +31,10 @@ areas: [permeability_rock_quality]
 ## Decide
 - Choose or assess a transform. Usual order: a core-fitted porosity-permeability transform per rock type; else Timur, Coates or Wyllie-Rose (porosity plus irreducible water), tuned to local core if any.
 - Rank zones by median or geometric mean, by arithmetic mean, and by permeability-thickness (kh = sum of k x thickness). They can disagree.
-- Flow units (rock volumes with consistent flow properties): compute log10 FZI per sample; look for histogram modes, straight segments on a normal-probability plot, or parallel unit-slope trends on log RQI vs log PHI_Z. Closest here: crossplot RQI PHI_Z log_y log_x, and stats FZI with percentiles for its distribution.
-- Alternatives give different units: data-driven clusters, fixed FZI bands (global hydraulic elements, each bound double the last), Winland R35 classes, or Lucia classes in carbonates.
+- Flow units (Ebanks 1987: intervals with consistent flow properties, predictably different from those above and below; Amaefule et al. 1993: hydraulic units by FZI): on logs a flow unit is a depth interval. Start from the workflow's own FZI classes zone by zone, then check them with the FZI distribution: histogram modes, straight segments on a normal-probability plot, or parallel unit-slope trends on log RQI vs log PHI_Z. Closest here: crossplot RQI PHI_Z log_y log_x, and stats FZI with percentiles for its distribution.
+- Alternatives give different units: data-driven clusters, fixed FZI bands (global hydraulic elements, each bound double the last), Winland R35 classes, or Lucia classes in carbonates. Report an alternative beside the workflow's classes and say where they differ.
 - Use the fewest units that explain the spread. A unit thinner than the tool resolution cannot be separated on logs, and a unit resting on a few samples is weak.
-- Zones are distinct flow units only where their FZI or PERM ranges separate; strong overlap means the zone boundaries are not flow-unit boundaries. Two FZI modes in one zone suggest two units.
+- Report the flow units as depth intervals, each with its class and its PHIE, PERM and FZI. Intervals sharing a class are units of that class, or one unit spanning them. Where their FZI or PERM ranges overlap strongly, the boundary between them is weak: that lowers the grade of the split, not the intervals or their classes. Two FZI modes in one interval suggest two units.
 - Baffles and barriers show on logs as thin layers with low PHIE, high VCL, SEALFLAG, or cement or anhydrite signs. Their depth and thickness can be read; their lateral extent cannot, from one well.
 - kv/kh (vertical over horizontal permeability) comes from paired KV_CORE and KH_CORE plugs, per zone; without them any ratio is an assumption. Shale layers lower effective kv.
 - Answer shape: classify (units with their classes), or relate (direction, strength, where it holds and where it breaks). Each zone with its class or value on each curve the record holds, the core-calibrated one named; for a relation, the zones that follow it and those that break it.
@@ -53,10 +53,10 @@ areas: [permeability_rock_quality]
 
 ## Easily misread
 - A log PERM is a model output, not a measurement. Where it is computed from porosity alone, its ranking of zones repeats the porosity ranking; read the recorded method.
-- If PERM comes from one porosity transform, log-derived FZI, RQI and R35 are functions of porosity only. Their 'different units' then restate porosity differences.
+- If PERM comes from one porosity transform, log-derived FZI, RQI and R35 are functions of porosity only. Their units then restate porosity differences: say so as a limit of the units, and still give them.
 - The arithmetic mean of permeability is dominated by a few high values; one thin high-k streak can set it. Check the median and how kh is spread over depth.
 - Separate vugs raise PHIT without raising k, so a transform on PHIT in vuggy carbonates overestimates k; separate vuggy porosity first (PHI_SEC is an index). Touching vugs or fractures can make k far higher than any transform predicts.
-- Class labels from analyzers (for example flow_unit_classification_system) use fixed thresholds. A class change at a threshold is a convention, not a geological boundary; read the thresholds.
+- Class labels from analyzers (for example flow_unit_classification_system) use fixed thresholds. A class change at a threshold is a convention, not a geological boundary; read the thresholds and name the convention with the classes.
 - Thin beds, bad hole and shoulder effects distort PHIE and so PERM. A one-sample spike in PERM may be an artifact.
 
 ## Do not state

@@ -94,6 +94,5 @@ def test_the_writer_reads_no_removed_rule():
     s.claims = Claims(s.points, s.ledger, s.map, s.task.question, s.f.view, (s.task.well,))
     s.claims.apply([{"op": "add", "point": 1, "text": "SW is lowest in the upper zones", "ev": [item.id],
                      "grade": "moderate", "means": MEANS}])
-    for variant in ("", "open"):
-        system, _, _, _ = prompt(s, variant)
-        assert ASPECTS_RULE in system and not [r for r in REMOVED if r in system], variant
+    system, _, _, _ = prompt(s)
+    assert not [r for r in REMOVED if r in system]

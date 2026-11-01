@@ -186,6 +186,8 @@ class FormationView:
     depth_scale: float = 1.0      # reporting units per LAS depth unit (0.3048 for a LAS in feet shown in metres)
     report_unit: str = "m"        # the unit every depth, thickness and zone limit is shown in (data.depth_unit / policy)
     m_per_unit: float = 1.0       # metres per reporting unit (thresholds stated in metres are converted with it)
+    basis: str = "all"            # the statistics' bases (data.basis): "all", or "zones" (no whole-interval lines)
+    conventions: list = field(default_factory=list)   # the data's reporting conventions (data.conventions)
     # curves the analyzers computed while classifying (src/petroharness/record/store.py), name -> (values over the well's samples, unit):
     # readable like any curve, never added to the workflow's well, so the card and every analyzer run see only the
     # workflow's curves (as petrophys runs them)
@@ -235,7 +237,8 @@ class FormationView:
             zones = segment_zones(depth[mask], labels, policy["zones"]["min_thickness_m"] / rep_m)
         return cls(task=task, prep=prep, interval=interval, mask=mask, zones=zones, policy=policy, labels=labels,
                    reg=load_registry(cfg.resources.rules_dir), lithology_curve=curve, vcl_bands=bands,
-                   code_table=table, depth_scale=scale, report_unit=unit, m_per_unit=rep_m)
+                   code_table=table, depth_scale=scale, report_unit=unit, m_per_unit=rep_m, basis=cfg.data.basis,
+                   conventions=list(cfg.data.conventions))
 
     @property
     def depth_unit(self) -> str:

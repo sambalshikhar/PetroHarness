@@ -159,10 +159,10 @@ permeability_rock_quality:
   decide:
     1: {starts: "Choose or assess a", calls: [crossplot PERM PHIE log_y, "lithology_stats PERM, PHIE, FZI"]}
     2: {starts: "Rank zones by median", calls: [profile PERM, "stats FZI, RQI, PHIE, PERM, KH"]}
-    3: {starts: "Flow units (rock volumes", calls: [crossplot RQI PHI_Z log_y log_x, "stats FZI, RQI, PHIE, PERM, KH", section permeability.flow_unit_classification_system]}
+    3: {starts: "Flow units (Ebanks 1987", calls: [crossplot RQI PHI_Z log_y log_x, "stats FZI, RQI, PHIE, PERM, KH", section permeability.flow_unit_classification_system]}
     4: {starts: "Alternatives give different units:", calls: [section permeability.flow_unit_classification_system], none: "method knowledge on unit schemes; the record's FZI classes are the one it computes"}
     5: {starts: "Use the fewest units", calls: [section permeability.flow_unit_classification_system]}
-    6: {starts: "Zones are distinct flow", calls: ["stats FZI, RQI, PHIE, PERM, KH", profile PERM, overlap A B]}
+    6: {starts: "Report the flow units", calls: ["stats FZI, RQI, PHIE, PERM, KH", profile PERM, overlap A B]}
     7: {starts: "Baffles and barriers show", calls: [runs SEALFLAG]}
     8: {starts: "kv/kh (vertical over horizontal", none: "data: paired KV_CORE and KH_CORE plugs, in a few records only (the stats tool reads them)"}
     9: {starts: "Answer shape: classify (units", none: "not a test: the shape of the answer beside the criteria (format)"}

@@ -142,8 +142,8 @@ def test_d1_every_indexed_facet_exists_and_every_facet_is_indexed():
 
 # --- D3 sizes ---------------------------------------------------------------------------------------------------------
 
-INDEX_MAX, GUIDE_MAX = 4000, 8500      # one line per guide (about 3,550); the researched guides 6,200-8,000 with
-#   their Compare lines
+INDEX_MAX, GUIDE_MAX = 4000, 9000      # one line per guide (about 3,550); the researched guides 6,200-9,000 with
+#   their Compare lines (permeability with its flow units)
 
 
 @pytest.mark.parametrize("topics", [[], ["porosity", "water_saturation"], ["data_quality"]])

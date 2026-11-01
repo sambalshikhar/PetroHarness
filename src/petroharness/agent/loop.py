@@ -269,6 +269,7 @@ class Session:
     topics: list = field(default_factory=list)       # the topic areas the model chose (READ); empty: none
     families: list = field(default_factory=list)     # the analyzer families those topics read; empty: no scoping
     reading: dict = field(default_factory=dict)      # the READ reply: topics, named
+    card: str = ""                                   # the provenance card the writer was shown (its numbers count as shown)
     # the skill library the guides come from (None: none, so no DIRECTION and no guide action); left out, the plugged one
     library: Optional[direction.Library] = field(default_factory=direction.plugged)
 

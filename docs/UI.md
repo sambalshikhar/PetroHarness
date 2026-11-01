@@ -66,28 +66,39 @@ with what to change, before the question waits for a worker.
 ## Following a run
 
 The run's header shows the question, its status (queued, running, done, error), the LAS file, the interval, the time
-so far and the model endpoint, with a bar of its phases: queue, interpret, read, investigate, settle, write, check.
-The **Progress** tab follows each model call as it happens, with its timing and token counts:
+so far and the model endpoint, with a bar of its phases: queue, interpret the well, read the question, investigate,
+settle the claims, write, check. While all workers are busy, a new question shows its place in the queue.
 
-- **Reading the LAS:** Petrophys interprets the well (the first question about a well; later ones reuse it).
-- **READ:** the topics the model chose for the question and the measurements it names.
-- **Step 1, 2, ...:** what the question asks and the points to settle (step 1), each step's focus, its edits to the
-  claims, the actions it runs and the results they opened (click a result id to read it).
-- **Settle:** the claims made final with every result in view.
-- **Writing the answer:** the writer's draft.
-- **The checker's findings, repair round N:** what the code found in the draft (numbers no result shows, words about
-  the process, statements the data contradicts) and the repaired draft.
+## Reading the answer
 
-While all workers are busy, a new question shows its place in the queue.
+**Interpretation** (the page a run opens on) tells the run as a petrophysicist reads a report, conclusion first:
 
-## The result
+1. **The answer:** its opening sentences, the number of findings by confidence, the results computed, and the
+   checker's outcome (every number in the answer traced to a computed result, or not).
+2. **The well:** the interval as Petrophys interpreted it, as a log plot (gamma ray, resistivity, density and neutron,
+   shale volume, porosity, water saturation, permeability, the pay flags, the lithology column and the zones), and the
+   zone table; the zones the answer names most are marked.
+3. **How the answer was reached:** the parts the model split the question into, each with its findings. A finding
+   gives its confidence and its reading, a chart of the zone values it rests on for each curve it names (with the
+   net-pay step's cutoff, and the zones it names marked), why it matters and what could change it, and a link to the
+   computed results it rests on. While the run goes on, the parts fill in with the model's working readings.
+4. **What limits this answer**, from the answer's own limitations.
+5. **The whole written answer**, section by section (the long ones folded to their opening lines and tables). Click a
+   number to see every computed result line that shows it, and a zone to find it on the logs. Then rate the answer
+   (good, partly or wrong) with a note.
 
-- **Answer:** the answer as written (markdown, with the zone table), the interval used, the topics the model read,
-  the skill library and the status. Below it, rate the answer (good, partly or wrong) with a note.
-- **Claims:** for each point the model set out to settle, its claims, each with its grade, what it means, where it is
-  weak and the results it cites.
-- **Results:** every opened result, as the model read it, computed by Petrophys. Filter them by a curve, a zone or a
-  word.
+The other tabs hold the detail behind it:
+
+- **Well logs:** the full plot, track by track, each curve marked measured (LAS) or computed by Petrophys and shown on
+  its conventional scale (else the range of its values). Move over the logs to read every curve at a depth; click a
+  zone, or a row of the zone table, to pick it; zoom 2x or 4x.
+- **Evidence:** by question part, each claim with its grade, what it means, what weakens it, the code's checks and the
+  results it rests on, opened under it; *All results* lists every result the model read, laid out as tables (or as
+  the text the model read), with a filter by curve, zone or word.
+- **Investigation log:** the run as it happened, for audit: a strip of every stage (each step with the results it
+  opened and the claims it added or revised), then each stage as a card: the well, the question as read, the first
+  look, each step (its focus, what it looked at in plain words, the results it opened, its claims, any harness note),
+  the settle step, the writer and the checker's rounds.
 - **Details:** the run in numbers (steps, model calls, tokens, time); the interval and its zones; the topics, the
   named measurements and the skills used; the data settings and the Petrophys version; each model call's usage; the
   checker's rounds; the inputs.
@@ -127,12 +138,12 @@ The page uses a small JSON API, which also serves scripts:
 
 | request | what it does |
 |---|---|
-| `GET /api/config` | the endpoints and their health, workers, queue, defaults, topic areas, context profiles |
+| `GET /api/config` | the endpoints and their health, workers, queue, defaults, topic areas, context profiles, each tool's group |
 | `GET /api/las?path=P` | a LAS file's header |
 | `GET /api/tops?path=P&las=L[&unit=m]` | the formations a tops file names, with the interval each would use |
 | `POST /api/upload?kind=las\|tops` | the file's bytes, its name in the `X-Filename` header; returns its path |
 | `POST /api/ask` | the inputs (below); returns the run id |
-| `GET /api/job/ID?since=N` | the status and the events from N on; the answer and the result when done |
+| `GET /api/job/ID?since=N` | the status and the events from N on (each model call, the results the model read, the interval's logs once Petrophys has read the well); the answer and the result when done |
 | `GET /api/runs` | the runs, newest first |
 | `GET /api/run/ID` | a run in full; `/api/run/ID/answer.md` and `/api/run/ID/trace.json` its files |
 | `POST /api/rate/ID` | `{"verdict": "good" \| "partly" \| "wrong", "note": "..."}` |

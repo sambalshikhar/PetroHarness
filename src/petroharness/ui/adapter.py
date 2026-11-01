@@ -272,8 +272,9 @@ def _iso(t: float) -> str:
 
 
 def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | None = None) -> None:
-    """Answer the job's question with petroharness.ask, reporting each model call as it happens; ask writes answer.md
-    and trace.json to `out`. model_factory(cfg) builds the model client (default: the harness's own LLM)."""
+    """Answer the job's question with petroharness.ask, reporting the interval's logs once Petrophys has interpreted the
+    well (a `well` event: petroharness.ui.wellplot) and each model call as it happens; ask writes answer.md and
+    trace.json to `out`. model_factory(cfg) builds the model client (default: the harness's own LLM)."""
     from petroharness.ask import ask
     from petroharness.llm import LLM
 
@@ -281,9 +282,17 @@ def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | No
     job.status, job.started = "running", time.time()
     job.emit({"kind": "phase", "name": "started", "endpoint": model_url or ""})
     job.emit({"kind": "phase", "name": "interpreting"})
+    def plot(view) -> None:                                   # the interval's logs, once Petrophys has read the well
+        try:
+            from petroharness.ui.wellplot import payload
+            job.emit({"kind": "well", **payload(view)})
+        except Exception as exc:  # noqa: BLE001  (the plot never fails the run)
+            job.emit({"kind": "well", "error": f"{type(exc).__name__}: {exc}"})
+
     try:
         from petroharness.ui.progress import Observed
-        got = ask(**job.kwargs, out=out, model_url=model_url, llm_factory=lambda cfg: Observed(base(cfg), job.emit))
+        got = ask(**job.kwargs, out=out, model_url=model_url, llm_factory=lambda cfg: Observed(base(cfg), job.emit),
+                  on_view=plot)
         job.answer = got.answer
         job.result = summary(got.trace, got.interval, got.status)
         job.status = "done" if got.ok else "error"

@@ -14,7 +14,8 @@ question goes to the least busy endpoint that serves the model. --workers questi
 in a queue.
 
 API (JSON):
-    GET  /api/config                endpoints and their health, workers, queue, defaults, topic areas, context profiles
+    GET  /api/config                endpoints and their health, workers, queue, defaults, topic areas, context profiles,
+                                    each tool's group
     GET  /api/las?path=             a LAS file's header (well, depth range and unit, curves)
     GET  /api/tops?path=[&las=&unit=]  the formations a tops file names, with the interval each would use
     POST /api/upload?kind=las|tops  the file's bytes, header X-Filename -> {path, ...}
@@ -223,8 +224,21 @@ class App:
                 "workers": self.workers, "running": running, "queued": waiting, "runs": str(self.store.root),
                 "max_steps": MAX_STEPS, "profiles": A.context_profiles(),
                 "topics": {k: v.get("when", "") for k, v in direction.areas().items()},
+                "verbs": verbs(), "petrophys_verbs": petrophys_verbs(),
                 "skills_env": os.environ.get("PETROHARNESS_SKILLS", ""),
                 "settings_env": os.environ.get("PETROHARNESS_DATA", "")}
+
+
+def verbs() -> dict:
+    """Each tool's group, as the brief groups the tools (agent/loop.py VERBS): {tool: group}."""
+    from petroharness.agent.loop import VERBS
+    return {t: head.split(":")[0].strip().capitalize() for head, tools in VERBS for t in tools}
+
+
+def petrophys_verbs() -> list:
+    """The verbs over Petrophys (docs/TOOLS.md): their requests have Petrophys compute what the record lacks."""
+    from petroharness.agent.library import LIBRARY
+    return [*LIBRARY, "check", "classify", "summarize", "calibrate"]
 
 
 def _env_urls() -> list:

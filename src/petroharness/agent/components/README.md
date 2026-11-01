@@ -12,7 +12,7 @@ Every text the harness sends to the model belongs to exactly one component. A co
 | C6 | C6_skills | the direction index over the topic areas (resources/topics.yaml) and the plugged skill library's guides (a library is data in its own folder, resources/skills/README.md; its lines are found in the prompts, and its version is the trace's `skills`); the GUIDES block of a step's prompt, a guide whole at the step after it is read and short after that |
 | C7 | C7_scripts | tool outputs and the map (rendered by code it frames; the label of a step parameter written as a curve) |
 | C8 | C8_middleware | the hooks' notes: actions left out, results withheld for NEW's budget (shown first at the next step), edits not applied, nothing new |
-| C9 | C9_answer | the writer: its prompt, rules (with the one guideline for bases and conventions, also in the settle step), shapes, the zone-table frame |
+| C9 | C9_answer | the writer: its prompt (the claims, every opened result, the provenance card) and write text, the table rule, the one guideline for bases and conventions (also in the settle step), the zone-table frame |
 | C10 | C10_reading | how evidence is read and graded: caveats, levels and rankings, negatives, absence |
 
 Files:

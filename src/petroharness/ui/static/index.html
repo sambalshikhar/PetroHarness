@@ -108,6 +108,7 @@ select:focus, input:focus, textarea:focus { outline: 3px solid var(--accent-soft
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .chip { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--code); color: var(--ink-2); }
 .chip.lith { background: var(--navy-soft); color: var(--navy); }
+.chip.sans { font-family: var(--sans); font-size: 12px; padding: 2px 8px; border-radius: 6px; }
 .err { color: var(--bad); font-size: 13px; white-space: pre-wrap; margin-top: 8px; line-height: 1.45; }
 details.more > summary { font-weight: 650; font-size: 13px; color: var(--ink-2); padding: 4px 0; }
 details > summary { cursor: pointer; list-style: none; user-select: none; }
@@ -297,6 +298,301 @@ h3.sec:first-child { margin-top: 0; }
 .errbox { background: var(--bad-soft); color: var(--bad); border-radius: 10px; padding: 12px 16px; font-size: 13.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .errbox pre { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; margin: 8px 0 0; color: var(--ink-2); }
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 50; }
+
+/* ---------- the run view (answer, how it was reached, evidence, well logs) ---------- */
+.lede2 { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; max-width: 90ch; line-height: 1.55; }
+.lede2 b { color: var(--ink-2); font-weight: 600; }
+/* at a glance */
+.glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.gbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px; min-width: 0; }
+.gbox .gl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+.gbox .gv { font-size: 13.5px; color: var(--ink); line-height: 1.5; overflow-wrap: anywhere; }
+.gbox .gv small { color: var(--muted); font-size: 12px; }
+.gbox .big { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--navy); margin-right: 4px; }
+.gbox.ok { border-color: var(--done); background: var(--done-soft); } .gbox.ok .gl { color: var(--done); }
+.gbox.warn { border-color: var(--warn); background: var(--warn-soft); } .gbox.warn .gl { color: var(--warn); }
+.gbox .go { margin-top: 6px; }
+.gradebar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 7px; background: var(--code); }
+.gradebar span { display: block; height: 100%; }
+.gb-high { background: var(--done); } .gb-moderate { background: var(--look); } .gb-low { background: var(--warn); } .gb-other { background: var(--faint); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; border: 1px solid rgba(0,0,0,.12); }
+.lithchip { display: inline-flex; align-items: center; font-size: 12px; padding: 1px 8px 1px 6px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); margin: 2px 4px 2px 0; white-space: nowrap; }
+.hintline { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin: 0 0 8px; flex-wrap: wrap; }
+.hintline .numref { cursor: default; }
+
+/* numbers in the answer, traced to the results */
+.numref { border-bottom: 1.5px dotted var(--faint); cursor: pointer; border-radius: 2px; }
+.numref:hover, .numref.on { background: var(--accent-soft); border-bottom-color: var(--accent); color: var(--accent-ink); }
+.pop { position: absolute; z-index: 60; width: min(560px, calc(100vw - 24px)); background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(1,30,63,.18); padding: 12px 14px 10px; font-size: 13px; }
+.pop .ph1 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.pop .ph1 b { font-size: 15px; color: var(--navy); font-variant-numeric: tabular-nums; }
+.pop .ph1 .x { margin-left: auto; border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; }
+.pop ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 320px; overflow-y: auto; }
+.pop li { border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 9px; background: var(--surface-2); }
+.pop .src { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 3px; flex-wrap: wrap; }
+.pop .ln { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); line-height: 1.5; overflow-wrap: anywhere; }
+.pop mark { background: var(--accent-soft); color: var(--accent-ink); border-radius: 3px; padding: 0 2px; font-weight: 700; }
+.pop .none { color: var(--muted); line-height: 1.5; }
+
+/* actions in plain words */
+.apills { display: flex; flex-wrap: wrap; gap: 6px; }
+.apill { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 3px 10px 3px 4px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 12.5px; color: var(--ink-2); }
+.apill .g { font-size: 10.5px; font-weight: 700; letter-spacing: .3px; padding: 1px 7px; border-radius: 999px; white-space: nowrap; background: var(--code); color: var(--muted); }
+.apill .a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.apill .a code { background: none; padding: 0; font-family: var(--mono); font-size: 11.5px; }
+.apill.g0 .g { background: var(--navy-soft); color: var(--navy); }
+.apill.g1 .g { background: var(--look-soft); color: var(--look); }
+.apill.g2 .g { background: var(--note-soft); color: var(--note); }
+.apill.g3 .g, .apill.g4 .g, .apill.g5 .g, .apill.g6 .g { background: var(--code); color: var(--ink-2); }
+.apill.pp { border-color: var(--pp); } .apill.pp .g { background: var(--pp-soft); color: var(--pp); }
+.apill.gd .g { background: var(--accent-soft); color: var(--accent-ink); }
+.apill.led .g { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+
+/* the story: how the answer was reached */
+.story { display: grid; gap: 12px; }
+.sc { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; }
+.sc .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 1.5px solid var(--line); color: var(--muted); position: relative; }
+.sc .ic svg { width: 17px; height: 17px; }
+.sc:not(:last-child) .ic::after { content: ""; position: absolute; top: 36px; left: 15.25px; width: 2px; height: calc(100% + 12px); background: var(--line); z-index: -1; }
+.sc { position: relative; z-index: 0; }
+.sc.k-pp .ic { border-color: var(--pp); color: var(--pp); background: var(--pp-soft); }
+.sc.k-read .ic { border-color: var(--navy); color: var(--navy); background: var(--navy-soft); }
+.sc.k-look .ic, .sc.k-step .ic { border-color: var(--look); color: var(--look); background: var(--look-soft); }
+.sc.k-settle .ic { border-color: var(--note); color: var(--note); background: var(--note-soft); }
+.sc.k-writer .ic { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+.sc.k-check .ic { border-color: var(--done); color: var(--done); background: var(--done-soft); }
+.sc.k-repair .ic { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }
+.sc.k-fail .ic { border-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
+.sc.live .ic { border-color: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.sbody { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); min-width: 0; }
+.shead { display: flex; gap: 6px 12px; align-items: baseline; padding: 11px 16px 0; flex-wrap: wrap; }
+.shead .st { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); white-space: nowrap; }
+.shead .meta2 { margin-left: auto; font-size: 11.5px; color: var(--faint); white-space: nowrap; font-family: var(--mono); }
+.sline { padding: 4px 16px 0; font-size: 15px; line-height: 1.55; color: var(--ink); font-weight: 550; overflow-wrap: anywhere; }
+.sline.q { font-weight: 500; }
+.sparts { padding: 10px 16px 14px; display: grid; gap: 10px; }
+.spart { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 4px 12px; align-items: start; }
+.spart > .lb { font-size: 11.5px; font-weight: 650; color: var(--muted); padding-top: 3px; }
+.spart > .vl { min-width: 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.55; }
+@media (max-width: 640px) { .spart { grid-template-columns: 1fr; } .sc { grid-template-columns: 26px minmax(0, 1fr); gap: 8px; } .sc .ic { width: 26px; height: 26px; } .sc .ic svg { width: 14px; height: 14px; } .sc:not(:last-child) .ic::after { left: 11.25px; top: 28px; } }
+.cl { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cl li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); }
+.cl .o { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-weight: 800; font-size: 12px; margin-top: 1px; background: var(--code); color: var(--ink); }
+.cl .o.add { background: var(--done-soft); color: var(--done); } .cl .o.revise { background: var(--look-soft); color: var(--look); } .cl .o.drop { background: var(--bad-soft); color: var(--bad); }
+.cl .cid { font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--ink); margin-right: 4px; }
+.morebtn { border: 0; background: none; padding: 0; color: var(--accent-ink); font-size: 12.5px; cursor: pointer; }
+.subtle { font-size: 12px; color: var(--muted); }
+.points2 { margin: 0; padding-left: 20px; display: grid; gap: 3px; } .points2 li::marker { color: var(--navy); font-weight: 700; }
+.warnline { font-size: 12.5px; color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 5px 9px; line-height: 1.5; white-space: pre-wrap; }
+.okline { font-size: 13px; color: var(--done); font-weight: 600; }
+.summarybox { background: var(--navy-soft); border-radius: 12px; padding: 14px 18px; font-size: 14px; line-height: 1.65; color: var(--ink-2); margin-bottom: 18px; }
+.summarybox b { color: var(--navy); }
+
+/* evidence */
+.evbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.ccard { padding: 14px 18px 14px 56px; display: grid; gap: 8px; }
+.ccard + .ccard { border-top: 1px dashed var(--line); }
+@media (max-width: 760px) { .ccard { padding-left: 18px; } }
+.ckv { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 4px 12px; font-size: 13px; line-height: 1.55; }
+.ckv .l { color: var(--muted); font-size: 12px; padding-top: 1px; } .ckv .v { color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .ckv { grid-template-columns: 1fr; } }
+.evchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.evchip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 2px 8px 2px 3px; background: var(--surface); cursor: pointer; font-size: 12px; color: var(--ink-2); max-width: 100%; }
+.evchip:hover, .evchip.on { border-color: var(--accent); }
+.evchip.on { background: var(--accent-soft); }
+.evchip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 360px; }
+.inres { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); padding: 10px 12px; margin-top: 2px; }
+.inres .ih { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.rv { display: grid; gap: 10px; min-width: 0; }
+.rb-head { font-size: 13px; color: var(--ink); line-height: 1.5; overflow-wrap: anywhere; }
+.rb-head b { font-family: var(--mono); font-size: 12.5px; color: var(--navy); }
+.rb-head span { color: var(--muted); }
+.rb-line { font-size: 12.5px; color: var(--ink-2); line-height: 1.55; padding-left: 10px; border-left: 2px solid var(--line); overflow-wrap: anywhere; }
+.rb-line b { color: var(--ink); font-weight: 650; }
+.rb-line.sub { margin-left: 14px; }
+.rv .tblwrap { margin: 0; }
+table.t.rt td, table.t.rt th { padding: 5px 10px; font-size: 12px; }
+table.t.rt td:first-child { font-weight: 600; color: var(--ink); }
+.rawtoggle { margin-left: auto; }
+.rawpre { white-space: pre-wrap; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+
+/* answer tables */
+.prose .tblwrap { margin: 10px 0 20px; }
+.prose table.t { font-size: 13px; }
+.prose table.t tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 70%, transparent); }
+.prose table.t td.grp { background: var(--surface) !important; font-weight: 600; color: var(--ink); border-right: 1px solid var(--line-2); }
+.prose table.t tr.gstart td { border-top: 1px solid var(--line); }
+.tblmore { display: block; width: 100%; border: 0; border-top: 1px solid var(--line-2); background: var(--surface-2); padding: 7px; cursor: pointer; color: var(--accent-ink); font-size: 12.5px; }
+.prose blockquote { margin: 0 0 14px; padding: 6px 14px; border-left: 3px solid var(--line); color: var(--muted); }
+
+/* well logs */
+.wtools { display: flex; gap: 10px 16px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.legend2 { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
+.legend2 i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: 3px; margin-right: 5px; }
+.wp { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow-x: auto; }
+.wp-in { display: inline-block; min-width: 100%; }
+.wp-read { position: sticky; left: 0; display: flex; gap: 4px 14px; flex-wrap: wrap; align-items: baseline; padding: 8px 14px; min-height: 36px; border-bottom: 1px solid var(--line-2); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wp-read b { color: var(--ink); font-weight: 650; }
+.wp-read .rv1 { white-space: nowrap; }
+.wp-heads, .wp-body { display: flex; }
+.wp-heads { border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.wp-h { flex: none; padding: 6px 8px 6px; border-left: 1px solid var(--line-2); font-size: 11px; line-height: 1.35; overflow: hidden; }
+.wp-h .lc { font-size: 10.5px; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wp-h:first-child { border-left: 0; }
+.wp-h .tt2 { font-weight: 700; color: var(--ink-2); font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; line-height: 1.25; min-height: 26px; }
+.wp-h .cv { font-family: var(--mono); font-size: 10.5px; border-top: 2px solid; padding-top: 1px; margin-top: 4px; white-space: nowrap; }
+.wp-h .cv .cn { font-weight: 700; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+.wp-h .cv .cn small { font-weight: 400; opacity: .8; }
+.wp-h .cv .cs { display: flex; justify-content: space-between; gap: 4px; font-size: 10px; opacity: .85; }
+.wp-h .cv.dash { border-top-style: dashed; }
+.wp-h .src { font-size: 9.5px; font-weight: 700; padding: 0 4px; border-radius: 3px; margin-left: 4px; vertical-align: 1px; }
+.wp-h .src.p { background: var(--pp-soft); color: var(--pp); } .wp-h .src.l { background: var(--code); color: var(--muted); }
+.wp-scroll { max-height: 78vh; overflow-y: auto; overflow-x: hidden; }
+.wp-body { position: relative; cursor: crosshair; }
+.wp-body svg { flex: none; display: block; border-left: 1px solid var(--line-2); }
+.wp-body svg:first-child { border-left: 0; }
+.xh { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--accent); pointer-events: none; display: none; }
+.zb { position: absolute; left: 0; right: 0; background: var(--accent); opacity: .09; pointer-events: none; border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent); }
+.ztable tr { cursor: pointer; } .ztable tr.on td { background: var(--accent-soft) !important; }
+.wnote { font-size: 12.5px; color: var(--muted); margin-top: 8px; max-width: 100ch; line-height: 1.5; }
+.prose table.t:not(.merged) tbody tr:nth-child(even) td { background: var(--surface-2); }
+.zone[data-z] { cursor: pointer; }
+.flow3 { display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: 8px; margin: 28px auto 0; max-width: 860px; }
+.flow3 > div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; text-align: left; min-width: 150px; flex: 1; }
+.flow3 > div:first-child { border-color: var(--pp); background: var(--pp-soft); } .flow3 > div:first-child b { color: var(--pp); }
+.flow3 b { display: block; color: var(--navy); font-size: 13.5px; } .flow3 span { font-size: 12.5px; color: var(--muted); }
+.flow3 i { align-self: center; color: var(--faint); font-style: normal; }
+details.ritem > summary .apill { min-width: 0; }
+
+/* ---------- organized, visual (v2) ---------- */
+.clamp2, .clamp3 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp2 { -webkit-line-clamp: 2; } .clamp3 { -webkit-line-clamp: 3; }
+.readmore { border: 0; background: none; padding: 0; margin-top: 2px; color: var(--accent-ink); font-size: 12px; cursor: pointer; }
+.numref { border-bottom: 1px dotted var(--line); }
+.numref:hover, .numref.on { border-bottom-color: var(--accent); }
+/* the zone bar: each zone's share of the interval, in its lithology's colour */
+.zstrip { display: flex; height: 22px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); margin: 8px 0 4px; background: var(--surface-2); }
+.zstrip span { display: grid; place-items: center; font-family: var(--mono); font-size: 10px; font-weight: 700; color: rgba(0,0,0,.62); min-width: 2px; border-right: 1px solid rgba(255,255,255,.7); overflow: hidden; white-space: nowrap; cursor: pointer; }
+.zstrip span:last-child { border-right: 0; }
+.zstrip span:hover { filter: brightness(.94); }
+.zaxis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* stat tiles */
+.tiles2 { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
+.stat { display: inline-flex; align-items: baseline; gap: 5px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.stat b { font-size: 22px; font-weight: 650; color: var(--navy); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.gbox .ckicon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--done); color: #fff; margin-bottom: 6px; }
+.gbox.warn .ckicon { background: var(--warn); }
+.gbox .ckicon svg { width: 17px; height: 17px; }
+/* the answer, section by section */
+.anstitle { font-size: 19px; font-weight: 650; color: var(--navy); margin: 0 0 10px; letter-spacing: -.005em; line-height: 1.35; }
+.secnav { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.secnav button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; font-size: 12.5px; color: var(--ink-2); cursor: pointer; }
+.secnav button:hover { border-color: var(--accent); color: var(--accent-ink); }
+.asec { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 26px 6px; margin-bottom: 12px; box-shadow: var(--shadow); scroll-margin-top: 110px; }
+.asec > h2.ah { font-size: 15px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 0 12px; padding: 0; border: 0; display: flex; align-items: center; gap: 8px; }
+.asec > h2.ah::before { content: ""; width: 4px; height: 16px; border-radius: 2px; background: var(--line); }
+.asec.key { border-color: var(--navy); border-top-width: 4px; }
+.asec.key > h2.ah { color: var(--navy); } .asec.key > h2.ah::before { background: var(--accent); }
+.asec.key .prose { font-size: 15.5px; color: var(--ink); }
+@media (max-width: 760px) { .asec { padding: 14px 16px 4px; } }
+/* the journey: every stage as one node, the steps with what they did */
+.journey { display: flex; align-items: flex-start; overflow-x: auto; padding: 14px 16px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 16px; gap: 0; }
+.jn { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 64px; border: 0; background: none; padding: 0 2px; cursor: pointer; color: var(--muted); font: inherit; }
+.jn .jc { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12.5px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); }
+.jn .jc svg { width: 15px; height: 15px; }
+.jn .jl { font-size: 11px; white-space: nowrap; }
+.jn .jm { display: flex; gap: 6px; font-size: 10.5px; font-variant-numeric: tabular-nums; min-height: 14px; }
+.jn .jm span { display: inline-flex; align-items: center; gap: 2px; }
+.jn .jm svg { width: 11px; height: 11px; }
+.jn:hover .jc { border-color: var(--accent); }
+.jn.k-pp .jc { border-color: var(--pp); color: var(--pp); background: var(--pp-soft); }
+.jn.k-read .jc { border-color: var(--navy); color: var(--navy); background: var(--navy-soft); }
+.jn.k-look .jc, .jn.k-step .jc { border-color: var(--look); color: var(--look); background: var(--look-soft); }
+.jn.k-settle .jc { border-color: var(--note); color: var(--note); background: var(--note-soft); }
+.jn.k-writer .jc { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+.jn.k-check .jc { border-color: var(--done); color: #fff; background: var(--done); }
+.jn.k-repair .jc { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }
+.jn.live .jc { border-color: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.jline { flex: 1 0 14px; height: 2px; background: var(--line); margin-top: 15px; }
+.jm .r { color: var(--look); } .jm .a { color: var(--done); } .jm .v { color: var(--note); }
+/* a folded stage card */
+.shead.tog { cursor: pointer; padding-bottom: 0; }
+.shead.tog:hover .st { color: var(--accent-ink); }
+.chev { display: inline-block; transition: transform .12s; color: var(--faint); font-size: 10px; margin-left: 6px; }
+.sbody.open .chev { transform: rotate(90deg); }
+.scount { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 16px 12px; }
+.scount span { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 2px 9px; }
+.scount svg { width: 12px; height: 12px; color: var(--muted); }
+.scount .ca { color: var(--done); background: var(--done-soft); border-color: transparent; }
+.scount .cr { color: var(--look); background: var(--look-soft); border-color: transparent; }
+.scount .cd { color: var(--bad); background: var(--bad-soft); border-color: transparent; }
+.scount .cw { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.scount .cdone { color: var(--done); background: var(--done-soft); border-color: transparent; font-weight: 600; }
+.sbody.open .scount { padding-bottom: 2px; }
+.expandall { display: flex; justify-content: flex-end; gap: 12px; margin: -6px 0 10px; }
+/* claims as cards */
+.ccard { padding: 14px 18px 14px 56px; position: relative; }
+.ccard::before { content: ""; position: absolute; left: 22px; top: 16px; bottom: 16px; width: 4px; border-radius: 2px; background: var(--faint); }
+.ccard.g-high::before { background: var(--done); } .ccard.g-moderate::before { background: var(--look); } .ccard.g-low::before { background: var(--warn); }
+.ccard .ctext { font-size: 14.5px; font-weight: 500; }
+.cboxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.cbx { border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+.cbx .cbh { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; margin-bottom: 3px; }
+.cbx .cbh svg { width: 13px; height: 13px; }
+.cbx.means { background: var(--look-soft); } .cbx.means .cbh { color: var(--look); }
+.cbx.weak { background: var(--note-soft); } .cbx.weak .cbh { color: var(--note); }
+.cbx.flags { background: var(--warn-soft); } .cbx.flags .cbh { color: var(--warn); }
+.evrow { display: flex; gap: 10px; align-items: flex-start; }
+.evrow .lb { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); padding-top: 5px; white-space: nowrap; }
+@media (max-width: 760px) { .ccard { padding-left: 36px; } .ccard::before { left: 14px; } .evrow { flex-direction: column; gap: 4px; } }
+.asec.folded .prose > :not(:first-child):not(.tblwrap) { display: none; }
+.asec.folded .prose > p:first-child { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.asec.folded .prose > ul:first-child > li:nth-child(n+3), .asec.folded .prose > ol:first-child > li:nth-child(n+3) { display: none; }
+.secmore { display: block; border: 0; border-top: 1px solid var(--line-2); background: none; width: calc(100% + 52px); margin: 4px -26px 0; padding: 9px; color: var(--accent-ink); font-size: 12.5px; cursor: pointer; }
+.secmore:hover { background: var(--surface-2); }
+@media (max-width: 760px) { .secmore { width: calc(100% + 32px); margin: 4px -16px 0; } }
+.asec { padding-bottom: 0; } .asec .prose { padding-bottom: 6px; }
+.ptcard .pthead .pcount { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; padding-top: 4px; }
+
+/* ---------- the interpretation: a report a petrophysicist reads top to bottom ---------- */
+.hero { background: var(--surface); border: 1px solid var(--navy); border-top-width: 4px; border-radius: 12px; padding: 18px 26px 16px; box-shadow: var(--shadow); margin-bottom: 26px; }
+.hero .hl, .chap .ch2 { font-size: 12px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: var(--navy); margin: 0 0 8px; }
+.hero .lead { font-size: 16.5px; line-height: 1.7; color: var(--ink); }
+.hero .lead p { max-width: 88ch; }
+.heromt { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-2); }
+.heromt .gbwrap { min-width: 180px; } .heromt .gbwrap .gradebar { margin-top: 0; }
+.chk { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--done); }
+.chk svg { width: 18px; height: 18px; padding: 3px; border-radius: 50%; background: var(--done); color: #fff; }
+.chk.warn { color: var(--warn); } .chk.warn svg { background: var(--warn); }
+.chap { margin-bottom: 30px; }
+.chap .ch2 { font-size: 13px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+.chap .ch2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.part { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 14px; overflow: hidden; }
+.phead { display: flex; gap: 12px; align-items: flex-start; padding: 14px 20px 10px; }
+.phead h3 { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ink); font-weight: 650; }
+.pnum { width: 28px; height: 28px; border-radius: 50%; background: var(--navy); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; }
+.find { margin: 0 20px 16px 60px; padding: 12px 16px 12px; border-radius: 10px; background: var(--surface-2); border-left: 4px solid var(--faint); display: grid; gap: 8px; }
+.find.g-high { border-left-color: var(--done); } .find.g-moderate { border-left-color: var(--look); } .find.g-low { border-left-color: var(--warn); }
+@media (max-width: 760px) { .find { margin: 0 12px 14px 12px; } }
+.fhead { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.conf { font-size: 11.5px; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--code); color: var(--muted); }
+.conf.c-high { background: var(--done-soft); color: var(--done); } .conf.c-moderate { background: var(--look-soft); color: var(--look); } .conf.c-low { background: var(--warn-soft); color: var(--warn); }
+.flead { margin: 0; font-size: 15px; line-height: 1.6; font-weight: 600; color: var(--ink); }
+.frest { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+.fcharts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+.zb2 { margin: 0; background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px; padding: 8px 10px 4px; }
+.zb2 figcaption { font-size: 12px; color: var(--ink-2); margin-bottom: 2px; }
+.zb2.flat { font-size: 12.5px; color: var(--muted); padding: 8px 12px; align-self: start; }
+.zb2.flat b { color: var(--ink-2); }
+.ffoot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ffoot .link { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; }
+.ffoot .link svg { width: 13px; height: 13px; }
+.limits { background: var(--note-soft); border-radius: 12px; padding: 14px 22px 4px; font-size: 14px; }
+.limits.prose p, .limits.prose li { color: var(--ink-2); }
+.zb.key { background: var(--navy); opacity: .06; border-color: var(--navy); }
+.ztable tr.key td { background: var(--navy-soft); }
+.ztable tr.key td:first-child { box-shadow: inset 3px 0 0 var(--navy); }
 </style>
 </head>
 <body>
@@ -419,31 +715,62 @@ const host = u => { try { return new URL(u).host; } catch (e) { return u || ""; 
 const hostname = u => { try { return new URL(u).hostname.split(".")[0]; } catch (e) { return u || ""; } };
 const narrow = () => window.matchMedia("(max-width: 1180px)").matches;
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 1800); }
-const S = {cfg: null, las: null, tops: null, mode: "whole", job: null, since: 0, events: [], last: null, tab: "progress", pinned: false, sig: "", poll: null, runs: [], det: {}};
+const S = {cfg: null, las: null, tops: null, mode: "whole", job: null, since: 0, events: [], last: null, tab: "main", pinned: false, sig: "", poll: null, runs: [], det: {}, open: {}, raw: {}, evMode: "", hlZone: null, wellZoom: 1, wellData: null, m: null, res: null};
 
-// ---------- inline text: evidence ids, zones, code, bold ----------
+// ---------- inline text: evidence ids, zones, code, bold; in the answer, numbers traced to the results ----------
 const HL = /(\[?\bE\d{1,3}\b\]?)|(\bZ\d{1,3}\b)/g;
 function hl(escaped) {
   return escaped.replace(HL, (m, e, z) => {
-    if (e) { const id = e.replace(/[\[\]]/g, ""); return `<span class="eid" data-e="${id}" title="Show ${id} in Results">${id}</span>`; }
-    if (z) return `<span class="zone">${z}</span>`;
+    if (e) { const id = e.replace(/[\[\]]/g, ""); return `<span class="eid" data-e="${id}" title="Show ${id} in Evidence">${id}</span>`; }
+    if (z) return `<span class="zone" data-z="${z}" title="Show ${z} on the logs">${z}</span>`;
     return m;
   });
 }
-function inline(s) {
-  return String(s ?? "").split(/(`[^`]+`)/g).map(part => {
+// a number in running text: not part of a word, an id (Z3, E12), an entity (&#39;) or a longer number
+const NUM = /(?<![\w.#&])\d+(?:,\d{3})*(?:\.\d+)?(?![\w]|\.\d)/g;
+function nums(html) {
+  return html.split(/(<[^>]+>)/g).map(p => p.startsWith("<") ? p :
+    p.replace(NUM, t => (t.includes(".") || t.replace(/,/g, "").length >= 2) ? `<span class="numref" data-n="${t}">${t}</span>` : t)).join("");
+}
+function inline(s, opt = {}) {
+  const out = String(s ?? "").split(/(`[^`]+`)/g).map(part => {
     if (/^`[^`]+`$/.test(part)) return `<code>${esc(part.slice(1, -1))}</code>`;
-    return hl(esc(part)).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, "$1<em>$2</em>");
+    const h = hl(esc(part)).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, "$1<em>$2</em>");
+    return opt.nums ? nums(h) : h;
   }).join("");
+  return out.replace(/&lt;br\s*\/?&gt;/gi, "<br>");
 }
 const isNum = v => /^[-+]?(\d[\d,]*)(\.\d+)?(e[-+]?\d+)?\s?%?$/i.test(String(v).trim()) || /^[-+]?\d+(\.\d+)?\s?[–-]\s?\d+(\.\d+)?$/.test(String(v).trim());
-function table(head, rows) {
-  const num = head.map((_, i) => rows.length > 0 && rows.every(r => !r[i] || r[i] === "-" || isNum(r[i])));
-  return `<div class="tblwrap"><table class="t"><thead><tr>${head.map((h, i) => `<th class="${num[i] ? "num" : ""}">${inline(h)}</th>`).join("")}</tr></thead><tbody>` +
-    rows.map(r => `<tr>${head.map((_, i) => `<td class="${num[i] ? "num" : String(r[i] ?? "").length <= 28 ? "nw" : ""}">${inline(r[i] ?? "")}</td>`).join("")}</tr>`).join("") + `</tbody></table></div>`;
+// a table: numbers right-aligned; leading text columns whose consecutive cells repeat (a zone's rows) merged into one cell
+function table(head, rows, opt = {}) {
+  const blank = v => !v || v === "-" || v === "–";
+  const num = head.map((_, i) => rows.length > 0 && rows.some(r => !blank(r[i])) && rows.every(r => blank(r[i]) || isNum(r[i])));
+  const lead = [];
+  for (let i = 0; i < head.length - 1 && !num[i]; i++) {
+    const same = rows.filter((r, k) => k && lead.concat(i).every(j => r[j] === rows[k - 1][j])).length;
+    if (rows.length >= 3 && same >= rows.length / 3) lead.push(i); else break;
+  }
+  const sameUpTo = (a, b, i) => lead.slice(0, lead.indexOf(i) + 1).every(j => a[j] === b[j]);
+  let body = "";
+  rows.forEach((r, k) => {
+    const start = k > 0 && lead.length && !sameUpTo(r, rows[k - 1], lead[0]);
+    let tds = "";
+    head.forEach((_, i) => {
+      if (lead.includes(i)) {
+        if (k > 0 && sameUpTo(r, rows[k - 1], i)) return;
+        let span = 1;
+        while (k + span < rows.length && sameUpTo(rows[k + span], r, i)) span++;
+        tds += `<td class="grp"${span > 1 ? ` rowspan="${span}"` : ""}>${inline(r[i] ?? "", opt)}</td>`;
+        return;
+      }
+      tds += `<td class="${num[i] ? "num" : String(r[i] ?? "").length <= 28 ? "nw" : ""}">${inline(r[i] ?? "", opt)}</td>`;
+    });
+    body += `<tr class="${start ? "gstart" : ""}">${tds}</tr>`;
+  });
+  return `<div class="tblwrap"><table class="t${lead.length ? " merged" : ""}${opt.cls ? " " + opt.cls : ""}"><thead><tr>${head.map((h, i) => `<th class="${num[i] ? "num" : ""}">${inline(h)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
-// markdown: the writer's subset (headings, paragraphs, lists, pipe tables, bold, code)
-function md(text) {
+// markdown: the writer's subset (headings, paragraphs, lists, pipe tables, quotes, code, bold)
+function md(text, opt = {}) {
   const lines = String(text || "").replace(/\r/g, "").split("\n");
   const out = [];
   const isRow = l => /^\s*\|.*\|\s*$/.test(l);
@@ -454,25 +781,36 @@ function md(text) {
     const l = lines[i];
     if (!l.trim()) { i++; continue; }
     let m;
+    if (/^\s*```/.test(l)) {
+      const code = []; i++;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
+      i++; out.push(`<pre class="rawpre">${esc(code.join("\n"))}</pre>`); continue;
+    }
     if ((m = l.match(/^(#{1,6})\s+(.*)$/))) { const n = Math.min(Math.max(m[1].length, 2), 4); out.push(`<h${n}>${inline(m[2])}</h${n}>`); i++; continue; }
     if (/^\s*([-*_])\s*\1\s*\1[\s\1]*$/.test(l)) { i++; continue; }
     if (isRow(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
       const head = cells(l); i += 2; const rows = [];
       while (i < lines.length && isRow(lines[i])) rows.push(cells(lines[i++]));
-      out.push(table(head, rows)); continue;
+      out.push(table(head, rows, opt)); continue;
+    }
+    if (/^\s*>/.test(l)) {
+      const q = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) q.push(lines[i++].replace(/^\s*>\s?/, ""));
+      out.push(`<blockquote>${inline(q.join(" "), opt)}</blockquote>`); continue;
     }
     if (isItem(l)) {
       const ordered = /^\s*\d+[.)]/.test(l), items = [];
       while (i < lines.length && isItem(lines[i])) {
+        const deep = /^\s{2,}/.test(lines[i]);
         let item = lines[i].replace(/^\s*([-*+]|\d+[.)])\s+/, ""); i++;
         while (i < lines.length && lines[i].trim() && !isItem(lines[i]) && !/^#/.test(lines[i]) && !isRow(lines[i])) item += " " + lines[i++].trim();
-        items.push(`<li>${inline(item)}</li>`);
+        items.push(`<li${deep ? ' style="margin-left:18px"' : ""}>${inline(item, opt)}</li>`);
       }
       out.push(`<${ordered ? "ol" : "ul"}>${items.join("")}</${ordered ? "ol" : "ul"}>`); continue;
     }
     const para = [l]; i++;
-    while (i < lines.length && lines[i].trim() && !/^#{1,6}\s/.test(lines[i]) && !isRow(lines[i]) && !isItem(lines[i])) para.push(lines[i++]);
-    out.push(`<p>${inline(para.join(" "))}</p>`);
+    while (i < lines.length && lines[i].trim() && !/^#{1,6}\s/.test(lines[i]) && !isRow(lines[i]) && !isItem(lines[i]) && !/^\s*>/.test(lines[i])) para.push(lines[i++]);
+    out.push(`<p>${inline(para.join(" "), opt)}</p>`);
   }
   return out.join("\n");
 }
@@ -656,7 +994,7 @@ $("#refresh").onclick = loadRuns;
 // ---------- a run: polling ----------
 function resetRun(id) {
   clearTimeout(S.poll); replayStop();
-  Object.assign(S, {job: id, since: 0, events: [], last: null, sig: "", det: {}, tab: S.pinned ? S.tab : "progress"});
+  Object.assign(S, {job: id, since: 0, events: [], last: null, sig: "", det: {}, open: {}, raw: {}, evMode: "", hlZone: null, wellData: null, tab: S.pinned ? S.tab : "main"});
   $$(".runitem").forEach(x => x.classList.toggle("cur", x.dataset.id === id));
   $("#run").innerHTML = `<div class="empty"><span class="spin"></span></div>`;
 }
@@ -672,7 +1010,7 @@ async function tick() {
     if (id !== S.job || R.run) return;
     if (j.events && j.events.length) { S.events.push(...j.events); S.since = j.n_events ?? S.events.length; }
     const finished = !["queued", "running"].includes(j.status);
-    if (finished && !S.pinned && S.tab === "progress" && j.answer) S.tab = "answer";
+    if (finished && !S.pinned && S.tab === "main" && j.answer) S.tab = "main";
     S.last = j;
     render();
     if (finished) { loadRuns(); loadConfig(); return; }
@@ -690,7 +1028,7 @@ function replaySeek(t) {
   const end = replayEnd(); R.t = Math.min(Math.max(t, 0), end);
   const done = R.t >= end;
   S.events = (run.events || []).filter(e => (e.t || 0) <= R.t);
-  if (done && !S.pinned && S.tab === "progress" && run.answer) S.tab = "answer";
+  if (done && !S.pinned && S.tab === "main" && run.answer) S.tab = "main";
   S.last = {...run, status: done ? run.status : "running", elapsed: done ? run.elapsed : Math.round(R.t * 10) / 10,
     answer: done ? run.answer : "", result: done ? run.result : null, error: done ? run.error : ""};
   render();
@@ -708,9 +1046,10 @@ window.__replay = {open: openReplay, seek: replaySeek, end: replayEnd};
 
 // ---------- what the events say ----------
 function digest(events) {
-  const m = {phase: {}, calls: [], byN: new Map(), results: new Map(), resultStep: new Map(), lastStep: 0};
+  const m = {phase: {}, calls: [], byN: new Map(), results: new Map(), resultStep: new Map(), lastStep: 0, well: null};
   for (const e of events) {
     if (e.kind === "phase") m.phase[e.name] = e;
+    else if (e.kind === "well") m.well = e;
     else if (e.kind === "call") { const c = {...e, reply: null}; m.calls.push(c); m.byN.set(e.n, c); if (e.type === "step") m.lastStep = Math.max(m.lastStep, e.number); }
     else if (e.kind === "reply") { const c = m.byN.get(e.n); if (c) c.reply = e; }
     else if (e.kind === "results") for (const it of e.items) {
@@ -726,8 +1065,8 @@ function digest(events) {
 function phases(j, m) {
   const finished = !["queued", "running"].includes(j.status);
   const has = t => m.calls.some(c => c.type === t);
-  const list = [["Queue", !!m.phase.started || finished], ["Interpret", m.calls.length > 0], ["Read", has("step") || has("settle") || has("writer")],
-    [`Investigate${m.lastStep ? ` · ${m.lastStep}` : ""}`, has("settle") || has("writer")], ["Settle", has("writer")],
+  const list = [["Queue", !!m.phase.started || finished], ["Interpret the well", m.calls.length > 0], ["Read the question", has("step") || has("settle") || has("writer")],
+    [`Investigate${m.lastStep ? ` · ${m.lastStep} step${m.lastStep > 1 ? "s" : ""}` : ""}`, has("settle") || has("writer")], ["Settle the claims", has("writer")],
     ["Write", m.calls.some(c => c.type === "writer" && c.reply)], [m.calls.some(c => c.type === "repair") ? "Check · repair" : "Check", j.status === "done"]];
   let html = "", marked = false;
   list.forEach(([name, done], i) => {
@@ -740,6 +1079,66 @@ function phases(j, m) {
   return `<div class="progress">${html}</div>`;
 }
 
+// ---------- actions in plain words ----------
+const LEDGER = {get: ["Re-read", "led"], find: ["Search", "led"], calc: ["Arithmetic", "led"], guide: ["Guide", "gd"]};
+function groupOf(tool) {
+  const c = S.cfg || {}, v = c.verbs || {}, groups = [...new Set(Object.values(v))];
+  if (LEDGER[tool]) return {g: LEDGER[tool][0], cls: LEDGER[tool][1]};
+  if ((c.petrophys_verbs || []).includes(tool)) return {g: `Petrophys · ${tool.replace(/_/g, " ")}`, cls: "pp"};
+  if (v[tool]) return {g: v[tool], cls: "g" + Math.max(0, Math.min(groups.indexOf(v[tool]), 6))};
+  return {g: tool.replace(/_/g, " "), cls: "led"};
+}
+function argText(args) {
+  if (args == null || typeof args !== "object") return String(args ?? "");
+  const a = {...args}, out = [];
+  const list = v => Array.isArray(v) ? v.map(list).join(", ") : v && typeof v === "object" ? Object.entries(v).map(([k, x]) => `${k} ${list(x)}`).join(", ") : String(v);
+  if (a.a != null && a.b != null) { out.push(`${list(a.a)} vs ${list(a.b)}`); delete a.a; delete a.b; }
+  if (a.x != null && a.y != null) { out.push(`${list(a.y)} on ${list(a.x)}`); delete a.x; delete a.y; }
+  for (const k of ["curves", "curve", "key", "name", "condition", "what", "property", "method", "query"]) if (a[k] != null && a[k] !== "") { out.push(list(a[k])); delete a[k]; }
+  if (a.zones != null) { const z = list(a.zones); if (z && !/^all$/i.test(z)) out.push(`in ${z}`); delete a.zones; }
+  if (a.where) { out.push(`where ${list(a.where)}`); delete a.where; }
+  for (const [k, v] of Object.entries(a)) if (v != null && v !== "" && v !== false && !(Array.isArray(v) && !v.length)) out.push(`${k.replace(/_/g, " ")} ${list(v)}`);
+  return out.join(" · ");
+}
+function action(text) {
+  const t = String(text || "").trim();
+  const m = /^([a-z_]+)\s*([\s\S]*)$/.exec(t);
+  if (!m) return {g: "action", cls: "led", label: t};
+  const rest = m[2].trim();
+  let label = rest.replace(/^\(|\)$/g, "").replace(/^\s*\(/, "");
+  if (rest.startsWith("{")) { try { label = argText(JSON.parse(rest)); } catch (e) { label = rest; } }
+  return {tool: m[1], ...groupOf(m[1]), label: label || m[1].replace(/_/g, " ")};
+}
+function pill(text, extra = "") {
+  const a = action(text);
+  return `<span class="apill ${a.cls}" title="${esc(text)}"><span class="g">${esc(a.g)}</span><span class="a">${hl(esc(clip(a.label, 110)))}${extra}</span></span>`;
+}
+const clip = (s, n) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+const gradeCls = g => String(g || "").replace(/ /g, "-");
+function more(items, n, key, wrap) {          // the first n items, and a button for the rest
+  const open = !!S.det[key];
+  const shown = open || items.length <= n + 1 ? items : items.slice(0, n);
+  return wrap(shown.join("")) + (shown.length < items.length || (open && items.length > n + 1) ?
+    `<button class="morebtn" data-more="${esc(key)}">${open ? "Show less" : `Show ${items.length - n} more`}</button>` : "");
+}
+function claimEdits(edits, key) {
+  if (!edits || !edits.length) return "";
+  const sym = {add: "+", revise: "~", drop: "−"};
+  const items = edits.map(e => `<li><span class="o ${esc(e.op)}">${sym[e.op] || "·"}</span><span>${e.id ? `<span class="cid">${esc(e.id)}</span>` : ""}${e.grade ? `<span class="grade ${esc(gradeCls(e.grade))}">${esc(e.grade)}</span> ` : ""}` +
+    (e.text ? inline(clip(e.text, 300)) : `<span class="subtle">${e.op === "drop" ? "dropped" : "revised"}</span>`) +
+    (e.ev && e.ev.length ? ` <span class="subtle">· cites ${e.ev.map(x => hl(esc(x))).join(" ")}</span>` : "") + `</span></li>`);
+  return more(items, 4, key, h => `<ul class="cl">${h}</ul>`);
+}
+function resultChips(ids, m, calls, key) {
+  if (!ids.length) return "";
+  const items = ids.map(id => {
+    const r = m.results.get(id), call = (calls && calls.get(id)) || (r ? r.title : "");
+    const a = action(call);
+    return `<span class="evchip" data-e="${id}" title="${esc(call)}"><span class="eidb">${id}</span><span class="t">${esc(clip(a.label || call, 70))}</span></span>`;
+  });
+  return more(items, 6, key, h => `<div class="evchips">${h}</div>`);
+}
+
 // ---------- render ----------
 function render() {
   const j = S.last; if (!j) return;
@@ -748,15 +1147,17 @@ function render() {
   const res = j.result && Array.isArray(j.result.claims) ? j.result : null;   // a run that failed early has none
   const sig = `${j.status}|${S.events.length}|${S.tab}|${!!res}|${JSON.stringify(j.rating || {})}`;
   if (sig === S.sig) { const el = $("#elapsed"); if (el) el.textContent = fmtS(j.elapsed); return; }
-  S.sig = sig;
+  S.sig = sig; S.m = m; S.res = res;
+  closePop();
   const scroll = window.scrollY;
   const i = j.inputs || {};
-  const nRes = m.results.size || (res ? res.opened.length : 0);
-  const tabs = [["answer", "Answer"], ["progress", "Progress"], ["claims", `Claims${res ? ` · ${res.claims.length}` : ""}`], ["results", `Results${nRes ? ` · ${nRes}` : ""}`], ["details", "Details"]];
+  const calls = new Map(((res && res.opened) || []).map(o => [o.id, o.call]));
+  const nRes = new Set([...m.results.keys(), ...calls.keys()]).size;
+  const tabs = [["main", "Interpretation"], ["well", "Well logs"], ["evidence", `Evidence${nRes ? ` · ${nRes}` : ""}`], ["story", "Investigation log"], ["details", "Details"]];
   const qpos = j.queue_position ? `<span class="pill"><span class="k">queue</span>${j.queue_position}</span>` : "";
   let html = `<div class="runhead"><h1>${esc(i.question)}</h1><div class="meta">
     <span class="pill status ${esc(j.status)}">${esc(j.status)}</span>
-    <span class="pill" title="${esc(i.las)}"><span class="k">LAS</span>${esc(String(i.las || "").split("/").pop())}</span>
+    <span class="pill" title="${esc(i.las)}"><span class="k">well</span>${esc(String(i.las || "").split("/").pop())}</span>
     <span class="pill"><span class="k">interval</span>${esc(j.label || "")}</span>${qpos}
     <span class="pill"><span class="k">time</span><span id="elapsed">${fmtS(j.elapsed)}</span></span>
     ${j.endpoint ? `<span class="pill" title="${esc(j.endpoint)}"><span class="k">model</span>${esc(host(j.endpoint))}</span>` : ""}</div>
@@ -766,20 +1167,35 @@ function render() {
     <button class="link" id="reuse">Ask again or edit →</button></div>
     ${phases(j, m)}</div>
     <div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? "on" : ""}">${esc(l)}</button>`).join("")}</div><div class="pane">`;
-  if (S.tab === "answer") html += answerPane(j, res, finished);
-  else if (S.tab === "progress") html += progressPane(j, m, res, finished);
-  else if (S.tab === "claims") html += claimsPane(res, finished);
-  else if (S.tab === "results") html += resultsPane(m, res);
+  if (S.tab === "main" || S.tab === "answer") html += mainPane(j, m, res, finished, calls);
+  else if (S.tab === "story") html += storyPane(j, m, res, finished, calls);
+  else if (S.tab === "evidence") html += evidencePane(m, res, finished, calls);
+  else if (S.tab === "well") html += wellPane(m, res, finished);
   else html += detailsPane(j, res, m);
   html += `</div>`;
   $("#run").innerHTML = html;
   window.scrollTo(0, scroll);
   wire(j);
 }
+function rerender() { S.sig = ""; render(); }
 function wire(j) {
-  $$(".tabs button").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; S.pinned = true; S.sig = ""; render(); });
-  $$(".eid").forEach(x => x.onclick = () => gotoResult(x.dataset.e));
+  $$(".tabs button").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; S.pinned = true; rerender(); });
+  $$("#run .eid, #run .evchip[data-e]").forEach(x => x.onclick = e => { e.stopPropagation(); openEvidence(x.dataset.e, x.closest("[data-claim]")); });
+  $$("#run .zone[data-z], #run .zstrip [data-z]").forEach(x => x.onclick = e => { e.stopPropagation(); S.hlZone = x.dataset.z; S.tab = "well"; S.pinned = true; rerender(); window.scrollTo(0, 0); });
+  $$("[data-toggle]").forEach(x => x.onclick = e => {
+    if (e.target.closest(".eid, .zone, .evchip, a, button:not([data-toggle])")) return;
+    const open = x.closest(".sbody").classList.contains("open"); S.det[x.dataset.toggle] = !open; rerender(); });
+  $$("[data-jump]").forEach(b => b.onclick = () => { const el = document.getElementById(b.dataset.jump); if (el) { const st = el.querySelector("[data-toggle]");
+    if (st && !el.querySelector(".sbody").classList.contains("open")) { S.det[st.dataset.toggle] = true; rerender(); }
+    const t = document.getElementById(b.dataset.jump); if (t) window.scrollTo({top: t.getBoundingClientRect().top + window.scrollY - 110, behavior: "smooth"}); } });
+  $$("[data-secfold]").forEach(b => b.onclick = e => { if (e.target.closest(".eid, .zone, .numref")) return; S.det[b.dataset.secfold] = !S.det[b.dataset.secfold]; rerender(); });
+  $$("[data-foldall]").forEach(b => b.onclick = () => { for (const k of b.dataset.foldall.split(",")) S.det[k] = !!b.dataset.open; rerender(); });
+  $$("[data-more]").forEach(b => b.onclick = () => { S.det[b.dataset.more] = !S.det[b.dataset.more]; rerender(); });
+  $$("[data-goto]").forEach(b => b.onclick = () => { S.tab = b.dataset.goto; S.pinned = true; rerender(); window.scrollTo(0, 0); });
+  $$("[data-evmode]").forEach(b => b.onclick = () => { S.evMode = b.dataset.evmode; rerender(); });
+  $$("[data-raw]").forEach(b => b.onclick = () => { S.raw[b.dataset.raw] = !S.raw[b.dataset.raw]; rerender(); });
   $$("details[data-k]").forEach(d => d.addEventListener("toggle", () => { S.det[d.dataset.k] = d.open; }));
+  $$(".numref").forEach(x => x.onclick = e => { e.stopPropagation(); showSources(x); });
   const rb = $("#replaybtn"); if (rb) rb.onclick = () => { history.replaceState(null, "", `#replay=${j.id}&speed=8`); openReplay(j.id, 8); };
   const sr = $("#stopreplay"); if (sr) sr.onclick = () => { replayStop(); openRun(j.id); };
   const ru = $("#reuse"); if (ru) ru.onclick = () => fillForm(j.inputs || {});
@@ -791,9 +1207,16 @@ function wire(j) {
     try { const r = await post(`/api/rate/${j.id}`, {verdict: v ? v.v : "", note: $("#ratenote").value}); j.rating = r; if (R.run) R.run.rating = r; $("#ratemsg").textContent = "Saved."; loadRuns(); }
     catch (e) { $("#ratemsg").textContent = e.message; }
   };
+  if (S.tab === "well" || S.tab === "main" || S.tab === "answer") wireWell();
+  $$("[data-goclaim]").forEach(b => b.onclick = () => { S.tab = "evidence"; S.evMode = "claims"; S.pinned = true; rerender();
+    const el = $(`.ccard[data-claim="${b.dataset.goclaim}"]`); if (el) { window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - 120}); el.classList.add("flash"); } });
 }
-function gotoResult(id) {
-  S.tab = "results"; S.pinned = true; S.det["r-" + id] = true; S.sig = ""; render();
+function openEvidence(id, claimEl) {
+  if (claimEl && S.tab === "evidence") {                  // a claim's evidence: shown under the claim
+    const key = `${claimEl.dataset.claim}|${id}`;
+    S.open[key] = !S.open[key]; rerender(); return;
+  }
+  S.tab = "evidence"; S.evMode = "all"; S.pinned = true; S.det["r-" + id] = true; rerender();
   const el = document.getElementById("r-" + id);
   if (el) { el.open = true; el.scrollIntoView({block: "center"}); el.classList.add("flash"); }
 }
@@ -821,16 +1244,69 @@ function errorBox(j, res) {
   const tb = res && res.traceback;
   return `<div class="errbox">${esc(j.error || (res && res.error) || j.status)}${tb ? `<details><summary><span class="caret">▶</span>Traceback</summary><pre>${esc(tb)}</pre></details>` : ""}</div>`;
 }
-function answerPane(j, res, finished) {
-  if (!finished) return `<div class="card"><div class="cb"><div class="thinking"><span class="spin"></span>The answer appears here when the run ends. The Progress tab follows it as it happens.</div></div></div>`;
+function zonesOf(m, res) { return (m.well && m.well.zones) || ((res && res.zones) || []).map(z => ({...z, thickness: z.base - z.top})); }
+function lithChips(zones) {
+  const by = new Map();
+  for (const z of zones) { const t = by.get(z.lithology) || [0, 0]; by.set(z.lithology, [t[0] + 1, t[1] + (z.thickness || 0)]); }
+  return [...by].sort((a, b) => b[1][1] - a[1][1]).map(([l, [n]]) => `<span class="lithchip"><span class="swatch" style="background:${lithColor(l)}"></span>${esc(l)}${n > 1 ? ` <small>&nbsp;×${n}</small>` : ""}</span>`).join("");
+}
+function gradeBar(claims) {
+  const order = ["high", "moderate", "low"], n = claims.length || 1, by = {};
+  for (const c of claims) { const g = order.includes(c.grade) ? c.grade : "other"; by[g] = (by[g] || 0) + 1; }
+  const parts = [...order, "other"].filter(g => by[g]);
+  return `<div class="gradebar" title="${parts.map(g => `${by[g]} ${g === "other" ? "other grades" : g}`).join(", ")}">${parts.map(g => `<span class="gb-${g}" style="width:${100 * by[g] / n}%"></span>`).join("")}</div>
+    <div class="subtle" style="margin-top:4px">${parts.map(g => `${by[g]} ${g === "other" ? "other" : g}`).join(" · ")}</div>`;
+}
+function checkerState(res) {
+  const vr = res && res.verify_rounds && res.verify_rounds.length ? res.verify_rounds : [];
+  const last = vr[vr.length - 1];
+  const clean = r => r && !(r.unsupported || []).length && !(r.process || []).length && !(r.contradictions || []).length && !(r.leaks || []).length;
+  return {rounds: vr.length, repairs: Math.max(0, vr.length - 1), clean: !last || clean(last), last};
+}
+// the answer in its sections: the title (a first "# " line) and each "## " section; the first section headed Answer
+// (else the first) is the key one
+function answerSections(text) {
+  const lines = String(text || "").replace(/\r/g, "").split("\n");
+  let title = "", cur = null;
+  const secs = [];
+  for (const l of lines) {
+    const m = /^(#{1,2})\s+(.*)$/.exec(l);
+    if (m && m[1] === "#" && !title && !secs.some(s => s.body.trim())) { title = m[2]; continue; }
+    if (m && m[1] === "##") { cur = {head: m[2], body: ""}; secs.push(cur); continue; }
+    if (!cur) { cur = {head: "", body: ""}; secs.push(cur); }
+    cur.body += l + "\n";
+  }
+  return {title, secs: secs.filter(s => s.head || s.body.trim())};
+}
+function answerPane(j, m, res, finished) {
+  if (!finished) return `<div class="card"><div class="cb"><div class="thinking"><span class="spin"></span>The answer appears here when the run ends. <button class="morebtn" data-goto="story">Follow how it is being reached →</button></div></div></div>`;
   let html = "";
-  if (res && res.interval) html += `<div class="strip"><div class="sbox"><div class="sl">Interval</div><div class="sv">${intervalText(res.interval)}</div></div>
-    <div class="sbox"><div class="sl">Topics read</div><div class="sv">${topicsHtml(res.read && res.read.topics)}</div></div>
-    <div class="sbox"><div class="sl">Skills</div><div class="sv">${skillsText(res)}</div></div>
-    <div class="sbox"><div class="sl">Status</div><div class="sv">${esc(res.status)}<br><small>${res.steps.length} steps · ${res.usage.calls} model calls · ${fmtS(res.seconds)}</small></div></div></div>`;
+  if (res && res.interval) {
+    const zones = zonesOf(m, res), ck = checkerState(res), iv = res.interval;
+    const unresolved = res.status === "unresolved_numbers", ok = !unresolved && ck.clean;
+    html += `<div class="glance">
+      <div class="gbox"><div class="gl">Interval</div><div class="gv"><b>${esc(iv.name)}</b><div class="subtle">${fmtD(iv.top)}–${fmtD(iv.base)} ${esc(iv.unit || "")} · ${fmtN(iv.samples)} samples</div></div></div>
+      <div class="gbox" style="grid-column: span 2"><div class="gl">${zones.length} lithology zone${zones.length === 1 ? "" : "s"}</div>
+        ${zoneStrip(zones, iv.top, iv.base, iv.unit)}<div class="subtle" style="margin-top:4px">${esc(lithText(res.lithology))} · <button class="morebtn" data-goto="well">See the logs →</button></div></div>
+      <div class="gbox"><div class="gl">The investigation</div><div class="gv tiles2"><span class="stat"><b>${res.steps.length}</b>steps</span><span class="stat"><b>${res.opened.length}</b>results</span><span class="stat"><b>${res.claims.length}</b>claims</span></div>
+        ${res.claims.length ? gradeBar(res.claims) : ""}<button class="morebtn" data-goto="story">How it was reached →</button></div>
+      <div class="gbox ${ok ? "ok" : "warn"}"><div class="ckicon">${ok ? MINI.ok : MINI.warn}</div><div class="gv">${unresolved ? "A number in the answer appears in no computed result: read numbers with care." :
+        ck.clean ? `Every number is in a result the investigation opened${ck.repairs ? ` (after ${ck.repairs} repair${ck.repairs > 1 ? "s" : ""})` : ""}.` : "The checker's last findings stand."}</div></div></div>`;
+  }
   if (j.status !== "done" && !j.answer) return html + errorBox(j, j.result);
-  if (res && res.status === "unresolved_numbers") html += `<div class="callout warn" style="margin-bottom:12px">The answer kept a number the checker found in no computed result: read numbers with care.</div>`;
-  html += `<div class="ansbar"><button class="btn small" id="copyans">Copy answer</button></div><div class="answer"><div class="prose">${md(j.answer)}</div></div>`;
+  const {title, secs} = answerSections(j.answer);
+  const key = Math.max(0, secs.findIndex(s => /^answer\b/i.test(s.head)));
+  html += `<div class="hintline">${title ? `<h2 class="anstitle" style="margin:0">${inline(title)}</h2>` : ""}<span class="grow"></span><button class="btn small" id="copyans">Copy answer</button></div>`;
+  if (secs.length > 2) html += `<div class="secnav">${secs.map((s, i) => s.head ? `<button data-jump="as-${i}">${inline(s.head)}</button>` : "").join("")}</div>`;
+  html += `<div class="hintline"><span>Click a <span class="numref">number</span> to see the results that show it, a <span class="zone">Z1</span> zone to find it on the logs.</span></div>`;
+  // the key section in full; the others folded to their opening lines and their tables, opened on a click
+  const folds = secs.map((s, i) => i !== key && s.body.length > 600 ? `as-${i}` : null).filter(Boolean);
+  if (folds.length) html += `<div class="expandall" style="margin:0 0 8px"><button class="link" data-foldall="${folds.join(",")}" data-open="1">Open every section</button><button class="link" data-foldall="${folds.join(",")}" data-open="">Fold them</button></div>`;
+  html += secs.map((s, i) => {
+    const k = `as-${i}`, fold = folds.includes(k), open = !fold || !!S.det[k];
+    return `<section class="asec${i === key ? " key" : ""}${open ? "" : " folded"}" id="as-${i}">${s.head ? `<h2 class="ah"${fold ? ` data-secfold="${k}" style="cursor:pointer"` : ""}>${inline(s.head)}${fold ? `<span class="chev"${open ? ' style="transform:rotate(90deg)"' : ""}>▶</span>` : ""}</h2>` : ""}
+      <div class="prose">${md(s.body, {nums: true})}</div>${fold ? `<button class="secmore" data-secfold="${k}">${open ? "Fold the section" : "Read the section"}</button>` : ""}</section>`;
+  }).join("");
   const r = j.rating || {};
   html += `<div class="rate"><div class="q">Is this answer right?</div><div class="opts">${["good", "partly", "wrong"].map(v => `<button data-v="${v}" class="${v}${r.verdict === v ? " on" : ""}">${v}</button>`).join("")}</div>
     <textarea id="ratenote" placeholder="What was right or wrong (optional)">${esc(r.note || "")}</textarea>
@@ -838,146 +1314,632 @@ function answerPane(j, res, finished) {
   return html;
 }
 
-// ---------- progress ----------
-function tokens(r) { return r && (r.prompt_tokens != null || r.completion_tokens != null) ? `${fmtN(r.prompt_tokens)} in · ${fmtN(r.completion_tokens)} out` : ""; }
-function editsHtml(edits) {
-  if (!edits || !edits.length) return "";
-  return `<ul class="edits">${edits.map(e => `<li><span class="op ${esc(e.op)}">${esc(e.op)}</span>${e.id ? `<b>${esc(e.id)}</b> ` : ""}${e.point ? `<small>point ${esc(e.point)}</small> ` : ""}${e.grade ? `<span class="grade ${esc(String(e.grade).replace(/ /g, "-"))}">${esc(e.grade)}</span> ` : ""}${inline(e.text || "")}${e.ev ? ` <small>${e.ev.map(x => inline(x)).join(" ")}</small>` : ""}</li>`).join("")}</ul>`;
+// ---------- a number in the answer: the results that show it ----------
+function numSources(s) {
+  const m = S.m || {results: new Map()}, res = S.res;
+  const calls = new Map(((res && res.opened) || []).map(o => [o.id, o.call]));
+  const v = parseFloat(String(s).replace(/,/g, "")), d = (String(s).split(".")[1] || "").length;
+  const tol = 0.5 * Math.pow(10, -d) + 1e-9;
+  const out = [];
+  const scan = (src, call, text) => {
+    for (const line of String(text || "").split("\n")) {
+      let hit = false;
+      const marked = esc(line).replace(NUM, t => { const x = parseFloat(t.replace(/,/g, "")); if (Math.abs(x - v) <= tol) { hit = true; return `<mark>${t}</mark>`; } return t; });
+      if (hit) out.push({src, call, line: marked, exact: line.includes(s)});
+    }
+  };
+  for (const [id, r] of m.results) scan(id, calls.get(id) || r.title, r.text);
+  if (res && res.zone_table) scan("zone table", "the zone table the harness composed", res.zone_table);
+  const w = m.well;
+  if (w) scan("interval", "the interval and its zones", [`interval ${w.top} - ${w.base} ${w.unit}, ${w.samples} samples`,
+    ...w.zones.map(z => `${z.zone} ${z.lithology} ${z.top} - ${z.base} ${w.unit}, thickness ${z.thickness}`)].join("\n"));
+  out.sort((a, b) => b.exact - a.exact);
+  return out;
 }
-function resultChips(ids, m, calls) {
-  return ids.map(id => {
-    const r = m.results.get(id), line = (calls && calls.get(id)) || (r ? r.title : "");
-    return `<li style="font-family:var(--sans)"><span class="eid" data-e="${id}">${id}</span> <span class="mono">${esc(line.length > 120 ? line.slice(0, 117) + "…" : line)}</span></li>`;
-  }).join("");
+function closePop() { const p = $("#pop"); if (p) p.remove(); $$(".numref.on").forEach(x => x.classList.remove("on")); }
+function showSources(el) {
+  closePop();
+  el.classList.add("on");
+  const s = el.dataset.n, hits = numSources(s);
+  const ids = [...new Set(hits.map(h => h.src))];
+  const p = document.createElement("div");
+  p.className = "pop"; p.id = "pop";
+  p.innerHTML = `<div class="ph1"><b>${esc(s)}</b><span class="subtle">${hits.length ? `appears in ${ids.length} source${ids.length > 1 ? "s" : ""}` : "no exact source"}</span><button class="x" title="Close">×</button></div>` +
+    (hits.length ? `<ul>${hits.slice(0, 12).map(h => `<li><div class="src">${/^E\d+$/.test(h.src) ? `<span class="eid" data-e="${h.src}">${h.src}</span>${pill(h.call)}` : `<b>${esc(h.src)}</b> ${esc(h.call)}`}</div><div class="ln">${h.line.trim()}</div></li>`).join("")}</ul>` +
+      (hits.length > 12 ? `<div class="subtle" style="margin-top:6px">and ${hits.length - 12} more lines</div>` : "") :
+      `<div class="none">No opened result shows this number at this precision. It may be arithmetic on results (a sum, a ratio), a rounding of a longer number, or a number from the question.</div>`);
+  document.body.appendChild(p);
+  const r = el.getBoundingClientRect(), w = p.offsetWidth;
+  p.style.top = `${window.scrollY + r.bottom + 6}px`;
+  p.style.left = `${Math.max(12, Math.min(window.scrollX + r.left - 20, window.scrollX + document.documentElement.clientWidth - w - 12))}px`;
+  p.querySelector(".x").onclick = closePop;
+  p.querySelectorAll(".eid").forEach(x => x.onclick = () => { closePop(); openEvidence(x.dataset.e); });
 }
-function callCard(kind, title, calls, body, live) {
+document.addEventListener("click", e => { const p = $("#pop"); if (p && !p.contains(e.target) && !e.target.classList.contains("numref")) closePop(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePop(); });
+
+// ---------- how the answer was reached ----------
+const ICONS = {
+  pp: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 3v14M8 3c-1.5 2 1.5 4 0 6s1.5 4 0 6v2M12 3v14M16 3c1.2 2.5-1.2 5 0 7.5S16 15 16 17"/></svg>',
+  read: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 5h14M3 10h9M3 15h6"/><circle cx="15" cy="14" r="2.6"/><path d="m17 16 1.5 1.5"/></svg>',
+  look: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10Z"/><circle cx="10" cy="10" r="2.5"/></svg>',
+  step: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="5"/><path d="m12.5 12.5 4.5 4.5"/></svg>',
+  settle: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 5h12M4 10h12M4 15h7"/><path d="m13 15 1.6 1.6L18 13"/></svg>',
+  writer: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M13.5 3.5 16.5 6.5 7 16l-3.5.5L4 13Z"/></svg>',
+  check: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m4 10.5 4 4 8-9"/></svg>',
+  repair: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M16 4a4 4 0 0 0-5.3 5.3L3.5 16.5l1 1 7.2-7.2A4 4 0 0 0 17 5l-2.3 2.3-2-2L15 3Z"/></svg>',
+  fail: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 5v6M10 14.5v.5"/></svg>',
+};
+function callMeta(calls) {
   const secs = calls.reduce((s, c) => s + ((c.reply && c.reply.seconds) || 0), 0);
-  const tok = calls.reduce((a, c) => [a[0] + ((c.reply && c.reply.prompt_tokens) || 0), a[1] + ((c.reply && c.reply.completion_tokens) || 0)], [0, 0]);
   const t0 = calls.length ? calls[0].t : null;
-  const extra = calls.length > 1 ? `${calls.length} calls · ` : "";
-  return `<div class="ti k-${kind}${live ? " live" : ""}"><div class="card"><div class="ch"><span class="kind ${kind}">${esc(kind === "read" ? "READ" : kind)}</span><span class="title">${title}</span>
-    <span class="right">${t0 != null ? `<span class="tt">at ${fmtS(t0)}</span>` : ""}${extra}${secs ? `${secs.toFixed(1)} s` : ""}${tok[0] || tok[1] ? ` · ${fmtN(tok[0])} in · ${fmtN(tok[1])} out` : ""}</span></div>
-    <div class="cb">${body}${live ? `<div class="thinking"><span class="spin"></span>Waiting for the model…</div>` : ""}</div></div></div>`;
+  return [t0 != null ? `at ${fmtS(t0)}` : "", secs ? `${secs.toFixed(0)} s` : ""].filter(Boolean).join(" · ");
 }
-function progressPane(j, m, res, finished) {
-  let html = `<div class="tl">`;
-  const ph = (text, t) => `<div class="ti phase"><div class="phtext">${t != null ? `<span class="tt">${fmtS(t)}</span>` : ""}${text}</div></div>`;
-  if (m.phase.queued && !m.phase.started) html += ph(`<b>Waiting for a free worker</b>${j.queue_position ? ` · number ${j.queue_position} in the queue` : ""}`, null);
-  if (m.phase.started) html += ph(`<b>Started</b>${m.phase.started.endpoint ? ` on ${esc(host(m.phase.started.endpoint))}` : ""}`, m.phase.started.t);
-  if (m.phase.interpreting) html += ph(`<b>Reading the LAS</b>; <span style="color:var(--pp)">Petrophys</span> interprets the well${m.calls.length ? "" : " <span class=\"spin\" style=\"width:10px;height:10px;vertical-align:-1px\"></span>"}`, m.phase.interpreting.t);
+const MINI = {
+  eye: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2"/></svg>',
+  doc: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 1.5h5l3 3v10H4Z"/><path d="M6 8h4M6 11h4"/></svg>',
+  pen: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 2.5 13.5 5 6 12.5l-3 .5.5-3Z"/></svg>',
+  ok: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m3 8.5 3.2 3.2L13 4.5"/></svg>',
+  warn: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 4V9M8 11.5V12"/></svg>',
+  bulb: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 12.5h4M6.5 14.5h3M8 1.5a4.5 4.5 0 0 0-2.5 8.2V11h5V9.7A4.5 4.5 0 0 0 8 1.5Z"/></svg>',
+  flag: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 14.5V2M3.5 2.5h8l-1.8 3 1.8 3h-8"/></svg>',
+};
+// a stage of the run as a card; a folded one (opt.key) shows its headline and counts, its parts on a click
+function card(kind, label, headline, parts, meta, live, plain, opt = {}) {
+  const fold = !!opt.key && parts.length > 0;
+  const open = !fold || live || (S.det[opt.key] ?? !!opt.open);
+  const tog = fold ? ` data-toggle="${esc(opt.key)}"` : "";
+  return `<div class="sc k-${kind}${live ? " live" : ""}"${opt.id ? ` id="${opt.id}"` : ""}><div class="ic">${ICONS[kind] || ICONS.step}</div><div class="sbody${fold && open ? " open" : ""}">
+    <div class="shead${fold ? " tog" : ""}"${tog}><span class="st">${label}${fold ? `<span class="chev">▶</span>` : ""}</span>${meta ? `<span class="meta2">${meta}</span>` : ""}</div>
+    ${headline ? `<div class="sline${plain ? " q" : ""}${fold && !open ? " clamp2" : ""}"${tog}${fold ? ' style="cursor:pointer"' : ""}>${headline}</div>` : ""}
+    ${opt.counts ? `<div class="scount">${opt.counts}</div>` : ""}
+    ${open && parts.length ? `<div class="sparts">${parts.map(([l, v]) => `<div class="spart"><span class="lb">${l}</span><div class="vl">${v}</div></div>`).join("")}</div>` : opt.counts ? "" : `<div style="height:12px"></div>`}
+    ${live ? `<div class="sparts" style="padding-top:0"><div class="thinking"><span class="spin"></span>Waiting for the model…</div></div>` : ""}</div></div>`;
+}
+const cnt = (icon, n, label, cls = "") => n ? `<span class="${cls}">${icon || ""}${n} ${label}</span>` : "";
+function editCounts(edits) {
+  const by = op => (edits || []).filter(e => e.op === op).length;
+  return cnt("", by("add"), "added", "ca") + cnt("", by("revise"), "revised", "cr") + cnt("", by("drop"), "dropped", "cd");
+}
+function zoneStrip(zones, top, base, unit) {
+  if (!zones || !zones.length) return "";
+  const zs = [...zones].sort((a, b) => a.top - b.top);
+  const t0 = top ?? zs[0].top, t1 = base ?? zs[zs.length - 1].base, span = (t1 - t0) || 1;
+  let html = "", at = t0;
+  for (const z of zs) {
+    if (z.top > at + span * 0.002) html += `<span style="flex:${z.top - at} 0 0;background:transparent;cursor:default" title="outside the zones"></span>`;
+    const w = Math.max(z.base - z.top, span * 0.006);
+    html += `<span data-z="${z.zone}" style="flex:${w} 0 0;background:${lithColor(z.lithology)}" title="${z.zone} · ${esc(z.lithology)} · ${fmtD(z.top)}–${fmtD(z.base)} ${esc(unit || "")}">${w / span > 0.05 ? z.zone : ""}</span>`;
+    at = Math.max(at, z.base);
+  }
+  if (t1 > at + span * 0.002) html += `<span style="flex:${t1 - at} 0 0;background:transparent;cursor:default" title="outside the zones"></span>`;
+  return `<div class="zstrip">${html}</div><div class="zaxis"><span>${fmtD(t0)} ${esc(unit || "")}</span><span>${fmtD(t1)} ${esc(unit || "")}</span></div>`;
+}
+function journey(nodes) {
+  return `<div class="journey">${nodes.map((n, i) => `${i ? `<span class="jline"></span>` : ""}<button class="jn k-${n.kind}${n.live ? " live" : ""}" data-jump="${n.id}" title="${esc(n.title || n.label)}">
+    <span class="jc">${n.icon || esc(n.num)}</span><span class="jl">${esc(n.label)}</span><span class="jm">${n.res ? `<span class="r">${MINI.doc}${n.res}</span>` : ""}${n.add ? `<span class="a">+${n.add}</span>` : ""}${n.rev ? `<span class="v">${MINI.pen}${n.rev}</span>` : ""}</span></button>`).join("")}</div>`;
+}
+function storyPane(j, m, res, finished, calls) {
   const live = c => !finished && c && !c.reply;
-  // READ
+  const out = [], nodes = [], stepKeys = [];
+  // the well
+  if (m.phase.interpreting || m.well) {
+    const w = m.well, parts = [];
+    let head, counts = "";
+    if (w && !w.error) {
+      const cs = w.tracks.flatMap(t => t.curves);
+      const las = cs.filter(c => c.source === "LAS").map(c => c.name), pp = cs.filter(c => c.source !== "LAS").map(c => c.name).concat(w.flags.map(f => f.name));
+      const chips = names => names.map(n => `<span class="chip">${esc(n)}</span>`).join(" ");
+      head = `Petrophys interpreted ${esc(fmtD(w.top))}–${esc(fmtD(w.base))} ${esc(w.unit)}: ${w.zones.length} lithology zone${w.zones.length === 1 ? "" : "s"}.${zoneStrip(w.zones, w.top, w.base, w.unit)}`;
+      counts = cnt(MINI.doc, las.length, "logs measured") + cnt(MINI.pen, pp.length, "curves computed by Petrophys") + `<span style="cursor:pointer" data-goto="well">See the logs →</span>`;
+      parts.push(["Measured", chips(las) || `<span class="subtle">none plotted</span>`], ["Computed", chips(pp)]);
+    } else head = w && w.error ? `Petrophys interpreted the well (the plot could not be drawn: ${esc(w.error)}).` : m.calls.length || finished ? "Petrophys interpreted the well." : "Petrophys is interpreting the well…";
+    const lv = !w && !m.calls.length && !finished;
+    out.push(card("pp", "The well", head, parts, m.phase.interpreting ? `at ${fmtS(m.phase.interpreting.t)}` : "", lv, false, {key: "st-well", counts, id: "st-well"}));
+    nodes.push({kind: "pp", label: "Well", id: "st-well", icon: ICONS.pp, live: lv});
+  }
+  // the question as read
   const reads = m.calls.filter(c => c.type === "read");
   if (reads.length) {
     const r = [...reads].reverse().find(c => c.reply && c.reply.topics) || reads[reads.length - 1];
-    const rep = r.reply || {};
-    let body = rep.topics ? `<div class="kv"><span class="l">topics</span><span class="v">${topicsHtml(rep.topics)}</span>${rep.named && rep.named.length ? `<span class="l">named</span><span class="v">${rep.named.map(esc).join(" · ")}</span>` : ""}</div>` :
-      rep.unreadable ? `<div class="callout warn">The READ reply could not be read${reads.length > 1 ? "" : "; it is asked once more"}.</div>` : "";
-    html += callCard("read", "The question's topics", reads, body, live(reads[reads.length - 1]));
+    const rep = r.reply || {}, parts = [];
+    if (rep.named && rep.named.length) parts.push(["It names", rep.named.map(n => `<span class="chip sans">${esc(n)}</span>`).join(" ")]);
+    if (res && res.absent && res.absent.length) parts.push(["Not in this well", res.absent.map(a => esc(a.name)).join(", ")]);
+    if (rep.unreadable) parts.push(["Reply", `<div class="warnline">The reply could not be read${reads.length > 1 ? "" : "; it is asked once more"}.</div>`]);
+    const lv = live(reads[reads.length - 1]);
+    out.push(card("read", "Reading the question", rep.topics ? topicsHtml(rep.topics) : "", parts, callMeta(reads), lv, false, {id: "st-read"}));
+    nodes.push({kind: "read", label: "Read", id: "st-read", icon: ICONS.read, live: lv});
   }
-  // steps
-  const steps = [...new Set(m.calls.filter(c => c.type === "step").map(c => c.number))].sort((a, b) => a - b);
+  // the first look
   const firstLook = [...m.resultStep].filter(([, k]) => k === 0).map(([id]) => id);
-  const callLine = new Map(((res && res.opened) || []).map(o => [o.id, o.call]));
+  if (firstLook.length) {
+    out.push(card("look", "First look", "The key curves of the topics, zone by zone, opened before the first step.",
+      [["Opened", resultChips(firstLook, m, calls, "fl")]], "", false, true, {key: "st-look", counts: cnt(MINI.doc, firstLook.length, firstLook.length === 1 ? "result" : "results"), id: "st-look"}));
+    nodes.push({kind: "look", label: "First look", id: "st-look", icon: ICONS.look, res: firstLook.length});
+  }
+  // the steps
+  const steps = [...new Set(m.calls.filter(c => c.type === "step").map(c => c.number))].sort((a, b) => a - b);
   for (const k of steps) {
-    const calls = m.calls.filter(c => c.type === "step" && c.number === k);
-    const main = calls.find(c => c.stage === `step_${k}` && c.reply && !c.reply.empty && !c.reply.unreadable) || calls.find(c => c.reply && (c.reply.focus !== undefined)) || calls[0];
+    const cs = m.calls.filter(c => c.type === "step" && c.number === k);
+    const main = cs.find(c => c.stage === `step_${k}` && c.reply && !c.reply.empty && !c.reply.unreadable) || cs.find(c => c.reply && (c.reply.focus !== undefined)) || cs[0];
     const rep = (main && main.reply) || {};
     const rec = res && res.steps.find(s => s.step === k);
-    let body = "";
-    if (k === 1 && firstLook.length) body += `<div class="kv"><span class="l">first look</span><span class="v"><ul class="acts">${resultChips(firstLook, m, callLine)}</ul></span></div>`;
-    const rows = [];
-    if (rep.asks) rows.push(["asks", inline(rep.asks)]);
+    const parts = [];
+    if (rep.asks) parts.push(["The question asks", inline(rep.asks)]);
     const asked = m.calls.find(c => c.stage === `step_${k}_points` && c.reply && c.reply.points);
     const points = (rep.points && rep.points.length && rep.points) || (asked && asked.reply.points) || (k === 1 && res && res.points.length ? res.points : null);
-    if (points) rows.push(["points", `<ol class="points">${points.map(p => `<li>${inline(p)}</li>`).join("")}</ol>`]);
-    if (rep.intent) rows.push(["intent", esc(rep.intent)]);
-    const focus = (rec && rec.focus) || rep.focus;
-    if (focus) rows.push(["focus", inline(focus)]);
-    const edits = rep.edits && rep.edits.length ? rep.edits : (rec ? rec.edits : []);
-    if (edits && edits.length) rows.push(["edits", editsHtml(edits)]);
+    if (points) parts.push(["Points to settle", `<ol class="points2">${points.map(p => `<li>${inline(p)}</li>`).join("")}</ol>`]);
     const actions = rec ? rec.actions : (rep.next || []);
-    if (actions.length) rows.push([rec ? "actions" : "asks for", `<ul class="acts">${actions.map(a => `<li>${esc(a)}</li>`).join("")}</ul>`]);
+    if (actions.length) parts.push([rec ? "Looked at" : "Asks for", more(actions.map(a => pill(a)), 6, `act-${k}`, h => `<div class="apills">${h}</div>`)]);
     const opened = [...m.resultStep].filter(([, s]) => s === k).map(([id]) => id);
-    if (opened.length) rows.push(["opened", `<ul class="acts">${resultChips(opened, m, callLine)}</ul>`]);
-    if (rec && rec.edit_msgs && rec.edit_msgs.length) rows.push(["not applied", `<div class="callout warn">${rec.edit_msgs.map(esc).join("\n")}</div>`]);
-    if (rep.done || (rec && rec.done)) rows.push(["done", "the model says the answer is settled"]);
-    if (rec && rec.stopped) rows.push(["stopped", esc(rec.stopped)]);
+    if (opened.length) parts.push(["Results", resultChips(opened, m, calls, `res-${k}`)]);
+    const edits = rep.edits && rep.edits.length ? rep.edits : (rec ? rec.edits : []);
+    if (edits && edits.length) parts.push(["Claims", claimEdits(edits, `ed-${k}`)]);
+    const warns = [];
+    if (rec && rec.edit_msgs && rec.edit_msgs.length) warns.push(...rec.edit_msgs);
     const fixed = rec && rec.repaired ? {"salvage": "The reply was not one complete JSON object; the harness read the edits and actions it holds.",
-      "salvage, incomplete": "The reply was not complete JSON, nor was its fixed form; the harness read the edits and actions it could recover.",
+      "salvage, incomplete": "The reply was not complete JSON, nor was its fixed form; the harness read what it could recover.",
       "fix": "The reply was not valid JSON; the model's fixed reply was read."}[rec.repaired] : "";
-    if (fixed) rows.push(["reply", `<div class="callout warn">${esc(fixed)}</div>`]);
-    else if (rec && rec.error) rows.push(["reply", `<div class="callout warn">${esc(rec.error)}</div>`]);
-    else if (rep.unreadable && !(rec && rec.focus !== undefined)) rows.push(["reply", `<div class="callout warn">The reply could not be read as JSON${finished ? "" : "; the harness asks the model to fix it"}.</div>`]);
-    if (rows.length) body += `<div class="kv">${rows.map(([l, v]) => `<span class="l">${l}</span><span class="v">${v}</span>`).join("")}</div>`;
-    const variants = calls.filter(c => c !== main).map(c => c.stage.replace(`step_${k}_`, "")).join(", ");
-    html += callCard("step", `Step ${k}${variants ? ` <small style="font-weight:400;color:var(--muted)">(+ ${esc(variants)})</small>` : ""}`, calls, body, live(calls[calls.length - 1]));
+    if (fixed) warns.push(fixed); else if (rec && rec.error) warns.push(rec.error);
+    else if (rep.unreadable && !(rec && rec.focus !== undefined)) warns.push(`The reply could not be read as JSON${finished ? "" : "; the harness asks the model to fix it"}.`);
+    if (warns.length) parts.push(["Harness notes", `<div class="warnline">${warns.map(esc).join("\n")}</div>`]);
+    if (rec && rec.stopped) parts.push(["Stopped", esc(rec.stopped)]);
+    const done = rep.done || (rec && rec.done);
+    const counts = (points ? cnt(MINI.flag, points.length, points.length === 1 ? "point to settle" : "points to settle") : "") + cnt(MINI.eye, actions.length, "looked at") +
+      cnt(MINI.doc, opened.length, opened.length === 1 ? "result" : "results") + editCounts(edits) + cnt(MINI.warn, warns.length, warns.length === 1 ? "harness note" : "harness notes", "cw") +
+      (done ? `<span class="cdone">${MINI.ok}points settled</span>` : "");
+    const focus = (rec && rec.focus) || rep.focus;
+    const lv = live(cs[cs.length - 1]);
+    stepKeys.push(`st-step-${k}`);
+    out.push(card("step", `Step ${k}`, focus ? inline(focus) : "", parts, callMeta(cs), lv, false, {key: `st-step-${k}`, counts, id: `st-step-${k}`, open: !finished && k === steps[steps.length - 1]}));
+    nodes.push({kind: "step", label: `Step ${k}`, num: k, id: `st-step-${k}`, title: focus || "", res: opened.length, add: (edits || []).filter(e => e.op === "add").length, rev: (edits || []).filter(e => e.op === "revise").length, live: lv});
   }
   // settle
   const settles = m.calls.filter(c => c.type === "settle");
   if (settles.length) {
-    const rep = (settles[0].reply) || {};
-    let body = rep.edits ? (rep.edits.length ? editsHtml(rep.edits) : `<div class="phtext">No edits: the claims stand as they are.</div>`) : "";
-    if (res && res.settle) body += `<div class="phtext">${fmtN(res.settle.claims_before)} claims before, ${fmtN(res.settle.claims_after)} after</div>`;
-    html += callCard("settle", "Settle: the claims made final, every result in view", settles, body, live(settles[settles.length - 1]));
+    const rep = settles[0].reply || {}, st = res && res.settle;
+    const head = st ? `With every result in view, the claims were made final: ${fmtN(st.claims_after)} claim${st.claims_after === 1 ? "" : "s"}.` : "With every result in view, the claims are made final.";
+    const parts = rep.edits && rep.edits.length ? [["Claims", claimEdits(rep.edits, "ed-settle")]] : [];
+    const lv = live(settles[settles.length - 1]);
+    out.push(card("settle", "Settle", head, parts, callMeta(settles), lv, false, {key: "st-settle", id: "st-settle", counts: rep.edits ? (rep.edits.length ? editCounts(rep.edits) : `<span>no edits</span>`) : ""}));
+    nodes.push({kind: "settle", label: "Settle", id: "st-settle", icon: ICONS.settle, add: (rep.edits || []).filter(e => e.op === "add").length, rev: (rep.edits || []).filter(e => e.op === "revise").length, live: lv});
   }
-  // writer and checker
+  // the writer
   const writers = m.calls.filter(c => c.type === "writer");
   if (writers.length) {
     const last = [...writers].reverse().find(c => c.reply) || writers[writers.length - 1];
     const rep = last.reply || {};
-    const body = rep.draft != null ? `<details data-k="w-draft"${det("w-draft", false)}><summary><span class="caret">▶</span>The draft (${fmtN(rep.chars)} characters)</summary><pre class="txt" style="margin-top:8px">${esc(rep.draft)}${rep.chars > rep.draft.length ? "\n…" : ""}</pre></details>` : "";
-    html += callCard("writer", "Writing the answer", writers, body, live(writers[writers.length - 1]));
+    const parts = rep.draft != null ? [["Draft", `<pre class="rawpre">${esc(rep.draft)}${rep.chars > rep.draft.length ? "\n…" : ""}</pre>`]] : [];
+    const lv = live(writers[writers.length - 1]);
+    out.push(card("writer", "Writing the answer", "Concluded once, from the claims, every opened result (they decide where the two differ) and a card of what each curve is.", parts, callMeta(writers), lv, true,
+      {key: "st-writer", id: "st-writer", counts: rep.chars ? cnt(MINI.pen, fmtN(rep.chars), "characters drafted") : ""}));
+    nodes.push({kind: "writer", label: "Write", id: "st-writer", icon: ICONS.writer, live: lv});
   }
+  // the checker and its repairs
+  const vr = (res && res.verify_rounds) || [];
+  const findings = r => [["Numbers no result shows", r.unsupported], ["Words about the process", r.process], ["Statements the record contradicts", r.contradictions], ["Working notes", r.leaks]]
+    .filter(([, v]) => v && v.length).map(([l, v]) => [l, `<div class="warnline">${v.map(esc).join(l.startsWith("Numbers") ? ", " : "\n")}</div>`]);
+  const nfind = r => r ? ["unsupported", "process", "contradictions", "leaks"].reduce((a, k) => a + ((r[k] || []).length), 0) : 0;
   const rounds = [...new Set(m.calls.filter(c => c.type === "repair").map(c => c.number))];
   for (const n of rounds) {
-    const calls = m.calls.filter(c => c.type === "repair" && c.number === n);
-    const body = `<div class="callout warn">${esc(calls[0].findings || "")}</div>` + (calls[calls.length - 1].reply && calls[calls.length - 1].reply.draft != null ?
-      `<details data-k="r-${n}"${det("r-" + n, false)}><summary><span class="caret">▶</span>The repaired draft (${fmtN(calls[calls.length - 1].reply.chars)} characters)</summary><pre class="txt" style="margin-top:8px">${esc(calls[calls.length - 1].reply.draft)}</pre></details>` : "");
-    html += callCard("repair", `The checker's findings, repair round ${n}`, calls, body, live(calls[calls.length - 1]));
+    const cs = m.calls.filter(c => c.type === "repair" && c.number === n);
+    const r = vr[n - 1];
+    const parts = r ? findings(r) : [["Findings", `<pre class="rawpre">${esc(cs[0].findings || "")}</pre>`]];
+    const rep = cs[cs.length - 1].reply;
+    if (rep && rep.draft != null) parts.push(["Repaired", `<pre class="rawpre">${esc(rep.draft)}</pre>`]);
+    const lv = live(cs[cs.length - 1]);
+    out.push(card("repair", `Check · repair ${n}`, "The checker found something to fix and sent the draft back to the writer.", parts, callMeta(cs), lv, true,
+      {key: `st-repair-${n}`, id: `st-repair-${n}`, counts: cnt(MINI.warn, nfind(r), nfind(r) === 1 ? "finding" : "findings", "cw")}));
+    nodes.push({kind: "repair", label: `Repair ${n}`, id: `st-repair-${n}`, icon: ICONS.repair, live: lv});
   }
   if (finished) {
-    const ok = j.status === "done";
-    const vr = res && res.verify_rounds && res.verify_rounds.length ? res.verify_rounds[res.verify_rounds.length - 1] : null;
-    const clean = vr && !(vr.unsupported || []).length && !(vr.process || []).length && !(vr.contradictions || []).length && !(vr.leaks || []).length;
-    html += `<div class="ti ${ok ? "k-end" : "k-fail"}"><div class="phtext"><span class="tt">${fmtS(j.elapsed)}</span><b>${ok ? "Finished" : esc(j.status)}</b>${res ? `: ${esc(res.status)}` : ""}${vr ? (clean ? " · the checker found nothing to repair" : " · the checker's last findings stand") : ""}</div>${ok ? "" : `<div style="margin-top:8px">${errorBox(j, j.result)}</div>`}</div>`;
+    const ok = j.status === "done", ck = checkerState(res);
+    if (ok) {
+      out.push(card(ck.clean ? "check" : "repair", "Check", ck.clean ? "Every number in the answer appears in a result the investigation opened." : "The checker's last findings stand.",
+        ck.clean || !ck.last ? [] : findings(ck.last), `at ${fmtS(j.elapsed)}`, false, true, {id: "st-check"}));
+      nodes.push({kind: ck.clean ? "check" : "repair", label: "Check", id: "st-check", icon: ck.clean ? MINI.ok : ICONS.repair});
+    } else out.push(`<div class="sc k-fail"><div class="ic">${ICONS.fail}</div><div>${errorBox(j, j.result)}</div></div>`);
+  } else if (!m.phase.started) out.push(card("read", "Waiting", j.queue_position ? `Number ${j.queue_position} in the queue: the question starts when a worker is free.` : "Waiting for a free worker.", [], "", false, true));
+  let top = "";
+  if (finished && res) {
+    const ck = checkerState(res), topics = (res.read && res.read.topics) || [];
+    top += `<div class="glance">
+      <div class="gbox"><div class="gl">The question, read as</div><div class="gv">${topicsHtml(topics)}</div></div>
+      <div class="gbox"><div class="gl">The investigation</div><div class="gv tiles2"><span class="stat"><b>${res.steps.length}</b>steps</span><span class="stat"><b>${res.opened.length}</b>results</span><span class="stat"><b>${res.claims.length}</b>claims</span></div>${res.claims.length ? gradeBar(res.claims) : ""}</div>
+      <div class="gbox ${ck.clean ? "ok" : "warn"}"><div class="ckicon">${ck.clean ? MINI.ok : MINI.warn}</div><div class="gv">${ck.clean ? `Every number checked against the results${ck.repairs ? `, after ${ck.repairs} repair${ck.repairs > 1 ? "s" : ""}` : ""}.` : "The checker's last findings stand."}</div></div></div>`;
   }
-  return html + `</div>`;
+  if (nodes.length) top += journey(nodes);
+  if (stepKeys.length) top += `<div class="expandall"><button class="link" data-foldall="${stepKeys.join(",")}" data-open="1">Open every step</button><button class="link" data-foldall="${stepKeys.join(",")}" data-open="">Fold every step</button></div>`;
+  return top + `<div class="story">${out.join("")}</div>`;
 }
 
-// ---------- claims ----------
-function claimsPane(res, finished) {
-  if (!res) return `<div class="card"><div class="cb"><div class="thinking">${finished ? "This run has no claims." : `<span class="spin"></span>The claims appear when the run ends; the Progress tab shows each step's edits as they happen.`}</div></div></div>`;
+// ---------- the evidence: claims and the results they cite ----------
+function resultHtml(text) {
+  const lines = String(text || "").split("\n");
+  const blocks = [];
+  for (const l of lines) {
+    if (!/^\s/.test(l) || !blocks.length) blocks.push({head: /^\s/.test(l) ? "" : l, rows: /^\s/.test(l) ? [l] : []});
+    else blocks[blocks.length - 1].rows.push(l);
+  }
+  return `<div class="rv">${blocks.map(b => blockHtml(b)).join("")}</div>`;
+}
+function splitTop(s, sep) {                       // split at sep outside parentheses
+  const out = []; let depth = 0, cur = "";
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === "(" || ch === "[") depth++;
+    else if ((ch === ")" || ch === "]") && depth) depth--;
+    if (!depth && s.startsWith(sep, i)) { out.push(cur); cur = ""; i += sep.length - 1; continue; }
+    cur += ch;
+  }
+  out.push(cur);
+  return out.map(x => x.trim()).filter(Boolean);
+}
+const KV = /^([A-Za-z_][^:]{0,44}?)\s+((?:[-+]?(?:\d|\.\d)|<\s?\d|n\/a\b)[\s\S]*)$/;
+function rowParse(l) {
+  const t = l.trim(), c = t.indexOf(": ");
+  if (c < 1 || c > 140) return null;
+  const label = t.slice(0, c), pairs = splitTop(t.slice(c + 2), ", ");
+  const kv = pairs.map(p => KV.exec(p));
+  const ok = kv.filter(Boolean).length;
+  if (ok < 2 || ok < 0.6 * pairs.length) return null;
+  return {label, cells: pairs.map((p, i) => kv[i] ? [kv[i][1].trim(), kv[i][2].trim()] : ["", p])};
+}
+function blockHtml(b) {
+  let html = "";
+  if (b.head) {
+    const [name, ...rest] = b.head.split(" = ");
+    html += `<div class="rb-head">${rest.length ? `<b>${esc(name)}</b> <span>= ${esc(rest.join(" = "))}</span>` : inline(b.head)}</div>`;
+  }
+  let run = [];
+  const flush = () => {
+    if (!run.length) return;
+    if (run.length === 1 && run[0].cells.length < 3) { html += `<div class="rb-line"><b>${hl(esc(run[0].label))}:</b> ${run[0].cells.map(([k, v]) => `${esc(k)} ${hl(esc(v))}`).join(", ")}</div>`; run = []; return; }
+    const tail = run.map(r => /, ([A-Z][A-Z0-9_]*)$/.exec(r.label));
+    const strip = tail.every(Boolean) && tail.every(t => t[1] === tail[0][1]);
+    const keys = [...new Set(run.flatMap(r => r.cells.map(([k]) => k)))];
+    const rows = run.map(r => [strip ? r.label.replace(/, [A-Z][A-Z0-9_]*$/, "") : r.label, ...keys.map(k => { const c = r.cells.find(([x]) => x === k); return c ? c[1] : ""; })]);
+    html += table(["", ...keys.map(k => k || "")], rows, {cls: "rt"});
+    run = [];
+  };
+  for (const l of b.rows) {
+    const r = rowParse(l);
+    if (r) { run.push(r); continue; }
+    flush();
+    const t = l.trim(), c = t.indexOf(": ");
+    html += `<div class="rb-line${/^\s{4}/.test(l) ? " sub" : ""}">${c > 0 && c < 70 ? `<b>${hl(esc(t.slice(0, c)))}:</b> ${hl(esc(t.slice(c + 2)))}` : hl(esc(t))}</div>`;
+  }
+  flush();
+  return html;
+}
+function resultBody(id, m, calls) {
+  const r = m.results.get(id), call = calls.get(id);
+  if (!r) return `<div class="hint">Opened as ${esc(call || id)}; its text did not reach a prompt.</div>`;
+  return (S.raw[id] ? `<pre class="rawpre">${esc(r.text)}</pre>` : resultHtml(r.text)) +
+    (r.digest ? `<div class="hint">The model read this result in short form; the lines left out are listed in it.</div>` : "");
+}
+function evidencePane(m, res, finished, calls) {
+  const ids = [...new Set([...m.results.keys(), ...calls.keys()])].sort((a, b) => +a.slice(1) - +b.slice(1));
+  const mode = S.evMode || (res ? "claims" : "all");
+  let html = `<div class="evbar"><div class="seg"><button data-evmode="claims" class="${mode === "claims" ? "on" : ""}">By question point</button><button data-evmode="all" class="${mode === "all" ? "on" : ""}">All results · ${ids.length}</button></div>
+    <span class="pp-by" title="Every result is computed by the Petrophys library"><img src="/img/petrophys_mark.png" alt="">Computed by Petrophys</span></div>`;
+  if (mode === "all") {
+    if (!ids.length) return html + `<div class="card"><div class="cb"><div class="thinking">No results opened yet.</div></div></div>`;
+    html += `<div class="rtools"><input type="text" id="rfilter" placeholder="Filter results (curve, zone, class…)"><span class="hint" style="margin:0">each as the model read it</span></div>`;
+    return html + ids.map(id => {
+      const r = m.results.get(id), call = calls.get(id) || (r && r.title) || "";
+      return `<details class="ritem" id="r-${id}" data-k="r-${id}" data-text="${esc((call + " " + (r ? r.text : "")).toLowerCase())}"${det("r-" + id, false)}><summary><span class="caret">▶</span><span class="eidb">${id}</span>${pill(call)}<span class="t2">${r ? `${fmtN(r.text.split("\n").length)} lines` : ""}</span></summary>
+        <div class="rbody"><div class="row" style="justify-content:flex-end;margin-bottom:6px"><button class="link fix" data-raw="${id}">${S.raw[id] ? "Show as tables" : "Show as text"}</button></div>${resultBody(id, m, calls)}</div></details>`;
+    }).join("");
+  }
+  if (!res) return html + `<div class="card"><div class="cb"><div class="thinking">${finished ? "This run has no claims." : `<span class="spin"></span>The claims appear when the run ends; How it was reached shows each step's claims as they are made.`}</div></div></div>`;
+  html += `<p class="lede2">Each point the model set out to settle, with its claims. <b>Click a result</b> to read it under the claim.</p>`;
   const points = res.points || [];
-  let html = res.intent ? `<div class="hint" style="margin:0 0 12px">Intent: <b>${esc(res.intent)}</b>. Each claim carries its grade and the results it cites.</div>` : "";
   const byPoint = new Map(points.map((_, i) => [i + 1, []]));
   for (const c of res.claims) { if (!byPoint.has(c.point)) byPoint.set(c.point, []); byPoint.get(c.point).push(c); }
+  const box = (cls, icon, head, text, open) => `<div class="cbx ${cls}"><div class="cbh">${icon}${head}</div><div class="${open ? "" : "clamp3"}">${text}</div></div>`;
   for (const [k, cs] of byPoint) {
-    html += `<div class="ptcard"><div class="pthead"><span class="ptnum">${k}</span><span class="pttext">${inline(points[k - 1] || `Point ${k}`)}</span></div>`;
-    html += cs.length ? cs.map(c => `<div class="claim"><div class="chead"><b class="mono">${esc(c.id)}</b><span class="grade ${esc(String(c.grade).replace(/ /g, "-"))}">${esc(c.grade)}</span>
-      ${(c.ev || []).map(e => /^E\d+$/.test(e) ? `<span class="eid" data-e="${e}">${e}</span>` : `<span class="chip">${esc(e)}</span>`).join(" ")}</div>
-      <div class="ctext">${inline(c.text)}</div>
-      ${c.means ? `<div class="kv"><span class="l">means</span><span class="v">${inline(c.means)}</span></div>` : ""}
-      ${c.weak ? `<div class="kv"><span class="l">weak</span><span class="v">${inline(c.weak)}</span></div>` : ""}
-      ${(c.flags || []).map(f => `<div class="flag">! ${esc(f)}</div>`).join("")}</div>`).join("") : `<div class="claim"><div class="phtext">No claim for this point.</div></div>`;
+    html += `<div class="ptcard"><div class="pthead"><span class="ptnum">${k}</span><span class="pttext">${inline(points[k - 1] || `Point ${k}`)}</span><span class="pcount">${cs.length} claim${cs.length === 1 ? "" : "s"}</span></div>`;
+    html += cs.length ? cs.map(c => {
+      const evs = (c.ev || []), key = `cl-${c.id}`, open = !!S.det[key];
+      const long = (c.text || "").length + (c.means || "").length + (c.weak || "").length > 320;
+      const shown = evs.filter(e => S.open[`${c.id}|${e}`]);
+      return `<div class="ccard g-${esc(gradeCls(c.grade))}" data-claim="${esc(c.id)}"><div class="chead"><b class="mono">${esc(c.id)}</b><span class="grade ${esc(gradeCls(c.grade))}">${esc(c.grade)}</span></div>
+        <div class="ctext${open ? "" : " clamp3"}">${inline(c.text)}</div>
+        ${c.means || c.weak || (c.flags || []).length ? `<div class="cboxes">${c.means ? box("means", MINI.bulb, "What it means", inline(c.means), open) : ""}${c.weak ? box("weak", MINI.warn, "What weakens it", inline(c.weak), open) : ""}${(c.flags || []).length ? box("flags", MINI.flag, "Code's checks", c.flags.map(esc).join("<br>"), open) : ""}</div>` : ""}
+        ${long ? `<div><button class="readmore" data-more="${esc(key)}">${open ? "Show less" : "Read in full"}</button></div>` : ""}
+        ${evs.length ? `<div class="evrow"><span class="lb">Rests on</span><div class="evchips">${evs.map(e => /^E\d+$/.test(e) ? `<span class="evchip${S.open[`${c.id}|${e}`] ? " on" : ""}" data-e="${e}"><span class="eidb">${e}</span><span class="t">${esc(clip(action(calls.get(e) || (m.results.get(e) || {}).title || "").label, 60))}</span></span>` : `<span class="chip">${esc(e)}</span>`).join("")}</div></div>` : ""}
+        ${shown.map(e => `<div class="inres"><div class="ih"><span class="eidb">${e}</span>${pill(calls.get(e) || (m.results.get(e) || {}).title || "")}<button class="link rawtoggle" data-raw="${e}">${S.raw[e] ? "Show as tables" : "Show as text"}</button></div>${resultBody(e, m, calls)}</div>`).join("")}</div>`;
+    }).join("") : `<div class="ccard"><div class="phtext">No claim for this point.</div></div>`;
     html += `</div>`;
   }
   if (res.dropped && res.dropped.length) html += `<details data-k="dropped"${det("dropped", false)}><summary class="hint"><span class="caret">▶</span>${res.dropped.length} dropped claims</summary><ul class="edits" style="margin-top:8px">${res.dropped.map(c => `<li><b class="mono">${esc(c.id)}</b> ${inline(c.text)}</li>`).join("")}</ul></details>`;
   return html;
 }
 
-// ---------- results ----------
-function resultsPane(m, res) {
-  const calls = new Map(((res && res.opened) || []).map(o => [o.id, o.call]));
-  const ids = [...new Set([...m.results.keys(), ...calls.keys()])].sort((a, b) => +a.slice(1) - +b.slice(1));
-  if (!ids.length) return `<div class="card"><div class="cb"><div class="thinking">No results opened yet.</div></div></div>`;
-  let html = `<div class="rtools"><input type="text" id="rfilter" placeholder="Filter results (curve, zone, class…)"><span class="hint" style="margin:0">${ids.length} results, each as the model read it</span>
-    <span class="pp-by" title="Every result is computed by the Petrophys library"><img src="/img/petrophys_mark.png" alt="">Computed by Petrophys</span></div>`;
-  html += ids.map(id => {
-    const r = m.results.get(id), call = calls.get(id);
-    const body = r ? `<pre class="txt">${esc(r.text)}</pre>${r.digest ? `<div class="hint">The model read this result in short form; the lines left out are listed above.</div>` : ""}` : `<div class="hint">Opened as ${esc(call || id)}; its text did not reach a prompt.</div>`;
-    return `<details class="ritem" id="r-${id}" data-k="r-${id}" data-text="${esc(((call || "") + " " + (r ? r.text : "")).toLowerCase())}"${det("r-" + id, false)}><summary><span class="caret">▶</span><span class="eidb">${id}</span><span class="t1">${esc(call || (r && r.title) || "")}</span><span class="t2">${r ? `${fmtN(r.text.split("\n").length)} lines` : ""}</span></summary><div class="rbody">${body}</div></details>`;
+// ---------- the well logs ----------
+const LITH = [[/COAL/, "#4a4a4a"], [/ANHY|GYP|SALT|HALITE|EVAPOR/, "#d9bfe3"], [/DOLO/, "#c3a9dd"], [/CHALK/, "#e4ecf8"], [/MARL/, "#b9d6cb"],
+  [/LIME|CALC|CARBON/, "#a8cbec"], [/SHALY SAND|ARGILLACEOUS SAND|SANDY SHALE/, "#dccb7c"], [/CLEAN|SAND/, "#f3db6a"], [/SILT/, "#d6c59f"],
+  [/SHALY/, "#bdb98e"], [/SHALE|CLAY|MUD/, "#9eab8d"], [/NO_LITH|NO LITH|UNKNOWN|NO DATA|^NONE$/, "#eeeeee"]];
+function lithColor(name) {
+  const n = String(name || "").toUpperCase();
+  for (const [re, c] of LITH) if (re.test(n)) return c;
+  let h = 0; for (const ch of n) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `hsl(${h} 42% 82%)`;
+}
+const TRACK_COLORS = {"Gamma ray": ["#2b7536", "#6b7280"], "Resistivity": ["#b42318", "#285aa6", "#8f5300"], "Density · neutron": ["#b42318", "#285aa6"],
+  "Sonic": ["#6b4fa0"], "Shale volume": ["#7a5c2e"], "Porosity": ["#285aa6", "#6b7280"], "Water saturation": ["#1f5fa8"], "Permeability": ["#b84e12"]};
+const FILLS = {VCL: [[0, 1], "left", "#cdb98f"], PHIE: [[0.5, 0], "right", "#9cc3e6"], SW: [[1, 0], "left", "#9bd39b"]};
+const TW = {track: 130, log: 142, depth: 58, lith: 84, flag: 22};
+function niceStep(span, n) { const raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))); return [1, 2, 2.5, 5, 10].map(x => x * p).find(x => x >= raw) || 10 * p; }
+function fmtV(v) { if (v == null) return "–"; const a = Math.abs(v); return a >= 1000 ? v.toFixed(0) : a >= 100 ? v.toFixed(1) : a >= 1 ? v.toFixed(2) : a >= 0.01 ? v.toFixed(3) : v.toPrecision(2); }
+// the log plot: o.p (an id prefix), o.H (height), o.only (track titles to show; all when absent), o.flags (flag names
+// to show; all when absent), o.key (zones to mark), o.width (the width to fill)
+function plotHtml(w, o) {
+  const tracks = o.only ? w.tracks.filter(t => o.only.includes(t.title)) : w.tracks;
+  const flags = o.flags ? w.flags.filter(f => o.flags.includes(f.name)) : w.flags;
+  const tw = {...TW};
+  const avail = (o.width || 1100) - 4 - tw.depth - tw.lith - tw.flag * flags.length;
+  const nlog = tracks.filter(t => t.log).length, unit = avail / Math.max(1, tracks.length + 0.1 * nlog);
+  tw.track = Math.round(Math.max(80, Math.min(170, unit))); tw.log = Math.round(Math.max(86, Math.min(185, unit * 1.1)));
+  const H = o.H, span = (w.base - w.top) || 1, y = d => (d - w.top) / span * H;
+  const ticks = []; const st = niceStep(span, Math.max(4, H / 70));
+  for (let d = Math.ceil(w.top / st) * st; d <= w.base + 1e-9; d += st) ticks.push(+d.toFixed(6));
+  const key = new Set(o.key || []);
+  let heads = `<div class="wp-h" style="width:${tw.depth}px"><div class="tt2">Depth</div><div class="subtle" style="font-size:10.5px">${esc(w.unit)}</div></div>
+    <div class="wp-h" style="width:${tw.lith}px"><div class="tt2">Lithology</div><div class="subtle lc" title="${esc(w.lithology_curve ? `the lithology log ${w.lithology_curve}` : w.zone_bands ? "shale-volume bands" : "")}">${w.lithology_curve ? esc(w.lithology_curve) : w.zone_bands ? "VCL bands" : "–"}</div><div class="subtle" style="font-size:10.5px">and zones</div></div>`;
+  let bodies = `<svg width="${tw.depth}" height="${H}">${ticks.map(d => `<line x1="${tw.depth - 6}" x2="${tw.depth}" y1="${y(d)}" y2="${y(d)}" stroke="var(--faint)"/><text x="${tw.depth - 9}" y="${y(d) + 4}" text-anchor="end" font-size="10.5" fill="var(--muted)" font-family="var(--mono)">${fmtD(d)}</text>`).join("")}</svg>`;
+  const LW = 48;
+  bodies += `<svg width="${tw.lith}" height="${H}">${w.lithology.map(r => `<rect x="0" y="${y(r.top)}" width="${LW}" height="${Math.max(0.5, y(r.base) - y(r.top))}" fill="${lithColor(r.lithology)}"><title>${esc(r.lithology)} ${fmtD(r.top)}–${fmtD(r.base)}</title></rect>`).join("")}
+    ${w.zones.map(z => { const y0 = y(z.top), y1 = y(z.base), on = S.hlZone === z.zone, k = key.has(z.zone);
+      return `<g data-z="${z.zone}" style="cursor:pointer"><rect x="${LW + 2}" y="${y0}" width="${tw.lith - LW - 4}" height="${Math.max(1, y1 - y0)}" rx="3" fill="${on ? "var(--accent-soft)" : k ? "var(--navy-soft)" : "var(--surface-2)"}" stroke="${on ? "var(--accent)" : k ? "var(--navy)" : "var(--line)"}"/>
+      ${y1 - y0 > 13 ? `<text x="${(LW + tw.lith) / 2 + 1}" y="${(y0 + y1) / 2 + 4}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--navy)" font-family="var(--mono)">${z.zone}</text>` : ""}<title>${z.zone} ${esc(z.lithology)} ${fmtD(z.top)}–${fmtD(z.base)}</title></g>`; }).join("")}</svg>`;
+  for (const t of tracks) {
+    const W = t.log ? tw.log : tw.track, cols = TRACK_COLORS[t.title] || ["#1c2433", "#6b7280", "#8f5300"], cid = `${o.p}cp-${t.title.replace(/\W/g, "")}`;
+    heads += `<div class="wp-h" style="width:${W}px"><div class="tt2" title="${esc(t.title)}">${esc(t.title)}</div>${t.curves.map((c, i) => `<div class="cv${i ? " dash" : ""}" style="border-color:${cols[i % cols.length]};color:${cols[i % cols.length]}" title="${esc([c.name, c.about, c.unit, c.source === "LAS" ? "measured (LAS)" : "computed by Petrophys"].filter(Boolean).join(" · "))}"><div class="cn">${esc(c.name)}<span class="src ${c.source === "LAS" ? "l" : "p"}">${c.source === "LAS" ? "LAS" : "PP"}</span>${c.unit ? ` <small>${esc(c.unit)}</small>` : ""}</div><div class="cs"><span>${fmtV(c.scale[0])}</span><span>${fmtV(c.scale[1])}</span></div></div>`).join("")}</div>`;
+    const grid = [];
+    if (t.log) { const [a, b] = t.curves[0].scale.map(v => Math.log10(Math.max(v, 1e-9))); for (let e = Math.ceil(Math.min(a, b)); e <= Math.max(a, b); e++) grid.push((e - a) / (b - a) * W); }
+    else for (let q = 1; q < 4; q++) grid.push(q * W / 4);
+    let svg = `<svg width="${W}" height="${H}"><defs><clipPath id="${cid}"><rect width="${W}" height="${H}"/></clipPath></defs>`;
+    svg += grid.map(x => `<line x1="${x}" x2="${x}" y1="0" y2="${H}" stroke="var(--line-2)"/>`).join("") + ticks.map(d => `<line x1="0" x2="${W}" y1="${y(d)}" y2="${y(d)}" stroke="var(--line-2)"/>`).join("");
+    svg += w.zones.map(z => `<line x1="0" x2="${W}" y1="${y(z.top)}" y2="${y(z.top)}" stroke="var(--faint)" stroke-dasharray="2 3" opacity=".6"/>`).join("");
+    svg += `<g clip-path="url(#${cid})">`;
+    t.curves.forEach((c, i) => {
+      const [l, r] = c.scale;
+      const x = t.log ? (v => v > 0 ? (Math.log10(v) - Math.log10(l)) / (Math.log10(r) - Math.log10(l)) * W : null) : (v => (v - l) / (r - l) * W);
+      const segs = []; let cur = [];
+      c.values.forEach((v, k) => { const xv = v == null ? null : x(v); if (xv == null || !isFinite(xv)) { if (cur.length) segs.push(cur); cur = []; } else cur.push([Math.max(-4, Math.min(W + 4, xv)), y(w.depth[k])]); });
+      if (cur.length) segs.push(cur);
+      const fill = FILLS[c.name];
+      if (i === 0 && fill && fill[0][0] === l && fill[0][1] === r) {
+        const x0 = fill[1] === "left" ? 0 : W;
+        svg += segs.map(s => `<path d="M${x0} ${s[0][1].toFixed(1)}L${s.map(p => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("L")}L${x0} ${s[s.length - 1][1].toFixed(1)}Z" fill="${fill[2]}" opacity=".55"/>`).join("");
+      }
+      svg += segs.map(s => `<path d="M${s.map(p => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("L")}" fill="none" stroke="${cols[i % cols.length]}" stroke-width="${i ? 1.1 : 1.4}"${i ? ' stroke-dasharray="4 2"' : ""}/>`).join("");
+    });
+    bodies += svg + `</g></svg>`;
+  }
+  for (const f of flags) {
+    heads += `<div class="wp-h" style="width:${tw.flag}px;padding:6px 2px"><div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:10px;font-weight:700;color:var(--ink-2);height:56px;white-space:nowrap" title="${esc(f.name)}">${esc(f.name)}</div></div>`;
+    const dy = w.step / span * H;
+    bodies += `<svg width="${tw.flag}" height="${H}">${f.values.map((v, k) => v > 0 ? `<rect x="3" y="${(y(w.depth[k]) - dy / 2).toFixed(1)}" width="${tw.flag - 6}" height="${Math.max(1, dy).toFixed(1)}" fill="${/PAY/.test(f.name) ? "#2b7536" : /RES/.test(f.name) ? "#4f9a5a" : "#8bbf93"}"/>` : "").join("")}</svg>`;
+  }
+  const bands = w.zones.filter(z => key.has(z.zone) && z.zone !== S.hlZone).map(z => `<div class="zb key" style="top:${y(z.top)}px;height:${Math.max(2, y(z.base) - y(z.top))}px"></div>`).join("");
+  const hz = w.zones.find(z => z.zone === S.hlZone);
+  return `<div class="wp"><div class="wp-in"><div class="wp-read" id="${o.p}read"><span>Move over the logs to read the values at a depth; click a zone to pick it.</span></div>
+    <div class="wp-heads">${heads}</div><div class="wp-scroll" id="${o.p}scroll"><div class="wp-body" id="${o.p}body" data-h="${H}" style="height:${H}px">${bodies}${bands}
+    ${hz ? `<div class="zb" style="top:${y(hz.top)}px;height:${Math.max(2, y(hz.base) - y(hz.top))}px"></div>` : ""}<div class="xh" id="${o.p}xh"></div></div></div></div></div>`;
+}
+function zoneTable(w, key, opt = {}) {
+  const k = new Set(key || []);
+  const flagNames = w.flags.map(f => f.name).filter(f => !opt.flags || opt.flags.includes(f));
+  const cols = [...w.means.map(c => [c, `${c} mean`]), ...w.medians.map(c => [c, `${c} median`]), ...flagNames.map(f => [f, `${f} %`])].filter(([c]) => w.zones.some(z => z.stats && z.stats[c] != null));
+  return `<div class="tblwrap"><table class="t ztable"><thead><tr><th>Zone</th><th>Lithology</th><th class="num">Top</th><th class="num">Base</th><th class="num">Thick&shy;ness</th>${opt.samples ? `<th class="num">Samples</th>` : ""}${cols.map(([, l]) => `<th class="num">${esc(l)}</th>`).join("")}</tr></thead><tbody>
+    ${w.zones.map(z => `<tr data-z="${z.zone}" class="${S.hlZone === z.zone ? "on" : k.has(z.zone) ? "key" : ""}"><td class="nw"><span class="zone">${z.zone}</span></td><td class="nw"><span class="swatch" style="background:${lithColor(z.lithology)}"></span>${esc(z.lithology)}</td><td class="num">${fmtD(z.top)}</td><td class="num">${fmtD(z.base)}</td><td class="num">${fmtV(z.thickness)}</td>${opt.samples ? `<td class="num">${fmtN(z.samples)}</td>` : ""}${cols.map(([c]) => `<td class="num">${z.stats && z.stats[c] != null ? fmtV(z.stats[c]) : "–"}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+function wellPane(m, res, finished) {
+  const w = m.well;
+  if (!w) return `<div class="card"><div class="cb"><div class="thinking">${finished ? "This run has no plot of the well (it was asked before the plot existed, or failed before Petrophys read the well)." : `<span class="spin"></span>The logs appear here once Petrophys has interpreted the well.`}</div></div></div>`;
+  if (w.error) return `<div class="errbox">The plot could not be drawn: ${esc(w.error)}</div>`;
+  S.wellData = w;
+  const zoom = S.wellZoom || 1, iv = res && res.interval;
+  let html = `<div class="wtools"><div><b>${esc((iv && iv.name) || "The interval")}</b> <span class="subtle">${esc(fmtD(w.top))}–${esc(fmtD(w.base))} ${esc(w.unit)} · ${fmtN(w.samples)} samples · ${w.zones.length} zones ${esc(res ? lithText(res.lithology) : "")}</span></div>
+    <span class="grow"></span><div class="seg">${[1, 2, 4].map(z => `<button data-zoom="${z}" class="${zoom === z ? "on" : ""}">${z === 1 ? "Fit" : z + "×"}</button>`).join("")}</div></div>` + plotLegend();
+  html += plotHtml(w, {p: "wp", H: Math.round(680 * zoom), width: ($("#run") && $("#run").clientWidth) || 1100});
+  const liths = [...new Set(w.lithology.map(r => r.lithology))];
+  html += `<div class="legend2" style="margin-top:8px"><b style="color:var(--ink-2)">Lithology</b>${liths.map(l => `<span><span class="swatch" style="background:${lithColor(l)}"></span>${esc(l)}</span>`).join("")}</div>`;
+  html += `<h3 class="sec">The zones</h3>` + zoneTable(w, [], {samples: true}) +
+    `<div class="wnote">The curves as Petrophys interpreted this interval. The zone values here are plain means of each zone's samples (permeability: the median), for orientation; the answer's numbers come from the results in Evidence, which the model opened with its tools.</div>`;
+  return html;
+}
+function plotLegend() {
+  return `<div class="legend2" style="margin-bottom:8px"><span><span style="font-size:10px;font-weight:700;padding:0 4px;border-radius:3px;background:var(--pp-soft);color:var(--pp)">PP</span> computed by Petrophys</span><span><span style="font-size:10px;font-weight:700;padding:0 4px;border-radius:3px;background:var(--code);color:var(--muted)">LAS</span> measured</span>
+    <span>Shaded: <span class="swatch" style="background:#cdb98f"></span>shale volume, <span class="swatch" style="background:#9cc3e6"></span>effective porosity, <span class="swatch" style="background:#9bd39b"></span>hydrocarbon (1 − SW)</span></div>`;
+}
+function wirePlot(p) {
+  const w = S.wellData, body = $(`#${p}body`); if (!w || !body) return;
+  const H = +body.dataset.h, span = (w.base - w.top) || 1;
+  const xh = $(`#${p}xh`), read = $(`#${p}read`);
+  const at = ev => { const r = body.getBoundingClientRect(); return w.top + (ev.clientY - r.top) / H * span; };
+  const index = d => { let lo = 0, hi = w.depth.length - 1; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (w.depth[mid] < d) lo = mid; else hi = mid; } return Math.abs(w.depth[lo] - d) <= Math.abs(w.depth[hi] - d) ? lo : hi; };
+  const zoneAt = d => w.zones.find(z => d >= z.top && d <= z.base);
+  body.onmousemove = ev => {
+    const d = at(ev), k = index(d), z = zoneAt(d);
+    xh.style.display = "block"; xh.style.top = `${(w.depth[k] - w.top) / span * H}px`;
+    const vals = w.tracks.flatMap(t => t.curves).map(c => `<span class="rv1">${esc(c.name)} <b>${fmtV(c.values[k])}</b>${c.unit ? ` <small>${esc(c.unit)}</small>` : ""}</span>`);
+    const fl = w.flags.filter(f => f.values[k] > 0).map(f => esc(f.name));
+    read.innerHTML = `<span class="rv1"><b>${fmtD(w.depth[k])} ${esc(w.unit)}</b></span>${z ? `<span class="rv1"><span class="zone">${z.zone}</span> ${esc(z.lithology)}</span>` : `<span class="rv1 subtle">outside the zones</span>`}${vals.join("")}${fl.length ? `<span class="rv1">flags <b>${fl.join(", ")}</b></span>` : ""}`;
+  };
+  body.onmouseleave = () => { xh.style.display = "none"; };
+  body.onclick = ev => { const z = zoneAt(at(ev)); S.hlZone = z ? (S.hlZone === z.zone ? null : z.zone) : null; rerender(); };
+  scrollToZone(p);
+}
+function wireWell() {
+  for (const p of ["wp", "sp"]) wirePlot(p);
+  $$(".ztable tr[data-z]").forEach(tr => tr.onclick = () => { S.hlZone = S.hlZone === tr.dataset.z ? null : tr.dataset.z; rerender(); });
+  $$("[data-zoom]").forEach(b => b.onclick = () => { S.wellZoom = +b.dataset.zoom; rerender(); });
+}
+function scrollToZone(p) {
+  const w = S.wellData, sc = $(`#${p}scroll`), body = $(`#${p}body`), z = w && w.zones.find(x => x.zone === S.hlZone);
+  if (!sc || !z || !body) return;
+  const H = +body.dataset.h, y0 = (z.top - w.top) / ((w.base - w.top) || 1) * H;
+  if (y0 < sc.scrollTop || y0 > sc.scrollTop + sc.clientHeight - 40) sc.scrollTop = Math.max(0, y0 - 60);
+}
+
+// ---------- the interpretation: the run told as a petrophysicist reads a report ----------
+// The answer first; then the well with the zones it names; then the reasoning, one part of the question at a time, each
+// finding with the zone values it rests on; then what limits it; then the full written answer.
+const WORDS = {SW: /water saturation/i, PHIE: /effective porosity|\bporosity\b/i, VCL: /shale volume|clay volume|shaliness|\bshaly\b|\bVSH\b/i,
+  PERM: /permeab/i, NET_PAY: /net pay\b|\bpay\b/i, NET_RES: /net reservoir/i, NET_ROCK: /net rock/i};
+const CURVE_COLOR = {VCL: "#8a6a2e", PHIE: "#2f7fc1", SW: "#1f3a68", PERM: "#b84e12"};
+const CONF = {high: "High confidence", moderate: "Moderate confidence", low: "Low confidence", hypothesis: "Not settled", undetermined: "Undetermined", "not indicated": "Not indicated"};
+function curvesIn(text, w) {
+  if (!w) return [];
+  const have = [...w.means, ...w.medians, ...w.flags.map(f => f.name)].filter(c => w.zones.some(z => z.stats && z.stats[c] != null));
+  const at = c => {
+    const m = new RegExp(`(?<![A-Za-z0-9_])${c}(?![A-Za-z0-9_])`).exec(text);
+    const v = WORDS[c] ? WORDS[c].exec(text) : null;
+    return Math.min(m ? m.index : 1e9, v ? v.index : 1e9);
+  };
+  return have.map(c => [c, at(c)]).filter(([, i]) => i < 1e9).sort((a, b) => a[1] - b[1]).map(([c]) => c);
+}
+function zonesIn(text) {
+  const out = new Set();
+  for (const m of String(text || "").matchAll(/\bZ(\d{1,3})\s*(?:[–—-]|to)\s*Z(\d{1,3})\b/g)) for (let k = +m[1]; k <= +m[2] && k - +m[1] < 60; k++) out.add(`Z${k}`);
+  for (const m of String(text || "").matchAll(/\bZ\d{1,3}\b/g)) out.add(m[0]);
+  return out;
+}
+function zoneBars(w, c, hl) {
+  const zs = w.zones.filter(z => z.stats && z.stats[c] != null);
+  if (!zs.length) return "";
+  const flag = w.flags.some(f => f.name === c), log = w.medians.includes(c), cut = w.cutoffs ? w.cutoffs[c] : null;
+  const vals = zs.map(z => z.stats[c]);
+  if (vals.every(v => v === 0)) return `<div class="zb2 flat"><b>${esc(c)}</b> ${flag ? "is set in no sample of any zone (0%)" : "is 0 in every zone"}</div>`;
+  let lo = 0, hi;
+  if (flag) hi = 100;
+  else if (log) { const pos = vals.filter(v => v > 0); lo = Math.pow(10, Math.floor(Math.log10(Math.min(...pos, cut || Infinity) || 0.01))); hi = Math.pow(10, Math.ceil(Math.log10(Math.max(...pos, cut || 0, lo * 10)))); }
+  else { const top = Math.max(...vals, cut || 0); hi = top <= 1 && (c === "SW" || c === "VCL") ? 1 : top * 1.15 || 1; }
+  const L = 48, BW = 230, R = 56, row = 22, top0 = 8, Hh = top0 + zs.length * row + 18;
+  const x = v => log ? (v > 0 ? (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo)) * BW : 0) : (v - lo) / (hi - lo) * BW;
+  const col = flag ? "#2b7536" : CURVE_COLOR[c] || "var(--navy)";
+  const any = zs.some(z => hl.has(z.zone));
+  let svg = zs.map((z, i) => {
+    const yy = top0 + i * row, v = z.stats[c], on = !any || hl.has(z.zone);
+    return `<g><rect x="0" y="${yy + 5}" width="9" height="9" rx="2" fill="${lithColor(z.lithology)}" stroke="rgba(0,0,0,.15)"/><text x="14" y="${yy + 14}" font-size="11" font-family="var(--mono)" font-weight="${on && any ? 700 : 500}" fill="${on ? "var(--ink)" : "var(--faint)"}">${z.zone}</text>
+      <rect x="${L}" y="${yy + 3}" width="${Math.max(1.5, Math.min(BW, x(v)))}" height="${row - 7}" rx="3" fill="${on ? col : "var(--line)"}"/>
+      <text x="${L + Math.min(BW, x(v)) + 5}" y="${yy + 14}" font-size="11" fill="${on ? "var(--ink-2)" : "var(--faint)"}" font-variant-numeric="tabular-nums">${fmtV(v)}${flag ? "%" : ""}</text><title>${z.zone} ${esc(z.lithology)}: ${c} ${fmtV(v)}${flag ? "% of samples set" : log ? " (median)" : " (mean)"}</title></g>`;
   }).join("");
+  if (cut != null && cut >= lo && cut <= hi) {
+    const cx = L + x(cut);
+    svg += `<line x1="${cx}" x2="${cx}" y1="${top0 - 2}" y2="${top0 + zs.length * row}" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 3"/><text x="${cx}" y="${top0 + zs.length * row + 13}" text-anchor="middle" font-size="10.5" fill="var(--accent-ink)" font-weight="600">cutoff ${fmtV(cut)}</text>`;
+  }
+  svg += `<line x1="${L}" x2="${L}" y1="${top0 - 2}" y2="${top0 + zs.length * row}" stroke="var(--line)"/>`;
+  const what = flag ? "% of samples set" : log ? "median" : "mean";
+  return `<figure class="zb2"><figcaption><b>${esc(c)}</b> ${what} by zone${cut != null ? ` <span class="subtle">· net-pay cutoff ${fmtV(cut)}</span>` : ""}</figcaption>
+    <svg viewBox="0 0 ${L + BW + R} ${Hh}" width="100%" style="max-width:${L + BW + R + 40}px" role="img" aria-label="${esc(c)} ${what} for each zone">${svg}</svg></figure>`;
+}
+function splitLead(text) {
+  let t = String(text || "").replace(/^\s*(finding|hypothesis|claim|reading)\s*:\s*/i, "").trim();
+  t = t.charAt(0).toUpperCase() + t.slice(1);
+  const m = /^([\s\S]{20,320}?[.!?])(\s+[A-Z(]|\s*$)/.exec(t);
+  return m ? [m[1], t.slice(m[1].length).trim()] : [t, ""];
+}
+function liveFindings(m) {                       // while the run goes on: the readings the steps have added
+  const out = [];
+  for (const c of m.calls) if (c.type === "step" && c.reply && c.reply.edits) for (const e of c.reply.edits) if (e.op === "add" && e.text) out.push({point: e.point, text: e.text, grade: e.grade, live: true});
+  return out;
+}
+function finding(c, w, calls, m, shown) {
+  const [lead, rest] = splitLead(c.text);
+  const key = `f-${c.id || c.text.slice(0, 24)}`, open = !!S.det[key];
+  const hl = zonesIn(c.text);
+  const want = curvesIn(`${c.text} ${c.means || ""}`, w).filter(cv => !shown || !shown.has(`${cv}|${[...hl].sort()}`)).slice(0, 3);
+  if (shown) for (const cv of want) shown.add(`${cv}|${[...hl].sort()}`);       // a chart once in a part
+  const charts = want.map(cv => zoneBars(w, cv, hl)).filter(Boolean);
+  const evs = (c.ev || []).filter(e => /^E\d+$/.test(e));
+  const box = (cls, icon, head, text) => text ? `<div class="cbx ${cls}"><div class="cbh">${icon}${head}</div><div class="${open ? "" : "clamp2"}">${inline(text)}</div></div>` : "";
+  return `<div class="find g-${esc(gradeCls(c.grade))}">
+    <div class="fhead"><span class="conf c-${esc(gradeCls(c.grade))}">${esc(CONF[c.grade] || c.grade || "")}</span>${c.live ? `<span class="subtle">a working reading</span>` : ""}</div>
+    <p class="flead">${inline(lead)}</p>${rest ? `<p class="frest${open ? "" : " clamp2"}">${inline(rest)}</p>` : ""}
+    ${charts.length ? `<div class="fcharts">${charts.join("")}</div>` : ""}
+    ${c.means || c.weak ? `<div class="cboxes">${box("means", MINI.bulb, "Why it matters", c.means)}${box("weak", MINI.warn, "What could change it", c.weak)}</div>` : ""}
+    <div class="ffoot">${rest || c.means || c.weak ? `<button class="readmore" data-more="${esc(key)}">${open ? "Show less" : "Read in full"}</button>` : ""}
+      ${evs.length ? `<span class="grow"></span><button class="link" data-goclaim="${esc(c.id)}">${MINI.doc} Rests on ${evs.length} computed result${evs.length === 1 ? "" : "s"} →</button>` : ""}</div></div>`;
+}
+function mainPane(j, m, res, finished, calls) {
+  const w = m.well && !m.well.error ? m.well : null;
+  if (w) S.wellData = w;
+  const ans = finished && j.answer ? answerSections(j.answer) : null;
+  const keyIdx = ans ? Math.max(0, ans.secs.findIndex(s => /^answer\b/i.test(s.head))) : -1;
+  const keySec = ans && ans.secs[keyIdx];
+  // the zones the answer names most
+  const counts = new Map();
+  if (keySec) for (const mm of keySec.body.matchAll(/\bZ\d{1,3}\b/g)) counts.set(mm[0], (counts.get(mm[0]) || 0) + 1);
+  const key = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([z]) => z);
+  let html = "";
+  // 1. the answer
+  if (finished && j.status !== "done" && !j.answer) return errorBox(j, j.result);
+  if (keySec) {
+    const paras = keySec.body.trim().split(/\n\s*\n/);
+    const ck = checkerState(res), unresolved = res && res.status === "unresolved_numbers";
+    // sentences end at . ! or ? before a space and a capital (a decimal point never ends one)
+    const sents = paras[0].replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s+(?=[A-Z(*])/);
+    const lead = sents.slice(0, 2).join(" "), more = sents.length > 2 || paras.length > 1 || ans.secs.length > 1;
+    html += `<section class="hero"><div class="hl">The answer</div><div class="prose lead">${md(lead, {nums: true})}</div>
+      ${more ? `<button class="link" data-jump="full">Read the whole answer ↓</button>` : ""}
+      ${res ? `<div class="heromt"><span class="stat"><b>${res.claims.length}</b>findings</span>${res.claims.length ? `<span class="gbwrap">${gradeBar(res.claims)}</span>` : ""}<span class="stat"><b>${res.opened.length}</b>computed results</span>
+        <span class="chk ${unresolved || !ck.clean ? "warn" : ""}">${unresolved || !ck.clean ? MINI.warn : MINI.ok}${unresolved ? "A number in the answer is in no computed result" : ck.clean ? "Every number traced to a computed result" : "The checker's last findings stand"}</span></div>` : ""}</section>`;
+  } else if (!finished) {
+    const stage = !m.phase.started ? "Waiting for a free worker" : !m.calls.length ? "Petrophys is interpreting the well" : m.calls.some(c => c.type === "writer") ? "Writing the answer" :
+      m.calls.some(c => c.type === "settle") ? "Settling the findings" : m.lastStep ? `Investigating · step ${m.lastStep}` : "Reading the question";
+    html += `<section class="hero"><div class="hl">The answer</div><div class="thinking"><span class="spin"></span>${esc(stage)}… The story below fills in as the investigation goes; <button class="morebtn" data-goto="story">every step is in the Investigation log →</button></div></section>`;
+  }
+  // 2. the well
+  if (w) {
+    const iv = res && res.interval;
+    html += `<section class="chap"><h2 class="ch2">The well</h2><p class="lede2"><b>${esc((iv && iv.name) || "The interval")}</b>, ${esc(fmtD(w.top))}–${esc(fmtD(w.base))} ${esc(w.unit)}, interpreted by <span style="color:var(--pp);font-weight:600">Petrophys</span>:
+      ${w.zones.length} lithology zone${w.zones.length === 1 ? "" : "s"}${res ? ` ${esc(res.lithology && res.lithology.source === "lithology log" ? `from the lithology log ${res.lithology.curve}` : res.lithology && res.lithology.source === "shale-volume bands" ? "from shale-volume bands (the well has no lithology log)" : "")}` : ""}.${key.length ? ` The answer centres on <b>${key.join(", ")}</b>, marked below.` : ""}</p>
+      ${plotHtml(w, {p: "sp", H: 440, width: Math.min((($("#run") && $("#run").clientWidth) || 1000) - 2, 1100), key,
+        only: ["Gamma ray", "Resistivity", "Density · neutron", "Shale volume", "Porosity", "Water saturation", "Permeability"], flags: w.flags.map(f => f.name).filter(f => /PAY|RES/.test(f)).slice(0, 2)})}
+      <div style="margin-top:12px">${zoneTable(w, key, {flags: w.flags.map(f => f.name).filter(f => /PAY/.test(f))})}</div>
+      <div class="wnote">Zone values are plain means of each zone's samples (permeability: the median), for orientation. <button class="morebtn" data-goto="well">Open the full logs →</button></div></section>`;
+  } else if (!finished && m.phase.interpreting) html += `<section class="chap"><h2 class="ch2">The well</h2><div class="thinking"><span class="spin"></span>Petrophys is interpreting the well; its logs appear here.</div></section>`;
+  // 3. how the answer was reached
+  const step1 = m.calls.find(c => c.type === "step" && c.number === 1 && c.reply && c.reply.points);
+  const points = (res && res.points && res.points.length ? res.points : null) || (step1 && step1.reply.points) || [];
+  const claims = res ? res.claims : liveFindings(m);
+  if (points.length || claims.length) {
+    html += `<section class="chap"><h2 class="ch2">How the answer was reached</h2>
+      <p class="lede2">The model split the question into ${points.length || "its"} part${points.length === 1 ? "" : "s"} and settled each from results Petrophys computed. Each finding shows the zone values it rests on and how sure it is.</p>`;
+    const byPoint = new Map(points.map((_, i) => [i + 1, []]));
+    for (const c of claims) { const k = c.point || 1; if (!byPoint.has(k)) byPoint.set(k, []); byPoint.get(k).push(c); }
+    for (const [k, cs] of byPoint) {
+      const shown = new Set();
+      html += `<article class="part"><div class="phead"><span class="pnum">${k}</span><h3>${inline(String(points[k - 1] || `Part ${k}`).replace(/^\s*\d+[.)]\s*/, ""))}</h3></div>
+        ${cs.length ? cs.map(c => finding(c, w, calls, m, shown)).join("") : `<div class="subtle" style="padding:4px 0 6px 40px">${finished ? "No finding for this part." : "Not settled yet."}</div>`}</article>`;
+    }
+    html += `</section>`;
+  }
+  // 4. what limits it, and the whole answer
+  if (ans) {
+    const lim = ans.secs.findIndex((s, i) => i !== keyIdx && /limit|caveat|uncertain|data quality|trust/i.test(s.head));
+    if (lim >= 0) html += `<section class="chap"><h2 class="ch2">What limits this answer</h2><div class="limits prose">${md(ans.secs[lim].body.replace(/\n\s*\|[\s\S]*$/, ""), {nums: true})}</div></section>`;
+    const folds = ans.secs.map((s, i) => i !== keyIdx && s.body.length > 600 ? `as-${i}` : null).filter(Boolean);
+    html += `<section class="chap" id="full"><div class="row" style="align-items:baseline"><h2 class="ch2" style="margin:0">The whole written answer</h2><span class="grow"></span>
+      ${folds.length ? `<button class="link fix" data-foldall="${folds.join(",")}" data-open="1">Open every section</button>` : ""}<button class="btn small fix" id="copyans">Copy</button></div>
+      ${ans.title ? `<div class="anstitle" style="margin-top:10px">${inline(ans.title)}</div>` : ""}
+      <div class="hintline" style="margin-top:6px">Click a <span class="numref">number</span> to see the results that show it, a <span class="zone">Z1</span> zone to find it on the logs.</div>` +
+      ans.secs.map((s, i) => {
+        const k = `as-${i}`, fold = folds.includes(k), open = !fold || !!S.det[k];
+        return `<section class="asec${i === keyIdx ? " key" : ""}${open ? "" : " folded"}" id="as-${i}">${s.head ? `<h2 class="ah"${fold ? ` data-secfold="${k}" style="cursor:pointer"` : ""}>${inline(s.head)}${fold ? `<span class="chev"${open ? ' style="transform:rotate(90deg)"' : ""}>▶</span>` : ""}</h2>` : ""}
+          <div class="prose">${md(s.body, {nums: true})}</div>${fold ? `<button class="secmore" data-secfold="${k}">${open ? "Fold the section" : "Read the section"}</button>` : ""}</section>`;
+      }).join("") + `</section>`;
+    const r = j.rating || {};
+    html += `<div class="rate"><div class="q">Is this answer right?</div><div class="opts">${["good", "partly", "wrong"].map(v => `<button data-v="${v}" class="${v}${r.verdict === v ? " on" : ""}">${v}</button>`).join("")}</div>
+      <textarea id="ratenote" placeholder="What was right or wrong (optional)">${esc(r.note || "")}</textarea>
+      <div class="row" style="margin-top:10px"><button class="btn fix" id="ratesave">Save verdict</button><span class="hint" id="ratemsg" style="margin:0">${r.rated ? `Saved ${esc(r.rated)}` : ""}</span></div></div>`;
+  }
+  if (finished && j.status !== "done") html += errorBox(j, j.result);
   return html;
 }
 
@@ -1023,8 +1985,9 @@ function lithText(l) {
 
 // ---------- the empty page ----------
 function emptyPage() {
-  $("#run").innerHTML = `<div class="empty"><h2>Ask about a LAS file</h2><div>Choose a well, the interval and the question on the left.</div>
+  $("#run").innerHTML = `<div class="empty"><h2>Ask a well a question</h2><div>Choose a well, the interval and the question on the left.</div>
     <div class="steps3"><div><span class="n">1</span>A LAS file: a path on the server, or an upload</div><div><span class="n">2</span>The interval: a formation from a tops file, depths, or the whole well</div><div><span class="n">3</span>The question, in your own words</div></div>
+    <div class="flow3"><div><b>Petrophys interprets</b><span>the well: logs, zones, the record</span></div><i>→</i><div><b>The model investigates</b><span>step by step, citing every result</span></div><i>→</i><div><b>Code checks</b><span>every number against the results</span></div><i>→</i><div><b>You audit</b><span>the answer, its claims and the logs</span></div></div>
     <div class="tagline"><span class="pp"><img src="/img/petrophys_mark.png" alt=""><b>Petrophys</b>&nbsp;calculates</span><span class="sep">·</span><span><b>PetroHarness</b> investigates and records</span><span class="sep">·</span><span><b>${esc((S.cfg && S.cfg.label) || "The model")}</b> interprets</span></div></div>`;
 }
 

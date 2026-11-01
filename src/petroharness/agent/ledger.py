@@ -104,15 +104,15 @@ def _blocks(lines: list) -> list:
 _CLASS = re.compile(r"^(  [A-Z][A-Z0-9_]*(?: \([^)]*\))?: .*?; runs: )(.*)$")
 _THICKEST = re.compile(r"^thickest \d+ of \d+: ")                 # a long list cut to its thickest runs
 _EVERY = re.compile(r"\s*\.\.\. \(every run: condition ([^)]*)\)\s*$")   # a list cut, and the condition of every run
-_CELL = re.compile(r"^(?:(Z\d+) )?(-?\d+(?:\.\d+)?)(?:-(-?\d+(?:\.\d+)?))?(?: \([^)]*\))?$")
+_CELL = re.compile(r"^(?:(Z\d+)(?: \([^)]*\))? )?(-?\d+(?:\.\d+)?)(?:-(-?\d+(?:\.\d+)?))?(?: \([^)]*\))?$")
 
 
 def _class_runs(line: str, zs: set, zone_at=None) -> Optional[str]:
-    """A section's class line restricted to zones: its head and only the runs in those zones. A run is "Z2 a-b" (a
-    class over several zones) or "a-b" (in one zone: zone_at(depth) names it), with its thickness where the list is its
-    thickest runs. "none in Z3" only where the list is whole and every run's zone is known; a cut list, or a run whose
-    zone cannot be read, says its runs there are not listed, with the condition that lists every run (a cut list
-    read as none would be a false absence)."""
+    """A section's class line restricted to zones: its head and only the runs in those zones. A run is "Z2 a-b" or
+    "Z2 (SAND) a-b" (a class over several zones, with its zone's rock) or "a-b" (in one zone: zone_at(depth) names
+    it), with its thickness where the list is its thickest runs. "none in Z3" only where the list is whole and every
+    run's zone is known; a cut list, or a run whose zone cannot be read, says its runs there are not listed, with the
+    condition that lists every run (a cut list read as none would be a false absence)."""
     m = _CLASS.match(line)
     if not m:
         return None

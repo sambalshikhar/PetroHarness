@@ -193,7 +193,8 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
         base: float | None = None, depth_unit: str | None = None, lithology_curve: str | None = None,
         formation_lithology: str | None = None, profile: str | None = None, out=None,
         model_url: str | None = None, model: str | None = None, model_card: str | None = None, settings=None,
-        skills: str | None = None, max_steps: int | None = None, llm_factory: Callable | None = None) -> AskResult:
+        skills: str | None = None, max_steps: int | None = None, llm_factory: Callable | None = None,
+        on_view: Callable | None = None) -> AskResult:
     """One question about one LAS file -> AskResult (answer, status, trace, the interval used). The interval: the
     formation `formation` of the tops file `tops`; or the depths `top`/`base` (`formation` names it); or, with
     neither, the whole well. `depth_unit` (m or ft): the unit of the depths given and of the answer's depths (default:
@@ -201,7 +202,9 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
     "none" for no guides; None: PETROHARNESS_SKILLS, else the packaged library). `model`: the served model's name
     (any chat model; the generic card); `model_card`: a model card's YAML file or a packaged card's name (default:
     K2-Horizon-7B's); `model_url`: the endpoint(s), comma-separated (default: PETROHARNESS_MODEL_URL). `out`: a folder
-    for answer.md and trace.json (None: nothing is written).
+    for answer.md and trace.json (None: nothing is written). `on_view(view)`: called with the interval's view
+    (petroharness.well.view.FormationView) once Petrophys has interpreted the well, before the first model call (the
+    web UI plots the logs from it).
     Errors in the inputs raise ValueError (FormationNotFound for a name a tops file lacks); a failed run returns
     status "error: ..." with the traceback in the trace."""
     from petroharness.agent import graph
@@ -254,6 +257,8 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
             raise ValueError(f"WHAT: the lithology curve {lithology_curve!r} has no data in {las.name} (its curves: "
                              f"{', '.join(view.prep.input_curves)}). WHY: the zones come from it. FIX: name one of "
                              "those curves (as Petrophys names it), or leave --lithology-curve out.")
+        if on_view is not None:
+            on_view(view)
         depth = view.depth
         used = {"name": span["name"], "top": round(float(view.interval.top), 4),
                 "base": round(float(view.interval.base if view.interval.base is not None else depth[-1]), 4),

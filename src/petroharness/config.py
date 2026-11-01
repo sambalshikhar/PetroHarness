@@ -105,6 +105,14 @@ class DataPaths(_Strict):
     # "formation" (the whole formation interval is one zone, labelled by the log's majority lithology: data whose
     # context lays out one group per formation).
     zone_layout: Literal["lithology_runs", "formation"] = "lithology_runs"
+    # The statistics' bases: "all" (each zone, the zones pooled, and the whole interval where it differs, with what the
+    # samples outside the zones hold) or "zones" (each zone and the zones pooled only: data whose references report on
+    # the lithology zones, a benchmark's convention, set in its data file).
+    basis: Literal["all", "zones"] = "all"
+    # Reporting conventions of this data (each a sentence), shown to the investigation and the writer as the data's
+    # conventions: how its own reports name or group what the record holds (a benchmark's convention, set in its data
+    # file). Empty: none, and no prompt changes.
+    conventions: list[str] = Field(default_factory=list)
     cache_dir: Path = REPO_ROOT / ".cache" / "wells"
     # Pinned interpretation engines (a policy's workflow of record), one directory per engine name.
     engines_dir: Optional[Path] = None

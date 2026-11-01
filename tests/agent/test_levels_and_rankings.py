@@ -108,20 +108,13 @@ def test_zone_table_adds_the_geometric_mean_by_the_shape_of_the_values_only():
 
 # --- guides, writer rules, brief -------------------------------------------------------------------------------------
 
-def test_the_no_reversal_rule_holds_no_ranking_rule_of_its_own():
-    """No per-property ranking sentence (median as well as mean permeability): the summary layer ranks by each
-    statistic it shows, and the writer's one guideline asks for the bases that differ."""
-    from petroharness.agent.writer import NO_REVERSAL_RULE
-    assert "permeability" not in NO_REVERSAL_RULE and "median" not in NO_REVERSAL_RULE
-    assert "a negative finding says in how many zones" in NO_REVERSAL_RULE.lower()
-
 
 @pytest.mark.data
-def test_the_writer_prompt_and_the_brief_carry_the_level_and_ranking_lines(real):
+def test_the_brief_carries_the_level_and_ranking_lines(real):
     from petroharness.agent.loop import V10_BRIEF, brief
-    from petroharness.agent.writer import ASPECTS_RULE, HIGH_LOW_RULE, prompt
-    system, _, _, _ = prompt(real, "open", "default")
-    assert ASPECTS_RULE in system and HIGH_LOW_RULE in system and "zone-mean permeability" not in system
+    from petroharness.agent.writer import prompt
+    system, _, _, _ = prompt(real, "default")
+    assert "zone-mean permeability" not in system
     assert V10_BRIEF in brief() and "log-normal" not in V10_BRIEF
 
 
