@@ -23,6 +23,14 @@ CASES = [
     ("unavailable [card].", "unavailable."),
     ("per 10 m of depth E5. SXO", "per 10 m of depth. SXO"),
     ("ranges E1–E3 show", "ranges show"),
+    ("rebuilt from E5’s zone means of RMED", "rebuilt from the zone means of RMED"),   # a possessive id: a determiner
+    ("corroborated by E12's EXTREME_DEVIATION_ZONE run", "corroborated by the EXTREME_DEVIATION_ZONE run"),
+    ("held. E3's pooled line gives 0.21", "held. The pooled line gives 0.21"),
+    ("E3’s pooled line gives 0.21", "The pooled line gives 0.21"),
+    ("mean 0.04326 v/v over 18 samples, E4), but", "mean 0.04326 v/v over 18 samples), but"),   # no stray comma
+    ("(the rw step, E7). It is", "(the rw step). It is"),
+    ("(Z1 0.21; E3) and", "(Z1 0.21) and"),
+    ("PHIE 0.21 (E3 E4). Next", "PHIE 0.21. Next"),
 ]
 
 
@@ -36,6 +44,7 @@ def test_citation_forms_are_removed(raw, clean):
     "RDEP (ohm.m) is 0.89 (Z6), VCL < 0.30 (cutoff)",
     "EIRIKSSON MB. TOP has E-W trending beds; ratio 1E3",
     "see the card for the Rw route",
+    "values (Z1, Z2) and log10(RT) with f(x)",
 ])
 def test_ordinary_text_is_kept(keep):
     assert strip_citations(keep) == keep

@@ -14,7 +14,6 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
                 str(Path(__file__).resolve().parent)]
 import b2_reference as R  # noqa: E402
 from test_b2_tools import F  # noqa: E402
-from petroharness.agent import options  # noqa: E402
 from petroharness.agent.engine import ToolError  # noqa: E402
 
 
@@ -199,7 +198,6 @@ def test_a_one_zone_table_has_a_row_per_curve_with_its_spread():
 def test_lithology_analyzer_classes_by_construction_are_noted():
     """NON_CARBONATE where the carbonate indicators could not test, CARBONATE_LOG_MISMATCH where only bulk RHOB fails,
     NO_LOG_LITHOLOGY_MATCH for a rock the consistency windows do not cover: each noted with counts from the data."""
-    from petroharness.agent.inventory import from_view
     from petroharness.agent import notes as N
     seen = 0
     for t, f in F():

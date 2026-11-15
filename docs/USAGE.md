@@ -50,8 +50,10 @@ petroharness: tuhua-7.las, Mount Messenger: 590.55-873.862 m (1860 samples; tops
 ```
 
 The first run on a well interprets it (a few seconds for a typical LAS); the interpreted well is cached in the
-output folder, so later questions about the same well start straight away. The investigation and the answer take a
-few minutes, depending on the model server.
+output folder, so later questions about the same well start straight away. An investigation and its answer take a
+few minutes, depending on the model server. A direct question (a value, a setting, a count that one or two lookups
+state) takes a short route and is answered in about a minute; the header of `answer.md` says which route was taken,
+and `--investigate` gives every question the full investigation.
 
 ## Choosing the interval
 
@@ -277,6 +279,19 @@ for example, Petrophys could not interpret the LAS) and 2 when the inputs are wr
 tops file lacks, an interval outside the log). Status `unresolved_numbers` in the record means the answer kept a
 number the checker could not find in any computed result: read that number with care.
 
+## More than one question
+
+`petroharness` answers one question and stops. To keep an interval open and go on asking, use `petroharness chat`
+with the same interval options ([SESSIONS.md](SESSIONS.md)). A conversation's folder is also what the other commands
+read:
+
+| Command | What it gives |
+|---|---|
+| `petroharness chat --las WELL.las ...` | a conversation: any number of questions about one interval, each starting from what the earlier ones found |
+| `petroharness audit SESSION` | each answer's audit trail, back to the LAS file's hash ([EVIDENCE.md](EVIDENCE.md)) |
+| `petroharness report SESSION` | the conversation as one document: answers, figures, methods and parameters, audit trails |
+| `petroharness setup` | what answers a question (code, prompts, Petrophys, model and data settings), with one hash ([SETUP.md](SETUP.md)) |
+
 ## From Python
 
 ```python
@@ -324,3 +339,4 @@ apply (the stderr record names the settings used).
 | `--settings PATH` | a data settings file to start from |
 | `--skills PATH\|none` | the skill library (default: the packaged one); `none` for no guides |
 | `--max-steps N` | the investigation's step cap (default: the harness's) |
+| `--investigate` | give every question a full investigation (default: the model first says whether the question is direct, a value or a fact that one or two lookups state; a direct question gets a short route and a short answer) |

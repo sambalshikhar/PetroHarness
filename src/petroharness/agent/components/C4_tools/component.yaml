@@ -11,4 +11,6 @@ texts:
   library: library.md      # Petrophys's functions are searched before a hand calculation
 frames:
 - agent/schemas.py
+- agent/toolset.py
+- tools/spec.py
 - agent/engine.py

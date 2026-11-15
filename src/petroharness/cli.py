@@ -2,9 +2,10 @@
 (petroharness.ask; docs/USAGE.md), the default; `petroharness ui` starts the web UI (petroharness.ui,
 docs/UI.md); `petroharness benchmark ...` is the validation mode below.
 
-Benchmark mode runs the harness on benchmark questions: each question investigated and written
-(petroharness.agent.graph). The run takes the question, the well and the formation; the evaluation index's category
-only groups the output files.
+Benchmark mode runs the harness on benchmark questions, each as a user's question is run: the model first says
+whether the question is direct (the direct route) or needs an investigation (petroharness.agent.graph; --investigate
+gives every question the investigation, the 3.5.6 route). The run takes the question, the well and the formation; the
+evaluation index's category only groups the output files.
 
     PETROHARNESS_DATA=<data config> PETROHARNESS_MODEL_URL=<servers> petroharness benchmark --arm A1 --rep 1 \
         --cats hydrocarbon,porosity --ids IDS.json --gt-dir GT --workers 40
@@ -59,9 +60,11 @@ def save(prefix: str, model_key: str, arm: str, items: list, index: dict, gt_dir
         (sub / name).write_text(json.dumps({**gt_all, "qa_pairs": kept} if isinstance(gt_all, dict) else kept, indent=1))
 
 
-def answer(task, model_key: str, rep: int, max_steps: int, writer: str = "", fmt: str = "profile") -> dict:
-    """One question through the question graph (src/petroharness/agent/graph.py, docs/GRAPH.md) -> {"answer", "status", "trace"}."""
-    return graph_answer(task, model_key, rep, max_steps, writer, fmt, commit=COMMIT)
+def answer(task, model_key: str, rep: int, max_steps: int, writer: str = "", fmt: str = "profile",
+           direct: bool = True) -> dict:
+    """One question through the question graph (src/petroharness/agent/graph.py, docs/GRAPH.md) -> {"answer", "status",
+    "trace"}. direct=False: the full investigation for every question (the 3.5.6 route)."""
+    return graph_answer(task, model_key, rep, max_steps, writer, fmt, commit=COMMIT, depth=direct)
 
 
 def main():
@@ -70,6 +73,18 @@ def main():
     argv = sys.argv[1:]
     if argv[:1] == ["benchmark"]:
         return benchmark(argv[1:])
+    if argv[:1] == ["chat"]:                   # a conversation on one interval (src/petroharness/session)
+        from petroharness.session.chat import main as chat_main
+        return chat_main(argv[1:])
+    if argv[:1] == ["setup"]:                  # what questions are answered under, with one hash (src/petroharness/core/setup.py)
+        from petroharness.core.setup import main as setup_main
+        return setup_main(argv[1:])
+    if argv[:1] == ["report"]:                 # a conversation as one document (src/petroharness/evidence/report.py)
+        from petroharness.evidence.report import main as report_main
+        return report_main(argv[1:])
+    if argv[:1] == ["audit"]:                  # an answer's audit trail from its session folder (src/petroharness/evidence)
+        from petroharness.evidence.audit import main as audit_main
+        return audit_main(argv[1:])
     if argv[:1] == ["ui"]:                     # the web UI (src/petroharness/ui, docs/UI.md)
         from petroharness.ui.server import main as ui_main
         return ui_main(argv[1:])
@@ -96,6 +111,9 @@ def benchmark(argv=None):
     ap.add_argument("--writer", default="open", help="the writer's repair rounds: open (two, the default) or '' (one)")
     ap.add_argument("--format", default="profile", choices=["profile", "default"],
                     help="the answer format: the reporting profile's format block, or the writer's own")
+    ap.add_argument("--investigate", action="store_true",
+                    help="give every question the full investigation (the 3.5.6 route; default: the model first "
+                         "says whether a question is direct, and a direct question takes the direct route)")
     args = ap.parse_args(argv)
     cfg = HarnessConfig()
     direction.plugged(cfg)                     # the skill library (skills, PETROHARNESS_SKILLS): a bad one stops the run here
@@ -120,7 +138,7 @@ def benchmark(argv=None):
                 tr = json.loads(path.read_text())
                 if tr.get("commit") == COMMIT and "answer" in tr and not str(tr.get("status", "")).startswith("error"):
                     return {"answer": tr["answer"], "status": tr["status"], "trace": tr}
-            r = answer(t, key, args.rep, args.max_steps, args.writer, args.format)
+            r = answer(t, key, args.rep, args.max_steps, args.writer, args.format, direct=not args.investigate)
             r["trace"]["answer"] = r["answer"]
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(r["trace"], indent=1, default=str))
@@ -130,7 +148,9 @@ def benchmark(argv=None):
             results = list(ex.map(one, tasks))
         save(prefix, m, args.arm, list(zip(tasks, results)), index, args.gt_dir)
         tr = [r["trace"] for r in results]
-        summary[m] = {"prefix": prefix, "commit": COMMIT, "writer": args.writer, "format": args.format, "n": len(tr), "ok": sum(r["status"] == "ok" for r in results),
+        summary[m] = {"prefix": prefix, "commit": COMMIT, "writer": args.writer, "format": args.format,
+                      "route": "investigate" if args.investigate else "direct",
+                      "n": len(tr), "ok": sum(r["status"] == "ok" for r in results),
                       "unresolved": sum(r["status"] == "unresolved_numbers" for r in results),
                       "errors": sum(str(r["status"]).startswith("error") for r in results),
                       "steps_mean": round(sum(len(x.get("steps", [])) for x in tr) / max(len(tr), 1), 2),

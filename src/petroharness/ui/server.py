@@ -149,8 +149,21 @@ class App:
             threading.Thread(target=self._work, name=f"petroharness-ui-{i + 1}", daemon=True).start()
 
     def submit(self, inputs: dict) -> A.Job:
+        root = None
+        follow = str(inputs.get("follow") or "").strip() if isinstance(inputs, dict) else ""
+        if follow:                                  # a follow-up: the next question of that run's conversation
+            prev = self.jobs[follow].record() if follow in self.jobs else self.store.load(follow)
+            if prev.get("status") != "done":
+                raise A.InputError("WHAT: that question has no answer yet. FIX: wait for it to finish, then ask the "
+                                   "follow-up.")
+            root = (prev.get("conversation") or {}).get("root") or follow
+            if not (self.store.folder(root) / "session" / "log.jsonl").is_file():
+                raise A.InputError("WHAT: that run has no conversation to go on with (it was answered by an earlier "
+                                   "version). FIX: ask its question again, then follow up on the new answer.")
+            inputs = {**prev["inputs"], "question": inputs.get("question"), "follow": follow}
         kwargs = A.arguments(inputs) | self.choice  # wrong inputs are said now, not after the queue
         job = A.Job(self.store.new_id(), inputs, kwargs)
+        job.root = root or job.id
         with self._lock:
             self.jobs[job.id] = job
             self.waiting.append(job.id)
@@ -171,7 +184,8 @@ class App:
                 if self.model_factory is None:
                     url = self.endpoints.acquire()
                     job.endpoint = url
-                A.run(job, self.store.prepare(job.id), url, self.model_factory)
+                A.run(job, self.store.prepare(job.id), url, self.model_factory,
+                      None if job.root == job.id else self.store.folder(job.root))
             except Exception as exc:  # noqa: BLE001  (no endpoint: the job fails with the reason)
                 job.status, job.error = "error", str(exc)
                 job.finished = job.finished or time.time()
@@ -183,6 +197,7 @@ class App:
                     self.store.save(job.record())
                 except Exception:  # noqa: BLE001  (a record not saved is said in the log; the worker goes on)
                     traceback.print_exc()
+                job.saved = True                    # from here the page sees it finished
                 self._forget()
                 self._queue.task_done()
 
@@ -192,6 +207,16 @@ class App:
             done = sorted((j for j in self.jobs.values() if j.finished is not None), key=lambda j: j.finished)
             for j in done[:max(0, len(done) - keep)]:
                 self.jobs.pop(j.id, None)
+
+    def audit(self, run_id: str) -> str:
+        """The audit trail of a run's answer (petroharness.evidence), from its conversation's session folder."""
+        from petroharness.evidence import EvidenceGraph, audit
+        rec = self.jobs[run_id].record() if run_id in self.jobs else self.store.load(run_id)
+        conv = rec.get("conversation") or {}
+        session = self.store.folder(conv.get("root") or run_id) / "session"
+        if not (session / "log.jsonl").is_file() or not conv.get("turn"):
+            raise KeyError(f"{run_id} has no audit trail (it has no answer yet, or was answered by an earlier version)")
+        return audit.markdown(EvidenceGraph.from_log(session), int(conv["turn"]))
 
     def position(self, run_id: str) -> int | None:
         with self._lock:
@@ -230,15 +255,15 @@ class App:
 
 
 def verbs() -> dict:
-    """Each tool's group, as the brief groups the tools (agent/loop.py VERBS): {tool: group}."""
-    from petroharness.agent.loop import VERBS
-    return {t: head.split(":")[0].strip().capitalize() for head, tools in VERBS for t in tools}
+    """Each tool's group, as the brief groups the tools (agent/toolset.py): {tool: group}."""
+    from petroharness.agent.toolset import TOOLSET
+    return {t: head.split(":")[0].strip().capitalize() for head, tools in TOOLSET.by_group() for t in tools}
 
 
 def petrophys_verbs() -> list:
     """The verbs over Petrophys (docs/TOOLS.md): their requests have Petrophys compute what the record lacks."""
-    from petroharness.agent.library import LIBRARY
-    return [*LIBRARY, "check", "classify", "summarize", "calibrate"]
+    from petroharness.agent.toolset import TOOLSET
+    return [t.name for t in TOOLSET if t.verb]
 
 
 def _env_urls() -> list:
@@ -329,6 +354,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(app.job_view(arg, int(q.get("since", 0) or 0)))
             if method == "GET" and what == "runs":
                 return self._json(app.runs())
+            if method == "GET" and what == "run" and len(parts) == 5 and parts[3] == "figures":
+                return self._send(200, app.store.figure(arg, parts[4]).read_bytes(), "image/png")
+            if method == "GET" and what == "run" and len(parts) == 4 and parts[3] == "audit":
+                return self._send(200, app.audit(arg).encode(), "text/markdown; charset=utf-8",
+                                  {"Content-Disposition": f'inline; filename="{arg}-audit.md"'})
             if method == "GET" and what == "run" and len(parts) == 4:
                 path = app.store.file(arg, parts[3])
                 ctype = "text/markdown; charset=utf-8" if path.suffix == ".md" else "application/json"

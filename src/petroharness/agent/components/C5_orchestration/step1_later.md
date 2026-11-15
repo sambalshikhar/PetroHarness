@@ -1,0 +1,3 @@
+
+
+This question continues a conversation on this well and interval. EARLIER IN THIS SESSION gives the earlier questions and what was found, and OPENED lists every result already opened: read those with get or find before opening the same thing again. Open or compute only what this question still needs. Where the opened results already answer a point, write its claim with their ids; when they answer every point, set done.

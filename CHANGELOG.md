@@ -1,5 +1,84 @@
 # Changelog
 
+## 4.0 (in development)
+
+Questions that need an investigation are answered as 3.5.6 answers them; a direct question now takes a short route
+(below), measured on the whole benchmark with both models. With `--investigate` every request is the 3.5.6 build's,
+proven on its 1,388 saved runs. The rest is new around the question: conversations, the evidence graph, figures.
+
+- **Conversations.** Ask, read the answer, ask again: `petroharness chat` keeps one interval of one well open. A later
+  question sees what the earlier ones found, reads their results again instead of computing them again, and may cite
+  them. Result ids go on across questions. `docs/SESSIONS.md`.
+- **Three graphs.** The question graph is the measured one. A later-question graph answers follow-ups on the same
+  session, and lets the model choose a brief or a full reply. A session graph carries each question from the message
+  to its committed record: `open -> turn -> project -> figures -> commit`. `docs/SESSION_GRAPH.md`.
+- **One session log.** Every conversation is one append-only log with the texts it names kept by hash. A
+  conversation is resumed from it, and what the model is shown of earlier questions is built from it by code.
+- **The evidence graph and the audit trail.** `petroharness audit SESSION` writes, for each answer, the claims with
+  the results they cite, the numbers with the results that show them, the curves those read, the Petrophys steps and
+  parameters behind them, and the LAS file's hash. It needs only the session folder. `petroharness report SESSION`
+  writes a whole conversation as one document. The web UI links each answer's audit trail. `docs/EVIDENCE.md`.
+- **Methods and parameters under every answer**, read from the well's record by code.
+- **Figures, drawn by Petrophys.** Where a plot says it better than text, the model chooses among the plots of the
+  answer's results and the standard displays of the interval (density-neutron, Pickett, Buckles, flow units, triple
+  combo and others). The harness draws nothing itself. A conversation also opens with Petrophys' log display of the
+  interval. Never in a benchmark run.
+- **Direct questions get a short route.** The model first says whether a question is direct (a value, a setting, a
+  count or a fact that one or two lookups state) or needs an investigation. A direct question takes one or two
+  look steps and a short answer with its basis: three model calls instead of eight or more. Where the lookups do not
+  state what is asked, the question still gets an investigation (the look step or the writer hands it over). This is the default
+  everywhere (the command, chat, the web UI, benchmark mode); `--investigate` gives every question the full
+  investigation, the 3.5.6 route. Measured on all 347 benchmark questions, two runs per model, GPT-5 judge, against the two 3.5.6
+  runs: K2-Horizon-7B W 67.03 against 66.67, Qwen3.5-27B GRPO 66.57 against 66.23 (both within the run-to-run
+  interval); the questions read as direct (12-13% and 6%) score higher, at about a quarter of their tokens. Thinking is not
+  reduced on the route: in the look steps that cost about 7 points of reference alignment and saved no time.
+  `docs/GRAPH.md`.
+- **The setup record.** `petroharness setup` prints what answers a question, with one hash; every conversation logs
+  it and every trace names it. `docs/SETUP.md`.
+- **The web UI** asks follow-up questions in a thread, shows the figures, the methods and parameters, and the
+  interval's log display.
+- **One definition per tool.** Each tool is one `Tool` (`petroharness.tools.spec`) in `agent/toolset.py`: its
+  function, arguments, description, group and how a call of it is listed. The lists that lived in six places are read
+  from the definitions; every request is unchanged. `docs/TOOLS.md`, "Adding a tool".
+- **Gates in the repository.** `tests/gate`: a public mini set (a recorded conversation on a Petrophys sample well,
+  replayed with no model server and no private data) and the request gate as a tool. `CONTRIBUTING.md`, a CI
+  workflow and the repository's own lint configuration.
+- **Fixes:** a result id written as a possessive ("from E5's zone means") no longer leaves a stranded "'s" when the
+  ids are taken out of the answer; an installed Petrophys is named by its own build; the web UI reports a run finished only once its
+  record is saved.
+
+## 3.5.6 (2026-11-14)
+
+- **The writer reads the results for each point itself.** The writer is given the question's points and every result
+  the investigation opened, not the investigation's claims. The limits the investigation found come with them, by
+  point, so a result the investigation judged unusable is not repeated as a finding.
+- **Each point gets its own part.** Rule 10 of the writer's brief: each of the question's points has its part, with its
+  finding, the numbers and intervals it rests on and what limits it, and a table where zones or curves are compared.
+- **The investigation ends on what it has seen.** A `done` while opened results are still withheld waits one step and
+  shows them first. Once every point is settled, the step asks for the brief's "Before you finish" checks.
+- **An order over a few zones is said to be untestable.** An exact rank test cannot test an order over fewer than five
+  zones. The tool now says so, without direction words.
+- **Measured** on the 347 single-formation questions of WellLogBench (GPT-5 judge, two full runs of each model):
+
+  | Answering model | Version | RA | W |
+  |---|---|---|---|
+  | K2-Horizon-7B | 3.5.3 | 66.76 | 66.36 |
+  | K2-Horizon-7B | 3.5.6 | 67.46 | 66.67 |
+  | Qwen3.5-27B GRPO | 3.5.3 | 62.41 | 64.05 |
+  | Qwen3.5-27B GRPO | 3.5.6 | 65.73 | 66.22 |
+
+  The changes were made for answering models other than the default. They do not cost the default model anything:
+  K2-Horizon-7B is +0.69 RA [-0.78, +2.12] against 3.5.3. A question costs more tokens than in 3.5.3 (K2-Horizon-7B
+  281k to 307k, Qwen3.5-27B GRPO 225k to 268k).
+- **No switches.** The six changes were measured as switches and are now the code. The 17 switches that were measured
+  and not adopted are removed with their code and texts; `agent/options.py` defines none.
+- **Tests.** `tests/agent/test_measured_build.py` asserts each of the six changes. The tests build their formations on
+  the default reporting settings, so the suite gives the same result under any data settings. The 36 golden tapes
+  were recorded again on K2-Horizon-7B.
+- **Fix:** an installed Petrophys in a virtual environment inside a git repository was named in traces by that
+  repository's commit. It is now named by its own build.
+- **How this version was proven** is in `docs/LOCK_v3.5.6.md`.
+
 ## 3.5.3 (2026-11-01)
 
 - **The writer concludes from all the evidence.** The investigation still builds its claims as results come in. The

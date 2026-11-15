@@ -98,9 +98,13 @@ def read_reply_of(stage: str, text: str) -> dict:
     kind, _ = kind_of(stage)
     text = text or ""
     if kind == "read":
-        got = L._reading(text)
-        return {"topics": got["topics"], "named": got["named"]} if got else {"unreadable": True,
-                                                                                 "text": text[:TEXT_CHARS]}
+        got = L._reading(text, '"depth"' in text)             # the depth, where the reply says one
+        if not got:
+            return {"unreadable": True, "text": text[:TEXT_CHARS]}
+        out = {"topics": got["topics"], "named": got["named"]}
+        if got.get("depth"):
+            out["depth"] = got["depth"]
+        return out
     if kind in ("step", "settle"):
         if not text.strip():
             return {"empty": True}
@@ -127,9 +131,10 @@ def read_reply_of(stage: str, text: str) -> dict:
 class Observed:
     """The harness's model client with every call reported to `emit` (an event dict), behaviour unchanged."""
 
-    def __init__(self, inner, emit: Callable[[dict], None]):
+    def __init__(self, inner, emit: Callable[[dict], None], numbers=None):
         self.inner = inner
         self.emit = emit
+        self.numbers = numbers                      # a shared counter, when one run uses several clients
         self.calls = 0
         self.results: dict = {}                     # id -> (text, digest): the best seen so far
         self._scanned: set = set()
@@ -141,7 +146,7 @@ class Observed:
 
     def chat(self, stage: str, messages: list, usage, max_tokens: int, *args, **kwargs) -> str:
         self.calls += 1
-        n = self.calls
+        n = next(self.numbers) if self.numbers is not None else self.calls
         self._scan(stage, messages)
         kind, number = kind_of(stage)
         event = {"kind": "call", "stage": stage, "type": kind, "n": n}

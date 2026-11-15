@@ -1,0 +1,1 @@
+ Every point has a settled claim. Before you set done, go through the list under "Before you finish" in your brief: an indicator with no corroboration yet, two readings that disagree, a zone with no finding, a curve, class or statistic the question names that you have not opened. Set done to true when none of these is left.

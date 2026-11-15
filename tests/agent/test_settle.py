@@ -11,7 +11,6 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
                 str(Path(__file__).resolve().parent)]
 from petroharness.llm import Usage  # noqa: E402
 from test_b5_loop import MEANS, Script, _session  # noqa: E402
-from petroharness.agent import options  # noqa: E402
 from petroharness.agent.claims import Claims  # noqa: E402
 from petroharness.agent.loop import SETTLE, settle  # noqa: E402
 

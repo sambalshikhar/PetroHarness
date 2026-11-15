@@ -1,217 +1,23 @@
-"""The tools as the model sees them (native tool-calling schemas) and the door a model's call goes through:
-argument names and values read, unknown arguments said back."""
+"""The door a model's call goes through: argument names and values read, the shapes models send fitted to what a
+tool takes, unknown arguments said back. The tools themselves are defined once, in petroharness.agent.toolset; this
+module shows them as native tool-calling schemas (named)."""
 from __future__ import annotations
 
 import inspect
 import json
 import re
 
-from petroharness.agent.engine import STATISTICS, Formation, Result, ToolError
+from petroharness.agent import components as C  # the texts: src/petroharness/agent/components
+from petroharness.agent.engine import Formation, Result, ToolError
+from petroharness.agent.toolset import TOOLS, TOOLSET
 from petroharness.well import summary as S
-from petroharness.agent.tools import TOOLS
-from petroharness.agent import components as C  # noqa: E402  (the texts: src/petroharness/agent/components)
 
-CONDITION = C.text("C4", "condition")
-_ZONES = {"type": "array", "items": {"type": "string"}, "description": "zone ids, e.g. [\"Z2\", \"Z3\"]; all zones when left out"}
-_WHERE = {"type": "string", "description": "only the samples where " + CONDITION}
-_STATISTICS = {"type": "array", "items": {"type": "string"},
-               "description": f"which statistics: {', '.join(STATISTICS)}, or any percentile p1-p99; left out: n, mean, "
-                              "median, p10, p90, min, max (and geo_mean where the values are positive and span more "
-                              "than two orders of magnitude)"}
-
-
-def _fn(name: str, description: str, properties: dict, required: list) -> dict:
-    return {"type": "function", "function": {"name": name, "description": description,
-                                             "parameters": {"type": "object", "properties": properties, "required": required}}}
-
-
-D = C.text("C4", "tool_descriptions")    # each tool's description (src/petroharness/agent/components/C4_tools)
-NAMED = [
-    _fn("stats", D["stats"],
-        {"curves": {"type": "array", "items": {"type": "string"}, "description": "curve names, e.g. [\"PHIE\", \"SW\"]"},
-         "zones": _ZONES,
-         "statistics": _STATISTICS,
-         "where": _WHERE}, ["curves"]),
-    _fn("runs", D["runs"],
-        {"condition": {"type": "string", "description": CONDITION},
-         "zones": _ZONES,
-         "limit": {"type": "integer", "description": "how many of the longest runs to list (20)"},
-         "min_thickness": {"type": "number", "description": "only runs at least this thick"},
-         "max_thickness": {"type": "number", "description": "only runs at most this thick (thin beds)"}}, ["condition"]),
-    _fn("compare", D["compare"],
-        {"a": {"type": "string", "description": "a curve, e.g. PHIE"}, "b": {"type": "string", "description": "a curve, e.g. PHIE_CC"},
-         "zones": _ZONES, "tolerance": {"type": "number", "description": "report the share of samples where |a - b| exceeds it"},
-         "where": _WHERE}, ["a", "b"]),
-    _fn("overlap", D["overlap"],
-        {"a": {"type": "string", "description": "condition A: " + CONDITION},
-         "b": {"type": "string", "description": "condition B, in the same grammar"},
-         "zones": _ZONES,
-         "limit": {"type": "integer", "description": "how many runs of each set to list before cutting to the thickest (12)"}},
-        ["a", "b"]),
-    _fn("profile", D["profile"],
-        {"curve": {"type": "string", "description": "a curve, e.g. PHIE"}, "zones": _ZONES, "statistics": _STATISTICS,
-         "where": _WHERE}, ["curve"]),
-    _fn("section", D["section"],
-        {"key": {"type": "string", "description": "the section key exactly as the description lists it (family.section)"}},
-        ["key"]),
-    _fn("step", D["step"],
-        {"name": {"type": "string", "description": "the step name as the description lists it, e.g. saturation"}}, ["name"]),
-]
-
-_ZONES_OPT = {"type": "array", "items": {"type": "string"}, "description": "only these zones' rows (all when left out)"}
-_CURVE = {"type": "string", "description": "a curve, e.g. DTC"}
-_CURVES = {"type": "array", "items": {"type": "string"}, "description": "curve names, e.g. [\"GR\", \"VCL\"]"}
-NAMED += [
-    _fn("lithology_stats", D["lithology_stats"], {"curves": _CURVES, "statistics": {"type": "array", "items": {"type": "string"}},
-                                                                 "zones": _ZONES_OPT}, ["curves"]),
-    _fn("zone_contrast", D["zone_contrast"],
-        {"curve": _CURVE, "inputs": _CURVES, "zones": _ZONES_OPT}, ["curve"]),
-    _fn("curve_order", D["curve_order"], {"curves": _CURVES, "relation": {"type": "string", "enum": ["decreasing", "increasing", "between"]},
-                                               "zones": _ZONES_OPT}, ["curves"]),
-    _fn("threshold_exceedance", D["threshold_exceedance"],
-        {"curve": _CURVE, "threshold": {"type": "number"}, "op": {"type": "string", "enum": [">", ">=", "<", "<="]},
-         "absolute": {"type": "boolean"}, "zones": _ZONES_OPT}, ["curve"]),
-    _fn("spike_flags", D["spike_flags"],
-        {"curves": _CURVES, "k": {"type": "number"}, "baseline": {"type": "string", "enum": ["zoned", "interval", "zone"]},
-         "zones": _ZONES_OPT}, ["curves"]),
-    _fn("adjacent_jumps", D["adjacent_jumps"],
-        {"curve": _CURVE, "threshold": {"type": "number"}, "zones": _ZONES_OPT}, ["curve", "threshold"]),
-    _fn("vertical_sequence", D["vertical_sequence"],
-        {"curves": _CURVES, "min_change": {"type": "number"}}, []),
-    _fn("pay_summary", D["pay_summary"], {}, []),
-    _fn("core_vs_log", D["core_vs_log"], {"zones": _ZONES_OPT}, []),
-    _fn("zone_classes", D["zone_classes"], {"topic": {"type": "string", "description": "a classification topic, e.g. hc_indicators, porosity_quality, flow_units"}}, ["topic"]),
-    _fn("formation_summary", D["formation_summary"], {"curves": _CURVES, "statistics": _STATISTICS}, []),
-    _fn("data_record", D["data_record"],
-        {"zones": _ZONES_OPT}, []),
-    _fn("unit_roles", D["unit_roles"], {"zones": _ZONES_OPT}, []),
-]
-
-# a least-squares line of one curve on another or on depth (relations, matrix lines, depth trends)
-CROSSPLOT = _fn("crossplot", D["crossplot"],
-                {"y": {"type": "string", "description": "the curve on the vertical axis, e.g. RHOB"},
-                 "x": {"type": "string", "description": "a curve, or DEPTH, e.g. NPHI"},
-                 "zones": _ZONES, "log_y": {"type": "boolean", "description": "fit log10(y)"},
-                 "log_x": {"type": "boolean", "description": "fit against log10(x)"}, "where": _WHERE}, ["y", "x"])
-
-
-# the descriptions of the lookups whose output changed (signed compare shares, the per-zone spike
-# screen) and the zone selector (lithology names, ALL)
-V9_DESCRIPTIONS = C.text("C4", "v9_descriptions")
-V9_ZONES = C.text("C4", "v9_zones")
-
-
-# depth matching between logs by cross-correlation
-LAG = _fn("lag_correlation", D["lag_correlation"],
-          {"curves": _CURVES, "max_lag": {"type": "number", "description": "search half-width in depth units (3 m when "
-                                                                            "left out)"}, "zones": _ZONES_OPT}, ["curves"])
-
-
-LIBRARY_NAMES = ("calculate", "estimate", "what_if", "check", "classify", "summarize", "calibrate")
-_VERB_MODULES = {"check": "library_check", "classify": "library_classify", "summarize": "library_summarize",
-                 "calibrate": "library_calibrate"}
-
-
-def _objects(verb: str) -> tuple:
-    """A verb's objects (its module's OBJECTS): their names, and one line each for the description."""
-    import importlib
-    objects = importlib.import_module(f"petroharness.agent.{_VERB_MODULES[verb]}").OBJECTS
-    return list(objects), "\n".join(f"    {k}: {v}" for k, v in objects.items())
-
-
-def library_schemas() -> list:
-    """The verbs over Petrophys (agent/library*.py): calculate's description lists the properties
-    and their methods from the library's own catalog."""
-    from petroharness.agent.library import ESTIMATES, menu_text
-    out = [
-        _fn("calculate", D["calculate"] + "\n" + menu_text(),
-            {"property": {"type": "string", "description": "the property, e.g. saturation"},
-             "method": {"type": "string", "description": "one of the methods the property lists, e.g. simandoux"},
-             "parameters": {"type": "object", "description": "parameter values, e.g. {\"rcl\": 4.0, \"m\": 2.2}"},
-             "label": {"type": "string", "description": "the new curves' suffix (default: the method), e.g. SIMANDOUX"},
-             "downstream": {"type": "boolean", "description": "also recompute the steps that read its outputs (true)"}},
-            ["property"]),
-        _fn("estimate", D["estimate"] + "\n" + "\n".join(f"    {k}: {' | '.join(v)}" for k, v in ESTIMATES.items()),
-            {"parameter": {"type": "string", "enum": list(ESTIMATES)},
-             "method": {"type": "string", "description": "one of the parameter's methods below (the first by default)"},
-             "zones": _ZONES,
-             "rmf": {"type": "number", "description": "mud-filtrate resistivity, ohm.m (rw by sp; else the LAS header's)"},
-             "rmf_temp_f": {"type": "number", "description": "the temperature of rmf, degF"},
-             "bht_f": {"type": "number", "description": "bottom-hole temperature, degF (temperature; else the header's)"},
-             "td": {"type": "number", "description": "the depth of bht_f, in the well's depth unit"},
-             "vcl_max": {"type": "number", "description": "the clean samples' VCL limit (0.3)"},
-             "phie_min": {"type": "number", "description": "the porous samples' PHIE floor for rwa (0.05)"}}, ["parameter"]),
-        _fn("what_if", D["what_if"],
-            {"property": {"type": "string", "description": "the property whose input changes, e.g. net_pay"},
-             "parameter": {"type": "string", "description": "the input, e.g. sw_cutoff, m, rcl, or model / method"},
-             "values": {"type": "array", "items": {"type": ["number", "string"]}, "description": "the values to try (6 at most)"},
-             "target": {"type": "string", "description": "the curve to report, e.g. NET_PAY"},
-             "parameters": {"type": "object", "description": "inputs held fixed for every value, e.g. {\"rw_temp_f\": 105}"}},
-            ["property", "parameter", "values"]),
-        *_verbs(),
-    ]
-    return [_library_access(t) for t in out]
-
-
-def _library_access(t: dict) -> dict:
-    """A verb's schema with search / run over every Petrophys function it serves: their arguments added, its own
-    arguments optional (search and run need none of them), and its description ending with what search reaches."""
-    from petroharness.agent.library_api import menu_line
-    fn = t["function"]
-    fn["description"] += "\n" + menu_line(fn["name"])
-    fn["parameters"]["properties"].update({
-        "search": {"type": "string", "description": "words to search this verb's Petrophys functions, e.g. gas"},
-        "run": {"type": "string", "description": "a Petrophys function's name, as search lists it"},
-        "args": {"type": "object", "description": "run's arguments: a curve name, a condition (VCL > 0.6) or a value"}})
-    fn["parameters"]["properties"].setdefault("label", {"type": "string", "description": "the new curves' prefix"})
-    fn["parameters"]["required"] = []
-    return t
-
-
-def _verbs() -> list:
-    """check, classify, summarize and calibrate: each takes `what`, one of its module's objects."""
-    out = []
-    names, text = _objects("check")
-    out.append(_fn("check", D["check"] + "\n" + text,
-                   {"what": {"type": "string", "enum": names}, "curves": {"type": "array", "items": {"type": "string"},
-                    "description": "the curves to check (default: the object's own)"}, "zones": _ZONES,
-                    "threshold": {"type": "number", "description": "the object's limit, where it takes one"}}, ["what"]))
-    names, text = _objects("classify")
-    out.append(_fn("classify", D["classify"] + "\n" + text,
-                   {"what": {"type": "string", "enum": names}, "method": {"type": "string"},
-                    "curves": {"type": "array", "items": {"type": "string"}, "description": "the curves to classify on"},
-                    "zones": _ZONES, "k": {"type": "integer", "description": "the number of classes or units"}}, ["what"]))
-    names, text = _objects("summarize")
-    out.append(_fn("summarize", D["summarize"] + "\n" + text,
-                   {"what": {"type": "string", "enum": names}, "zones": _ZONES,
-                    "vcl_cutoff": {"type": "number"}, "phie_cutoff": {"type": "number"}, "sw_cutoff": {"type": "number"}},
-                   ["what"]))
-    names, text = _objects("calibrate")
-    out.append(_fn("calibrate", D["calibrate"] + "\n" + text,
-                   {"what": {"type": "string", "enum": names},
-                    "curves": {"type": "array", "items": {"type": "string"}, "description": "the curves to use"},
-                    "zones": _ZONES}, ["what"]))
-    return out
+LIBRARY_NAMES = tuple(t.name for t in TOOLSET if t.verb)      # the verbs over Petrophys
 
 
 def named() -> list:
-    """The lookups the model is shown: NAMED, the crossplot and the lag correlation, with their descriptions, and the
-    verbs over Petrophys."""
-    out = NAMED + [CROSSPLOT, LAG] + library_schemas()
-    import copy
-    out = copy.deepcopy(out)
-    for t in out:
-        fn = t["function"]
-        fn["description"] = V9_DESCRIPTIONS.get(fn["name"], fn["description"])
-        z = fn["parameters"]["properties"].get("zones")
-        if z is not None:
-            z["description"] = V9_ZONES
-        b = fn["parameters"]["properties"].get("baseline")
-        if fn["name"] == "spike_flags" and b is not None:
-            b["enum"] = ["zone", "zoned", "interval"]
-            fn["parameters"]["properties"]["scale"] = {"type": "string", "enum": ["linear", "log10"]}
-            fn["parameters"]["properties"]["window"] = {"type": "integer", "description": "rolling window in samples"}
-    return out
+    """The tools the model is shown, as native tool-calling schemas, from their definitions."""
+    return TOOLSET.schemas()
 
 
 _NUMERIC = {"limit": int, "min_thickness": float, "max_thickness": float, "tolerance": float, "threshold": float, "k": float,

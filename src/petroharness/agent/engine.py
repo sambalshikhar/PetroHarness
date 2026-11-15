@@ -190,6 +190,42 @@ def from_curves(f: Formation, c: str) -> list:
     return [str(i) for i in (cv.inputs or []) if str(i) != c]
 
 
+def direct_inputs(f: Formation, c: str) -> list:
+    """The curves c is computed from: the mnemonics its catalog line names, and from each input the step recorded the
+    one it used (a fallback group 'PHIE+PHIT' or 'SWIRR/SW': its first member that is a curve here)."""
+    try:
+        named = from_curves(f, c)
+    except KeyError:
+        return []
+    used = []
+    for group in (f.inv.curves[c].inputs or []):
+        members = [m.strip() for m in re.split(r"[+/]", str(group)) if m.strip()]
+        first = next((m for m in members if m in f.inv.curves), None)
+        if first:
+            used.append(first)
+    return [x for x in dict.fromkeys(named + used) if x != c]
+
+
+def computed_from(f: Formation, a: str, b: str, depth: int = 6) -> list:
+    """The chain by which curve a is computed from curve b through the record's inputs ([a, ..., b]), shortest first;
+    [] when a is not computed from b (or either is not a curve of the record)."""
+    if a == b or a not in f.inv.curves or b not in f.inv.curves:
+        return []
+    seen, frontier = {a}, [[a]]
+    for _ in range(depth):
+        nxt = []
+        for path in frontier:
+            ins = direct_inputs(f, path[-1])
+            for c in ins:
+                if c == b:
+                    return path + [b]
+                if c not in seen and c in f.inv.curves:
+                    seen.add(c)
+                    nxt.append(path + [c])
+        frontier = nxt
+    return []
+
+
 def calibrated_twin(f: Formation, c: str) -> Optional[str]:
     """The core-calibrated curve of the same quantity with data here: the curve whose catalog meaning is
     'core-calibrated' + this curve's meaning (PHIE_CC beside PHIE), else None."""

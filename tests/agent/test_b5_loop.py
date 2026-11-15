@@ -6,6 +6,7 @@ formation (no K2H).
 import json
 import re
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -132,8 +133,7 @@ def test_loop_runs_tools_edits_and_stops_when_settled(monkeypatch):
          "next": [{"runs": "NET_PAY"}, {"stats": {"curves": ["SW"], "where": "NET_PAY"}}, {"guide": "net_reservoir_pay"},
                   {"profile": "SW"}, {"profile": "PHIE"}],                  # a guide is free; a fourth action is left out
          "done": False},
-        None,                                                               # filled below from the ledger
-    ])
+    ])                                                         # step 2 is written below from the ledger; then: done
     trace = {}
 
     def second(stage, messages, usage, max_tokens, retry=False):
@@ -146,7 +146,6 @@ def test_loop_runs_tools_edits_and_stops_when_settled(monkeypatch):
             {"op": "revise", "id": "C1", "text": "NET_PAY is set in the zones listed by the runs", "ev": [runs_item.id], "grade": "moderate", "means": MEANS},
             {"op": "revise", "id": "C2", "text": f"NET_PAY totals {total} {s.f.inv.depth_unit} over all zones", "ev": [runs_item.id], "grade": "moderate", "means": MEANS}],
             "next": [], "done": True})
-    llm.replies[1] = None
     orig = llm.chat
 
     def chat(stage, messages, usage, max_tokens, retry=False):
@@ -160,9 +159,14 @@ def test_loop_runs_tools_edits_and_stops_when_settled(monkeypatch):
     calls = [e.call_text().split(" ")[0] for e in s.ledger.items]
     assert calls[:1] == ["stats"] and calls[-3:] == ["runs", "stats", "profile"]   # the first look first (stats only)
     assert all(c in ("section", "stats") for c in calls[1:-3]), calls        # what the guide opened (its sections, curves)
-    auto = trace["steps"][0]["guide_sections"]
-    assert len(trace["steps"]) == 2 and len(trace["steps"][0]["actions"]) == 1 + len(auto) + MAX_ACTIONS   # the guide,
-                                                                                   #   what it opened and 3 actions
+    steps = trace["steps"]
+    auto = steps[0]["guide_sections"]
+    assert len(steps[0]["actions"]) == 1 + len(auto) + MAX_ACTIONS             # the guide, what it opened and 3 actions
+    # step 2 settles both points and sets done. A done waits while results opened earlier are not shown yet (those over
+    # NEW's budget at step 1): they come first at the next step, and the first done with nothing withheld ends it
+    for before, st in pairwise(steps):
+        assert st["done"] and st.get("held_done", []) == before["withheld"], st["step"]
+    assert len(steps) == 2 + sum(1 for st in steps if st.get("held_done")) and steps[-1]["done_issues"] == []
     assert not claims.done_issues(), claims.render()
     assert s.guides == ["net_reservoir_pay"]
 

@@ -12,7 +12,6 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 from test_b2_tools import F  # noqa: E402
-from petroharness.agent import options  # noqa: E402
 from petroharness.agent.engine import ToolError  # noqa: E402
 
 

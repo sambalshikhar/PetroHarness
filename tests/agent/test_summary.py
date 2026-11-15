@@ -99,6 +99,29 @@ def test_every_summarising_tool_shows_each_zone_the_zones_pooled_and_the_whole_i
     assert f"whole interval ({k} samples outside any zone)" in text
 
 
+ON_THE_BASIS = ("stats", "profile", "compare", "crossplot", "runs")       # the tools the data's basis setting applies to
+
+
+@pytest.mark.data
+@pytest.mark.parametrize("tool,args", SUMMARISING, ids=[f"{t}-{i}" for i, (t, _) in enumerate(SUMMARISING)])
+def test_on_the_zones_basis_the_tools_leave_the_whole_interval_out_and_the_record_s_computations_keep_it(tool, args, monkeypatch):
+    """data.basis "zones" (a data file's setting, a benchmark's): stats, profile, compare, crossplot and runs show each
+    zone and the zones pooled, with no whole-interval line and no line of the samples outside the zones; the tools
+    over the record's own computations give the same text on either basis."""
+    f = formation()[1]
+    assert f.view.basis == "all"                                # the shared formations: the default basis
+    full = call(f, tool, args).text
+    monkeypatch.setattr(f.view, "basis", "zones")
+    text = call(f, tool, args).text
+    if tool not in ON_THE_BASIS:
+        assert text == full, tool
+        return
+    zone, pooled, whole = _bases(text)
+    assert None not in (zone, pooled) and zone < pooled and whole is None, (tool, text[:1500])
+    assert not [ln for ln in text.splitlines() if ln.lstrip().startswith(("whole interval", "outside any zone"))]
+    assert "whole interval" not in text.splitlines()[-1]        # nor named among what a cut text left out
+
+
 @pytest.mark.data
 def test_the_formation_summary_ranks_each_statistic_then_pools_then_the_whole_interval():
     t, f = formation()

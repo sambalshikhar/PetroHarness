@@ -14,6 +14,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(Path(__file__).resolve().parent)]
+from petroharness.agent import components as C  # noqa: E402
 from petroharness.agent import direction  # noqa: E402
 from petroharness.agent.loop import CORE_CURVES, MINERAL_VOLUMES, read_schema  # noqa: E402
 from petroharness.llm import Usage  # noqa: E402
@@ -68,15 +69,16 @@ def _session(t, f):
     return Session(t, f, render(f.inv), Ledger(f))
 
 
-def _run(monkeypatch, reads, pred=lambda f: "PHIE" in f.inv.curves and "RDEP" in f.inv.curves):
-    """One question through the question graph on a built session, the model stubbed."""
+def _run(monkeypatch, reads, pred=lambda f: "PHIE" in f.inv.curves and "RDEP" in f.inv.curves, depth=True):
+    """One question through the question graph on a built session, the model stubbed. depth: graph.answer's (False:
+    the 3.5.6 route, --investigate)."""
     from petroharness.agent import graph
     from petroharness.agent.loop import Session
     t, f = _formation(pred)
     s = _session(t, f)
     monkeypatch.setattr(Session, "build", classmethod(lambda cls, task, cfg: s))
     llm = Stub(reads)
-    out = graph.answer(t, "k200t", 1, 2, "open", "profile", llm_factory=lambda cfg: llm)
+    out = graph.answer(t, "k200t", 1, 2, "open", "profile", llm_factory=lambda cfg: llm, depth=depth)
     assert not out["trace"].get("error"), out["trace"].get("traceback")
     return s, llm, out
 
@@ -138,19 +140,22 @@ def test_families_and_overview_follow_the_topics_in_order():
 # --- the READ call in the run ----------------------------------------------------------------------------------------
 
 @pytest.mark.data
-def test_a_valid_reading_sets_the_topics_the_first_look_and_the_index(monkeypatch):
+@pytest.mark.parametrize("depth", [True, False], ids=["the route read", "investigate"])
+def test_a_valid_reading_sets_the_topics_the_first_look_and_the_index(monkeypatch, depth):
     from petroharness.agent.loop import READ, brief
     from petroharness.agent.map import render
-    s, llm, out = _run(monkeypatch, [VALID])
+    s, llm, out = _run(monkeypatch, [VALID], depth=depth)
     tr = out["trace"]
     assert tr["read"]["parse"] == "ok" and tr["topics"] == VALID["topics"] and "category" not in tr
     assert {k: tr["read"][k] for k in VALID} == VALID and tr["read"]["reply"] == json.dumps(VALID)
     assert s.topics == VALID["topics"] and s.families == ["porosity", "lithology"]
     assert s.map == render(s.f.inv, ["porosity", "lithology"]) and tr["map_chars"] == len(s.map)
     call = llm.sent[0]                     # the brief; C5 read, the question, the map, the areas; the schema
-    assert call["stage"] == "read" and call["schema"] == read_schema() and call["messages"][0]["content"] == brief()
+    assert call["stage"] == "read" and call["schema"] == read_schema(depth) and call["messages"][0]["content"] == brief()
     user = call["messages"][1]["content"]
-    assert user.startswith(READ + "\n\nQUESTION:\n" + s.task.question) and "\nTHE MAP\n" in user
+    text = C.text("C5", "read_depth") if depth else READ               # the route asked for, or not (--investigate)
+    assert user.startswith(text + "\n\nQUESTION:\n" + s.task.question) and "\nTHE MAP\n" in user
+    assert tr["read"]["depth"] == "investigate" if depth else "depth" not in tr["read"]   # said nothing: investigate
     assert user.split("TOPIC AREAS:\n", 1)[1].splitlines() == [f"{n} - {a['when']}" for n, a in direction.areas().items()]
     assert {"C5", "C6", "C7"} <= {seg[0] for seg in tr["calls"][0]["messages"][1]["segments"]}
     look = [str(c) for c in s.ledger.items[0].args["curves"]]     # the topics' key curves, then the named curve
@@ -280,15 +285,17 @@ def test_step_1_holds_the_ambiguity_sentence(plugged):
 
 
 @pytest.mark.data
-def test_no_prompt_carries_readings_and_step_1_shows_the_topics(monkeypatch):
-    """A whole stub run: the READ prompt asks for topics and named only, step 1 shows YOUR TOPICS and the ambiguity
-    sentence, no message of any call (READ, steps, settle, writer) holds a readings field or YOUR READING, and point 1
-    is step 1's asks."""
+@pytest.mark.parametrize("depth", [True, False], ids=["the route read", "investigate"])
+def test_no_prompt_carries_readings_and_step_1_shows_the_topics(monkeypatch, depth):
+    """A whole stub run: the READ prompt asks for topics and named (and the route) only, step 1 shows YOUR TOPICS and
+    the ambiguity sentence, no message of any call (READ, steps, settle, writer) holds a readings field or YOUR
+    READING, and point 1 is step 1's asks."""
     old = dict(VALID, asks="Probe asks sentence?", readings=["probe reading one", "probe reading two"])  # extra fields
-    s, llm, out = _run(monkeypatch, [old])
+    s, llm, out = _run(monkeypatch, [old], depth=depth)
     tr = out["trace"]
-    assert set(tr["read"]) == {"reply", "parse", "topics", "named"} and tr["read"]["topics"] == VALID["topics"]
-    assert s.reading == {"topics": VALID["topics"], "named": VALID["named"]}
+    want = {"reply", "parse", "topics", "named"} | ({"depth"} if depth else set())
+    assert set(tr["read"]) == want and tr["read"]["topics"] == VALID["topics"]
+    assert s.reading == {"topics": VALID["topics"], "named": VALID["named"], **({"depth": "investigate"} if depth else {})}
     step1 = llm.prompt("step_1")
     assert "YOUR TOPICS: porosity, shale_clay\n\n" in step1 and AMBIGUITY in step1
     for call in llm.sent:

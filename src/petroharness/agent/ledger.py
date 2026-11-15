@@ -13,7 +13,7 @@ from typing import Optional
 
 from petroharness.agent.engine import CUT_GET, Formation, ToolError, max_chars
 from petroharness.agent.schemas import arguments, call, fit, known_args
-from petroharness.agent.tools import TOOLS
+from petroharness.agent.toolset import TOOLS, TOOLSET
 
 DIGEST_CHARS = 700         # an item at or below this size is its own digest
 SECTION_DIGEST_CHARS = 1600  # a section's digest keeps its classes and their runs (the answer's
@@ -46,11 +46,8 @@ class Item:
 
     def call_text(self) -> str:
         """The call in one short line, for listings."""
-        from petroharness.agent.compute import MAIN as COMPUTED_MAIN
-        main = {"stats": "curves", "runs": "condition", "compare": "a", "profile": "curve", "section": "key", "step": "name",
-                "calc": "expression", "crossplot": "y", **COMPUTED_MAIN}
         a = dict(self.args)
-        head = a.pop(main.get(self.tool, ""), "")
+        head = a.pop("expression" if self.tool == "calc" else TOOLSET.lead(self.tool), "")     # the tool's own lead
         if self.tool == "compare":
             head = f"{head} vs {a.pop('b', '')}"
         elif self.tool == "crossplot":
@@ -340,6 +337,10 @@ class Ledger:
         self.items: list = []
         self.errors: list = []                 # (tool, arguments, message)
         self._keys: dict = {}
+        # a conversation (petroharness.session): where the current question's items start, and the earlier items that
+        # read a curve a later question computed again (item id -> (curve, the item that computed it again))
+        self.turn_start: int = 0
+        self.superseded: dict = {}
 
     def has(self, tool: str, args: dict) -> bool:
         """Whether an identical call is already opened."""
@@ -360,6 +361,7 @@ class Ledger:
             key = normalize(name, known_args(name, args))
             if key in self._keys:
                 return self._keys[key], False
+            before = {n: id(a) for n, a in self.f.view.calculated.items()} if self.turn_start else {}
             r = call(self.f, name, args)
         except ToolError as e:
             self.errors.append((name, raw, str(e)))
@@ -368,10 +370,28 @@ class Ledger:
         item = Item(eid, name, args, key, list(r.rows), r.text.replace(CUT_GET, f"get {eid} with find"), list(r.numbers))
         self.items.append(item)
         self._keys[key] = item
+        again = [n for n, a in self.f.view.calculated.items() if n in before and id(a) != before[n]]
+        if again:
+            self._supersede(again, eid)
         return item, True
+
+    def _supersede(self, curves: list, by: str) -> None:
+        """A later question of a conversation computed these curves again under the same names: the earlier
+        questions' items that name them keep their text (it is what was shown then) but say so when read again, and
+        the same call asked again is computed anew instead of served from them."""
+        for e in self.items[:self.turn_start]:
+            hit = next((c for c in curves if re.search(rf"(?<![A-Z0-9_]){re.escape(c)}(?![A-Z0-9_])", f"{e.call_text()} {e.text}")), None)
+            if hit and e.id not in self.superseded:
+                self.superseded[e.id] = (hit, by)
+                if self._keys.get(e.key) is e:
+                    del self._keys[e.key]
 
     def show(self, item: Item, new: bool = True) -> str:
         """The item whole: a call opened before shows its item again in full, never only a pointer to it."""
+        if item.id in self.superseded:                    # read again after a later question computed its curve again
+            curve, by = self.superseded[item.id]
+            return (f"[{item.id}] (opened before {curve} was computed again in [{by}]: these are the earlier values; "
+                    f"{item.call_text()}) {item.text}")
         return f"[{item.id}] {item.text}" if new else f"[{item.id}] (opened before: {item.call_text()}) {item.text}"
 
     def zone_of(self, depth: float) -> Optional[str]:
@@ -421,8 +441,7 @@ class Ledger:
             for i, ln in enumerate(lines):
                 if rule.match(ln):
                     take([i])
-        from petroharness.agent.compute import COMPUTED
-        if item.tool in COMPUTED:                                  # a computed table reads in order: header, rows, facts
+        if item.tool in TOOLSET and TOOLSET[item.tool].table:      # a computed table reads in order: header, rows, facts
             for i in range(1, len(lines)):
                 take([i])
         keep = [short(lines[i]) for i in sorted(chosen)]

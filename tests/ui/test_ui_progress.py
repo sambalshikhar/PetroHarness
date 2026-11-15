@@ -153,3 +153,18 @@ def test_a_repair_round_carries_the_checker_findings():
     llm.chat("repair_1", msgs, Usage(), 10)
     call = next(e for e in events if e["kind"] == "call")
     assert call["type"] == "repair" and call["number"] == 1 and call["findings"].startswith("These numbers")
+
+
+def test_the_page_is_told_how_a_question_was_read_and_answered():
+    from petroharness.agent import direction
+    from petroharness.ui import adapter as A
+    area = next(iter(direction.areas()))
+    plain = P.read_reply_of("read", json.dumps({"topics": [area], "named": ["porosity"]}))
+    assert plain == {"topics": [area], "named": ["porosity"]}                      # no depth asked: none said
+    direct = P.read_reply_of("read", json.dumps({"topics": [area], "named": [], "depth": "direct"}))
+    assert direct["depth"] == "direct"
+    look = {"read": {"topics": [area], "depth": "direct"}, "steps": [{"step": 1, "direct": True}]}
+    assert A.summary(look, {}, "ok")["route"] == "direct" and A.summary(look, {}, "ok")["read"]["depth"] == "direct"
+    back = {**look, "depth": {"read": "direct", "investigated_from_step": 1, "why": "the model asked for it"}}
+    assert A.summary(back, {}, "ok")["route"] == "investigation after a look"
+    assert A.summary({"read": {"topics": [area]}, "steps": []}, {}, "ok")["route"] == "investigation"

@@ -146,6 +146,8 @@ With a hosted API, the prompts go to that provider, and the prompts include the 
 | `chat_template_kwargs` | `{enable_thinking: <enable_thinking>}` | chat-template variables sent with each request (vLLM, SGLang) |
 | `enable_thinking` | `false` | the template variable sent when `chat_template_kwargs` is not set |
 | `retry_template_kwargs` | none | the template variables of the one retry after an empty reply |
+| `light_template_kwargs` | none | the template variables of a call that needs little reasoning, for example `{reasoning_effort: low}` or `{enable_thinking: false}`. Used by the call that chooses an answer's figures. Without it every call thinks alike |
+| `reasoning_end` | none | where the server leaves the reasoning in a light call's reply, the marker that ends it; the reply is the text after the last marker |
 | `send_template_kwargs` | `true` | whether to send `chat_template_kwargs` at all |
 | `send_temperature` | `true` | whether to send `temperature` |
 | `max_tokens_param` | `max_tokens` | the name of the output cap: `max_tokens` or `max_completion_tokens` |

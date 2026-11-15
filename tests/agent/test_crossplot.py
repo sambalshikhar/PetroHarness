@@ -13,7 +13,6 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 from test_b0_inventory import formations  # noqa: E402
-from petroharness.agent import options  # noqa: E402
 from petroharness.agent.direction import parse_source  # noqa: E402
 from petroharness.agent.ledger import Ledger, normalize  # noqa: E402
 from petroharness.agent.loop import coerce_action, tools_text  # noqa: E402

@@ -132,7 +132,10 @@ conversation inside the investigation.
   the interval and its zones; the raw input curves and what each one is; the workflow's steps with their methods,
   inputs and outputs; its sections; notes on the interval's record (routes, fallbacks, cutoffs), scoped to the
   analyzer families of the topics the model chose.
-- **Tools** (`engine.py`, `tools.py`, `compute.py`, `schemas.py`). What the model can ask for:
+- **Tools** (`engine.py`, `tools.py`, `compute.py`, `toolset.py`, `schemas.py`). Each tool is defined once, a
+  `Tool` in `toolset.py` (`petroharness.tools.spec`): its function, arguments, description, group and how a call of
+  it is listed; every list of tools is read from the definitions ([TOOLS.md](TOOLS.md), "Adding a tool").
+  `schemas.py` is the door a model's call goes through. What the model can ask for:
   - lookups: `stats`, `runs` (the depth runs of a condition), `compare`, `overlap` (two conditions side by side),
     `profile`, `crossplot`, `lag_correlation`, `section` (an analyzer section), `step` (a step record);
   - named computations: `lithology_stats`, `zone_contrast`, `curve_order`, `threshold_exceedance`, `spike_flags`,
@@ -225,8 +228,9 @@ the change reaches.
 ### Switches
 
 `agent/options.py` holds the switches under test. A switch exists only while a comparison needs it: it defaults off,
-and once measured it becomes the default or goes. This release defines none. `PETROHARNESS_SET` sets them for one
-run, and every trace records the options in force.
+and once measured it becomes the default or goes. None is defined at present: the last one, `depth` (the direct route
+for every question: [GRAPH.md](GRAPH.md), "The direct route"), was measured on the whole benchmark with both models
+and is the code. `PETROHARNESS_SET` sets switches for one run, and every trace records the options in force.
 
 ## Resources (`petroharness/resources`)
 
@@ -238,6 +242,28 @@ run, and every trace records the options in force.
 - `topics.yaml`: the topic areas;
 - `skills/`: the skill libraries (`researched/` the default; the format in `skills/README.md`);
 - `models/`: the model card.
+
+## A conversation (`petroharness.session`, `petroharness.evidence`, `petroharness.core`)
+
+One question is the unit above. A conversation is any number of questions about one interval, and three more parts
+carry it. None of them changes how the first question is answered.
+
+```
+session   the session graph: open -> turn -> project -> figures -> commit, one run per question; the question graph
+          (first question) or the later-question graph runs inside `turn`; the session log is the record
+evidence  the evidence graph rebuilt from the session log: LAS file, curves, steps, results, claims, answers,
+          figures and their links; the audit trail and the report are written from it
+core      the setup record: what answers a question, with one hash
+```
+
+- **The session log** (`session/log.py`) is one append-only file per conversation, with the texts it names kept by
+  hash. Resuming re-opens the recorded results in order. What a later question is shown of the earlier ones is built
+  from the log by code ([SESSIONS.md](SESSIONS.md)).
+- **The later-question graph** is the question graph without `build`, with one more route: the model says in step 1
+  whether a few sentences answer the question, and the route picks the writer node ([SESSION_GRAPH.md](SESSION_GRAPH.md)).
+- **What comes after an answer** hangs on the session graph: the projections (the methods and parameters, the number
+  links) are code, and the figures are one model call plus Petrophys' own plots. Neither can change an answer's text.
+- **The evidence graph** needs only the session folder ([EVIDENCE.md](EVIDENCE.md)).
 
 ## One question, end to end
 

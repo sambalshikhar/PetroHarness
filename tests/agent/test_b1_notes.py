@@ -15,8 +15,8 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 from petroharness.agent.map import render  # noqa: E402
-from petroharness.agent import notes as N, options  # noqa: E402
-from petroharness.agent.notes import BAD_HOLE_SHOWN, bad_hole, not_run, notes  # noqa: E402
+from petroharness.agent import notes as N  # noqa: E402
+from petroharness.agent.notes import BAD_HOLE_SHOWN, bad_hole, not_run  # noqa: E402
 
 
 @lru_cache(maxsize=1)

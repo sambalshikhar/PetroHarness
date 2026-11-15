@@ -47,5 +47,10 @@ def test_golden_tape_replays_identically(ds, task_id, category, monkeypatch):
     got = graph.answer(task, sel["model"], 1, graph.MAX_STEPS, "open", "profile", llm_factory=Taped)
     with gzip.open(GOLDEN / ds / f"{task_id}.result.json.gz", "rt") as f:
         want = json.load(f)
-    problem = tape.compare_run(got, want, seen.get("replayer"))
+    problem = tape.compare_run(got, want, seen.get("replayer"), versions=False)     # behaviour: this decides
     assert not problem, problem
+    stamps = tape.compare_run(got, want, seen.get("replayer"))                       # version stamps: reported
+    if stamps:
+        import warnings
+        warnings.warn(f"{task_id}: same behaviour, version stamps differ from the recording ({stamps[:160]})",
+                      stacklevel=1)

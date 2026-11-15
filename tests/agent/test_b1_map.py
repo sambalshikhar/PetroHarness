@@ -11,7 +11,6 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 from test_b0_inventory import formations  # noqa: E402
-from petroharness.agent import options  # noqa: E402
 from petroharness.agent.map import num, primary_absent, render  # noqa: E402
 
 ADVISORY = re.compile(r"not independent|by construction|caveat|unvalidated|not validated|should|note that|cannot be|"

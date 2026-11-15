@@ -11,6 +11,8 @@ model:
   reasoning: true
   chat_template_kwargs: {reasoning_effort: high}
   retry_template_kwargs: {reasoning_effort: low}    # after an empty reply (reasoning used every token)
+  light_template_kwargs: {reasoning_effort: low}    # a call that needs little reasoning (choosing an answer's figures)
+  reasoning_end: "</ifm|think>"                     # at low effort the server leaves the reasoning before this marker
   temperature: 1.0
   top_p: 0.95
   max_tokens_spec: 32768

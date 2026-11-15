@@ -21,7 +21,8 @@ What the harness is: `README.md`, `docs/ARCHITECTURE.md`, `docs/GRAPH.md`. The c
    its trace are one model's work, and the harness must serve any model.*
 6. **Every step is one call rebuilt from the state.** No multi-turn conversation inside the investigation. *Why:
    what the model sees at each step is exactly what the trace records.*
-7. **A change that should not alter behaviour passes the golden tapes** (`tests/agent/test_golden_tapes.py`), the
+7. **A change that should not alter behaviour passes the public mini set** (`tests/gate`, which needs no data and no
+   server), **the golden tapes** (`tests/agent/test_golden_tapes.py`), the
    prompt fixture (`tests/agent/fixtures/prompts.json.gz`, compared by `tests/agent/test_skill_library.py`) and the
    ledger replay (`tests/agent/replay.py`). A change that should is a switch (`agent/options.py`, off by default)
    until it is measured. *Why: the proof of no change, and comparable A/Bs.*

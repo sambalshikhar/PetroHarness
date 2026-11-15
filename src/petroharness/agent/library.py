@@ -10,6 +10,7 @@ carries into come from each step's requires and produces. A calculated curve bec
 from __future__ import annotations
 
 import re
+import threading
 from functools import lru_cache
 from typing import Optional
 
@@ -160,7 +161,15 @@ def defaults(f: Formation, kind: str) -> dict:
 _UNUSED = re.compile(r"-\s*(\w+) is not used by")
 
 
-DROPPED: list = []          # the asked parameters the last _step left out (the chosen method does not take them)
+class _Dropped(threading.local):
+    """The asked parameters the last _step of this thread left out (the chosen method does not take them). Per thread:
+    questions run side by side, and one question's step must not read another's."""
+
+    def __init__(self):
+        self.names: list = []
+
+
+DROPPED = _Dropped()
 
 
 def _step(kind: str, params: dict, asked: tuple = ()):
@@ -168,7 +177,7 @@ def _step(kind: str, params: dict, asked: tuple = ()):
     asked ones among them are kept in DROPPED for the result to say; any other refusal is the library's message."""
     _, S = _library()
     params = dict(params)
-    DROPPED.clear()
+    DROPPED.names.clear()
     for _ in range(4):
         try:
             return getattr(S, kind)(**params)
@@ -176,7 +185,7 @@ def _step(kind: str, params: dict, asked: tuple = ()):
             unused = [p for p in _UNUSED.findall(str(e)) if p in params]
             if not unused:
                 raise ToolError(f"Petrophys {kind}: {str(e).strip()[:500]}") from None
-            DROPPED.extend(p for p in unused if p in asked)
+            DROPPED.names.extend(p for p in unused if p in asked)
             for p in unused:
                 params.pop(p)
     raise ToolError(f"Petrophys {kind}: the parameters could not be reconciled with the step")
@@ -236,7 +245,7 @@ def run(f: Formation, kind: str, changes: dict, with_downstream: bool = True) ->
         raise ToolError("water_resistivity needs rw (ohm.m) with rw_temp_f (degF), or salinity_ppm: the record states "
                         "no single Rw for this well")
     alt_first = _step(kind, alt_p, tuple(changes))
-    dropped = list(DROPPED)
+    dropped = list(DROPPED.names)
     made = list(alt_first.produces)
     chain = [kind] + (downstream(kind, made) if with_downstream else [])
     rest = [_step(k, defaults(f, k)) for k in chain[1:]]
@@ -765,9 +774,6 @@ def _rec_rw(f: Formation, row: Out) -> str:
     if _num(rec.get("rw_min")) and _num(rec.get("rw_max")):
         parts.append(f"{row.v(rec['rw_min'])}-{row.v(rec['rw_max'])} ohm.m at formation temperature")
     return "; ".join(parts) + f" (method {m.method})" if parts and m else "not stated"
-
-
-LIBRARY = {"calculate": calculate, "estimate": estimate, "what_if": what_if}
 
 
 def menu_text(kinds=None) -> str:

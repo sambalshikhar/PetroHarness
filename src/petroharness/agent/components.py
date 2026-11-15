@@ -140,7 +140,8 @@ def attribute(message: str, owner: str, skills: tuple = ()) -> list:
 OWNERS = ((re.compile(r"read(_retry)?$"), ("C1", "C5")),
           (re.compile(r"step_\d+(_retry)?$"), ("C1", "C5")), (re.compile(r"step_\d+_fix$"), ("C2",)),
           (re.compile(r"step_1_points$"), ("C1", "C5", "C3", "C5")), (re.compile(r"settle$"), ("C1", "C5")),
-          (re.compile(r"writer(_retry|_again)?$"), ("C9", "C9")), (re.compile(r"repair_\d+(_again)?$"), ("C9", "C9", "C3", "C2")))
+          (re.compile(r"writer(_retry|_again)?$"), ("C9", "C9")), (re.compile(r"repair_\d+(_again)?$"), ("C9", "C9", "C3", "C2")),
+          (re.compile(r"figures(_retry)?$"), ("C9", "C9")))
 
 
 def owners(stage: str, n: int) -> list:

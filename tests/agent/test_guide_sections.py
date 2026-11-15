@@ -10,7 +10,7 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
                 str(Path(__file__).resolve().parent)]
 from petroharness.llm import Usage  # noqa: E402
 from test_b5_loop import Script, _session  # noqa: E402
-from petroharness.agent import direction, options  # noqa: E402
+from petroharness.agent import direction  # noqa: E402
 from petroharness.agent.loop import investigate  # noqa: E402
 
 FIRST = {"points": ["Where is net pay?"], "intent": "locate", "focus": "where",

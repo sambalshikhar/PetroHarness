@@ -3,7 +3,6 @@ formation's real ledger items and content cases built from each formation's own 
 
     .venv/bin/python -m pytest tests/agent/test_b6_claims.py -q   (PETROHARNESS_DATA selects the dataset)
 """
-import math
 import random
 import re
 import sys
@@ -15,7 +14,6 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
                 str(Path(__file__).resolve().parent)]
 from petroharness.agent.claims import Claims, clean_text, coerce_edit, norm_grade  # noqa: E402
 from petroharness.agent.ledger import Item, shown_values  # noqa: E402
-from petroharness.agent.map import num  # noqa: E402
 
 MEANS = "so the zone is the better reservoir of the two"
 

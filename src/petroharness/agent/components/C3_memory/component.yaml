@@ -1,7 +1,9 @@
 id: C3
 name: memory
 purpose: 'the state the model reads back: the claims, the ledger of opened results, NEW and OPENED'
-texts: {}
+texts:
+  earlier_head: earlier_head.md   # the head of the earlier questions of a conversation (petroharness.session)
 frames:
 - agent/ledger.py
 - agent/claims.py
+- session/earlier.py

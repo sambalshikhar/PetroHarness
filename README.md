@@ -10,7 +10,7 @@ Every number in the answer traces back to the log.
 
 **Petrophys calculates · the model investigates · the harness records · you decide**
 
-[![Version](https://img.shields.io/badge/version-3.5.3-011e3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.0.0.dev0-011e3f)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.10-011e3f)](#install)
 [![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](docs/MODELS.md)
 [![Default model](https://img.shields.io/badge/default-K2--Horizon--7B-ef6719)](docs/MODELS.md)
@@ -165,7 +165,7 @@ flowchart LR
 | Stage | What happens |
 |---|---|
 | **1 · The well** | Petrophys interprets the raw LAS and cuts it to your interval. The interval is zoned by its lithology log, or by shale-volume bands when there is none. |
-| **2 · Read** | The model chooses the topic areas the question touches, and lists the measurements the question names. |
+| **2 · Read** | The model chooses the topic areas the question touches, lists the measurements the question names, and says whether the question is direct (a value, a setting, a count that one or two lookups state) or needs an investigation. A direct question skips stages 3 and 4: one or two lookups, then a short answer with its basis, in about a quarter of the model's work. Where the lookups do not state what is asked, it gets the investigation after all. `--investigate` gives every question the full investigation. |
 | **3 · Investigate** | Up to eight steps, each one model call rebuilt from the state. The model opens results with tools (statistics zone by zone, analyzer classes as located depth runs, profiles, comparisons, crossplots, overlaps, arithmetic), has Petrophys compute what the record does not hold (another method, an estimate, a what-if, any of its functions), and adds, revises or drops claims that cite them. Code checks each claim as it arrives. |
 | **4 · Settle** | With every opened result in view, the claims become final. |
 | **5 · Write and check** | The writer concludes once, from all the evidence: the settled claims, every result the investigation opened (where they differ, the results decide) and a card of what each curve is and how its values were made. A checker sends back numbers no result shows, statements the record contradicts and leftover working notes, for repair. |
@@ -220,6 +220,26 @@ The answer is printed. `answer.md` and `trace.json` are written to `./petroharne
 every model call and every result opened. With no lithology log, the well is zoned by shale volume
 (`--lithology-curve` names one the harness does not find, and `--formation-lithology` states what you know). Every
 option, with examples on three wells: [docs/USAGE.md](docs/USAGE.md).
+
+### Keep asking
+
+```bash
+petroharness chat --las well.las --tops tops.csv --formation "Mount Messenger"
+```
+
+One interval stays open and you ask as many questions as you like. A later question starts from what the earlier ones
+found: ask about an answer, try another method or parameter, or go further. Where a plot says it better, the answer
+carries figures drawn by Petrophys. [docs/SESSIONS.md](docs/SESSIONS.md).
+
+### Audit an answer
+
+```bash
+petroharness audit ./petroharness-sessions/well-20261114-101500
+```
+
+For each answer: the claims and the results they cite, each number with the results that show it, the curves those
+results read, the Petrophys steps and parameters behind the curves, and the LAS file's hash. It is read from the
+session folder alone. [docs/EVIDENCE.md](docs/EVIDENCE.md).
 
 ### In the browser
 
@@ -284,13 +304,19 @@ never recomputes petrophysics on its own. Documentation: [petrophys.netlify.app]
 | Guide | What it covers |
 |---|---|
 | [docs/USAGE.md](docs/USAGE.md) | asking about your own wells: intervals, tops files, units, lithology, output, the Python API |
+| [docs/SESSIONS.md](docs/SESSIONS.md) | conversations: follow-up questions on one interval, figures, the session folder, resume |
+| [docs/EVIDENCE.md](docs/EVIDENCE.md) | the evidence graph and the audit trail of an answer |
+| [docs/SETUP.md](docs/SETUP.md) | the setup record: what answers a question, with one hash |
 | [docs/TOOLS.md](docs/TOOLS.md) | the tools by request, and Petrophys's functions: calculate, estimate, what_if, check, classify, summarize, calibrate |
 | [docs/MODELS.md](docs/MODELS.md) | models: serving, model cards, reasoning models, hosted APIs |
 | [docs/UI.md](docs/UI.md) | the web UI: options, the parts of the page, its API |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the parts, and how a question flows through them |
 | [docs/GRAPH.md](docs/GRAPH.md) | the question graph, node by node |
+| [docs/SESSION_GRAPH.md](docs/SESSION_GRAPH.md) | the session graph and the later-question graph |
 | [docs/DESIGN.md](docs/DESIGN.md) | the design rules and the generality contract |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | configuration, benchmark mode, testing and the code layout |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | where a contribution goes and how to show a change is safe |
+| [tests/gate/README.md](tests/gate/README.md) | the gates: the public mini set, the golden tapes, the request gate |
 | [AGENTS.md](AGENTS.md) | the rules for changing the code |
 | [CHANGELOG.md](CHANGELOG.md) | the releases |
 

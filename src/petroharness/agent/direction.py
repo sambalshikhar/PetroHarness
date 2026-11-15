@@ -143,11 +143,13 @@ def parse_source(entry: str):
         return tool, {"key": rest}
     if tool == "step":
         return tool, {"name": rest}
-    from petroharness.agent.compute import COMPUTED, MAIN                    # the computations: the main argument, if any
-    if tool in COMPUTED:
+    from petroharness.agent.toolset import TOOLSET                           # the computations: the main argument, if any
+    if tool in TOOLSET and TOOLSET[tool].table:
         if not rest:
             return tool, {}
-        main = MAIN[tool]
+        main = TOOLSET[tool].lead
+        if not main:
+            raise KeyError(tool)
         return tool, {main: [c.strip() for c in rest.split(",")] if main == "curves" else rest}
     raise ValueError(f"unknown tool in {entry!r}")
 
@@ -167,11 +169,11 @@ def source_names(kw: dict) -> set:
 
 def runs_here(formation, tool: str, kw: dict) -> bool:
     """Whether a source has its data in this formation (stats: one of its curves is enough; a computation: it runs)."""
-    from petroharness.agent.compute import COMPUTED
-    if tool in COMPUTED:
+    from petroharness.agent.toolset import TOOLSET
+    if tool in TOOLSET and TOOLSET[tool].table:
         from petroharness.agent.engine import ToolError
         try:
-            COMPUTED[tool](formation, **kw)
+            TOOLSET[tool].run(formation, **kw)
             return True
         except ToolError:
             return False

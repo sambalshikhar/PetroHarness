@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "petroharness"
-version = "3.5.3"
+version = "4.0.0.dev0"
 description = "Answers petrophysics questions about an interval of a well from its raw LAS: Petrophys calculates, the harness investigates and records, a language model interprets"
 requires-python = ">=3.10"
 dependencies = [
@@ -38,3 +38,13 @@ markers = [
     "data: needs the data files named in the data config (configs/data.local.yaml or PETROHARNESS_DATA)",
     "llm: needs a live model endpoint",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+# What must never land: syntax errors, names that do not exist, comparisons that cannot be meant, unused imports.
+# Style is the reviewer's.
+select = ["E9", "F63", "F7", "F82", "F401"]
+

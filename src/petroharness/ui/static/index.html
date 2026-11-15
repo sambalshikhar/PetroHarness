@@ -288,6 +288,28 @@ h3.sec:first-child { margin-top: 0; }
 /* rating */
 .rate { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
 .rate .q { font-weight: 650; margin-bottom: 10px; }
+.figs { margin-top: 18px; display: grid; gap: 14px; }
+.figs figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.figs img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.figs figcaption { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.basis { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+.basis > summary { font-weight: 650; }
+.basis .bnote { font-size: 12.5px; color: var(--muted); margin: 6px 0 10px; }
+.basis .bstep { border-top: 1px solid var(--line); padding: 9px 0; }
+.basis .bstep .bh { font-weight: 650; }
+.basis .bstep .bm { color: var(--muted); font-size: 12.5px; margin-left: 8px; }
+.basis .bstep .bio { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; }
+.basis .bparams { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; }
+.basis .bparams span { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+.basis .bsub { font-size: 12px; color: var(--muted); margin: 12px 0 2px; text-transform: uppercase; letter-spacing: .04em; }
+.thread { margin: 0 0 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.thread .tl { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.thread button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 4px 0; cursor: pointer; color: var(--ink); font: inherit; }
+.thread button.cur { font-weight: 650; cursor: default; }
+.thread button .tn { color: var(--muted); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.follow { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+.follow .q { font-weight: 650; margin-bottom: 4px; }
+.follow textarea { width: 100%; min-height: 64px; margin: 8px 0 10px; }
 .rate .opts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .rate .opts button { border: 1px solid var(--line); border-radius: 8px; padding: 6px 16px; background: var(--surface); cursor: pointer; }
 .rate .opts button.on.good { background: var(--done-soft); border-color: var(--done); color: var(--done); font-weight: 650; }
@@ -679,11 +701,13 @@ details.ritem > summary .apill { min-width: 0; }
           <input type="text" id="skillspath" class="mono" placeholder="path of a skill library folder" style="margin-top:8px" hidden>
           <label class="lab" for="maxsteps">Investigation steps, at most</label>
           <input type="number" id="maxsteps" min="1" max="30" step="1">
+          <label class="lab" for="depth">Depth of the answer</label>
+          <select id="depth"><option value="">The model decides: a short answer to a direct question, an investigation for the rest</option><option value="investigate">A full investigation for every question</option></select>
         </details>
       </div>
 
       <button class="btn primary" id="ask">Ask</button>
-      <div class="hint">Ctrl+Enter asks. A question takes a few minutes; several can run at once, and the rest wait their turn.</div>
+      <div class="hint">Ctrl+Enter asks. A direct question (a value, a setting) takes about a minute, an investigation a few minutes; several can run at once, and the rest wait their turn.</div>
       <div class="hint" id="envnote" hidden></div>
       <div class="err" id="formerr"></div>
     </div>
@@ -923,6 +947,7 @@ function formInputs() {
   if ($("#profile").value) inputs.profile = $("#profile").value;
   inputs.skills = $("#skills").value === "path" ? $("#skillspath").value.trim() : $("#skills").value;
   if ($("#maxsteps").value) inputs.max_steps = +$("#maxsteps").value;
+  if ($("#depth").value) inputs.depth = $("#depth").value;
   return inputs;
 }
 async function ask() {
@@ -951,7 +976,8 @@ async function fillForm(inputs) {
   const sk = inputs.skills || "default";
   $("#skills").value = ["default", "none"].includes(sk) ? sk : "path"; $("#skillspath").value = ["default", "none"].includes(sk) ? "" : sk; $("#skills").onchange();
   $("#maxsteps").value = inputs.max_steps || "";
-  if (inputs.lithology_curve || inputs.formation_lithology || inputs.profile || inputs.max_steps || sk !== "default") $("#more").open = true;
+  $("#depth").value = inputs.depth === "investigate" ? "investigate" : "";
+  if (inputs.lithology_curve || inputs.formation_lithology || inputs.profile || inputs.max_steps || inputs.depth || sk !== "default") $("#more").open = true;
   $("#question").focus();
 }
 
@@ -982,7 +1008,7 @@ async function loadRuns() {
 function showRuns() {
   const f = $("#runfilter").value.trim().toLowerCase();
   const rows = S.runs.filter(r => !f || `${r.question} ${r.las} ${r.label} ${r.verdict}`.toLowerCase().includes(f));
-  $("#history").innerHTML = rows.length ? rows.map(r => `<div class="runitem${r.id === S.job ? " cur" : ""}" data-id="${esc(r.id)}"><div class="rq">${esc(r.question)}</div>
+  $("#history").innerHTML = rows.length ? rows.map(r => `<div class="runitem${r.id === S.job ? " cur" : ""}" data-id="${esc(r.id)}"><div class="rq">${r.turn > 1 ? `<span class="pill" style="padding:0 7px;margin-right:6px">follow-up ${r.turn}</span>` : ""}${esc(r.question)}</div>
     <div class="rm"><span class="pill status ${esc(r.status)}" style="padding:0 8px">${esc(r.status)}</span><span>${esc(r.las)}</span><span>${esc(r.label)}</span>
     ${r.elapsed ? `<span>${fmtS(r.elapsed)}</span>` : ""}${r.verdict ? `<span class="v-${esc(r.verdict)}">${esc(r.verdict)}</span>` : ""}</div></div>`).join("") :
     `<div class="hint">No runs yet.</div>`;
@@ -1050,6 +1076,7 @@ function digest(events) {
   for (const e of events) {
     if (e.kind === "phase") m.phase[e.name] = e;
     else if (e.kind === "well") m.well = e;
+    else if (e.kind === "display") m.display = e;
     else if (e.kind === "call") { const c = {...e, reply: null}; m.calls.push(c); m.byN.set(e.n, c); if (e.type === "step") m.lastStep = Math.max(m.lastStep, e.number); }
     else if (e.kind === "reply") { const c = m.byN.get(e.n); if (c) c.reply = e; }
     else if (e.kind === "results") for (const it of e.items) {
@@ -1200,6 +1227,10 @@ function wire(j) {
   const sr = $("#stopreplay"); if (sr) sr.onclick = () => { replayStop(); openRun(j.id); };
   const ru = $("#reuse"); if (ru) ru.onclick = () => fillForm(j.inputs || {});
   const cp = $("#copyans"); if (cp) cp.onclick = () => navigator.clipboard.writeText(j.answer || "").then(() => toast("Answer copied"));
+  $$(".thread button[data-run]").forEach(b => b.onclick = () => { S.pinned = false; openRun(b.dataset.run); });
+  const fq = $("#followq"); if (fq) { fq.oninput = () => { S.followDraft = fq.value; };
+    fq.addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) askFollow(j); }); }
+  const fa = $("#followask"); if (fa) fa.onclick = () => askFollow(j);
   const rf = $("#rfilter"); if (rf) { rf.oninput = () => filterResults(rf.value); rf.value = S.rfilter || ""; filterResults(rf.value); }
   $$(".rate .opts button").forEach(b => b.onclick = () => { $$(".rate .opts button").forEach(x => x.classList.toggle("on", x === b)); });
   const rs = $("#ratesave"); if (rs) rs.onclick = async () => {
@@ -1294,6 +1325,7 @@ function answerPane(j, m, res, finished) {
         ck.clean ? `Every number is in a result the investigation opened${ck.repairs ? ` (after ${ck.repairs} repair${ck.repairs > 1 ? "s" : ""})` : ""}.` : "The checker's last findings stand."}</div></div></div>`;
   }
   if (j.status !== "done" && !j.answer) return html + errorBox(j, j.result);
+  html += threadHtml(j);
   const {title, secs} = answerSections(j.answer);
   const key = Math.max(0, secs.findIndex(s => /^answer\b/i.test(s.head)));
   html += `<div class="hintline">${title ? `<h2 class="anstitle" style="margin:0">${inline(title)}</h2>` : ""}<span class="grow"></span><button class="btn small" id="copyans">Copy answer</button></div>`;
@@ -1307,11 +1339,60 @@ function answerPane(j, m, res, finished) {
     return `<section class="asec${i === key ? " key" : ""}${open ? "" : " folded"}" id="as-${i}">${s.head ? `<h2 class="ah"${fold ? ` data-secfold="${k}" style="cursor:pointer"` : ""}>${inline(s.head)}${fold ? `<span class="chev"${open ? ' style="transform:rotate(90deg)"' : ""}>▶</span>` : ""}</h2>` : ""}
       <div class="prose">${md(s.body, {nums: true})}</div>${fold ? `<button class="secmore" data-secfold="${k}">${open ? "Fold the section" : "Read the section"}</button>` : ""}</section>`;
   }).join("");
+  html += figuresHtml(j, res) + basisHtml(res) + auditHtml(j) + followHtml(j);
   const r = j.rating || {};
   html += `<div class="rate"><div class="q">Is this answer right?</div><div class="opts">${["good", "partly", "wrong"].map(v => `<button data-v="${v}" class="${v}${r.verdict === v ? " on" : ""}">${v}</button>`).join("")}</div>
     <textarea id="ratenote" placeholder="What was right or wrong (optional)">${esc(r.note || "")}</textarea>
     <div class="row" style="margin-top:10px"><button class="btn fix" id="ratesave">Save verdict</button><span class="hint" id="ratemsg" style="margin:0">${r.rated ? `Saved ${esc(r.rated)}` : ""}</span></div></div>`;
   return html;
+}
+
+// ---------- a conversation: the questions asked so far, the answer's figures, the next question ----------
+function threadHtml(j) {
+  const th = (j.conversation && j.conversation.thread) || [];
+  if (th.length < 2) return "";
+  return `<div class="thread"><div class="tl">This conversation: ${th.length} questions about this interval</div>${th.map(q =>
+    `<button ${q.run && q.run !== j.id ? `data-run="${esc(q.run)}"` : `class="cur"`}><span class="tn">${q.turn}</span>${esc(q.question)}</button>`).join("")}</div>`;
+}
+function figuresHtml(j, res) {
+  const figs = (res && res.figures) || [];
+  if (!figs.length) return "";
+  return `<div class="figs">${figs.map(g => `<figure><img src="/api/run/${esc(j.id)}/figures/${esc(g.file)}" alt="${esc(g.caption)}" loading="lazy"><figcaption>${esc(g.caption)}</figcaption></figure>`).join("")}</div>`;
+}
+function routeText(route) {
+  if (route === "direct") return "a direct question: one or two lookups and a short answer";
+  if (route === "investigation after a look") return "a direct question at first; after a first look it was given a full investigation";
+  return "a question that needs an investigation";
+}
+function auditHtml(j) {
+  if (j.status !== "done") return "";
+  return `<div class="hintline" style="margin-top:12px"><span>Every number's path from this answer back to the LAS file:</span>
+    <a class="link" href="/api/run/${esc(j.id)}/audit" target="_blank" rel="noopener">Audit trail</a></div>`;
+}
+function basisHtml(res) {
+  const rows = (res && res.basis) || [];
+  if (!rows.length) return "";
+  const val = v => typeof v === "boolean" ? (v ? "yes" : "no") : typeof v === "number" ? String(+v.toPrecision(6)) : String(v);
+  const step = r => `<div class="bstep"><span class="bh">${esc(r.step)}</span><span class="bm">${esc(r.method || "")}</span>
+    <div class="bio">${r.curves.length ? `computed ${esc(r.curves.join(", "))}` : ""}${r.inputs.length ? `${r.curves.length ? " · " : ""}read ${esc(r.inputs.join(", "))}` : ""}</div>
+    ${Object.keys(r.parameters).length ? `<div class="bparams">${Object.entries(r.parameters).map(([k, v]) => `<span>${esc(k)} = ${esc(val(v))}</span>`).join("")}</div>` : ""}</div>`;
+  const named = rows.filter(r => r.why === "named"), up = rows.filter(r => r.why !== "named");
+  return `<details class="basis"><summary><span class="caret">▶</span> Methods and parameters this answer rests on (${rows.length} step${rows.length === 1 ? "" : "s"})</summary>
+    <div class="bnote">Read from the well's record, not written by the model: the steps that computed the curves this answer names${up.length ? ", and the steps those read from" : ""}.</div>
+    ${named.map(step).join("")}${up.length ? `<div class="bsub">The steps those read from</div>${up.map(step).join("")}` : ""}</details>`;
+}
+function followHtml(j) {
+  if (j.status !== "done" || R.run) return "";
+  return `<div class="follow"><div class="q">Ask a follow-up</div><div class="hint" style="margin:0">The next question about this interval: it starts from the results already opened. Ask about this answer, try another method or parameter, or go further.</div>
+    <textarea id="followq" placeholder="For example: what if I use the density porosity instead?">${esc(S.followDraft || "")}</textarea>
+    <div class="row"><button class="btn fix" id="followask">Ask</button><span class="hint" id="followmsg" style="margin:0"></span></div></div>`;
+}
+async function askFollow(j) {
+  const q = $("#followq").value.trim(), msg = $("#followmsg"), btn = $("#followask");
+  if (!q) { msg.textContent = "Write the question first."; return; }
+  btn.disabled = true;
+  try { const {id} = await post("/api/ask", {follow: j.id, question: q}); S.followDraft = ""; S.pinned = false; openRun(id); loadRuns(); }
+  catch (e) { msg.textContent = e.message; btn.disabled = false; }
 }
 
 // ---------- a number in the answer: the results that show it ----------
@@ -1444,6 +1525,8 @@ function storyPane(j, m, res, finished, calls) {
     const r = [...reads].reverse().find(c => c.reply && c.reply.topics) || reads[reads.length - 1];
     const rep = r.reply || {}, parts = [];
     if (rep.named && rep.named.length) parts.push(["It names", rep.named.map(n => `<span class="chip sans">${esc(n)}</span>`).join(" ")]);
+    const route = (res && res.route) || (rep.depth === "direct" ? "direct" : rep.depth ? "investigation" : "");
+    if (route) parts.push(["Read as", esc(routeText(route))]);
     if (res && res.absent && res.absent.length) parts.push(["Not in this well", res.absent.map(a => esc(a.name)).join(", ")]);
     if (rep.unreadable) parts.push(["Reply", `<div class="warnline">The reply could not be read${reads.length > 1 ? "" : "; it is asked once more"}.</div>`]);
     const lv = live(reads[reads.length - 1]);
@@ -1461,7 +1544,8 @@ function storyPane(j, m, res, finished, calls) {
   const steps = [...new Set(m.calls.filter(c => c.type === "step").map(c => c.number))].sort((a, b) => a - b);
   for (const k of steps) {
     const cs = m.calls.filter(c => c.type === "step" && c.number === k);
-    const main = cs.find(c => c.stage === `step_${k}` && c.reply && !c.reply.empty && !c.reply.unreadable) || cs.find(c => c.reply && (c.reply.focus !== undefined)) || cs[0];
+    // a question sent to an investigation after a look has two step_1 calls: the card shows the later one, the investigation's
+    const main = [...cs].reverse().find(c => c.stage === `step_${k}` && c.reply && !c.reply.empty && !c.reply.unreadable) || cs.find(c => c.reply && (c.reply.focus !== undefined)) || cs[0];
     const rep = (main && main.reply) || {};
     const rec = res && res.steps.find(s => s.step === k);
     const parts = [];
@@ -1748,6 +1832,9 @@ function wellPane(m, res, finished) {
   html += plotHtml(w, {p: "wp", H: Math.round(680 * zoom), width: ($("#run") && $("#run").clientWidth) || 1100});
   const liths = [...new Set(w.lithology.map(r => r.lithology))];
   html += `<div class="legend2" style="margin-top:8px"><b style="color:var(--ink-2)">Lithology</b>${liths.map(l => `<span><span class="swatch" style="background:${lithColor(l)}"></span>${esc(l)}</span>`).join("")}</div>`;
+  if (m.display && m.display.file && S.job) html += `<details class="basis"${S.det.pview ? " open" : ""} data-k="pview"><summary><span class="caret">▶</span> The interval as Petrophys displays it</summary>
+    <div class="bnote">The standard log display of the interval, drawn by Petrophys (its log viewer), with the zones as the lithology track.</div>
+    <img src="/api/run/${esc(S.job)}/figures/${esc(m.display.file)}" alt="The interval's log display by Petrophys" loading="lazy" style="display:block;max-width:100%;height:auto;margin:0 auto"></details>`;
   html += `<h3 class="sec">The zones</h3>` + zoneTable(w, [], {samples: true}) +
     `<div class="wnote">The curves as Petrophys interpreted this interval. The zone values here are plain means of each zone's samples (permeability: the median), for orientation; the answer's numbers come from the results in Evidence, which the model opened with its tools.</div>`;
   return html;
@@ -1956,6 +2043,7 @@ function detailsPane(j, res, m) {
       ${res.zones.length ? table(["Zone", "Lithology", "Top", "Base"], res.zones.map(z => [z.zone, z.lithology, fmtD(z.top), fmtD(z.base)])) : ""}</div></div>`;
     html += `<h3 class="sec">The question as read</h3><div class="card"><div class="cb"><div class="kv"><span class="l">topics</span><span class="v">${topicsHtml(res.read && res.read.topics)}</span>
       ${res.read && res.read.named && res.read.named.length ? `<span class="l">named</span><span class="v">${res.read.named.map(esc).join(" · ")}</span>` : ""}
+      ${res.read && res.read.depth ? `<span class="l">read as</span><span class="v">${esc(routeText(res.route || res.read.depth))}</span>` : ""}
       ${res.absent && res.absent.length ? `<span class="l">not in record</span><span class="v">${res.absent.map(a => esc(a.name)).join(", ")}</span>` : ""}
       <span class="l">skills</span><span class="v">${skillsText(res)}</span></div></div></div>`;
     html += `<h3 class="sec">How it was computed</h3><div class="card"><div class="cb"><div class="kv">
@@ -1973,6 +2061,7 @@ function detailsPane(j, res, m) {
     ${i.profile ? `<span class="l">profile</span><span class="v">${esc(i.profile)}</span>` : ""}
     <span class="l">skills</span><span class="v">${esc(i.skills || "default")}</span>
     ${i.max_steps ? `<span class="l">max steps</span><span class="v">${esc(i.max_steps)}</span>` : ""}
+    ${i.depth === "investigate" ? `<span class="l">depth</span><span class="v">a full investigation for every question</span>` : ""}
     <span class="l">run</span><span class="v mono">${esc(j.id)}</span></div></div></div>`;
   return html;
 }

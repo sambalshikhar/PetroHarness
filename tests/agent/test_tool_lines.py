@@ -46,14 +46,15 @@ def _configs() -> list:
 
 @lru_cache(maxsize=None)
 def formations(path: str) -> list:
-    """The first PER_DATASET formations of a dataset config, built as the harness builds them."""
+    """The first PER_DATASET formations of a dataset config, built as the harness builds them, on the default reporting
+    settings (every basis, no conventions, whatever the data file sets: test_b0_inventory.default_reporting)."""
     from petroharness.agent.inventory import from_view
     from petroharness.config import DataPaths, EvalPaths, HarnessConfig
     from petroharness.record.store import build as build_store
     from petroharness.tasks import load_tasks
     from petroharness.well.view import FormationView
     d = yaml.safe_load(Path(path).read_text())
-    cfg = HarnessConfig(data=DataPaths(**d["data"]), eval=EvalPaths(**d["eval"]))
+    cfg = HarnessConfig(data=DataPaths(**{**d["data"], "basis": "all", "conventions": []}), eval=EvalPaths(**d["eval"]))
     tasks, _ = load_tasks(cfg.eval.questions, cfg.data.las_dir)
     out, seen = [], set()
     with warnings.catch_warnings():
@@ -341,24 +342,42 @@ def test_every_value_line_says_n_of_n(config):
 @pytest.mark.data
 def test_direction_with_depth_is_said_in_words():
     """profile: each statistic's rank correlation with depth carries 'higher upward' (negative) or 'higher
-    downward' (positive); crossplot on DEPTH: each fit says its direction."""
+    downward' (positive) where at least five zones give the order (summary.ORDER_MIN_ZONES), with the legend of the
+    signs; over fewer zones it carries the number, the count of zones and that an order cannot be told from chance,
+    with no direction words and no legend. crossplot on DEPTH: each fit says its direction."""
+    seen = set()
     for name, t, f in every():
         if len(f.view.zones) < 3 or "GR" not in f.inv.curves:
             continue
         line = next((ln for ln in T.profile(f, "GR").text.splitlines() if ln.startswith("  with depth (")), None)
         if not line:
             continue
-        for s, v, words in re.findall(r"(\w+) (-?[\d.]+) \((higher upward|higher downward|no order with depth)\)", line):
-            assert words == ("higher upward" if float(v) < 0 else "higher downward" if float(v) > 0 else
-                             "no order with depth"), line
-        assert re.search(r"\(higher (upward|downward)\)", line), line
+        head, cells = line.split("): ", 1)
+        k = int(re.search(r" over (\d+) zones", head).group(1))
+        cells = re.findall(r"(\w+) (-?[\d.]+) \(([^()]*)\)", cells)
+        assert cells, line
+        told = 0
+        for s, v, words in cells:
+            few = re.fullmatch(r"(\d+) zones: too few to tell an order from chance; at least 5 are needed", words)
+            if few:                                                 # this statistic's zones: fewer than five
+                assert 3 <= int(few.group(1)) <= min(k, S.ORDER_MIN_ZONES - 1), line
+            else:
+                told += 1
+                assert words == ("higher upward" if float(v) < 0 else "higher downward" if float(v) > 0 else
+                                 "no order with depth"), line
+        if k < S.ORDER_MIN_ZONES:                                   # too few zones: no direction, no legend
+            assert not told and "higher" not in line and "positive:" not in head, line
+        else:
+            assert head.endswith(f" over {k} zones; positive: higher deeper, negative: higher upward"), line
+            assert re.search(r"\((higher (upward|downward)|no order with depth)\)", line), line
         rows = [ln for ln in T.crossplot(f, "GR", "DEPTH").text.splitlines() if ", GR on DEPTH: n " in ln and "slope" in ln]
         for ln in rows:
             slope = float(re.search(r"slope (-?[\d.e-]+)", ln).group(1))
             assert ln.endswith("; GR higher downward" if slope > 0 else "; GR higher upward" if slope < 0 else
                                "; GR no order with depth"), ln
-        return
-    pytest.skip("no formation of three zones with GR")
+        seen.add(k < S.ORDER_MIN_ZONES)                             # every such formation: both kinds where the data has them
+    if not seen:
+        pytest.skip("no formation of three zones with GR")
 
 
 def _status_formation():
@@ -633,7 +652,8 @@ def test_recipes_say_what_each_tool_computes():
 def test_overlap_is_a_tool_the_model_is_shown():
     from petroharness.agent.loop import TOOLS as SHOWN, tools_text
     from petroharness.agent.schemas import named
-    assert "overlap" in SHOWN and "overlap" in T.TOOLS
+    from petroharness.agent.toolset import TOOLSET
+    assert "overlap" in SHOWN and "overlap" in TOOLSET
     fn = next(t["function"] for t in named() if t["function"]["name"] == "overlap")
     assert fn["parameters"]["required"] == ["a", "b"] and "A without B" in fn["description"]
     assert '{"overlap": {"a": ..., "b": ...' in tools_text()

@@ -228,3 +228,74 @@ def test_the_results_shown_are_the_ledger_items(env, monkeypatch):
         want = e.text if not digest else ledger.digest(e)[len(e.id) + 3:]
         assert text == want, e.id
     assert sum(not d for _, d in got.values()) >= len(got) - 2           # nearly all were seen whole
+
+
+# --- a conversation: follow-up questions and figures --------------------------------------------------------------------
+
+class FigureStub(StubModel):
+    """The stand-in model, choosing the first candidate figure when asked."""
+
+    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
+        if stage == "figures":
+            with self._lock:
+                self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
+            return '{"figures": ["F1"]}'
+        return super().chat(stage, messages, usage, max_tokens, json_schema, temperature, retry)
+
+
+def test_a_follow_up_is_the_next_question_of_the_runs_conversation(env, tmp_path):
+    log = []
+    app = U.App(tmp_path / "runs", workers=2, model_factory=lambda cfg: FigureStub(cfg, log=log))
+    srv, c = serve(app)
+    try:
+        first, _, view1 = ask(c, WINDOW)
+        assert view1["conversation"]["turn"] == 1 and view1["conversation"]["root"] == first["id"]
+        n1 = len(log)
+        status, got = c.json("/api/ask", {"follow": first["id"], "question": "And how shaly is the lower part?"})
+        assert status == 200, got
+        _, view2 = wait(c, got["id"])
+        assert view2["status"] == "done", view2.get("error")
+        conv = view2["conversation"]
+        assert conv["root"] == first["id"] and conv["turn"] == 2
+        assert [(q["turn"], q["run"]) for q in conv["thread"]] == [(1, first["id"]), (2, got["id"])]
+        assert view2["inputs"]["las"] == view1["inputs"]["las"] and view2["inputs"]["interval"] == WINDOW   # the same interval
+        later = [x for x in log[n1:] if x["stage"] == "step_1"][0]["messages"][-1]["content"]
+        assert "EARLIER IN THIS SESSION" in later and f"Question 1: {QUESTION}" in later   # the earlier question is in view
+        session = app.store.folder(first["id"]) / "session"
+        kinds = [json.loads(line)["type"] for line in (session / "log.jsonl").read_text().splitlines()]
+        assert kinds.count("turn_end") == 2 and kinds.count("session_resume") == 1
+        assert not (app.store.folder(got["id"]) / "session").exists()          # one conversation, kept by its first run
+        listed = {r["id"]: r["turn"] for r in c.json("/api/runs")[1]}
+        assert listed[first["id"]] == 1 and listed[got["id"]] == 2
+        # the figures the model chose are drawn into the run and served
+        figs = view1["result"]["figures"]
+        assert len(figs) == 1 and figs[0]["file"].startswith("figure_1_") and figs[0]["caption"].startswith("Figure 1. ")
+        status, kind, body = c.get(f"/api/run/{first['id']}/figures/{figs[0]['file']}")
+        assert status == 200 and kind == "image/png" and body.startswith(b"\x89PNG")
+        assert c.json(f"/api/run/{first['id']}/figures/..%2Frun.json")[0] == 404        # only a figure's own name
+        assert c.json(f"/api/run/{first['id']}/figures/figure_9_none.png")[0] == 404
+        # the interval's log display by Petrophys: drawn once for the conversation, served for each of its runs
+        assert (session / "overview.png").read_bytes().startswith(b"\x89PNG") and kinds.count("display") == 1
+        for run_id, events in ((first["id"], view1["events"]), (got["id"], view2["events"])):
+            status, kind, body = c.get(f"/api/run/{run_id}/figures/overview.png")
+            assert status == 200 and kind == "image/png" and body.startswith(b"\x89PNG")
+        assert [e["file"] for e in c.json(f"/api/job/{first['id']}?since=0")[1]["events"] if e["kind"] == "display"] == ["overview.png"]
+        # the methods and parameters each answer rests on: read from the record by code, shown under the answer
+        for view in (view1, view2):
+            rests = view["result"]["basis"]
+            assert isinstance(rests, list)
+            assert all({"step", "method", "curves", "inputs", "parameters", "why"} <= set(r) for r in rests)
+        # each run's audit trail, written from its conversation's session folder
+        for run_id, n in ((first["id"], 1), (got["id"], 2)):
+            status, kind, body = c.get(f"/api/run/{run_id}/audit")
+            assert status == 200 and kind.startswith("text/markdown") and f"# Audit trail: question {n}" in body.decode()
+            assert "## Steps Petrophys ran" in body.decode() and "- LAS file: " in body.decode()
+        assert c.json("/api/run/20200101-000000-abcdef/audit")[0] == 404
+        # what cannot be followed
+        status, bad = c.json("/api/ask", {"follow": first["id"], "question": "  "})
+        assert status == 400 and "question is empty" in bad["error"]
+        status, bad = c.json("/api/ask", {"follow": "20200101-000000-abcdef", "question": "And then?"})
+        assert status == 404
+    finally:
+        srv.shutdown()
+        srv.server_close()

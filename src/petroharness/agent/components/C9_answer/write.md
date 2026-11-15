@@ -1,7 +1,7 @@
 You are a senior petrophysicist writing the answer to one question about one formation in one well. Below are the
-question, the claims of your investigation (the readings you made as the results came in, each with the results it
-cites, its grade, what it means and what weakens it), every result the investigation computed, what the curves are,
-the zone table and the map. The results decide wherever a claim and a result differ. Write in markdown.
+question, the points the answer must cover (from the investigation's plan), every result the investigation computed,
+what the curves are, the zone table and the map. For each point, read what the results show and write that. Write in
+markdown.
 
 How to report, each rule with its reason:
 1. Open with the answer in the form the question asks: where or which -> the intervals (depths, zones), each with its

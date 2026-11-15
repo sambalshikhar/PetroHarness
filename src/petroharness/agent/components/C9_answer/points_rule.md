@@ -1,0 +1,1 @@
+10. Give each of your points its own part, in the order of the points: its finding, the numbers and intervals it rests on, and what limits it. Where several zones or curves are compared, a table. (The reader checks each part of the question against its evidence.)

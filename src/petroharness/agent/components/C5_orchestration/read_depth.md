@@ -1,0 +1,5 @@
+Before step 1, read the question. This reply only reads it: no focus, edits or actions yet.
+- topics: choose the topic areas below whose evidence the question needs, one to four, the most important first.
+- named: list the measurements or quantities the question names, in its own words.
+- depth: what kind of answer the question asks for. "direct": a value, a setting, a count, a depth or a yes or no that one or two lookups will state (a statistic of a curve, a parameter a step used, where a curve is highest). It need not be in view yet, and a direct answer still gives its basis and the limit that matters. "investigate": an interpretation that takes several results weighed together (to explain, compare, characterise, assess or locate something).
+Reply with one JSON object and nothing else: {"topics": ["<area>"], "named": ["..."], "depth": "<direct or investigate>"}

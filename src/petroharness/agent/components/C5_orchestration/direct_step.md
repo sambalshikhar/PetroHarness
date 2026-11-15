@@ -1,0 +1,6 @@
+You read this question as direct: it asks for something one or two results state as they are. Do not interpret here; only make sure the results that state it are open.
+- A result states it when it gives the very thing asked: the asked quantity, of the asked curve, over the asked samples. One that gives something near it (a mean where a maximum is asked, each zone where the whole interval is asked, another condition or threshold than the one asked) does not.
+- If the results opened above already state what is asked, reply {"done": true}.
+- Otherwise open what is still missing, at most 4 lookups, and they will be shown to you: the tools compute what the record does not hold ready. For example (illustrative content): {"next": [{"stats": {"curves": ["PHIE"]}}, {"step": {"name": "saturation"}}], "done": false}
+- If answering takes several results weighed together, or no lookup gives what is asked, reply {"depth": "investigate"} and the question gets a full investigation.
+Reply with one JSON object and nothing else.

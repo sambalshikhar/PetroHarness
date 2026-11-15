@@ -12,7 +12,6 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 from test_b6_claims import MAPTEXT, StubLedger, item  # noqa: E402
-from petroharness.agent import options  # noqa: E402
 from petroharness.agent.claims import Claims  # noqa: E402
 
 E1 = item("E1", "stats", ["SW [v/v] = water saturation (computed)", "  Z1 SAND 1950-1975 m: n 50 of 50, mean 0.4567"])

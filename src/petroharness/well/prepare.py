@@ -453,18 +453,44 @@ INTERPRETATION_KEYS = ("name", "engine", "interpretation_scope", "gr_endpoints",
 
 @functools.lru_cache(maxsize=1)
 def library_identity() -> str:
-    """The installed petrophys: its version and, for a source checkout, its commit. The value-range QC and the
-    post-QC curves come from it even when an engine interprets, so a cached well is valid only for the same library."""
+    """The installed petrophys: its version and what build it is. A source checkout: its commit (with +dirty for
+    uncommitted changes). An installed package: the commit it was installed from where pip recorded one, else a hash
+    of its installed files. The value-range QC and the post-QC curves come from it even when an engine interprets, so
+    a cached well is valid only for the same library."""
     import petrophys
     src = Path(petrophys.__file__).resolve().parent
+    version = getattr(petrophys, "__version__", "?")
+    commit = dirty = ""
     try:
-        commit = subprocess.run(["git", "-C", str(src), "rev-parse", "HEAD"], capture_output=True, text=True,
-                                timeout=10).stdout.strip()
-        dirty = subprocess.run(["git", "-C", str(src), "status", "--porcelain", "--", "."], capture_output=True,
-                               text=True, timeout=10).stdout.strip()
+        git = lambda *a: subprocess.run(["git", "-C", str(src), *a], capture_output=True, text=True, timeout=10)
+        # git answers for any folder inside a repository: an installed package in a virtual environment that sits in
+        # some other repository would be given that repository's commit. Only a tracked source file is a checkout.
+        if git("ls-files", "--error-unmatch", "__init__.py").returncode == 0:
+            commit = git("rev-parse", "HEAD").stdout.strip()
+            dirty = git("status", "--porcelain", "--", ".").stdout.strip()
     except (OSError, subprocess.SubprocessError):
         commit, dirty = "", ""
-    return f"{getattr(petrophys, '__version__', '?')}@{commit or 'no-git'}{'+dirty' if dirty else ''}"
+    if commit:
+        return f"{version}@{commit}{'+dirty' if dirty else ''}"
+    return f"{version}@{_installed_build('petrophys') or 'no-git'}"
+
+
+def _installed_build(package: str) -> str:
+    """An installed distribution's build: the commit pip recorded for it (an install from a repository), else
+    `files-` and a hash of its record of installed files; "" when it is not an installed distribution."""
+    import importlib.metadata as md
+    try:
+        dist = md.distribution(package)
+    except md.PackageNotFoundError:
+        return ""
+    try:
+        commit = (json.loads(dist.read_text("direct_url.json") or "{}").get("vcs_info") or {}).get("commit_id")
+    except ValueError:
+        commit = None
+    if commit:
+        return str(commit)
+    record = dist.read_text("RECORD")
+    return f"files-{hashlib.sha256(record.encode()).hexdigest()[:12]}" if record else ""
 
 
 @functools.lru_cache(maxsize=256)

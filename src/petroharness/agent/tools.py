@@ -468,7 +468,7 @@ def _zone_level(f: Formation, out: Out, zs: list, xa, xb, a: str, b: str, same: 
             + f", {row.i(len(pts))} zones): ")
     if len(pts) >= 3:
         rc = E.rank_correlation([p[1] for p in pts], [p[2] for p in pts])
-        words = f"{a} {S.direction_words(rc)}" if depth else E.together(rc, a, b)
+        words = S.order_words(rc, len(pts), lambda r: f"{a} {S.direction_words(r)}" if depth else E.together(r, a, b))
         text = (f"rank correlation of the zone means {row.v(rc)} over {row.i(len(pts))} zones ({words})"
                 if np.isfinite(rc) else "the zone means hold no rank order")
         if line:
@@ -797,6 +797,28 @@ def _class_line(f: Formation, out: Out, s, c, every: list, room: Optional[int]) 
         out.add(f"    {c.name} in all: {size}")
 
 
+def _zone_shares(f: Formation, every: list) -> list:
+    """[(zone id, share in % of the zone's samples)] of a class's runs (zone, top, base), one entry per zone it occurs in."""
+    zones = {z.zone_id: z for z in f.view.zones}
+    by = {}
+    for z, a, b in every:
+        by.setdefault(z, []).append((a, b))
+    out = []
+    for zid, rr in by.items():
+        z = zones.get(zid)
+        if z is None:
+            continue
+        idx = np.asarray(z.indices)
+        if idx.size == 0:
+            continue
+        d = f.depth[idx]
+        on = np.zeros(idx.size, dtype=bool)
+        for a, b in rr:
+            on |= (d >= a) & (d <= b)
+        out.append((zid, round(100.0 * float(on.sum()) / idx.size, 1)))
+    return out
+
+
 KEPT_CHARS = 4500          # the other runs of a cut list kept for its get: what one get returns (the thickest first)
 
 
@@ -964,18 +986,3 @@ def step(f: Formation, name: str) -> Result:
     for d in m.decisions_here:
         out.add(f"  record: {plain_inputs(d, m.inputs)}")
     return out.result()
-
-
-TOOLS = {"stats": stats, "runs": runs, "section": section, "step": step, "compare": compare, "profile": profile,
-         "crossplot": crossplot, "overlap": overlap}
-
-from petroharness.agent.compute import COMPUTED  # noqa: E402  (the named computations, agent/compute.py)
-TOOLS.update(COMPUTED)
-from petroharness.agent.library import LIBRARY  # noqa: E402  (the verbs over Petrophys, agent/library*.py: shown while
-from petroharness.agent.library_calibrate import calibrate  # noqa: E402  (docs/TOOLS.md)
-from petroharness.agent.library_check import check  # noqa: E402
-from petroharness.agent.library_classify import classify  # noqa: E402
-from petroharness.agent.library_summarize import summarize  # noqa: E402
-from petroharness.agent.library_api import verb_tool  # noqa: E402  (find / run over every Petrophys function)
-TOOLS.update({v: verb_tool(v, fn) for v, fn in {**LIBRARY, "check": check, "classify": classify, "summarize": summarize,
-                                                "calibrate": calibrate}.items()})

@@ -171,17 +171,20 @@ def real():
 
 
 @pytest.mark.data
-def test_the_prompt_holds_every_point_every_settled_claim_every_result_and_the_card(real):
+def test_the_prompt_holds_every_point_the_limits_found_every_result_and_the_card(real):
     from petroharness.agent import components as C
     system, user, table, shape = prompt(real, "default")
-    for p in real.points:
-        assert p in user
-    for c in real.claims.claims.values():
-        assert (c.text in user) == (c.grade != "hypothesis"), c.id
+    points, rest = user.split("THE QUESTION'S POINTS (the answer covers each):\n", 1)[1].split("\n\nLIMITS THE INVESTIGATION FOUND (", 1)
+    assert points == "\n".join(f"Point {k}: {p}" for k, p in enumerate(real.points, 1))
+    limits = rest.split("\n\nRESULTS (everything the investigation computed, by id):\n", 1)[0]
+    assert limits.endswith("):\nPoint 2: from the log model alone")             # the one settled claim with a limit (C2)
+    for c in real.claims.claims.values():                           # the writer reads the results for each point
+        assert c.text not in user, c.id                             #   itself: no claim's finding, settled or not
     for e in real.ledger.items:                                     # every opened result, whole
         assert f"[{e.id}] {e.text}" in user
     assert "WHAT THE CURVES ARE" in user and real.card and real.card in user
     assert system.startswith(C.text("C9", "write")) and (writer.TABLE_RULE in system) == bool(table)
+    assert system.endswith("\n" + C.text("C9", "points_rule"))      # each point its own part
     assert shape == "list" and table.startswith("| Zone |")
 
 
@@ -308,9 +311,9 @@ def test_the_replay_rebuilds_saved_investigations_and_its_prompt_holds_them():
             s, rep = rebuild(tr, by_id[tr["task_id"]], cfg.for_tasks())
             _, user, _, _ = prompt(s, "default")
         exact += rep["opened_equal"] and rep["flags_equal"]
-        for c in tr["claims"]:
-            if c["grade"] != "hypothesis":
-                assert c["text"] in user, (path.name, c["id"])
+        for k, p in enumerate(tr["points"], 1):         # the writer's prompt: the investigation's points and results
+            assert f"Point {k}: {p}" in user, (path.name, k)
+        assert all(f"[{e.id}] {e.text[:200]}" in user for e in s.ledger.items[:3]), path.name
     if not seen:
         pytest.skip("the saved traces belong to another dataset")
     assert exact >= seen - 1
@@ -430,7 +433,6 @@ def _first(pred):
 
 @pytest.mark.data
 def test_data_said_missing_while_present_is_a_contradiction():
-    from petroharness.agent import options
     from petroharness.agent.writer import contradictions
     f = _first(lambda f: any(f.view.available(c) for c in ("RSHA", "RXO", "RMIC")))
     s = _wsession(f, "Is there evidence of invasion?")
@@ -463,7 +465,6 @@ def test_a_classed_interval_denied_is_the_model_s_verdict():
 
 
 def test_the_writer_map_leaves_the_notes_out_unless_asked():
-    from petroharness.agent import options
     from petroharness.agent.writer import writer_map
     m = "WELL W, FORMATION F\nZones: 2\nAnalyzer sections\n  hydrocarbon (3): a, b, c\nNotes on this interval\n  - MHI: follows SW"
     assert writer_map(m) == "WELL W, FORMATION F\nZones: 2\nAnalyzer sections\n  hydrocarbon (3): a, b, c"
@@ -473,7 +474,6 @@ def test_the_writer_map_leaves_the_notes_out_unless_asked():
 # --- exact_numbers: numbers as the results show them -------------------------------------------------------------------
 
 def test_exact_numbers_keeps_digits_and_swaps_the_rounding_rule():
-    from petroharness.agent import options
     from petroharness.agent.writer import report_numbers
     text = "PHIT mean 0.2612 v/v at 8522.5 ft; PERM 35.4123 mD"
     assert report_numbers(text) == text

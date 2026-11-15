@@ -154,6 +154,13 @@ class ModelConfig(_Strict):
     # chat_template_kwargs instead, e.g. thinking off or the lowest effort: a plain answer beats no answer.
     # None: the retry repeats the first call's settings.
     retry_template_kwargs: Optional[dict[str, Any]] = None
+    # A call that needs little reasoning (the choice of an answer's figures among listed plots) sends these
+    # chat_template_kwargs instead, e.g. the lowest effort or thinking off. None: every call thinks as the first does.
+    # Not the look steps of a direct question: with thinking reduced there, the answers lost accuracy (docs/GRAPH.md).
+    light_template_kwargs: Optional[dict[str, Any]] = None
+    # Where the server leaves the reasoning in a light call's reply, the marker that ends it: the reply is the text
+    # after the last marker. None: the reply is taken as it comes.
+    reasoning_end: Optional[str] = None
     top_p: Optional[float] = None     # None -> server default
     # A reasoning model thinks before it answers. Its reply cut off by the token cap is a failed reply, not a short
     # one (the cut may sit inside the reasoning, which some parsers then return as the answer).

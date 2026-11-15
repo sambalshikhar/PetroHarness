@@ -1,0 +1,30 @@
+name: tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install
+        run: |
+          pip install -r requirements.lock
+          pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@916ca46c37980ceac56a0c4ac94b2eb0f8d8632c"
+          pip install -e ".[dev]" --no-deps
+      - name: Lint
+        run: ruff check src tests
+      - name: Tests
+        # No model server and no benchmark data: tests that need them skip. The public mini set (tests/gate) replays a
+        # recorded conversation on a Petrophys sample well, so a change that reaches the model fails here.
+        env:
+          LANGSMITH_TRACING: "false"
+        run: python -m pytest tests -q -p no:cacheprovider

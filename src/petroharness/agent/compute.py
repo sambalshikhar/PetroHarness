@@ -507,14 +507,3 @@ def unit_roles(f: Formation, zones=None) -> Result:
     """The workflow's flow roles (Petrophys flow_roles), as the workflow gives them: not re-ranked, re-labelled or added
     to."""
     return _run(f, "unit_roles", zones)
-
-
-COMPUTED = {"lithology_stats": lithology_stats, "zone_contrast": zone_contrast, "curve_order": curve_order,
-            "threshold_exceedance": threshold_exceedance, "spike_flags": spike_flags, "adjacent_jumps": adjacent_jumps,
-            "vertical_sequence": vertical_sequence, "pay_summary": pay_summary, "core_vs_log": core_vs_log,
-            "zone_classes": zone_classes, "formation_summary": formation_summary, "data_record": data_record,
-            "unit_roles": unit_roles, "lag_correlation": lag_correlation}
-# the main argument of each, for one-line listings and for a bare value ({"adjacent_jumps": "DTC"})
-MAIN = {"lithology_stats": "curves", "zone_contrast": "curve", "curve_order": "curves", "threshold_exceedance": "curve",
-        "spike_flags": "curves", "adjacent_jumps": "curve", "vertical_sequence": "curves", "zone_classes": "topic",
-        "formation_summary": "curves", "lag_correlation": "curves"}

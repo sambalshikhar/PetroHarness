@@ -1,5 +1,5 @@
-"""The writer reads the investigation's claims, every result it opened and the provenance card of the curves those
-name (docs/ARCHITECTURE.md, "The answer"); the tools give a class run's rock and a difference's size; the data's
+"""The writer reads the question's points, every result the investigation opened and the provenance card of the curves
+those name (docs/ARCHITECTURE.md, "The answer"); the tools give a class run's rock and a difference's size; the data's
 settings set the statistics' bases and the reporting conventions (docs/BENCHMARK.md).
 
     .venv/bin/python -m pytest tests/agent/test_writer_evidence.py -q
@@ -79,14 +79,15 @@ def _run(monkeypatch, conventions=()):
 # --- the writer ---------------------------------------------------------------------------------------------------------
 
 @pytest.mark.data
-def test_the_writer_reads_the_claims_every_opened_result_and_the_card(monkeypatch):
+def test_the_writer_reads_the_points_every_opened_result_and_the_card(monkeypatch):
     s, llm, out = _run(monkeypatch)
     w = llm.calls("writer")[0]["messages"]
     system, user = w[0]["content"], w[-1]["content"]
-    assert system.startswith(C.text("C9", "write"))
+    assert system.startswith(C.text("C9", "write")) and system.endswith("\n" + C.text("C9", "points_rule"))
     assert (W.TABLE_RULE in system) == bool(out["trace"].get("zone_table"))       # the zone table once
-    assert user.startswith(f"QUESTION:\n{QUESTION}")
-    assert CLAIM in user and "the results decide where they differ" in user
+    assert user.startswith(f"QUESTION:\n{QUESTION}\n\nTHE QUESTION'S POINTS (the answer covers each):\nPoint 1: {QUESTION}\n\n")
+    assert CLAIM not in user and "YOUR CLAIMS" not in user           # the results, not the investigation's readings
+    assert "LIMITS THE INVESTIGATION FOUND" not in user              # the settled claim names no limit: no block
     for e in s.ledger.items:                                         # every opened result, whole
         assert f"[{e.id}] {e.text}" in user
     assert "WHAT THE CURVES ARE" in user and "- PHIE" in s.card and s.card in user

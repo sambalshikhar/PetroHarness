@@ -183,8 +183,6 @@ def unsupported(text: str, s, table: str = "") -> list:
     return list(dict.fromkeys(bad))
 
 
-
-
 def report_numbers(text: str) -> str:
     """The delivered text's numbers, as written: the results' own precision (no rounding in code)."""
     return text
@@ -394,29 +392,68 @@ def curve_card(s) -> str:
     return E.provenance(s.f, [m for m in _MNEMONIC.findall(text) if m in s.f.inv.curves])
 
 
-def prompt(s, fmt: str = "profile") -> tuple:
+def prompt(s, fmt: str = "profile", brief: bool = False) -> tuple:
     """(system, user, table, shape): the question (and what it names that the record lacks), the data's conventions,
-    the claims, every opened result in full (cut at RESULTS_CHARS), what the curves are, the zone table and the map,
-    under C9's write text (with the table rule when a zone table is inserted)."""
+    the question's points and the limits the investigation found, by point (not the claims: the writer reads the
+    results for each point itself), every opened result in full (cut at RESULTS_CHARS), what the curves are, the zone
+    table and the map, under C9's write text (with the table rule when a zone table is inserted, and one part per
+    point)."""
     view = s.f.view
     shape = view.reg.shape_for(s.intent)
     form = reader_format(view.policy, fmt)
-    table = zone_table(s, s.claims, wide=True, style=form.get("zone_table") or "by_curve") if shape in ("list", "report") else ""
-    results = "\n\n".join(f"[{e.id}] {e.text}" for e in s.ledger.items)
+    table = (zone_table(s, s.claims, wide=True, style=form.get("zone_table") or "by_curve")
+             if shape in ("list", "report") and not brief else "")      # a short reply carries no zone table
+    items = s.ledger.items
+    later = getattr(s, "turn", 1) > 1
+    if later:                 # a later question of a conversation: its own results, and the earlier ones its claims cite
+        cited = {x for c in s.claims.claims.values() for x in c.ev} | set(getattr(s, "fetched", ()))   # or it fetched whole
+        items = [e for i, e in enumerate(items) if i >= s.turn_start or e.id in cited]
+    results = "\n\n".join(f"[{e.id}] {e.text}" for e in items)
     if len(results) > RESULTS_CHARS:
         results = results[:RESULTS_CHARS] + "\n... (cut)"
     s.card = curve_card(s)
     seen = (f"THE ZONE TABLE (inserted where you write {{{{ZONE_TABLE}}}}; computed from the data, its values are exact "
             f"and are evidence like the results: what you write must agree with it, and an empty cell is a zone without "
             f"that curve):\n{table}") if table else ""
-    parts = [f"QUESTION:\n{s.task.question}", vocabulary.note(s), conventions_block(s),
-             f"YOUR CLAIMS (readings made as the results came in; the results decide where they differ):\n"
-             f"{claims_block(s.claims, confidence=True)}",
+    readings = (f"THE QUESTION'S POINTS (the answer covers each):\n"
+                + "\n".join(f"Point {k}: {p}" for k, p in enumerate(s.claims.points, 1)))
+    if lim := doubts(s):
+        readings += ("\n\nLIMITS THE INVESTIGATION FOUND (in some results or their methods, by point; weigh them as you "
+                     "read the results):\n" + "\n".join(f"Point {k}: {w}" for k, w in lim))
+    parts = [f"QUESTION:\n{s.task.question}", getattr(s, "earlier", ""), vocabulary.note(s), conventions_block(s),
+             readings,
              f"RESULTS (everything the investigation computed, by id):\n{results}",
              f"WHAT THE CURVES ARE (from the record: each curve's meaning, status and what its values show):\n{s.card}",
              seen, f"THE MAP\n{writer_map(s.map)}"]
-    system = C.text("C9", "write") + (f"\n9. {TABLE_RULE}" if table else "")      # the zone table once, as the writer's
+    if brief:                 # a short reply: its own brief, no report form (C9 reply_brief)
+        system = C.text("C9", "reply_brief") + ("\n" + C.text("C9", "brief_later") if later else "")
+        if getattr(s, "depth", "") == "direct":   # the look steps' results may not state it: the writer may hand over
+            system += "\n" + C.text("C9", "brief_direct")
+        return system, "\n\n".join(p for p in parts if p), table, shape
+    system = C.text("C9", "write")
+    system += f"\n9. {TABLE_RULE}" if table else ""     # the zone table once, as the writer's
+    system += "\n" + C.text("C9", "points_rule")
+    if later:
+        system += "\n" + C.text("C9", "later_rule").strip()
     return system, "\n\n".join(p for p in parts if p), table, shape
+
+
+def doubts(s) -> list:
+    """[(point, limit)]: the settled claims' own limits (their 'weak' notes), by point, each once; no finding, grade or
+    meaning of a claim."""
+    out, seen = [], set()
+    for c in sorted(s.claims.claims.values(), key=lambda c: (c.point or 0)):
+        w = (c.weak or "").strip()
+        if c.grade == "hypothesis" or not w or re.match(r"(none|n/?a|-)\b", w, re.I) or w in seen:
+            continue
+        seen.add(w)
+        out.append((c.point, w))
+    return out
+
+
+def point_claims(s, k: int) -> list:
+    """The ids of the settled claims on point k (1-based)."""
+    return [c.id for c in s.claims.claims.values() if c.point == k and c.grade != "hypothesis"]
 
 
 def write(llm: LLM, s, cfg, usage: Usage, trace: dict, variant: str = "", fmt: str = "profile") -> tuple:

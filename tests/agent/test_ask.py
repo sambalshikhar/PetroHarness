@@ -371,9 +371,10 @@ def test_the_command_line(tmp_path, monkeypatch):
                   "top": None, "base": None, "depth_unit": "ft", "lithology_curve": "LITH",
                   "formation_lithology": "sandstone", "profile": None, "out": Path.cwd() / "petroharness-out" / "TW1",
                   "model_url": "http://h:8100/v1", "model": None, "model_card": None, "settings": None, "skills": None,
-                  "max_steps": None}
-    kw = A.options(A.parser().parse_args(["--las", "a.las", "--question", "q", "--model", "Qwen/Qwen3-32B"]))
-    assert (kw["model"], kw["model_card"]) == ("Qwen/Qwen3-32B", None)
+                  "max_steps": None, "direct": True}
+    kw = A.options(A.parser().parse_args(["--las", "a.las", "--question", "q", "--model", "Qwen/Qwen3-32B",
+                                          "--investigate"]))
+    assert (kw["model"], kw["model_card"], kw["direct"]) == ("Qwen/Qwen3-32B", None, False)
     qf = _file(tmp_path, "q.txt", "What is the net pay?\n")
     kw = A.options(A.parser().parse_args(["--las", "a.las", "--question-file", str(qf), "--top", "10", "--base", "20.5",
                                           "--out", "o"]))
@@ -431,8 +432,14 @@ def test_the_older_arm_form_reaches_the_batch_runner(monkeypatch, capsys):
 
 def test_the_help_shows_the_own_well_usage_and_names_benchmark_mode(monkeypatch, capsys):
     from petroharness import cli
-    for argv, want in ((["--help"], ["usage: petroharness [-h] --las LAS", "petroharness benchmark --help"]),
-                       (["benchmark", "--help"], ["usage: petroharness benchmark", "--arm ARM", "--gt-dir"])):
+    for argv, want in ((["--help"], ["usage: petroharness [-h] --las LAS", "petroharness benchmark", "petroharness chat",
+                                     "petroharness audit SESSION", "petroharness report SESSION",
+                                     "petroharness setup", "petroharness ui"]),
+                       (["benchmark", "--help"], ["usage: petroharness benchmark", "--arm ARM", "--gt-dir"]),
+                       (["chat", "--help"], ["usage: petroharness chat", "--resume"]),
+                       (["audit", "--help"], ["usage: petroharness audit", "--question"]),
+                       (["report", "--help"], ["usage: petroharness report", "--out"]),
+                       (["setup", "--help"], ["usage: petroharness setup", "--json"])):
         monkeypatch.setattr(sys, "argv", ["petroharness", *argv])
         with pytest.raises(SystemExit) as ex:
             cli.main()

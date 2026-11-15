@@ -1,0 +1,1 @@
+6. This question continues a conversation on the same well and interval (EARLIER IN THIS SESSION). Do not repeat earlier answers: refer to them. Where this reply rests on a result from an earlier question, or changes an earlier finding, say so. (The reader has the earlier answers.)

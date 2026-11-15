@@ -8,6 +8,7 @@ graph TD;
 	build(build)
 	read(read)
 	first_look(first_look)
+	look(look)
 	ask(ask)
 	skip(skip)
 	plan(plan)
@@ -16,6 +17,7 @@ graph TD;
 	close(close)
 	no_answer(no_answer)
 	settle(settle)
+	write_brief(write_brief)
 	write(write)
 	verify(verify)
 	repair(repair)
@@ -31,9 +33,13 @@ graph TD;
 	close -.-> no_answer;
 	close -.-> settle;
 	close -.-> write;
+	close -.-> write_brief;
 	decide -.-> act;
 	decide -.-> close;
-	first_look --> ask;
+	first_look -.-> ask;
+	first_look -.-> look;
+	look -.-> ask;
+	look -.-> close;
 	plan --> decide;
 	read --> first_look;
 	repair -.-> finalize;
@@ -44,8 +50,11 @@ graph TD;
 	verify -.-> finalize;
 	verify -.-> repair;
 	write --> verify;
+	write_brief -.-> ask;
+	write_brief -.-> verify;
 	finalize --> __end__;
 	no_answer --> __end__;
+	look -.-> look;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc

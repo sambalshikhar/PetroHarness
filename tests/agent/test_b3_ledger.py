@@ -6,7 +6,6 @@ Sessions: per formation, calls drawn from the dense tests' generator (test_b2_de
 one ledger. Expected selections are computed here with plain token regexes, not with the ledger's helpers.
 """
 import json
-import math
 import random
 import re
 import sys
@@ -20,10 +19,9 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
 from test_b2_dense import queries  # noqa: E402
 from test_b2_tools import F  # noqa: E402
 from petroharness.agent.engine import ToolError  # noqa: E402
-from petroharness.agent import options  # noqa: E402
 from petroharness.agent.ledger import DIGEST_CHARS, SECTION_DIGEST_CHARS, VIEW_CHARS, Ledger, shown_values  # noqa: E402
 from petroharness.agent.map import num  # noqa: E402
-from petroharness.agent.tools import TOOLS  # noqa: E402
+from petroharness.agent.toolset import TOOLS  # noqa: E402
 from petroharness.agent.engine import CUT_GET  # noqa: E402
 
 PER_FORMATION = 25

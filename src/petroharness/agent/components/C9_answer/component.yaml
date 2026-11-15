@@ -5,6 +5,12 @@ texts:
   table_rule: table_rule.md
   aspects_rule: aspects_rule.md
   write: write.md
+  points_rule: points_rule.md   # options.writer_points
+  later_rule: later_rule.md     # a later question of a conversation: the form follows the question
+  reply_brief: reply_brief.md   # a short answer: a direct question (options.depth), or a later question's "reply": "brief"
+  brief_later: brief_later.md   # the short answer's rule for a later question of a conversation
+  brief_direct: brief_direct.md # a direct question's short answer: the writer may hand it to an investigation
+  figures: figures.md           # petroharness.figures: the call that chooses an answer's figures (interactive use)
 frames:
 - agent/writer.py
 - resources/rules/shapes.yaml

@@ -13,17 +13,28 @@ _SQUARE_CITATION = re.compile(r"\s?\[[^\[\]\n]{0,80}?\bE\d+\b[^\[\]\n]{0,80}?\]|
 _BARE_RANGE = re.compile(r"\s?(?<![\w\[(])E\d{1,3}\s*(?:-|–|—|/|,|\bto\b)\s*E\d{1,3}(?!\w)")
 _BARE_ID = re.compile(r"\s?(?<![\w\[(./-])E\d{1,3}(?![\w])")
 _CITATION = re.compile(r"\[E\d+|\(E\d+|(?<![\w./-])E\d{1,3}(?!\w)")
+# a result named as the owner of what it shows ("from E5's zone means"): the id goes, and the sentence keeps a
+# determiner ("from the zone means"), not a stranded possessive ("from's zone means")
+_ID_POSSESSIVE = re.compile(r"(?<![\w\[(./-])E\d{1,3}['’]s\b")
+
+
+def _possessive(m: re.Match) -> str:
+    before = m.string[:m.start()].rstrip(" \t*_")
+    return "The" if not before or before[-1] in ".!?:\n" or before.endswith("- ") else "the"
 
 
 
 def strip_citations(text: str) -> str:
-    out = _SQUARE_CITATION.sub("", text)
+    out = _ID_POSSESSIVE.sub(_possessive, text)
+    out = _SQUARE_CITATION.sub("", out)
     out = _PAREN_CITATION.sub("", out)
     out = _BARE_RANGE.sub("", out)
     out = _BARE_ID.sub("", out)
     out = re.sub(r"[ \t]+([.,;:])", r"\1", out)          # "value [E1]." -> "value."
     out = re.sub(r",(?:[ \t]*,)+", ",", out)                # "[E1], [E2], [E3]" left ",,"
     out = re.sub(r",[ \t]*(?=[.;:!?])", "", out)             # "value [E1], [E2]." -> "value."
+    out = re.sub(r"[ \t]*[,;][ \t]*\)", ")", out)            # "(n = 18, E4)" -> "(n = 18)", not "(n = 18,)"
+    out = re.sub(r"[ \t]+\([ \t]*\)", "", out)               # "value (E4)." emptied: "value."
     out = re.sub(r"[ \t]{2,}", " ", out)
     return out.strip()
 

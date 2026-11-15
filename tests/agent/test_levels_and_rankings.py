@@ -15,7 +15,6 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
 import b2_reference as R  # noqa: E402
 from test_b2_tools import F  # noqa: E402
 from petroharness.well.view import fmt, sig  # noqa: E402
-from petroharness.agent import options  # noqa: E402
 
 ON = {}             # no switches: the tests' 'with options.use(**ON)' blocks run the defaults
 

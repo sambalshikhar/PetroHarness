@@ -86,7 +86,6 @@ def test_with_everything_covered_there_are_no_lists():
 
 @pytest.mark.data
 def test_the_writer_reads_no_removed_rule():
-    from types import SimpleNamespace as NS
     from petroharness.agent.writer import prompt
     s = _session()
     item, _ = s.ledger.open("stats", {"curves": ["SW"]})

@@ -53,6 +53,7 @@ retried, so the tapes, not LangGraph's checkpoints, are how a run is reproduced.
 | `build` | code | `Session.build`: the well prepared, the interval view, the workflow store, the inventory; the map |
 | `read` | model | the READ call: one schema-guided call (one retry when unreadable) in which the model chooses the question's topic areas, most important first, and lists the measurements it names; the map's notes follow the topics' families |
 | `first_look` | code | the note of what the question names that this well's record lacks; the key curves of the model's topics, the curves its READ reply names and the interval's reservoir curves, each with its core-calibrated twin where the record holds one (each zone, the zones pooled and the whole interval, with the default statistics), before step 1 |
+| `look` | model | the direct route's step ("The direct route" below; off with `--investigate`): one call that says the opened results state what is asked, or names up to 4 lookups, which run into the ledger; no points and no claims. A reply that asks for an investigation, or cannot be read, starts the investigation |
 | `ask` | model | build step k's prompt from the state (GUIDES with the guides read, the last step's whole and the earlier ones short, before NEW); one call (one retry after an empty reply); read the reply. The protocol is JSON (`parse`: read, salvage, or the model fixes its own syntax) |
 | `skip` | code | an unreadable reply: the step is recorded, and NEW says so |
 | `plan` | code (+ model once) | step 1 only: what the question asks, the points, the intent, the claims. One extra call when the reply's edits number points it does not list |
@@ -62,9 +63,42 @@ retried, so the tapes, not LangGraph's checkpoints, are how a run is reproduced.
 | `no_answer` | code | the question fails: step 1 was unreadable, so there are no claims to write from |
 | `settle` | model | the final step with every opened result; the claims made final |
 | `write` | model | the writer's draft from the settled claims, every opened result (the results decide where they differ), the provenance card of the curves they name, the zone table and the map; a retry after an empty reply, and the working-notes check |
+| `write_brief` | model | the short answer of a direct question (and, in the later-question graph, of a later question the model chose to answer briefly): the writer's call under the short brief, with no zone table; the checker and the repair rounds follow as for `write`. A direct question's writer may hand the question to an investigation instead of answering, where the results do not state what is asked |
 | `verify` | code | the checker: numbers no result (or the card, the map, the zone table, the question) shows, words about the process, statements the record contradicts, working notes left in the text |
 | `repair` | model | one repair round on the checker's findings (at most two with the `open` writer, one otherwise) |
 | `finalize` | code | the zone table placed, numbers as the results show them, the status |
+
+## The direct route
+
+Every question can take this route: a user's (`petroharness`, `petroharness chat`, the web UI) and a benchmark's.
+The READ call also says what kind of answer the question asks for: `direct` for a value, a setting, a count, a depth
+or a yes or no that one or two lookups will state, `investigate` for an interpretation that takes several results
+weighed together. The decision is the model's; the graph carries it. `--investigate` (the command, chat, benchmark
+mode; `direct=False` in Python; "A full investigation for every question" in the web UI) leaves the route out of the
+READ call, and every question gets the investigation: the 3.5.6 route, which the request gate still proves unchanged.
+
+| | An investigation | A direct question |
+|---|---|---|
+| Thinking | the model card's normal setting | the same: every call thinks as the card says |
+| Steps | up to 8, with points and claims | up to 2 `look` steps of at most 4 lookups |
+| Settle | one call | none |
+| Answer | the report form | the short form: the answer first, then only what it rests on |
+| Check | every number traced to a result; repairs | the same |
+
+What a direct question saves is the route: no points, no claims, no settle call, a short answer. Every call on it
+thinks as the model card says. Thinking was reduced in the `look` steps at first (the lowest effort, or thinking
+off) and measured on both models: the direct answers lost about 7 points of reference alignment, because the step
+stopped at a result near what was asked or chose a weaker lookup, and no time was saved that could be measured. A
+writer at the lowest effort was seen to deny a fact its results stated.
+
+A direct question can still get an investigation, which then starts from its own step 1 with the results already
+open. Three things send it there: a `look` reply that asks for it, a `look` reply that cannot be read (or whose
+lookups cannot be read), and the writer: where the results do not state what is asked, and do not show why it
+cannot be had, the writer replies with the one word INVESTIGATE instead of an answer, so a value is called missing
+only after an investigation has looked for it.
+
+The writer reads every result the `look` steps were shown: the ones they opened, and on a later question of a
+conversation the earlier questions' results they read again (a short answer has no claims to cite them by).
 
 The model never judges its own completion. `decide` (the claims' done rule) and `verify` (the number check) are code,
 and they route.
@@ -75,7 +109,10 @@ and they route.
 |---|---|---|
 | `build` | always | `read` |
 | `read` | always | `first_look` |
-| `first_look` | always | `ask` |
+| `first_look` | `after_first_look`: the READ call read the question as direct | `look`, else `ask` |
+| `look` | `after_look`: done, nothing to open, or the last look step | `close` |
+| `look` | the reply asks for an investigation, or cannot be read | `ask` (the investigation's step 1, at normal thinking) |
+| `look` | otherwise | `look` (k+1; NEW shows what was opened) |
 | `ask` | reply unreadable | `skip` |
 | `skip` | the skipped step was step 1, or the last step | `close` |
 | `skip` | otherwise | `ask` (k+1; NEW says the reply could not be read) |
@@ -87,10 +124,12 @@ and they route.
 | `act` | converged (POLISH_STEPS steps in a row only rephrased) | `close` |
 | `act` | otherwise | `ask` (k+1; `decide` always ends the last step, so `act` never runs at k = max_steps) |
 | `close` | no answer state (step 1 unreadable) | `no_answer` |
+| `close` | a direct question | `write_brief` |
 | `close` | claims and opened results exist | `settle` |
 | `close` | otherwise | `write` |
 | `settle` | always | `write` |
 | `write` | always | `verify` |
+| `write_brief` | `after_write_brief`: a direct question its writer handed to an investigation | `ask`, else `verify` |
 | `verify` | issues, rounds left, draft not empty | `repair` |
 | `verify` | otherwise | `finalize` |
 | `repair` | the repaired draft was kept (60% of the draft or shorter, or empty) | `finalize` |

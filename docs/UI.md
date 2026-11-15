@@ -58,7 +58,9 @@ The panel on the left (the menu button shows or hides it):
 4. **More options** (all optional): the lithology curve (default: detected; with none, the zones are shale-volume
    bands), the formation's lithology as you know it (it reaches the model with the question, marked as your
    statement), a Petrophys context profile (for wells of a known context package), the skill library (the packaged
-   one, none, or a library folder) and the investigation's step cap.
+   one, none, or a library folder), the investigation's step cap, and the depth of the answer: by default the model
+   first says whether a question is direct (a value, a setting or a fact that one or two lookups state), and a direct
+   question gets a short answer in about a minute; *A full investigation for every question* turns that off.
 
 What is wrong in the inputs (a missing file, a formation the tops file lacks, a base above the top) is said at once,
 with what to change, before the question waits for a worker.
@@ -105,6 +107,21 @@ The other tabs hold the detail behind it:
 
 `answer.md` and `trace.json` (the full record) can be opened from the run's header.
 
+Under the written answer:
+
+- **Figures**, where the model chose any: plots drawn by Petrophys from what the answer rests on, each with a caption
+  that names the Petrophys function and the result or curves it drew ([SESSIONS.md](SESSIONS.md), "Figures").
+- **Methods and parameters this answer rests on:** the Petrophys steps behind the curves the answer names, with their
+  parameters, read from the well's record.
+- **Audit trail:** every number's path from the answer back to the LAS file, as one document
+  ([EVIDENCE.md](EVIDENCE.md)).
+- **Ask a follow-up:** the next question about the same interval. It starts from the results already opened, so ask
+  about the answer, try another method or parameter, or go further. The questions of a conversation are listed above
+  the answer as a thread, and in the run list a follow-up carries its number.
+
+The Well logs tab also shows the interval as Petrophys displays it: its own log viewer, with the zones as the
+lithology track.
+
 ## Saved runs
 
 Each run is a folder in the runs folder:
@@ -146,6 +163,8 @@ The page uses a small JSON API, which also serves scripts:
 | `GET /api/job/ID?since=N` | the status and the events from N on (each model call, the results the model read, the interval's logs once Petrophys has read the well); the answer and the result when done |
 | `GET /api/runs` | the runs, newest first |
 | `GET /api/run/ID` | a run in full; `/api/run/ID/answer.md` and `/api/run/ID/trace.json` its files |
+| `GET /api/run/ID/figures/NAME` | a figure of the run's answer (`figure_1_histogram.png`), or `overview.png`, the interval as Petrophys displays it |
+| `GET /api/run/ID/audit` | the audit trail of the run's answer, as Markdown |
 | `POST /api/rate/ID` | `{"verdict": "good" \| "partly" \| "wrong", "note": "..."}` |
 
 ```bash
@@ -157,4 +176,8 @@ curl -s -X POST localhost:7860/api/ask -H 'Content-Type: application/json' -d '{
 
 `interval` is `{"mode": "whole"}` (the default), `{"mode": "tops", "tops": PATH, "formation": NAME[, "unit": "m"]}`
 or `{"mode": "depths", "top": D, "base": D[, "unit": "ft"][, "name": LABEL]}`; the other inputs are
-`lithology_curve`, `formation_lithology`, `profile`, `skills` (`default`, `none` or a folder) and `max_steps`.
+`lithology_curve`, `formation_lithology`, `profile`, `skills` (`default`, `none` or a folder), `max_steps` and
+`depth` (`investigate`: a full investigation for every question; left out: the model decides).
+
+A follow-up is `{"follow": RUN_ID, "question": "..."}`: the next question of that run's conversation, on the same LAS
+file and interval. The run it follows must have finished.

@@ -55,6 +55,7 @@ class Run:
     max_tokens: int = 0          # a step's and the settle step's output cap (cfg.model.max_tokens_spec)
     max_tokens_writer: int = 0   # the writer's and a repair's output cap (cfg.model.max_tokens_writer)
     session: Optional[Session] = None
+    depth: bool = False          # the READ call is asked whether the question is direct (docs/GRAPH.md, The direct route)
     system: str = ""             # the brief (step and settle system prompt)
     head: str = ""               # QUESTION, the note of what it names that the record lacks, THE MAP, DIRECTION (a library's)
     first_look: str = ""
@@ -94,6 +95,7 @@ class State(TypedDict, total=False):
 def build(state: State, runtime: Runtime[Run]) -> dict:
     r = runtime.context
     r.session = Session.build(r.task, r.cfg)
+    r.session.reads_depth = r.depth
     r.trace["map_chars"] = len(r.session.map)
     return {}
 
@@ -119,7 +121,8 @@ def first_look(state: State, runtime: Runtime[Run]) -> dict:
     trace["absent"] = [{"name": n, "curves": c} for n, c in vocabulary.absent(s)]
     from petroharness.agent.writer import conventions_block
     conv = conventions_block(s)
-    r.head = (f"QUESTION:\n{s.task.question}\n" + (f"{absent}\n" if absent else "") + (f"\n{conv}\n" if conv else "")
+    r.head = (f"QUESTION:\n{s.task.question}\n" + (f"{absent}\n" if absent else "")
+              + (f"\n{s.earlier}\n" if s.earlier else "") + (f"\n{conv}\n" if conv else "")
               + f"\nTHE MAP\n{s.map}\n\n"
               + (f"DIRECTION\n{s.library.index(s.topics)}\n\n" if s.library is not None else ""))
     look = ""
@@ -153,12 +156,16 @@ def ask(state: State, runtime: Runtime[Run]) -> dict:
     max_tokens, last = r.max_tokens, state["k"] == state["max_steps"]
     if k == 1:
         user = r.head + topics_text(s) + r.first_look + L.step1(s.library) + L.POINTS_SCOPE
+        if s.turn > 1:                                  # a later question of a conversation: what is already opened
+            user += C.text("C5", "step1_later")
+            if not s.reads_depth:                       # its answer's length: said here, unless READ reads the depth
+                user += C.text("C5", "step1_reply")
     else:
         pts = "\n".join(f"{i + 1}. {p}" for i, p in enumerate(s.points))
         done_ = "set done to true"
         ask_ = C.fill("C5", "step_last", done=done_) if last else C.text("C5", "step_next")
         if not last and not s.claims.done_issues():
-            ask_ += C.fill("C5", "step_settled", done=done_)
+            ask_ += C.text("C5", "step_settled_check")
         user = (r.head + f"YOUR POINTS:\n{pts}\n\nYOUR ANSWER (after step {k - 1} of {state['max_steps']}):\n"
                 f"{s.claims.render()}\n\nOPENED (fetch exact lines with get or find):\n{s.opened(set(state['shown_new']))}"
                 f"\n\n{s.guides_text(state['guides_new'])}NEW (from step {k - 1}):\n{state['new']}\n\n{ask_}")
@@ -176,6 +183,94 @@ def ask(state: State, runtime: Runtime[Run]) -> dict:
     rec["reply"] = (text or "")[:6000]
     return {"rec": rec, "reply": obj, "text": text, "user": user, "call_errors": call_errors, "shown_new": [],
             "guides_new": []}
+
+
+def _light(llm, on: bool) -> None:
+    """The client's calls from here on: the card's light thinking setting, or its normal one (a stand-in model has
+    neither)."""
+    switch = getattr(llm, "set_light", None)
+    if callable(switch):
+        switch(on)
+
+
+_SHOWN = re.compile(r"^\[(E\d+)\] (?!nothing in )", re.M)
+
+
+def _seen(s, text: str, item=None) -> None:
+    """What a look step is shown, the short answer's writer reads: the result a lookup opened (or the one the same
+    call opened before), and the results get or find read lines of. On a later question of a conversation these may
+    be an earlier question's results, and a short answer has no claims to cite them by (Session.fetched)."""
+    for eid in ([item.id] if item is not None else []) + _SHOWN.findall(text or ""):
+        if eid not in s.fetched and s.ledger.by_id(eid) is not None:
+            s.fetched.append(eid)
+
+
+def _reply_proper(llm, text: str) -> str:
+    """A reply without the reasoning a server left before it (the card's reasoning_end; llm.chat takes it off a
+    light call's reply, not off a retry's)."""
+    end = getattr(getattr(getattr(llm, "cfg", None), "model", None), "reasoning_end", None)
+    text = text or ""
+    return text.rsplit(end, 1)[1].lstrip() if isinstance(end, str) and end and end in text else text
+
+
+def look(state: State, runtime: Runtime[Run]) -> dict:
+    """A direct question's step (the READ call read the question as direct): one call that either says the opened
+    results state what is asked, or names what to open; its lookups run into the ledger. No points and no claims: the
+    writer reads the results. The step thinks as every call does: with thinking reduced, the direct answers of both
+    measured models lost about 7 points of reference alignment (the step stopped at a result near what was asked, or
+    chose a weaker lookup) and saved no measurable time. The reply may send the question to an investigation after
+    all, and so does a reply that cannot be read, or one whose lookups cannot be read."""
+    r = runtime.context
+    s, llm, usage, k = r.session, r.llm, r.usage, state["k"]
+    if k == 1:
+        s.points, s.intent = [s.task.question.strip()[:240]], "value"
+        s.claims = Claims(s.points, s.ledger, s.map, s.task.question, s.f.view, (s.task.well,))
+        s.claims.families = tuple(s.families)
+        user = r.head + topics_text(s) + r.first_look + C.text("C5", "direct_step")
+        _seen(s, r.first_look)
+    else:
+        user = (r.head + f"OPENED (fetch exact lines with get or find):\n{s.opened(set(state['shown_new']))}"
+                f"\n\nNEW (from step {k - 1}):\n{state['new']}\n\n" + C.text("C5", "direct_step"))
+    rec = {"step": k, "direct": True}
+    messages = [{"role": "system", "content": r.system}, {"role": "user", "content": user}]
+    text = llm.chat(f"step_{k}", messages, usage, r.max_tokens)
+    if not (text or "").strip():
+        text = llm.chat(f"step_{k}_retry", messages, usage, r.max_tokens, retry=True)
+    text = _reply_proper(llm, text)
+    back = re.search(r'"depth"\s*:\s*"investigate"', text) is not None      # its way back, read before the step parser
+    obj = {"depth": "investigate"} if back else parse(llm, k, text, usage, r.max_tokens, rec)
+    rec.update(prompt_chars=len(r.system) + len(user), reply=text[:6000],
+               prompt_tokens=usage.log[-1].get("prompt_tokens") if usage.log else None)
+    read = [] if obj is None or back else [(a, coerce_action(a, s.library is not None)) for a in (obj.get("next") or [])]
+    wanted = [c for _, c in read if c]
+    why = ("unreadable reply" if obj is None else "the model asked for it" if back else
+           "its lookups could not be read" if read and not wanted and not obj.get("done") else "")
+    if why:
+        s.depth, s.claims, s.points, s.fetched = "investigate", None, [], []    # the investigation starts from its own step 1
+        rec["to_investigation"] = why
+        if read:
+            rec["unread"] = [json.dumps(a, default=str)[:200] for a, _ in read]
+        r.trace["depth"] = {"read": "direct", "investigated_from_step": k, "why": why}
+        return {"steps": [rec], "k": 1, "new": "", "shown_new": [], "withheld": [], "guides_new": [],
+                "refused": False, "polish": 0, "finished": False}
+    acts = [] if obj.get("done") else wanted[:L.DIRECT_ACTIONS]
+    if len(wanted) > len(acts) and not obj.get("done"):
+        rec["over_cap"] = len(wanted) - len(acts)       # lookups asked beyond the step's cap: not run
+    parts, shown, used = [], [], 0
+    for a in acts:
+        out, item = s.run(a)
+        _seen(s, out, item)                             # the writer reads what this step is shown
+        if item is not None and used + len(out) > L.new_chars():
+            out = f"[{item.id}] {item.call_text()} (opened; the answer's writer reads it whole)"
+        elif item is not None:
+            shown.append(item.id)
+        parts.append(out)
+        used += len(out)
+    rec.update(actions=[action_text(a) for a in acts], done=bool(obj.get("done")),
+               unread=[json.dumps(a, default=str)[:200] for a, c in read if not c])
+    finished = bool(obj.get("done")) or not acts or k >= L.DIRECT_STEPS
+    return {"steps": [rec], "new": "\n\n".join(parts) or C.text("C8", "nothing_new"), "shown_new": shown,
+            "k": k + 1, "finished": finished}
 
 
 def skip(state: State, runtime: Runtime[Run]) -> dict:
@@ -217,6 +312,9 @@ def plan(state: State, runtime: Runtime[Run]) -> dict:
     rec["asks"] = asks
     it = str(obj.get("intent", "")).strip().lower()
     s.intent = it if it in ("value", "locate", "characterize", "compare", "explain", "qc_check") else "characterize"
+    if s.turn > 1:                              # a later question: the answer's length is the model's choice (C5 step1_later)
+        s.reply = "brief" if str(obj.get("reply", "")).strip().lower() == "brief" else "full"
+        r.trace.setdefault("session", {})["reply"] = s.reply
     s.claims = Claims(s.points, s.ledger, s.map, s.task.question, s.f.view, (s.task.well,))
     s.claims.families = tuple(s.families)
     return {"reply": obj, "rec": rec}
@@ -272,6 +370,11 @@ def decide(state: State, runtime: Runtime[Run]) -> dict:
                             guide=C.text("C8", "not_run_guide") if s.library is not None else ""))
     if dropped:
         notes.append(C.fill("C8", "actions_left_out", cap=cap, dropped=dropped))
+    if obj.get("done") and not last and state.get("withheld"):
+        rec["held_done"] = list(state["withheld"])          # opened, not yet shown: shown first, then decide again
+        notes.append(C.fill("C8", "done_waits", items=", ".join(state["withheld"])))
+        return {"rec": rec, "acts": [], "notes": notes, "msgs": msgs, "raw_edits": raw_edits,
+                "settled_before": settled_before, "refused": refused, "finished": False}
     if obj.get("done") or not acts or last:
         issues = s.claims.done_issues()
         rec["done_issues"] = issues
@@ -302,7 +405,7 @@ def act(state: State, runtime: Runtime[Run]) -> dict:
         nonlocal used
         if item is not None and item.id in shown:
             out = C.fill("C8", "shown_above", id=item.id)
-        elif item is not None and used + len(out) > L.NEW_CHARS:
+        elif item is not None and used + len(out) > L.new_chars():
             if item.id not in withheld:
                 withheld.append(item.id)
             return
@@ -371,11 +474,37 @@ def settle_step(state: State, runtime: Runtime[Run]) -> dict:
 # --- the writer and its checker ------------------------------------------------------------------------------------
 
 def write(state: State, runtime: Runtime[Run]) -> dict:
-    from petroharness.agent.writer import clean_reply, cited_lines, prompt, reader_format
+    return _write(runtime.context)
+
+
+HANDS_OVER = re.compile(r"\W*INVESTIGATE\b", re.I)
+
+
+def write_brief(state: State, runtime: Runtime[Run]) -> dict:
+    """The short answer: a direct question's, or a later question's that the model chose to answer briefly (step 1's
+    "reply": "brief"; route reply_form). The writer's call under C9's reply_brief, with no zone table; the checker
+    and the repair rounds are the same. A direct question's writer may hand the question to an investigation
+    instead of answering (the one word INVESTIGATE, C9 brief_direct): the look steps' results do not state what is
+    asked. The investigation then starts from its own step 1, with those results open."""
     r = runtime.context
+    s = r.session
+    out = _write(r, brief=True)
+    draft = out["draft"].strip()
+    if s.depth == "direct" and len(draft) < 200 and HANDS_OVER.match(draft):
+        s.depth, s.claims, s.points, s.fetched = "investigate", None, [], []
+        r.trace["depth"] = {"read": "direct", "investigated_from": "the writer",
+                            "why": "the writer found that the results do not state what is asked"}
+        return {"draft": "", "k": 1, "new": "", "shown_new": [], "withheld": [], "guides_new": [], "refused": False,
+                "polish": 0, "finished": False}
+    return out
+
+
+def _write(r: Run, brief: bool = False) -> dict:
+    from petroharness.agent.writer import clean_reply, cited_lines, prompt, reader_format
     s, llm, usage, trace, cap = r.session, r.llm, r.usage, r.trace, r.max_tokens_writer
+    _light(llm, False)                                  # the answer and its repairs are written at normal thinking
     variant = r.writer                                  # the repair rounds it allows (route after_verify)
-    system, user, table, shape = prompt(s, r.fmt)
+    system, user, table, shape = prompt(s, r.fmt, brief=brief)
     trace["writer_format"] = "profile" if reader_format(s.f.view.policy, r.fmt) else "default"
     trace["writer_user_chars"], trace["shape"], trace["writer_variant"] = len(user), shape, variant
     trace["cited_lines_chars"] = len(cited_lines(s.claims))
@@ -391,7 +520,22 @@ def write(state: State, runtime: Runtime[Run]) -> dict:
             draft = clean_reply(llm.chat("writer_again", messages, usage, cap, retry=True)) or draft
         else:
             draft = first
+    trace["draft_chars"] = len(draft)
     return {"draft": draft}
+
+
+def _repair_ask(bad: list, talk: list, contra: list, notes: list) -> str:
+    """The repair request for the checker's findings ("" when there are none): the repair node's texts."""
+    asks = []
+    if contra:
+        asks.append(C.text("C2", "repair_contradictions") + " ".join(contra[:4]))
+    if bad:
+        asks.append(C.fill("C2", "repair_numbers", numbers=", ".join(bad[:12])))
+    if talk:
+        asks.append(C.fill("C2", "repair_words", words=", ".join(repr(x) for x in talk[:8])))
+    if notes:
+        asks.append(C.fill("C2", "repair_leaks", leaks=", ".join(repr(x) for x in notes[:4])))
+    return " ".join(asks) + C.text("C2", "repair_keep") if asks else ""
 
 
 def _check(draft: str, r: Run) -> tuple:
@@ -454,6 +598,17 @@ def finalize(state: State, runtime: Runtime[Run]) -> dict:
 
 # --- routes (docs/GRAPH.md "Routes") --------------------------------------------------------------------------------
 
+def after_first_look(state: State, runtime: Runtime[Run]) -> str:
+    """A question the READ call read as direct takes the look steps; every other the investigation."""
+    return "look" if runtime.context.session.depth == "direct" else "ask"
+
+
+def after_look(state: State, runtime: Runtime[Run]) -> str:
+    if runtime.context.session.depth != "direct":       # sent to an investigation after all
+        return "ask"
+    return "close" if state["finished"] else "look"
+
+
 def after_ask(state: State) -> str:
     if state["reply"] is None:
         return "skip"
@@ -479,7 +634,26 @@ def after_close(state: State, runtime: Runtime[Run]) -> str:
     s = runtime.context.session
     if s.claims is None:
         return "no_answer"
+    if s.depth == "direct":                             # no claims to settle: the short answer from the results
+        return "write_brief"
     return "settle" if s.ledger.items else "write"
+
+
+def reply_form(state: State, runtime: Runtime[Run]) -> str:
+    """A later question: the writer node for the answer length the model chose in step 1 (Session.reply)."""
+    return "write_brief" if runtime.context.session.reply == "brief" else "write"
+
+
+def after_close_later(state: State, runtime: Runtime[Run]) -> str:
+    """after_close for a later question: where it goes to the full writer, reply_form picks the node."""
+    to = after_close(state, runtime)
+    return reply_form(state, runtime) if to == "write" else to
+
+
+def after_write_brief(state: State, runtime: Runtime[Run]) -> str:
+    """The short answer goes to the checker; a direct question its writer handed over (write_brief) goes to the
+    investigation's step 1."""
+    return "ask" if runtime.context.session.claims is None else "verify"
 
 
 def after_verify(state: State, runtime: Runtime[Run]) -> str:
@@ -493,13 +667,14 @@ def after_repair(state: State) -> str:
     return "finalize" if state["rounds"] and state["rounds"][-1].get("kept_draft") else "verify"
 
 
-INVESTIGATION_NODES = (("first_look", first_look), ("ask", ask), ("skip", skip), ("plan", plan), ("decide", decide),
-                       ("act", act), ("close", close))
+INVESTIGATION_NODES = (("first_look", first_look), ("look", look), ("ask", ask), ("skip", skip), ("plan", plan),
+                       ("decide", decide), ("act", act), ("close", close))
 WRITER_NODES = (("write", write), ("verify", verify), ("repair", repair), ("finalize", finalize))
 
 
 def _investigation(g: StateGraph) -> None:
-    g.add_edge("first_look", "ask")
+    g.add_conditional_edges("first_look", after_first_look, ["look", "ask"])
+    g.add_conditional_edges("look", after_look, ["look", "ask", "close"])
     g.add_conditional_edges("ask", after_ask, ["skip", "plan", "decide"])
     g.add_conditional_edges("skip", after_skip, ["ask", "close"])
     g.add_edge("plan", "decide")
@@ -517,14 +692,34 @@ def question_graph():
     """build -> read -> the investigation -> settle -> the writer and its checker (docs/GRAPH.md)."""
     g = StateGraph(State, context_schema=Run)
     for name, fn in (("build", build), ("read", read_step)) + INVESTIGATION_NODES \
-            + (("no_answer", no_answer), ("settle", settle_step)) + WRITER_NODES:
+            + (("no_answer", no_answer), ("settle", settle_step), ("write_brief", write_brief)) + WRITER_NODES:
         g.add_node(name, fn)
     g.add_edge(START, "build")
     g.add_edge("build", "read")
     g.add_edge("read", "first_look")
     _investigation(g)
-    g.add_conditional_edges("close", after_close, ["no_answer", "settle", "write"])
+    g.add_conditional_edges("close", after_close, ["no_answer", "settle", "write", "write_brief"])
     g.add_edge("settle", "write")
+    g.add_conditional_edges("write_brief", after_write_brief, ["ask", "verify"])
+    _writer(g)
+    g.add_edge("finalize", END)
+    return g.compile()
+
+
+def later_graph():
+    """A later question of a conversation (petroharness.session; docs/GRAPH.md "The later-question graph"): the
+    question graph without `build`, on the session the earlier questions ran on, with one more route: the answer
+    length the model chose in step 1 picks the writer node (reply_form: write, or write_brief)."""
+    g = StateGraph(State, context_schema=Run)
+    for name, fn in (("read", read_step),) + INVESTIGATION_NODES \
+            + (("no_answer", no_answer), ("settle", settle_step), ("write_brief", write_brief)) + WRITER_NODES:
+        g.add_node(name, fn)
+    g.add_edge(START, "read")
+    g.add_edge("read", "first_look")
+    _investigation(g)
+    g.add_conditional_edges("close", after_close_later, ["no_answer", "settle", "write", "write_brief"])
+    g.add_conditional_edges("settle", reply_form, ["write", "write_brief"])
+    g.add_conditional_edges("write_brief", after_write_brief, ["ask", "verify"])
     _writer(g)
     g.add_edge("finalize", END)
     return g.compile()
@@ -550,9 +745,8 @@ def writer_graph():
     return g.compile()
 
 
-GRAPH, INVESTIGATION, WRITER = question_graph(), investigation_graph(), writer_graph()
+GRAPH, INVESTIGATION, WRITER, LATER = question_graph(), investigation_graph(), writer_graph(), later_graph()
 _CONFIG = {"recursion_limit": RECURSION_LIMIT}
-
 
 
 def investigate(llm: LLM, s: Session, usage: Usage, max_tokens: int, trace: dict, max_steps: int = MAX_STEPS) -> Optional[Claims]:
@@ -573,10 +767,9 @@ def write_answer(llm: LLM, s: Session, cfg, usage: Usage, trace: dict, variant: 
 
 # --- one question ---------------------------------------------------------------------------------------------------
 
-def answer(task, model_key: str, rep: int, max_steps: int = MAX_STEPS, writer: str = "", fmt: str = "profile",
-           llm_factory: Optional[Callable] = None, commit: str = "") -> dict:
-    """One question through the graph -> {"answer", "status", "trace"} (src/petroharness/cli.py's record). llm_factory(cfg) builds the
-    model client (default: petroharness.llm.LLM on the registry's endpoint for this task)."""
+def task_config(task, model_key: str, rep: int):
+    """The configuration one question runs under: the model's card, the endpoint this task is sent to (by its id and
+    the repetition), the task's data settings."""
     from petroharness.config import HarnessConfig
     from petroharness.models import MODELS
     from petroharness.config import RESOURCES
@@ -585,18 +778,63 @@ def answer(task, model_key: str, rep: int, max_steps: int = MAX_STEPS, writer: s
     if named:
         cfg.model.model = named[0]                   # the served model's name (petroharness --model)
     cfg.model.base_url = urls[(int(hashlib.sha256(task.task_id.encode()).hexdigest()[:8], 16) + rep) % len(urls)]
-    tcfg = cfg.for_tasks()
+    return cfg.for_tasks()
+
+
+def answer(task, model_key: str, rep: int, max_steps: int = MAX_STEPS, writer: str = "", fmt: str = "profile",
+           llm_factory: Optional[Callable] = None, commit: str = "", depth: bool = True) -> dict:
+    """One question through the graph -> {"answer", "status", "trace"} (src/petroharness/cli.py's record). llm_factory(cfg) builds the
+    model client (default: petroharness.llm.LLM on the registry's endpoint for this task). depth: turn()'s."""
+    return turn(task, model_key, rep, max_steps, writer, fmt, llm_factory, commit, depth=depth)[0]
+
+
+def route(trace: dict) -> str:
+    """How a question was answered, from its trace: "direct" (look steps and a short answer), "investigation", or
+    "investigation after a look" (read as direct, then sent to an investigation)."""
+    if isinstance(trace.get("depth"), dict):
+        return "investigation after a look"
+    return "direct" if (trace.get("read") or {}).get("depth") == "direct" else "investigation"
+
+
+def route_text(trace: dict) -> str:
+    """The route in the words a user reads beside an answer."""
+    n = len(trace.get("steps") or [])
+    steps = f"{n} step{'' if n == 1 else 's'}"
+    how = route(trace)
+    if how == "direct":
+        return f"a direct answer, {n} look step{'' if n == 1 else 's'}"
+    if how == "investigation after a look":
+        return f"an investigation after a first look, {steps}"
+    return f"{n} investigation step{'' if n == 1 else 's'}"
+
+
+def turn(task, model_key: str, rep: int, max_steps: int = MAX_STEPS, writer: str = "", fmt: str = "profile",
+         llm_factory: Optional[Callable] = None, commit: str = "", session: Optional[Session] = None,
+         depth: bool = True) -> tuple:
+    """One question -> ({"answer", "status", "trace"}, the session it ran on). The first question of a conversation
+    builds the session (`session` None: the whole question graph, as answer()). A later one runs on the session the
+    earlier questions left, already moved to this task (Session.next_turn): the graph starts at the READ call, the
+    well is not prepared again and the ledger's ids go on. `depth`: the READ call also says whether the question is
+    direct (the direct route, docs/GRAPH.md); False: every question gets the investigation (the 3.5.6 route)."""
+    tcfg = task_config(task, model_key, rep)
     library = direction.plugged(tcfg)                # the skill library, checked as it loads: a bad one stops here
     llm, usage = (llm_factory or LLM)(tcfg), Usage()
+    _light(llm, False)                               # a client shared across questions starts each at normal thinking
     trace = {"task_id": task.task_id, "well": task.well, "formation": task.formation, "topics": [],
              "harness": HARNESS, "commit": commit, "model": model_key, "skills": direction.stamp(library)}
     trace["components"] = C.versions()               # each component's version (src/petroharness/agent/components)
     C.recording(llm, trace, library)                 # every call's attribution: trace["calls"]
     run = Run(task=task, cfg=tcfg, llm=llm, usage=usage, trace=trace, writer=writer, fmt=fmt,
-              max_tokens=tcfg.model.max_tokens_spec, max_tokens_writer=tcfg.model.max_tokens_writer)
+              max_tokens=tcfg.model.max_tokens_spec, max_tokens_writer=tcfg.model.max_tokens_writer, session=session,
+              depth=bool(depth))
+    trace["reads_depth"] = run.depth                 # the route setting: False is the 3.5.6 route
+    if session is not None:
+        session.reads_depth = run.depth
+        trace["session"] = {"turn": session.turn, "ledger_start": session.turn_start,
+                            "earlier_chars": len(session.earlier)}
     t0 = time.time()
     try:
-        out = GRAPH.invoke({"max_steps": max_steps}, context=run, config=_CONFIG)
+        out = (GRAPH if session is None else LATER).invoke({"max_steps": max_steps}, context=run, config=_CONFIG)
         text, status = out["answer"], out["status"]
     except Exception as exc:                         # one question's failure is recorded, the run goes on
         trace["error"] = f"{type(exc).__name__}: {exc}"
@@ -604,4 +842,4 @@ def answer(task, model_key: str, rep: int, max_steps: int = MAX_STEPS, writer: s
         text, status = "", f"error: {type(exc).__name__}"
     trace["status"], trace["seconds"] = status, round(time.time() - t0, 1)
     trace["usage"] = usage.log
-    return {"answer": text, "status": status, "trace": trace}
+    return {"answer": text, "status": status, "trace": trace}, run.session

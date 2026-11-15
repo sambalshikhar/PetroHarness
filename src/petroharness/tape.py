@@ -158,16 +158,30 @@ def first_diff(a: Any, b: Any, where: str = "trace") -> str:
     return "" if a == b else f"{where}: {str(a)[:120]!r} against {str(b)[:120]!r}"
 
 
-ADDED = ("calls", "components")   # trace keys a recording may lack (per-call attribution and the component
-                                  #   versions): compared when the recording has them, skipped otherwise
+ADDED = ("calls", "components", "draft_chars")   # trace keys a recording may lack (per-call attribution, the
+                                  #   component versions, the writer's draft length before repair): compared when the
+                                  #   recording has them, skipped otherwise
 
 
-def compare_run(got: dict, want: dict, replayer: "Replayer | None" = None, fixed: "dict | None" = None) -> str:
+def unstamped(trace: dict) -> dict:
+    """A trace without its version stamps: the component versions (`components`) and the version in every attributed
+    span of `calls` ([component, version, start, end] -> [component, start, end]). What is left decides behaviour;
+    the stamps say which files produced it (they change whenever a framed file is edited or moved)."""
+    out = {k: v for k, v in trace.items() if k != "components"}
+    if isinstance(out.get("calls"), list):
+        out["calls"] = [{**c, "messages": [{**m, "segments": [[s[0], *s[2:]] for s in m.get("segments") or []]}
+                                           for m in c.get("messages") or []]} for c in out["calls"]]
+    return out
+
+
+def compare_run(got: dict, want: dict, replayer: "Replayer | None" = None, fixed: "dict | None" = None,
+                versions: bool = True) -> str:
     """"" when a replayed run ({"answer", "status", "trace"}) equals the recorded one: every recorded call made, the same
     answer and status, the same trace except its volatile keys and the usage log's timings. A switch the recording does
     not know must be off (a new component, not yet in use). A switch the code does not have (a removed one) passes
     only when the recording ran it at the value now fixed in code (`fixed`: removed switch -> value); a key of ADDED
-    only the replay has is skipped."""
+    only the replay has is skipped. versions=False: the behaviour verdict alone (the version stamps left out, see
+    unstamped); with the default the stamps must be equal too."""
     if got["trace"].get("error") and "TapeMismatch" in got["trace"]["error"] and not want["trace"].get("error"):
         return got["trace"]["error"][:400]
     if replayer is not None and replayer.left():
@@ -194,4 +208,6 @@ def compare_run(got: dict, want: dict, replayer: "Replayer | None" = None, fixed
     for k in ADDED:
         if k in g and k not in w:
             del g[k]
+    if not versions:
+        g, w = unstamped(g), unstamped(w)
     return first_diff(g, w)

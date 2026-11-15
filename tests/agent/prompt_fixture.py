@@ -6,7 +6,9 @@ petroharness is first on the path, through Session.build, read_question and inve
 
     PYTHONPATH=<a petroharness src> PETROHARNESS_DATA=<geolink.yaml> python tests/agent/prompt_fixture.py IDS_DIR OUT.json.gz LABEL
 
-IDS_DIR holds smoke_ids_<dataset>.json; each dataset's config is found beside PETROHARNESS_DATA (<dataset>.yaml).
+IDS_DIR holds smoke_ids_<dataset>.json; each dataset's config is found beside PETROHARNESS_DATA (<dataset>.yaml) and
+read with the default reporting settings (config: data.basis all, no conventions), so the general and the benchmark
+data files render the same fixture.
 tests/agent/fixtures/prompts.json.gz is the current rendering (label "v3.5"); tests/agent/test_skill_library.py renders
 the same tasks and compares, so a change proves it changes no prompt it does not mean to. A change that alters prompts
 on purpose re-renders the fixture after checking that every changed line is intended.
@@ -64,10 +66,13 @@ class Stub:
 
 
 def config(path: Path):
-    """A dataset's configuration, passed explicitly (whatever PETROHARNESS_DATA names), without its evaluation paths."""
+    """A dataset's configuration, passed explicitly (whatever PETROHARNESS_DATA names), with the data's two reporting
+    settings at the package's defaults (data.basis "all", no conventions): the fixture holds the prompts of the general
+    harness, whichever data files render it (a benchmark's files set the zones basis and its conventions; the golden
+    tapes hold those prompts)."""
     from petroharness.config import DataPaths, EvalPaths, HarnessConfig
     d = yaml.safe_load(Path(path).read_text())
-    return HarnessConfig(data=DataPaths(**d["data"]), eval=EvalPaths(**d["eval"]))
+    return HarnessConfig(data=DataPaths(**{**d["data"], "basis": "all", "conventions": []}), eval=EvalPaths(**d["eval"]))
 
 
 def tasks(configs: dict, ids: dict) -> list:

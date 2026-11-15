@@ -9,13 +9,15 @@ The page's inputs (POST /api/ask):
                | {"mode": "tops", "tops": PATH, "formation": NAME[, "unit": "m"|"ft"]}
                | {"mode": "depths", "top": D, "base": D[, "unit": "m"|"ft"][, "name": LABEL]},
      "lithology_curve": MNEMONIC, "formation_lithology": TEXT, "profile": NAME,
-     "skills": "default" | "none" | PATH, "max_steps": N}
+     "skills": "default" | "none" | PATH, "max_steps": N, "depth": "investigate"}
 
 Everything but the LAS, the question and the interval is optional.
 """
 
 from __future__ import annotations
 
+import itertools
+import json
 import threading
 import time
 import traceback
@@ -196,6 +198,12 @@ def arguments(inputs: dict) -> dict:
         if not 1 <= steps <= MAX_STEPS_LIMIT:
             raise InputError(f"WHAT: max steps {steps}. FIX: give 1 to {MAX_STEPS_LIMIT}.")
         kw["max_steps"] = steps
+    depth = str(inputs.get("depth") or "").strip().lower()
+    if depth == "investigate":                                # default: the model says whether a question is direct
+        kw["direct"] = False
+    elif depth not in ("", "auto"):
+        raise InputError(f"WHAT: depth {depth!r}. FIX: leave it out (the model decides), or give 'investigate' for a "
+                         "full investigation of every question.")
     return kw
 
 
@@ -240,6 +248,9 @@ class Job:
         self.result: dict | None = None
         self.error = ""
         self.rating: dict = {}
+        self.root = run_id                 # the run that started this conversation (itself, for a first question)
+        self.conversation: dict = {}       # {root, turn, thread: [{turn, question, run}]}, once the question ran
+        self.saved = False                 # its finished record is on disk (the server sets it after saving)
         self._lock = threading.Lock()
 
     def emit(self, event: dict) -> None:
@@ -252,18 +263,22 @@ class Job:
             return 0.0
         return round((self.finished or time.time()) - self.started, 1)
 
-    def view(self, since: int = 0) -> dict:
+    def view(self, since: int = 0, final: bool | None = None) -> dict:
+        """What the page is given. A job shows as finished once its record is saved, so whoever sees it finished finds
+        the record on disk (final=True: the record itself, as it is)."""
         with self._lock:
             events = self.events[since:]
             n = len(self.events)
-        finished = self.finished is not None
-        return {"id": self.id, "status": self.status, "inputs": self.inputs, "label": interval_label(self.inputs),
+        finished = self.finished is not None and (self.saved if final is None else final)
+        status = self.status if finished or self.finished is None else "running"
+        return {"id": self.id, "status": status, "inputs": self.inputs, "label": interval_label(self.inputs),
                 "created": _iso(self.created), "elapsed": self.elapsed(), "endpoint": self.endpoint,
                 "events": events, "n_events": n, "answer": self.answer if finished else "",
-                "result": self.result if finished else None, "error": self.error, "rating": self.rating}
+                "result": self.result if finished else None, "error": self.error, "rating": self.rating,
+                "conversation": self.conversation or {"root": self.root}}
 
     def record(self) -> dict:
-        return self.view(0) | {"finished": _iso(self.finished) if self.finished else None}
+        return self.view(0, final=True) | {"finished": _iso(self.finished) if self.finished else None}
 
 
 def _iso(t: float) -> str:
@@ -271,12 +286,27 @@ def _iso(t: float) -> str:
     return dt.datetime.fromtimestamp(t, dt.timezone.utc).isoformat(timespec="seconds")
 
 
-def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | None = None) -> None:
-    """Answer the job's question with petroharness.ask, reporting the interval's logs once Petrophys has interpreted the
-    well (a `well` event: petroharness.ui.wellplot) and each model call as it happens; ask writes answer.md and
-    trace.json to `out`. model_factory(cfg) builds the model client (default: the harness's own LLM)."""
-    from petroharness.ask import ask
+_ASKING: dict = {}                     # a conversation's folder -> its lock: one question of it at a time
+_ASKING_GUARD = threading.Lock()
+
+
+def _asking(session: Path) -> threading.Lock:
+    with _ASKING_GUARD:
+        return _ASKING.setdefault(str(session), threading.Lock())
+
+
+def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | None = None,
+        root_out: Path | None = None) -> None:
+    """Answer the job's question as a question of a conversation (petroharness.session), reporting the interval's
+    logs once Petrophys has interpreted the well (a `well` event: petroharness.ui.wellplot) and each model call as it
+    happens. A first question starts the conversation in `out`/session and is answered as petroharness.ask answers
+    it; a follow-up (`root_out`: the folder of the conversation's first run) resumes that conversation. The answer,
+    the trace and the figures are written to `out`. model_factory(cfg) builds the model client (default: the
+    harness's own LLM)."""
+    import shutil
+
     from petroharness.llm import LLM
+    from petroharness.session import Conversation
 
     base = model_factory or LLM
     job.status, job.started = "running", time.time()
@@ -291,13 +321,45 @@ def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | No
 
     try:
         from petroharness.ui.progress import Observed
-        got = ask(**job.kwargs, out=out, model_url=model_url, llm_factory=lambda cfg: Observed(base(cfg), job.emit),
-                  on_view=plot)
-        job.answer = got.answer
-        job.result = summary(got.trace, got.interval, got.status)
-        job.status = "done" if got.ok else "error"
-        if not got.ok:
-            job.error = str(got.trace.get("error") or got.status)
+        kw = dict(job.kwargs)
+        question = kw.pop("question")
+        numbers = itertools.count(1)                         # one numbering for the run's calls (the question's client
+        factory = lambda cfg: Observed(base(cfg), job.emit, numbers)   # and the figures call's)
+        session = (root_out or out) / "session"
+        with _asking(session):
+            if root_out is None:
+                session.mkdir(parents=True, exist_ok=True)
+                cache = out / ".cache"
+                if cache.exists() and not (session / ".cache").exists():     # the interpreted wells shared by every run
+                    (session / ".cache").symlink_to(cache.resolve(), target_is_directory=True)
+                c = Conversation.start(kw.pop("las"), session, **kw, model_url=model_url, llm_factory=factory,
+                                       on_view=plot)
+            else:
+                c = Conversation.resume(session, model_url=model_url, llm_factory=factory, on_view=plot)
+            shown = c.overview()                              # the interval's log display by Petrophys, once
+            if shown is not None:
+                (out / "figures").mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(shown, out / "figures" / shown.name)
+                job.emit({"kind": "display", "file": shown.name})
+            turn = c.ask(question)
+            runs = json.loads((session / "runs.json").read_text()) if (session / "runs.json").exists() else {}
+            runs[str(turn.number)] = job.id
+            (session / "runs.json").write_text(json.dumps(runs))
+        for name in ("answer.md", "trace.json"):
+            shutil.copyfile(turn.folder / name, out / name)
+        if (turn.folder / "figures").is_dir():
+            shutil.copytree(turn.folder / "figures", out / "figures", dirs_exist_ok=True)
+        job.conversation = {"root": job.root, "turn": turn.number,
+                            "thread": [{"turn": r["turn"], "question": r["question"], "status": r["status"],
+                                        "run": runs.get(str(r["turn"]))} for r in c.turns]}
+        job.answer = turn.answer
+        job.result = summary(turn.trace, c.p.used, turn.status)
+        job.result["figures"] = [{"caption": g["caption"], "file": Path(g["file"]).name, "kind": g["kind"],
+                                  "source": g["source"]} for g in turn.figures]
+        job.result["basis"] = turn.basis
+        job.status = "done" if turn.ok else "error"
+        if not turn.ok:
+            job.error = str(turn.trace.get("error") or turn.status)
     except (ValueError, LookupError, OSError) as exc:          # the inputs (ask's own checks): said as ask says them
         job.status, job.error = "error", str(exc)
     except Exception as exc:  # noqa: BLE001  (one question's failure is recorded; the server goes on)
@@ -306,6 +368,11 @@ def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | No
     finally:
         job.finished = time.time()
         job.emit({"kind": "phase", "name": "finished", "status": job.status, **({"error": job.error} if job.error else {})})
+
+
+def _route(trace: dict) -> str:
+    from petroharness.agent.graph import route
+    return route(trace)
 
 
 def summary(trace: dict, interval: dict, status: str) -> dict:
@@ -329,7 +396,8 @@ def summary(trace: dict, interval: dict, status: str) -> dict:
         "status": status, "seconds": trace.get("seconds"), "interval": interval,
         "question_sent": a.get("question_sent"), "lithology": a.get("lithology"), "zones": a.get("zones") or [],
         "settings": a.get("settings"), "interpret": a.get("interpret"), "petrophys": a.get("petrophys"),
-        "read": {k: (trace.get("read") or {}).get(k) for k in ("topics", "named", "parse")},
+        "read": {k: (trace.get("read") or {}).get(k) for k in ("topics", "named", "parse", "depth")},
+        "route": _route(trace),
         "topics": trace.get("topics") or [], "absent": trace.get("absent") or [],
         "points": trace.get("points") or [], "intent": trace.get("intent"),
         "claims": claims,

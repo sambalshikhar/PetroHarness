@@ -3,15 +3,19 @@ name: orchestration
 purpose: 'what each stage asks: the reading, step 1, step k, the points request, settle (with its bookkeeping lists)'
 texts:
   read: read.md
+  read_depth: read_depth.md               # options.depth: READ also says whether the question is direct
+  direct_step: direct_step.md             # options.depth: a direct question's look step
   step1: step1.md
   step1_guides: step1_guides.md           # with a skill library only
   step1_guide_call: step1_guide_call.md   # with a skill library only
+  step1_later: step1_later.md             # a later question of a conversation (petroharness.session)
+  step1_reply: step1_reply.md             # a later question's answer length, said in step 1 (not with options.depth)
   points_scope: points_scope.md
   settle: settle.md
   settle_lists: settle_lists.json      # the settle step's bookkeeping lists
   step_last: step_last.md
   step_next: step_next.md
-  step_settled: step_settled.md
+  step_settled_check: step_settled_check.md   # options.stop_check: the brief's checks once every point is settled
   section_owners: section_owners.json
 frames:
 - agent/graph.py

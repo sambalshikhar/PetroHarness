@@ -79,7 +79,7 @@ def test_the_rendered_step_records_read_in_plain_words():
     whole well is labelled a parameter of its step, on the map and in the step tool."""
     from test_b2_tools import F
     from petroharness.agent.map import render
-    from petroharness.agent.tools import TOOLS
+    from petroharness.agent.toolset import TOOLS
     seen_fallback = seen_parameter = 0
     for t, f in F():
         text = render(f.inv)

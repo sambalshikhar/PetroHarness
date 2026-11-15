@@ -84,6 +84,10 @@ class LLM:
             usage.log[-1]["max_tokens_shrunk"] = shrunk
         if retry and m.retry_template_kwargs is not None:
             usage.log[-1]["template_kwargs"] = dict(m.retry_template_kwargs)
+        elif self.light and m.light_template_kwargs is not None:
+            usage.log[-1]["light"] = True
+            if m.reasoning_end and m.reasoning_end in content:      # reasoning the server left in the reply
+                content = content.rsplit(m.reasoning_end, 1)[1].lstrip()
         if choice.finish_reason == "length" and self.cfg.model.reasoning:
             usage.log[-1]["discarded"] = "truncated reasoning reply"
             return ""                     # callers retry or keep their previous draft
@@ -110,9 +114,18 @@ class LLM:
         m = self.cfg.model
         return m.reasoning if m.replay_reasoning_field is None else m.replay_reasoning_field
 
+    light = False                     # the calls that follow need little reasoning (set_light)
+
+    def set_light(self, on: bool) -> None:
+        """From here on, calls use the card's light thinking setting (light_template_kwargs), or its normal one again.
+        A card without a light setting is not changed by this."""
+        self.light = bool(on)
+
     def template_kwargs(self, retry: bool = False) -> dict:
         m = self.cfg.model
         if retry and m.retry_template_kwargs is not None:
             return dict(m.retry_template_kwargs)
+        if self.light and m.light_template_kwargs is not None:
+            return dict(m.light_template_kwargs)
         return dict(m.chat_template_kwargs) if m.chat_template_kwargs is not None else {"enable_thinking": m.enable_thinking}
 

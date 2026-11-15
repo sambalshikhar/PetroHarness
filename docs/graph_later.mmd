@@ -1,0 +1,59 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	read(read)
+	first_look(first_look)
+	look(look)
+	ask(ask)
+	skip(skip)
+	plan(plan)
+	decide(decide)
+	act(act)
+	close(close)
+	no_answer(no_answer)
+	settle(settle)
+	write_brief(write_brief)
+	write(write)
+	verify(verify)
+	repair(repair)
+	finalize(finalize)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> read;
+	act -.-> ask;
+	act -.-> close;
+	ask -.-> decide;
+	ask -.-> plan;
+	ask -.-> skip;
+	close -.-> no_answer;
+	close -.-> settle;
+	close -.-> write;
+	close -.-> write_brief;
+	decide -.-> act;
+	decide -.-> close;
+	first_look -.-> ask;
+	first_look -.-> look;
+	look -.-> ask;
+	look -.-> close;
+	plan --> decide;
+	read --> first_look;
+	repair -.-> finalize;
+	repair -.-> verify;
+	settle -.-> write;
+	settle -.-> write_brief;
+	skip -.-> ask;
+	skip -.-> close;
+	verify -.-> finalize;
+	verify -.-> repair;
+	write --> verify;
+	write_brief -.-> ask;
+	write_brief -.-> verify;
+	finalize --> __end__;
+	no_answer --> __end__;
+	look -.-> look;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

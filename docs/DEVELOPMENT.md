@@ -72,7 +72,7 @@ the checks: `src/petroharness/resources/skills/README.md`.
 | `PETROHARNESS_API_KEY` | the API key sent to the endpoints (a model card can name another variable) |
 | `PETROHARNESS_SKILLS` | the skill library: a folder or `none` |
 | `PETROHARNESS_COMPONENTS` | another copy of the component texts (`src/petroharness/agent/components`), to compare two versions |
-| `PETROHARNESS_SET` | switches under test, `name=true,...`; this release defines none |
+| `PETROHARNESS_SET` | switches under test, `name=true,...`; none is defined at present (`agent/options.py`) |
 
 Hosted tracing stays off: the harness refuses to start when `LANGSMITH_TRACING` (or a LangChain equivalent) is on,
 because LangSmith would send every prompt, with the well data, to its service.
@@ -119,6 +119,7 @@ export PETROHARNESS_MODEL_URL=http://host-a:8100/v1,http://host-b:8100/v1
 | `--max-steps N` | the step cap (default 8) |
 | `--writer open` | the writer's repair rounds: `open` (default) allows two, `''` one |
 | `--format profile` | the answer format: the report style's (`profile`, default) or the writer's own (`default`) |
+| `--investigate` | every question gets the full investigation: the 3.5.6 route (default: the model first says whether a question is direct, as for a user's question; [GRAPH.md](GRAPH.md), "The direct route") |
 
 **The output**, under `runs/` in the checkout:
 
@@ -150,6 +151,15 @@ A question's status is `ok`, `unresolved_numbers` (the checker still found numbe
 repairs) or `error: <type>` (the trace holds the error and its traceback; the run goes on). A run resumes: a question
 whose trace was written at the same commit, without an error, is not run again.
 
+### The reference runs
+
+A change is judged against reference runs: two benchmark runs of each measured model on the head, with the head's
+route, kept outside the repository with the benchmark data. Their scores are what a change is compared with (two
+runs, so that the difference between them shows the run-to-run noise), and the request gate's base is recorded from
+them ([tests/gate/README.md](../tests/gate/README.md)). When a change is adopted because it was meant to alter what
+the model is sent, its measured runs become the new reference runs, and the gate's base is recorded again from them.
+The 3.5.6 runs stay the reference of the `--investigate` route.
+
 ## Testing
 
 ```bash
@@ -165,6 +175,10 @@ Some tests need data that is not part of this repository, and skip without it:
 
 `tests/test_generality.py` holds one test per rule of the generality contract (`docs/DESIGN.md`), and
 `tests/test_lint.py` keeps well, formation and dataset names and depth literals out of the code, rules and prompts.
+
+The gates that anyone can run, and the request gate over every saved run, are in `tests/gate/`
+([tests/gate/README.md](../tests/gate/README.md)): the public mini set replays a recorded conversation on a Petrophys
+sample well with no model server and no benchmark data.
 
 Three regression gates show that a change alters nothing it does not mean to. They run wherever their data is
 present: record golden tapes and a fixture on wells you have with the tools below. A change that alters behaviour
@@ -191,7 +205,14 @@ on purpose re-records the gate it changes, after checking that every difference 
 
 ```
 src/petroharness/
-  cli.py        the command line: a question about one well (default) and benchmark mode
+  cli.py        the command line: a question about one well (default), chat, audit, setup, ui and benchmark mode
+  session/      a conversation on one interval: the session graph (graph.py), the session log (log.py), the
+                earlier-questions block, `petroharness chat` (docs/SESSIONS.md, docs/SESSION_GRAPH.md)
+  evidence/     the evidence graph rebuilt from a session log, the well's record as data, the number links, the
+                audit trail (docs/EVIDENCE.md)
+  core/         what every part shares: the setup record (docs/SETUP.md)
+  figures.py    an answer's figures: Petrophys' plots chosen by the model, bound to the interval
+  basis.py      the methods and parameters an answer rests on, read from the record
   ask.py        a question about any LAS file: the interval, the settings, the run, the output (and its Python API)
   ui/           the web UI: a standard-library server over ask, the page, saved runs
   config.py     the configuration (data config, model, resources, skill library)
@@ -203,12 +224,14 @@ src/petroharness/
   well/         the raw LAS read and interpreted by Petrophys, viewed interval by interval; the summary layer;
                 the tops reader (well/tops.py)
   record/       the workflow's record as evidence: analyzer sections, the evidence catalog, the record's facts
-  agent/        the map, the tools, the ledger and claims, the question graph, the writer; library*.py: the
-                verbs over Petrophys and the registry of its functions (docs/TOOLS.md)
+  agent/        the map, the tools, the ledger and claims, the question graph, the writer; toolset.py: each tool
+                defined once; library*.py: the verbs over Petrophys and the registry of its functions (docs/TOOLS.md)
+  tools/        the tool definition and the set that holds the definitions (spec.py); no tool of its own
   agent/components/   every fixed text the model reads, by component (C1-C10)
   resources/    the policy, the report style, the registries, the topic areas, the skill libraries, the model cards
 configs/        data.example.yaml
-tests/          unit and data tests; tests/agent the harness's own; tests/golden the tapes
+tests/          unit and data tests; tests/agent the harness's own; tests/golden the tapes; tests/gate the public
+                mini set and the request gate; tests/session, tests/evidence, tests/core, tests/figures
 docs/           USAGE.md (your own wells), MODELS.md (models), UI.md (the web UI), ARCHITECTURE.md, GRAPH.md and
                 graph.mmd (the question graph), DESIGN.md, DEVELOPMENT.md (this file), images/
 ```

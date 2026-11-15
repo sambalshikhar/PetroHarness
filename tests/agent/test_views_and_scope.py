@@ -18,7 +18,7 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
 from petroharness.agent.checks import ascii_minus, number_provenance  # noqa: E402
 from test_b2_tools import F  # noqa: E402
 from test_b7_writer import real  # noqa: E402,F401  (the writer's session with claims)
-from petroharness.agent import options, routes  # noqa: E402
+from petroharness.agent import routes  # noqa: E402
 from petroharness.agent.engine import Formation, ToolError, zone_at  # noqa: E402
 from petroharness.agent import engine as E  # noqa: E402
 from petroharness.agent.inventory import _banded, from_view  # noqa: E402

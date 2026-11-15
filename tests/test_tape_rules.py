@@ -57,3 +57,15 @@ def test_other_new_keys_and_changes_still_fail():
     got = copy.deepcopy(REC)
     got["trace"]["steps"][0]["prompt_chars"] = 11
     assert "prompt_chars" in compare_run(got, REC)
+
+
+def test_the_behaviour_verdict_leaves_the_version_stamps_out():
+    calls = [{"stage": "step_1", "messages": [{"role": "user", "segments": [["C5", "abc", 0, 10]]}]}]
+    rec = run(REC["trace"]["options"], calls=calls, components={"C5": "abc"})
+    moved = run(REC["trace"]["options"], calls=[{"stage": "step_1", "messages": [{"role": "user", "segments": [["C5", "xyz", 0, 10]]}]}],
+                components={"C5": "xyz"})
+    assert "components" in compare_run(moved, rec) or "calls" in compare_run(moved, rec)      # the stamps differ
+    assert compare_run(moved, rec, versions=False) == ""                                       # the behaviour does not
+    other = run(REC["trace"]["options"], calls=[{"stage": "step_1", "messages": [{"role": "user", "segments": [["C7", "abc", 0, 10]]}]}],
+                components={"C5": "abc"})
+    assert "calls" in compare_run(other, rec, versions=False)                                  # another owner is behaviour

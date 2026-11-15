@@ -194,6 +194,7 @@ def _ask(path, **over):
     ({"skills": "/no/such/library"}, "no skill library folder"),
     ({"max_steps": 0}, "max steps 0"),
     ({"max_steps": "many"}, "not a whole number"),
+    ({"depth": "deep"}, "depth 'deep'"),
     ({"profile": "no-such-profile"}, "no context profile"),
 ])
 def test_wrong_inputs_are_said_before_the_queue(ui, files, over, says):
@@ -220,7 +221,9 @@ def test_the_inputs_as_ask_arguments(files, tmp_path):
     got = A.arguments(_ask(las, interval={"mode": "depths", "top": "1001", "base": "", "unit": "M", "name": " sand "},
                            skills="default"))
     assert (got["top"], got["base"], got["depth_unit"], got["formation"]) == (1001.0, None, "m", "sand")
-    assert "skills" not in got
+    assert "skills" not in got and "direct" not in got                 # the model decides the depth of the answer
+    assert A.arguments(_ask(las, depth="investigate"))["direct"] is False
+    assert "direct" not in A.arguments(_ask(las, depth="auto"))
     lib = tmp_path / "lib"
     lib.mkdir()
     assert A.arguments(_ask(las, skills=str(lib)))["skills"] == str(lib.resolve())

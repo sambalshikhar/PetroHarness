@@ -152,6 +152,38 @@ Each input is listed with its source.
 A call Petrophys refuses comes back with Petrophys's own message, for example "model='dual_water' needs rwb", so
 the answer can say what the user would have to provide.
 
+## Adding a tool
+
+A calculation belongs in Petrophys: the verbs' search and run reach every public Petrophys function with no change
+here. A tool of the harness itself (a lookup of the record, a computed table, an object of a verb) is one definition,
+a `Tool` in `src/petroharness/agent/toolset.py`:
+
+```python
+Tool("adjacent_jumps", K.adjacent_jumps, CHECK, _text("adjacent_jumps"),
+     {"curve": CURVE, "threshold": {"type": "number"}, "zones": ZONES},
+     ("curve", "threshold"), main="curve", lead="curve", table=True),
+```
+
+| Field | What it is |
+|---|---|
+| name | as the model writes it: `{"adjacent_jumps": {...}}` |
+| run | the function, `run(formation, **arguments) -> Result` (`agent/tools.py`, `agent/compute.py`, `agent/library*.py`) |
+| group | the heading of the brief it is listed under (DESCRIBE, COMPARE, CHECK, CALCULATE, CLASSIFY, SUMMARIZE, CALIBRATE) |
+| description | the text the model reads, kept in `agent/components/C4_tools/tool_descriptions.json` |
+| arguments, required | name -> JSON schema, in the order the brief lists them; the arguments a call must give |
+| main | the argument a bare value fills: `{"adjacent_jumps": "DTC"}` |
+| lead | the argument a one-line listing of a call leads with: `adjacent_jumps DTC (threshold 15)` |
+| table | its result is a computed table (header, rows, facts) |
+| verb | a verb over Petrophys (it also takes search, run and args) |
+
+Everything that lists tools reads these definitions: the functions the call door runs, the schemas, the brief's tool
+text and its groups, the names the reply parser knows, the ledger's listings, the web UI's groups. A wrong definition
+(a name used twice, a group the brief does not list, a required argument it does not define) is said when the
+harness is imported. `tests/agent/test_tool_registration.py` checks every definition.
+
+A new tool changes what the model is sent on every question, so it is a measured change
+([CONTRIBUTING.md](../CONTRIBUTING.md), "Show that a change is safe").
+
 ## An example
 
 "can u compute saturation with Simandoux and give me the statistics", for one formation of a sample well. The

@@ -14,9 +14,8 @@ import pytest
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
-from petroharness.record.catalog import CATALOG, Evidence, EvidenceError, fmt  # noqa: E402
-from petroharness.agent import options  # noqa: E402
-from petroharness.agent.compute import COMPUTED, _plain_line  # noqa: E402
+from petroharness.record.catalog import CATALOG, EvidenceError, fmt  # noqa: E402
+from petroharness.agent.compute import _plain_line  # noqa: E402
 from petroharness.agent.engine import Result, ToolError, max_chars  # noqa: E402
 from petroharness.agent.ledger import DIGEST_CHARS, Ledger  # noqa: E402
 from petroharness.agent.schemas import arguments, call, fit  # noqa: E402

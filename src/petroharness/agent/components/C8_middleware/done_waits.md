@@ -1,0 +1,1 @@
+You set done while results you opened were not shown yet (size limit): {items}. They come first in NEW below; read them and edit your claims where they change a reading, then decide again.

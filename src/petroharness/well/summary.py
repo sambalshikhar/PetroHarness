@@ -355,10 +355,22 @@ def depth_order(rows: list, mids: dict, shown: list, v: Callable[[float], str], 
             continue
         rc = rank_corr([m for m, _ in vals], [x for _, x in vals])
         if np.isfinite(rc):
-            parts.append(f"{s} {v(rc)} ({direction_words(rc)})")
+            parts.append(f"{s} {v(rc)} ({order_words(rc, len(vals), direction_words)})")
             k = max(k, len(vals))
+    legend = "" if k < ORDER_MIN_ZONES else "; positive: higher deeper, negative: higher upward"
     return (f"with depth (rank correlation of each zone's {of + ' ' if of else ''}value with its mid-depth over {k} "
-            "zones; positive: higher deeper, negative: higher upward): " + "; ".join(parts)) if parts else ""
+            f"zones{legend}): " + "; ".join(parts)) if parts else ""
+
+
+ORDER_MIN_ZONES = 5    # an exact rank test cannot reach p < 0.05 with fewer: 4 zones give at best p = 2/24 (two-sided)
+
+
+def order_words(rc: float, k: int, words: Callable[[float], str]) -> str:
+    """The words for a rank correlation over k zones: words(rc), or, with fewer than ORDER_MIN_ZONES zones, that the
+    order cannot be told from chance."""
+    if k < ORDER_MIN_ZONES:
+        return f"{k} zones: too few to tell an order from chance; at least {ORDER_MIN_ZONES} are needed"
+    return words(rc)
 
 
 def direction_words(rc: float) -> str:

@@ -26,7 +26,6 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
 import b2_reference as R  # noqa: E402
 from petroharness.well.summary import curve_kind  # noqa: E402
 from test_b2_tools import F, Mutated  # noqa: E402
-from petroharness.agent import options  # noqa: E402
 from petroharness.agent.engine import max_chars  # noqa: E402
 from petroharness.agent.map import num  # noqa: E402
 from petroharness.agent.schemas import call  # noqa: E402
@@ -521,7 +520,6 @@ def test_t9_generated_queries_match_the_reference():
 
 @pytest.mark.data
 def test_t9_every_section_and_step():
-    from petroharness.agent import options
     from petroharness.agent.tools import _zone_cells, _store_runs
     bad = []
     for t, f in F():

@@ -63,12 +63,13 @@ def test_labels_name_the_new_curves():
     assert L._label("2x", {}) == "X2X"
 
 
-def test_the_verbs_are_shown_after_the_lookups():
+def test_the_verbs_are_shown_with_the_lookups():
     names = [t["function"]["name"] for t in schemas.named()]
-    assert names[-7:] == list(schemas.LIBRARY_NAMES) and "stats" in names
-    shown = [t for t in schemas.named() if t["function"]["name"] in schemas.LIBRARY_NAMES]
-    assert [t["function"]["name"] for t in shown] == ["calculate", "estimate", "what_if", "check", "classify",
-                                                      "summarize", "calibrate"]
+    assert set(schemas.LIBRARY_NAMES) == {"calculate", "estimate", "what_if", "check", "classify", "summarize",
+                                          "calibrate"}
+    assert set(schemas.LIBRARY_NAMES) < set(names) and "stats" in names
+    shown = {t["function"]["name"]: t for t in schemas.named() if t["function"]["name"] in schemas.LIBRARY_NAMES}
+    shown = [shown[n] for n in ("calculate", "estimate", "what_if", "check", "classify", "summarize", "calibrate")]
     calc = shown[0]["function"]["description"]
     assert "saturation: model: archie | simandoux" in calc and "net_pay:" in calc
 

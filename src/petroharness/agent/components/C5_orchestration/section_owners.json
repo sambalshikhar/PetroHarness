@@ -1,5 +1,6 @@
 {
  "QUESTION:\n": "C5",
+ "EARLIER IN THIS SESSION (": "C3",
  "\nTHE MAP\n": "C7",
  "THE MAP\n": "C7",
  "DIRECTION\n": "C6",
@@ -23,5 +24,7 @@
  "CANDIDATES YOUR CLAIMS ACCOUNT FOR": "C3",
  "Named but not in this well's record": "C10",
  "Edits not applied:\n": "C2",
- "Write the answer in the": "C9"
+ "Write the answer in the": "C9",
+ "THE ANSWER:\n": "C9",
+ "CANDIDATE FIGURES:\n": "C9"
 }

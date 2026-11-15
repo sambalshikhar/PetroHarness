@@ -18,7 +18,6 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
                 str(Path(__file__).resolve().parent)]
 from test_b0_inventory import formations  # noqa: E402
 from test_b1_map import advisory  # noqa: E402
-from petroharness.agent import options  # noqa: E402
 from petroharness.agent import engine as E  # noqa: E402
 from petroharness.agent.engine import Result, max_chars  # noqa: E402
 from petroharness.agent.map import num  # noqa: E402

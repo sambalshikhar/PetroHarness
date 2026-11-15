@@ -426,6 +426,7 @@ class Claims:
             out.append(f"flagged claims: {', '.join(flagged)} (fix or drop each)")
         return out
 
+
     def render(self) -> str:
         out = []
         for k, p in enumerate(self.points, 1):

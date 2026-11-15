@@ -4,7 +4,6 @@ skill library (the packaged researched one in the suite).
 
     .venv/bin/python -m pytest tests/agent/test_b4_direction.py -q -s   (PETROHARNESS_DATA selects the dataset)
 """
-import json
 import re
 import sys
 from collections import Counter
@@ -14,8 +13,9 @@ import pytest
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
-from petroharness.agent.direction import areas, parse_source, plugged, runs_here, source_names  # noqa: E402
-from petroharness.agent.compute import COMPUTED  # noqa: E402
+from petroharness.agent.direction import areas, parse_source, plugged, source_names  # noqa: E402
+from petroharness.agent.toolset import TOOLSET  # noqa: E402
+COMPUTED = tuple(t.name for t in TOOLSET if t.table)       # the computed tables: here when they run
 from petroharness.agent.engine import ToolError  # noqa: E402
 
 LIB = plugged()                # the plugged skill library (the packaged researched one in the suite)
@@ -231,7 +231,7 @@ def test_d2_each_compare_line_has_a_plain_note_on_what_it_shows():
 @pytest.mark.data
 def test_d2_sources_run_where_their_data_is_and_say_what_exists_elsewhere():
     from test_b2_tools import F
-    from petroharness.agent.tools import TOOLS
+    from petroharness.agent.toolset import TOOLS
     ran, bad = Counter(), []
     for t, f in F():
         steps = {m.step for m in f.inv.methods}
@@ -269,8 +269,7 @@ def test_d2_sources_run_where_their_data_is_and_say_what_exists_elsewhere():
 @pytest.mark.data
 def test_d2_a_guide_for_a_formation_lists_only_what_runs_there():
     from test_b2_tools import F
-    from petroharness.agent.tools import TOOLS
-    from petroharness.agent import options
+    from petroharness.agent.toolset import TOOLS
     from petroharness.agent.direction import gated
     bad, dropped = [], 0
     for t, f in F():
@@ -280,9 +279,7 @@ def test_d2_a_guide_for_a_formation_lists_only_what_runs_there():
             if block and re.search(r"\b(no|without|missing|absent|lacks?)\b", block.group(1), re.I):
                 bad.append((t.well, name, "says what is absent"))
             for raw in LIB.facets[name]["compare"]:
-                tagged, entry = raw != gated(raw)[1], gated(raw)[1]
-                if tagged and raw in hidden and f"  - {entry}" in off:   # an option's entry while the option is off
-                    bad.append((t.well, name, "gated entry shown with its option off", entry))
+                entry = gated(raw)[1]
                 p = parse_source(entry)
                 listed = f"  - {entry}" in text
                 if p is None:
@@ -304,8 +301,6 @@ def test_d2_a_guide_for_a_formation_lists_only_what_runs_there():
 def test_d2_the_gate_mechanism_for_candidate_lines():
     """The skills are generic (no switch tags; tests/agent/test_skills.py). A candidate line under measurement may carry a
     gate: '[option] text' shows while the option is on, '[!option] text' while it is off, several tags must all hold."""
-    from petroharness.agent import options
-    from petroharness.agent.direction import gated
 
 
 
@@ -333,7 +328,8 @@ def _dataset_configs() -> list:
 
 def _formations(path: Path) -> list:
     """The formations of a dataset config, each once, built as the harness builds them (the config passed explicitly,
-    whatever PETROHARNESS_DATA names)."""
+    whatever PETROHARNESS_DATA names), on the default reporting settings (every basis, no conventions, whatever the
+    data file sets: test_b0_inventory.default_reporting)."""
     import warnings
     import yaml
     from petroharness.agent.inventory import from_view
@@ -343,7 +339,7 @@ def _formations(path: Path) -> list:
     from petroharness.tasks import load_tasks
     from petroharness.well.view import FormationView
     d = yaml.safe_load(path.read_text())
-    cfg = HarnessConfig(data=DataPaths(**d["data"]), eval=EvalPaths(**d["eval"]))
+    cfg = HarnessConfig(data=DataPaths(**{**d["data"], "basis": "all", "conventions": []}), eval=EvalPaths(**d["eval"]))
     tasks, _ = load_tasks(cfg.eval.questions, cfg.data.las_dir)
     out, seen = [], set()
     with warnings.catch_warnings():
@@ -384,7 +380,7 @@ def test_every_compare_line_parses_and_renders_on_each_configured_dataset(config
     """Every Compare line of every guide parses (a lookup, or a template: a recipe the model fills); on each formation
     of the dataset a guide lists exactly the lookups that run there (a listed line runs, an unlisted one fails there),
     templates always; and each area guide lists at least one lookup on some formation of the dataset."""
-    from petroharness.agent.tools import TOOLS
+    from petroharness.agent.toolset import TOOLS
     fs = _formations(config)
     assert fs, config
     bad, shown = [], Counter()

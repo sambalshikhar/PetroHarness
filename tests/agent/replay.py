@@ -22,7 +22,6 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(Path(__file__).resolve().paren
 warnings.simplefilter("ignore")
 
 from petroharness.agent.claims import Claim, Claims  # noqa: E402
-from petroharness.agent.engine import ToolError  # noqa: E402
 from petroharness.agent.loop import Session  # noqa: E402
 
 NUM = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?![A-Za-z0-9_])")
@@ -31,7 +30,7 @@ NUM = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?![A-Za-z0-9_])")
 def _action(a: str):
     """'stats {"curves": [...]}' -> ("stats", {...}); 'get E1 Z1' and the like -> None (they open nothing)."""
     name, _, rest = a.partition(" ")
-    from petroharness.agent.tools import TOOLS
+    from petroharness.agent.toolset import TOOLS
     if name in TOOLS:
         try:
             return name, json.loads(rest)

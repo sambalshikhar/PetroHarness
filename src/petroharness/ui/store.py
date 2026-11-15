@@ -75,6 +75,15 @@ class Store:
             raise KeyError(f"{run_id} has no {name}")
         return path
 
+    def figure(self, run_id: str, name: str) -> Path:
+        """One figure of a run's answer (petroharness.figures writes them as figure_<n>_<kind>.png)."""
+        if not re.fullmatch(r"figure_\d+_[a-z]+(_[a-z]+)*\.png|overview\.png", str(name)):
+            raise KeyError(name)
+        path = self.folder(run_id) / "figures" / name
+        if not path.is_file():
+            raise KeyError(f"{run_id} has no {name}")
+        return path
+
     def history(self, limit: int = 500) -> list:
         """The saved runs, newest first: what the run list shows."""
         out = []
@@ -143,4 +152,5 @@ def brief(r: dict) -> dict:
     return {"id": r.get("id"), "status": r.get("status"), "question": i.get("question", ""),
             "las": Path(str(i.get("las") or "")).name, "las_path": i.get("las"), "label": r.get("label", ""),
             "created": r.get("created"), "elapsed": r.get("elapsed"),
-            "verdict": (r.get("rating") or {}).get("verdict", "")}
+            "verdict": (r.get("rating") or {}).get("verdict", ""),
+            "turn": (r.get("conversation") or {}).get("turn") or 1}

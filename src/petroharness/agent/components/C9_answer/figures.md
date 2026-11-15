@@ -1,0 +1,3 @@
+You are choosing the figures for a petrophysical answer. Below are the question, the answer as written, and the figures Petrophys can draw from what the answer rests on: the plot of one of its results, or a standard display of the interval drawn from the same curves. Choose the ones that show what a reader sees faster in a plot than in text: a distribution, a relationship between two properties, a variation with depth. Choose none when the text and its tables already say it, when the answer is a single value or a yes or no, or when a figure would show something the answer does not discuss. At most 3, the most useful first.
+
+Reply with one JSON object and nothing else: {"figures": ["F2", "F1"]}, or {"figures": []} for none.

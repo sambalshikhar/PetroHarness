@@ -1,0 +1,1 @@
+ Also say how long the answer should be, as "reply": "brief" where a few sentences answer the question, "full" where it needs an analysis in parts.

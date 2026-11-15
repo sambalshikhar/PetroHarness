@@ -9,6 +9,7 @@ texts:
   withheld_last: withheld_last.md   # the same before the last step: settle shows every result
   shown_above: shown_above.md   # a result asked for again in the step that already shows it
   nothing_new: nothing_new.md
+  done_waits: done_waits.md     # options.see_first: a done while opened results are still withheld waits one step
   edits_not_applied: edits_not_applied.md
 frames:
 - agent/graph.py

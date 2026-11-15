@@ -15,24 +15,32 @@ from petroharness.agent.claims import Claims, coerce_edit
 from petroharness.agent.engine import Formation, ToolError
 from petroharness.agent.ledger import Ledger, _terms
 from petroharness.agent.map import render
-from petroharness.agent.schemas import CROSSPLOT, LAG, LIBRARY_NAMES, NAMED, named
+from petroharness.agent.schemas import named
+from petroharness.agent.toolset import TOOLSET
 
 NEW_CHARS = 12000          # NEW's results at most (about 3k tokens); results beyond come first at the next step (the
 #   guides read are not in NEW: they have their own block, GUIDES)
 OPENED_CHARS = 6000        # digests of earlier results at most
+
+
+def new_chars() -> int:
+    """NEW's budget: NEW_CHARS."""
+    return NEW_CHARS
+
+
+def opened_chars() -> int:
+    """OPENED's budget: OPENED_CHARS."""
+    return OPENED_CHARS
 ACTIONS = 6                 # lookups per step: the cap and the prompt's stated limit
 MAX_GUIDES = 2             # guides read in a step, beside the actions
 MAX_CALCS = 3              # calculations in a step, beside the actions
 MAX_STEPS = 8
+DIRECT_STEPS = 2            # look steps of a direct question
+DIRECT_ACTIONS = 4          # lookups in one look step
 POLISH_STEPS = 2           # settled and only rephrasing this many steps in a row: converged
 STEP_KEYS = {"asks", "points", "intent", "focus", "edits", "next", "done"}
-TOOLS = {t["function"]["name"] for t in NAMED + [CROSSPLOT, LAG]} | set(LIBRARY_NAMES)   # every lookup the model can be shown (named()
-#   adds the optional ones while their switch is on; a shown tool the parser does not know is dropped unread)
-from petroharness.agent.compute import MAIN as _COMPUTED_MAIN  # noqa: E402
+TOOLS = set(TOOLSET.names())      # every tool the model is shown (agent/toolset.py); the reply parser reads no other
 from petroharness.agent import components as C  # noqa: E402  (the texts: src/petroharness/agent/components)
-_MAIN = {"section": "key", "step": "name", "runs": "condition", "profile": "curve", "crossplot": "y",
-         "calculate": "property", "estimate": "parameter", "check": "what", "classify": "what",
-         "summarize": "what", "calibrate": "what", **_COMPUTED_MAIN}
 _EDIT_KEY = re.compile(r'"op"\s*:')
 _ACT_KEY = re.compile(r'\{\s*"(?:' + "|".join(sorted(TOOLS | {"get", "find", "guide", "calc", "tool", "action"}, key=len, reverse=True))
                       + r')"\s*:')
@@ -40,16 +48,8 @@ _WRAPS = ("step", "reply", "response", "answer", "output", "result")
 
 
 # the tools by what users ask (docs/TOOLS.md), as the brief groups them: the record's lookups are members of their
-# verb, and the verbs over Petrophys fill what they lack
-VERBS = (("DESCRIBE: what the record holds", ("stats", "profile", "runs", "section", "step", "formation_summary")),
-         ("COMPARE AND GROUP", ("compare", "crossplot", "overlap", "lithology_stats", "zone_contrast", "curve_order",
-                                "vertical_sequence")),
-         ("CHECK: data quality", ("check", "spike_flags", "adjacent_jumps", "threshold_exceedance", "data_record",
-                                  "lag_correlation")),
-         ("CALCULATE: recompute with Petrophys", ("calculate", "what_if", "estimate")),
-         ("CLASSIFY", ("classify", "zone_classes", "unit_roles")),
-         ("SUMMARIZE", ("summarize", "pay_summary")),
-         ("CALIBRATE: against core, elastic properties", ("calibrate", "core_vs_log")))
+# verb, and the verbs over Petrophys fill what they lack. Read from the tools' definitions (agent/toolset.py).
+VERBS = TOOLSET.by_group()
 
 
 def _tool_line(t: dict) -> str:
@@ -61,19 +61,11 @@ def _tool_line(t: dict) -> str:
 def tools_text() -> str:
     """The tools as the brief lists them, from the tool schemas (src/petroharness/agent/schemas.py), grouped by verb
     under the line that says where Petrophys's functions are."""
-    tools = named()
-    by = {t["function"]["name"]: t for t in tools}
-    out, placed = [C.text("C4", "library")], set()
-    for head, names in VERBS:
-        here = [by[n] for n in names if n in by]
-        if here:
-            out.append(f"  {head}")
-            out += [_tool_line(t) for t in here]
-            placed |= {t["function"]["name"] for t in here}
-    rest = [t for t in tools if t["function"]["name"] not in placed]
-    if rest:
-        out.append("  OTHER")
-        out += [_tool_line(t) for t in rest]
+    by = {t["function"]["name"]: t for t in named()}
+    out = [C.text("C4", "library")]
+    for head, names in VERBS:                                # every tool has its group (tools.spec.Toolset.add)
+        out.append(f"  {head}")
+        out += [_tool_line(by[n]) for n in names]
     # the zone selector the engine reads
     out.append('  zones (any lookup that takes them): zone ids ["Z2", "Z3"], a lithology ["SILT"] for its zones, '
                'or ["ALL"]; left out, every zone')
@@ -119,7 +111,7 @@ def coerce_action(a, guides: bool = True) -> Optional[tuple]:
     if isinstance(body, dict):
         args = {**body, **args}
     elif isinstance(body, str):
-        args.setdefault(_MAIN.get(name, "curves"), body)
+        args.setdefault(TOOLSET.main(name), body)
     elif isinstance(body, list):
         if name == "compare" and len(body) == 2:
             args.setdefault("a", body[0]), args.setdefault("b", body[1])
@@ -240,8 +232,9 @@ def parse(llm: LLM, k: int, text: str, usage: Usage, max_tokens: int, rec: dict)
             rec["repaired"]["by"] = "salvage"
             return sal
         if "{" in (text or ""):
+            # a reformat, not a reading: the card's retry settings (no or low reasoning), so the budget goes to the JSON
             fixed = llm.chat(f"step_{k}_fix", [{"role": "user", "content": FIX.format(error=str(exc)[:120], text=text)}],
-                             usage, min(max_tokens, len(text) // 2 + 3000))
+                             usage, min(max_tokens, len(text) // 2 + 3000), retry=True)
             try:
                 obj = read_reply(fixed)
                 rec["repaired"]["by"] = "fix"
@@ -272,6 +265,19 @@ class Session:
     card: str = ""                                   # the provenance card the writer was shown (its numbers count as shown)
     # the skill library the guides come from (None: none, so no DIRECTION and no guide action); left out, the plugged one
     library: Optional[direction.Library] = field(default_factory=direction.plugged)
+    # a conversation on this well and interval (petroharness.session): the question's number in it, where its results
+    # start in the ledger, and the earlier questions as the prompts show them ("" for the first question)
+    turn: int = 1
+    turn_start: int = 0
+    earlier: str = ""
+    reply: str = "full"       # a later question's answer length, as the model chose in step 1: "brief" or "full"
+    # Depth: whether the READ call is asked how much work the question needs (reads_depth: on unless the run asked
+    # for the investigation every time, --investigate), how it read this question ("direct": look steps and a
+    # short answer), and the results a direct question's look steps were shown (its writer reads them: on a later
+    # question they may be an earlier question's)
+    reads_depth: bool = False
+    depth: str = "investigate"
+    fetched: list = field(default_factory=list)
 
     @classmethod
     def build(cls, task, cfg) -> "Session":
@@ -282,6 +288,18 @@ class Session:
         store = build_store(view)
         f = Formation(from_view(view, store), view, store)
         return cls(task, f, render(f.inv), Ledger(f), library=direction.plugged(cfg))
+
+    def next_turn(self, task, earlier: str) -> None:
+        """A further question of the same conversation: the well, the ledger and its ids stay (results opened before
+        are read with get and find, and may be cited); the question's own state (topics, points, claims, guides)
+        starts again. `earlier`: the earlier questions and what was found, as the prompts show them."""
+        self.task, self.earlier = task, earlier
+        self.turn += 1
+        self.turn_start = self.ledger.turn_start = len(self.ledger.items)
+        self.claims, self.points, self.intent, self.reply = None, [], "characterize", "full"
+        self.depth, self.fetched = "investigate", []
+        self.guides, self.topics, self.families, self.reading, self.card = [], [], [], {}, ""
+        self.map = render(self.f.inv)
 
     def choose(self, topics: list) -> None:
         """The topics the model chose: their families, and the map's notes scoped to them."""
@@ -339,7 +357,7 @@ class Session:
             if e.id in exclude:
                 continue
             d = self.ledger.digest(e)
-            if used + len(d) > OPENED_CHARS:
+            if used + len(d) > opened_chars():
                 break
             lines.append(d)
             used += len(d)
@@ -361,6 +379,8 @@ def brief(library=_PLUGGED) -> str:
                   guide_action=C.text("C1", "brief_guide") if on else "")
     text = text.rstrip() + "\n\n" + V9_BRIEF + "\n"
     text = text.rstrip() + "\n\n" + V10_BRIEF + "\n"
+    text = text.replace("Stop when every point is settled.",
+                        'Stop when every point is settled and nothing on the list under "Before you finish" is left.')
     return text.replace("{TOOLS}", tools_text()).replace("{ACTIONS}", str(ACTIONS))
 
 
@@ -422,19 +442,23 @@ POINTS = ("Your reply has no points. Reply with only the points your edits refer
 READ = C.text("C5", "read")
 
 
-def read_schema() -> dict:
+def read_schema(depth: bool = False) -> dict:
     """The READ reply's JSON schema: the topics from the index's areas and the measurements the question names (nothing
-    that frames the question before the evidence is in view)."""
-    return {"type": "object",
-            "properties": {"topics": {"type": "array", "items": {"enum": list(direction.areas())}, "minItems": 1,
-                                      "maxItems": 4},
-                           "named": {"type": "array", "items": {"type": "string"}, "maxItems": 12}},
-            "required": ["topics", "named"]}
+    that frames the question before the evidence is in view); with `depth`, also what kind of answer it asks for."""
+    schema = {"type": "object",
+              "properties": {"topics": {"type": "array", "items": {"enum": list(direction.areas())}, "minItems": 1,
+                                        "maxItems": 4},
+                             "named": {"type": "array", "items": {"type": "string"}, "maxItems": 12}},
+              "required": ["topics", "named"]}
+    if depth:
+        schema["properties"]["depth"] = {"enum": ["direct", "investigate"]}
+        schema["required"] = ["topics", "named", "depth"]
+    return schema
 
 
-def _reading(text: str) -> Optional[dict]:
-    """The READ reply as {topics, named}; None when it is not the JSON object the schema asks for (topics not one of
-    the areas). Other keys are not read."""
+def _reading(text: str, depth: bool = False) -> Optional[dict]:
+    """The READ reply as {topics, named} (with `depth`: and depth); None when it is not the JSON object the schema asks
+    for (topics not one of the areas). Other keys are not read."""
     try:
         obj = json.loads(text or "")
     except json.JSONDecodeError:
@@ -446,8 +470,11 @@ def _reading(text: str) -> Optional[dict]:
     if not topics:
         return None
     named = obj.get("named")
-    return {"topics": topics,
-            "named": [str(x).strip() for x in named if str(x).strip()][:12] if isinstance(named, list) else []}
+    got = {"topics": topics,
+           "named": [str(x).strip() for x in named if str(x).strip()][:12] if isinstance(named, list) else []}
+    if depth:                                            # anything but a clear "direct" is an investigation
+        got["depth"] = "direct" if str(obj.get("depth", "")).strip().lower() == "direct" else "investigate"
+    return got
 
 
 def read_question(llm: LLM, s: Session, usage: Usage, max_tokens: int, trace: dict) -> None:
@@ -455,19 +482,22 @@ def read_question(llm: LLM, s: Session, usage: Usage, max_tokens: int, trace: di
     readable). The model's topics key the first look, the index, the sections a guide opens and the map's notes; no
     readable reply leaves no topics (the general first look, the index in its own order). How the question is read
     is step 1's, with the evidence in view."""
-    user = (READ + f"\n\nQUESTION:\n{s.task.question}\n\nTHE MAP\n{s.map}\n\nTOPIC AREAS:\n"
+    user = ((C.text("C5", "read_depth") if s.reads_depth else READ)
+            + f"\n\nQUESTION:\n{s.task.question}\n" + (f"\n{s.earlier}\n" if s.earlier else "")
+            + f"\nTHE MAP\n{s.map}\n\nTOPIC AREAS:\n"
             + "\n".join(f"{name} - {a['when']}" for name, a in direction.areas().items()))
     messages = [{"role": "system", "content": brief(s.library)}, {"role": "user", "content": user}]
     got, how = None, "ok"
     for stage in ("read", "read_retry"):
-        text = llm.chat(stage, messages, usage, max_tokens, json_schema=read_schema())
-        got = _reading(text)
+        text = llm.chat(stage, messages, usage, max_tokens, json_schema=read_schema(s.reads_depth))
+        got = _reading(text, s.reads_depth)
         if got is not None:
             break
         how = "retry"
     if got is None:
         got, how = {"topics": [], "named": []}, "failed"
     s.reading = got
+    s.depth = got.get("depth", "investigate")
     s.choose(got["topics"])
     trace["read"] = {"reply": (text or "")[:3000], "parse": how, **got}
     trace["topics"] = list(s.topics)
@@ -533,6 +563,7 @@ def settle(llm: LLM, s: Session, usage: Usage, max_tokens: int, trace: dict) -> 
     pts = "\n".join(f"{i + 1}. {p}" for i, p in enumerate(s.points))
     book = bookkeeping(s)                         # lists for the model, never a check
     user = (f"QUESTION:\n{s.task.question}\n" + (f"{absent}\n" if absent else "")
+            + (f"\n{s.earlier}\n" if s.earlier else "")
             + f"\nTHE MAP\n{s.map}\n\nYOUR POINTS:\n{pts}\n\nYOUR ANSWER:\n{s.claims.render()}\n\n"
             f"ALL RESULTS:\n{opened_results(s)}\n\n" + book
             + f"{SETTLE}" + SETTLE_V9 + "\n- " + ASPECTS_RULE)
