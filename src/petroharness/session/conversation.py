@@ -32,7 +32,7 @@ from petroharness.session.log import SessionLog
 # what a conversation on a LAS file is started with, kept in the log so it can be resumed (the model endpoint is not:
 # it can change)
 INPUTS = ("formation", "tops", "top", "base", "depth_unit", "lithology_curve", "formation_lithology", "profile",
-          "settings", "skills", "model", "model_card", "max_steps", "figures", "direct")
+          "settings", "skills", "model", "model_card", "max_steps", "figures", "direct", "interpretation")
 
 
 @dataclass
@@ -80,7 +80,8 @@ class Conversation:
               formation_lithology: str | None = None, profile: str | None = None, settings=None,
               skills: str | None = None, model_url: str | None = None, model: str | None = None,
               model_card: str | None = None, max_steps: int | None = None, llm_factory: Callable | None = None,
-              on_view: Callable | None = None, figures: bool = True, direct: bool = True) -> Conversation:
+              on_view: Callable | None = None, figures: bool = True, direct: bool = True,
+              interpretation: dict | None = None) -> Conversation:
         """A new conversation about one interval of a LAS file, kept in `folder` (the arguments are ask()'s). The
         interval is checked and the well interpreted here, before any question. `figures`: draw each answer's
         figures (one more model call per answer chooses them). `direct`: the model first says whether a question is
@@ -92,7 +93,8 @@ class Conversation:
         given = {"formation": formation, "tops": tops, "top": top, "base": base, "depth_unit": depth_unit,
                  "lithology_curve": lithology_curve, "formation_lithology": formation_lithology, "profile": profile,
                  "settings": settings, "skills": skills, "model": model, "model_card": model_card,
-                 "max_steps": max_steps, "figures": figures, "direct": direct}
+                 "max_steps": max_steps, "figures": figures, "direct": direct,
+                 **({"interpretation": dict(interpretation)} if interpretation else {})}
         inputs = {k: (str(v) if isinstance(v, Path) else v) for k, v in given.items()}
         c = cls._open(folder, las, inputs, model_url, llm_factory, on_view)
         from petroharness.cli import COMMIT

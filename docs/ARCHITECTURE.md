@@ -196,8 +196,16 @@ conversation inside the investigation.
   the table is not to be repeated. The checker is code: numbers no opened result, the card, the map, the zone table
   or the question shows; words about the investigation rather than the formation; statements the record
   contradicts; working notes left in the text. Each finding goes back to the model as a repair request (up to two
-  rounds); a repair much shorter than the draft keeps the draft. `finalize` places the code-composed zone table and
-  removes citation ids.
+  rounds); a repair much shorter than the draft keeps the draft. `finalize` keeps the writer's last draft as written
+  in the trace and delivers the answer from it (`graph.delivered`).
+- **Delivery** (`compose.py`, `writer.strip_ids`, `writer.report_numbers`). The answer a reader gets: the
+  code-composed zone table placed on lines of its own, numbers written as the results show them, and every evidence
+  and claim id taken out, in whatever form the model wrote it: a citation in brackets (`[E1, E4]`, `(E3)`); a bracket
+  that cites and says something, which keeps what it says (`(E10, n = 161)` becomes `(n = 161)`); a label naming a
+  part of what the writer was shown, which goes with its id (`(E1, MAP)`, `(E6, Point 3 Limit)`); a chain (`E2/E5`,
+  `C8b/E7`). An id the model used as the noun of its phrase becomes "the result" (`of E6 alone` becomes `of the
+  result alone`); one that qualifies a noun or cites a sentence is deleted. The checker reads the draft as delivered
+  this way, so what it flags is what the reader would see. `tests/test_citations.py` holds the forms.
 
 ### Reporting settings
 
@@ -291,7 +299,8 @@ Each question's trace holds what it needs to be audited and replayed:
   guides read, the done issues;
 - the points, every opened result's call (`opened`), the claims with their history, the dropped claims;
 - the settle step, the writer's rounds and findings (`verify_rounds`), the zone table; the writer's prompt with the
-  provenance card is in its call;
+  provenance card is in its call; the writer's last draft as written (`draft`), from which
+  `graph.delivered(draft, zone_table)` gives the answer, so a change to delivery can be measured on the same drafts;
 - every model call (`calls`) with its spans attributed to components, and token use per call (`usage`);
 - the status, the time taken, and on a failure the error and its traceback.
 

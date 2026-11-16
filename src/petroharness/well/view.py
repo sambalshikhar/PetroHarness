@@ -222,6 +222,10 @@ class FormationView:
             raise ValueError("WHAT: the policy names a lithology curve (lithology.curve). WHY: which LAS curve is the "
                              "lithology log belongs to the data, not to the interpretation policy. FIX: remove it from "
                              "the policy; name the curve in data.lithology_curve, or leave it null to detect it.")
+        given = {k: v for k, v in (("min_thickness_m", cfg.data.zone_min_thickness_m),
+                                   ("fallback_vcl_bands", cfg.data.zone_vcl_bands)) if v is not None}
+        if given:                                 # the user's zone rule (data.zone_*), for this view only
+            policy = {**policy, "zones": {**policy["zones"], **given}}
         describe = lambda c: str(getattr(prep.well.get(c), "description", "") or "")
         curve = find_lithology_curve(prep.curve, list(prep.input_curves), describe, cfg.data.lithology_curve)
         bands = None

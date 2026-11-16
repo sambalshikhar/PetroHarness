@@ -580,16 +580,26 @@ def repair(state: State, runtime: Runtime[Run]) -> dict:
                         "leaks": notes}]}
 
 
+def delivered(draft: str, table: str) -> str:
+    """The answer a reader gets from the writer's draft: the zone table on lines of its own, evidence ids and claim
+    ids out, numbers as the results show them."""
+    from petroharness.agent.compose import compose
+    from petroharness.agent.writer import report_numbers, strip_ids
+    draft = re.sub(r"[ \t]*\{\{ZONE_TABLE\}\}[ \t]*", "\n\n{{ZONE_TABLE}}\n\n", draft)     # the table on lines of its own
+    return re.sub(r"\n{3,}", "\n\n", report_numbers(strip_ids(compose(draft, table))))
+
+
 def finalize(state: State, runtime: Runtime[Run]) -> dict:
     """The zone table placed, numbers as the results show them, the status."""
-    from petroharness.agent.compose import compose, leftover_citations
-    from petroharness.agent.writer import report_numbers, strip_ids
+    from petroharness.agent.compose import leftover_citations
     r = runtime.context
     trace, draft, table, rounds = r.trace, state["draft"], r.w_table, state["rounds"]
     trace["verify_rounds"] = rounds
     trace["zone_table"] = table
-    draft = re.sub(r"[ \t]*\{\{ZONE_TABLE\}\}[ \t]*", "\n\n{{ZONE_TABLE}}\n\n", draft)     # the table on lines of its own
-    text = re.sub(r"\n{3,}", "\n\n", report_numbers(strip_ids(compose(draft, table))))
+    # the writer's last draft as the model wrote it: the answer is delivered(draft, zone_table), so a change to how
+    # the answer is delivered (ids, numbers) can be measured on the same drafts
+    trace["draft"] = draft
+    text = delivered(draft, table)
     left = leftover_citations(text)
     if left:
         trace["render_leftovers"] = left

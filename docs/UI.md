@@ -38,7 +38,11 @@ The server listens on `127.0.0.1` by default. When it runs on a remote machine, 
 
 ## Asking a question
 
-The panel on the left (the menu button shows or hides it):
+The page is laid out as a chat. The question box is docked at the bottom, below the answer, and the runs are in a
+drawer (the menu button at the top left). Above the box, four chips hold the conversation's setup: **Well**,
+**Interval**, **Interpretation** and **Options**. A chip shows what is chosen; clicking it opens that part's settings
+in a sheet above the box (Well, Interval and Options are its tabs; a click outside closes it). Enter sends the
+question, Shift+Enter starts a new line. While a question is being answered, the box waits for it to finish.
 
 1. **Well (LAS file).** A path on the server (*Load*), or *Upload a LAS…* from your machine. Once a file is chosen,
    the page shows its header: the well's name, the depth range and unit, the depth step, the samples and every curve
@@ -54,8 +58,11 @@ The panel on the left (the menu button shows or hides it):
      choose it (default: the LAS file's).
    - **Depths:** a top and a base (both included), their unit (default: the LAS file's) and an optional name. An
      empty top starts at the top of the log, an empty base runs to its end.
-3. **Question,** in your own words. *Ask* (or Ctrl+Enter) sends it.
-4. **More options** (all optional): the lithology curve (default: detected; with none, the zones are shale-volume
+3. **Interpretation.** What Petrophys interprets the well with, before the model reads it. The chip reads
+   *Petrophys defaults* until you change a setting, then how many are changed; clicking it opens the settings panel
+   (below).
+4. **Question,** in your own words, in the box.
+5. **Options** (all optional): the lithology curve (default: detected; with none, the zones are shale-volume
    bands), the formation's lithology as you know it (it reaches the model with the question, marked as your
    statement), a Petrophys context profile (for wells of a known context package), the skill library (the packaged
    one, none, or a library folder), the investigation's step cap, and the depth of the answer: by default the model
@@ -64,6 +71,47 @@ The panel on the left (the menu button shows or hides it):
 
 What is wrong in the inputs (a missing file, a formation the tops file lacks, a base above the top) is said at once,
 with what to change, before the question waits for a worker.
+
+**A conversation.** Once an answer of a conversation is on screen, the box continues it: the next question is that
+conversation's next, on the same well, interval and settings, starting from the results already opened. The chips
+then show the conversation's well and interval, locked, and the note under the box says which question it will be.
+To ask about another well or interval, or under other settings, start a **New conversation** (the button at the top
+right, or the chip): it keeps the open conversation's well, interval and settings in the chips, ready to change.
+Opening any run from the drawer makes the box continue that run's conversation.
+
+**Earlier questions stay on screen.** Above the question shown, on every tab, each earlier question of its
+conversation is a box with its number, the question and the answer's first sentence. Opening a box shows the whole
+answer with its figures, a link to that question's own page (its evidence, logs and how it was computed) and its audit
+trail. With more than three earlier questions, the last two show and the rest are one click away. The question shown
+says its number ("Question 3 of this conversation"). Opened from the drawer, an earlier question says when the
+conversation went on after it, with a link to the latest; a question asked there still continues the conversation at
+its end.
+
+### Interpretation settings
+
+The panel lists every setting Petrophys's interpretation takes (`petrophys.workflow.DynamicWorkflowConfig`, read from
+the installed library) and the harness's zone rule, in groups: **Zones** (the minimum zone thickness, in the well's
+depth unit; the shale-volume band edges that zone a well without a lithology log; one zone for the whole interval),
+**Clay volume** (the GR method and endpoints, SP), **Porosity and matrix** (matrix, ρma, matrix neutron, Δtma, fluid),
+**Formation water** (Rw, salinity), **Water saturation** (the model; a, m, n; the shaly-sand parameters),
+**Permeability**, **Net reservoir and pay** (the cutoffs), **Temperature**, **Mud**, **Lithology** and **Input
+handling**. A search box finds a setting by name or by what its help says.
+
+Each row gives the setting's name, Petrophys's own help (*More* for the whole of it), its control (a number with its
+unit, a list of the values Petrophys accepts, on or off), and its **default**: the policy's for the zone rule and the
+VCL and SW cutoffs, Petrophys's for the rest, where *auto* means read from the LAS header or derived from the data.
+A changed setting is marked, with *Reset to default*; *Reset all* clears them.
+
+The bar at the top previews the interpretation on the well and interval chosen (the well is interpreted once and
+kept, so a later preview, and the question that follows, reuse it): the zones you get and how much of the interval
+they hold, drawn as a strip, and in each row **this well:** the value Petrophys took here and the step that took it
+(GR clean 40.8, Rw from Rwa, a 0.81). It follows your changes as you make them. A setting that cannot be used (a
+value of the wrong kind, a choice Petrophys does not accept, band edges out of order) is said there and at *Ask*,
+before the question is queued. Petrophys settings cannot be combined with a context profile, which fixes its own.
+
+A run records the settings it ran with (the run's inputs; its Details tab lists them), every later question of its
+conversation runs under them, and the steps' parameters in the methods panel, the computation graph and the audit
+trail show the values used.
 
 ## Following a run
 
@@ -76,7 +124,8 @@ settle the claims, write, check. While all workers are busy, a new question show
 **Interpretation** (the page a run opens on) tells the run as a petrophysicist reads a report, conclusion first:
 
 1. **The answer:** its opening sentences, the number of findings by confidence, the results computed, and the
-   checker's outcome (every number in the answer traced to a computed result, or not).
+   checker's outcome (every number in the answer traced to a computed result, or not). The questions of a
+   conversation are listed above it as a thread, and its **figures** follow right under it, drawn by Petrophys.
 2. **The well:** the interval as Petrophys interpreted it, as a log plot (gamma ray, resistivity, density and neutron,
    shale volume, porosity, water saturation, permeability, the pay flags, the lithology column and the zones), and the
    zone table; the zones the answer names most are marked.
@@ -107,17 +156,26 @@ The other tabs hold the detail behind it:
 
 `answer.md` and `trace.json` (the full record) can be opened from the run's header.
 
+The **figures**, where the model chose any, are plots drawn by Petrophys from what the answer rests on, each with a
+caption that names the Petrophys function and the result or curves it drew ([SESSIONS.md](SESSIONS.md), "Figures").
+
+**How it was computed**, under the figures, draws what the answer rests on, left to right: the measured logs, the
+Petrophys steps that computed the curves it uses (in the order they ran, each with its method, what it read, what it
+computed and its key parameters, such as Archie's a, m, n and Rw), the results the model opened, the findings and the
+answer. Click a box to light up its path and read its detail (a step's full parameters); click a number in the answer
+to see the results that show it, the curve it sits under in each, and the Petrophys steps behind that curve, back to
+the measured logs. It is drawn from the conversation's evidence graph ([EVIDENCE.md](EVIDENCE.md)).
+
 Under the written answer:
 
-- **Figures**, where the model chose any: plots drawn by Petrophys from what the answer rests on, each with a caption
-  that names the Petrophys function and the result or curves it drew ([SESSIONS.md](SESSIONS.md), "Figures").
 - **Methods and parameters this answer rests on:** the Petrophys steps behind the curves the answer names, with their
   parameters, read from the well's record.
 - **Audit trail:** every number's path from the answer back to the LAS file, as one document
   ([EVIDENCE.md](EVIDENCE.md)).
-- **Ask a follow-up:** the next question about the same interval. It starts from the results already opened, so ask
-  about the answer, try another method or parameter, or go further. The questions of a conversation are listed above
-  the answer as a thread, and in the run list a follow-up carries its number.
+
+The next question is asked in the box at the bottom (see *A conversation* above). It starts from the results already
+opened, so ask about the answer, try another method or parameter, or go further. The questions of a conversation are
+listed above the answer as a thread, and in the run list a follow-up carries its number.
 
 The Well logs tab also shows the interval as Petrophys displays it: its own log viewer, with the zones as the
 lithology track.
@@ -134,8 +192,8 @@ Each run is a folder in the runs folder:
 | `uploads/` | the uploaded LAS and tops files |
 | `.cache/` | the interpreted wells, shared by every run |
 
-The **Runs** tab lists them, newest first, with their status and rating; filter by any word. *Ask again or edit*
-puts a run's inputs back in the form. Runs a stopped server left unfinished are marked interrupted when it starts
+The **Runs** drawer lists them, newest first, with their status and rating; filter by any word. *Ask again or edit*
+starts a new conversation with a run's inputs and question in the box, to change before sending. Runs a stopped server left unfinished are marked interrupted when it starts
 again.
 
 **Replay.** A finished run's *Replay* (or the address `#replay=<run id>&speed=8`) plays the run again from its saved
@@ -165,6 +223,10 @@ The page uses a small JSON API, which also serves scripts:
 | `GET /api/run/ID` | a run in full; `/api/run/ID/answer.md` and `/api/run/ID/trace.json` its files |
 | `GET /api/run/ID/figures/NAME` | a figure of the run's answer (`figure_1_histogram.png`), or `overview.png`, the interval as Petrophys displays it |
 | `GET /api/run/ID/audit` | the audit trail of the run's answer, as Markdown |
+| `GET /api/settings` | the interpretation settings: groups, each setting's kind, unit, choices, default and help |
+| `POST /api/preview` | the inputs of a question (without the question) and `interpretation`: the interval, its zones under the zone rule, and the value each setting took on this well |
+| `GET /api/run/ID/conversation` | the conversation the run belongs to, as it stands: every question in order (the run's later ones too, and one still waiting or running), each with its run id, number, status, answer and figures |
+| `GET /api/run/ID/lineage` | what the run's answer rests on, as JSON (`EvidenceGraph.trail`): its findings and the results they cite, which results show each number, the curves they name, the Petrophys steps behind them with their methods and parameters, and the measured logs |
 | `POST /api/rate/ID` | `{"verdict": "good" \| "partly" \| "wrong", "note": "..."}` |
 
 ```bash

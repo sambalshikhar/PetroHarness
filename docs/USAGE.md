@@ -305,6 +305,15 @@ print(r.answer)
 
 The keyword arguments mirror the command's options (`formation`, `tops`, `top`, `base`, `depth_unit`,
 `lithology_curve`, `formation_lithology`, `profile`, `out`, `model`, `model_card`, `model_url`, `settings`, `skills`).
+`interpretation` changes what Petrophys interprets the well with, and the zone rule, setting by setting
+(`petroharness.well.settings.schema()` lists them with their defaults and help; unset settings keep their defaults):
+
+```python
+r = ask("tuhua-7.las", "Which zone has the best reservoir quality?", formation="Mount Messenger",
+        tops="formations_tuhua-7.csv", interpretation={"rw": 0.05, "sw_model": "indonesia", "m": 2.2,
+                                                       "zone_min_thickness_m": 1.0})
+```
+
 Without `out`, nothing is written. Wrong inputs raise `ValueError` (a formation the tops file lacks: `FormationNotFound`), with a message that
 says what is wrong, why it matters and how to fix it.
 

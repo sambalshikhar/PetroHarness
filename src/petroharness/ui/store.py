@@ -153,4 +153,5 @@ def brief(r: dict) -> dict:
             "las": Path(str(i.get("las") or "")).name, "las_path": i.get("las"), "label": r.get("label", ""),
             "created": r.get("created"), "elapsed": r.get("elapsed"),
             "verdict": (r.get("rating") or {}).get("verdict", ""),
-            "turn": (r.get("conversation") or {}).get("turn") or 1}
+            "turn": (r.get("conversation") or {}).get("turn") or 1,
+            "root": (r.get("conversation") or {}).get("root") or r.get("id")}

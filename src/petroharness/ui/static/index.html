@@ -78,9 +78,6 @@ body.panel-closed .side { visibility: hidden; }
   body.panel-closed .side { transform: translateX(-102%); visibility: visible; box-shadow: none; }
   body:not(.panel-closed) .scrim { display: block; position: fixed; inset: 52px 0 0 0; background: rgba(0,0,0,.25); z-index: 15; }
 }
-.sidetabs { display: flex; gap: 4px; padding: 10px 12px 0; border-bottom: 1px solid var(--line); }
-.sidetabs button { border: 0; background: none; padding: 8px 12px; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font-weight: 500; }
-.sidetabs button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 650; }
 .count { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 4px; border-radius: 9px; background: var(--code); color: var(--muted); font-size: 11px; font-weight: 600; text-align: center; }
 .sidebody { overflow-y: auto; padding: 18px 18px 28px; flex: 1; }
 .field { margin-bottom: 22px; }
@@ -110,7 +107,6 @@ select:focus, input:focus, textarea:focus { outline: 3px solid var(--accent-soft
 .chip.lith { background: var(--navy-soft); color: var(--navy); }
 .chip.sans { font-family: var(--sans); font-size: 12px; padding: 2px 8px; border-radius: 6px; }
 .err { color: var(--bad); font-size: 13px; white-space: pre-wrap; margin-top: 8px; line-height: 1.45; }
-details.more > summary { font-weight: 650; font-size: 13px; color: var(--ink-2); padding: 4px 0; }
 details > summary { cursor: pointer; list-style: none; user-select: none; }
 details > summary::-webkit-details-marker { display: none; }
 .caret { display: inline-block; transition: transform .12s; color: var(--faint); margin-right: 6px; font-size: 10px; }
@@ -302,11 +298,30 @@ h3.sec:first-child { margin-top: 0; }
 .basis .bparams { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; }
 .basis .bparams span { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
 .basis .bsub { font-size: 12px; color: var(--muted); margin: 12px 0 2px; text-transform: uppercase; letter-spacing: .04em; }
-.thread { margin: 0 0 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
-.thread .tl { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.thread button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 4px 0; cursor: pointer; color: var(--ink); font: inherit; }
-.thread button.cur { font-weight: 650; cursor: default; }
-.thread button .tn { color: var(--muted); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.turns { display: grid; gap: 8px; margin: 0 0 14px; }
+.turns .thd { font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 2px 2px 0; display: flex; gap: 10px; align-items: baseline; }
+.turns .thd .link { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.turn { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.turn > summary { list-style: none; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 12px; align-items: center; padding: 11px 14px; cursor: pointer; }
+.turn > summary::-webkit-details-marker { display: none; }
+.turn > summary:hover .tq { color: var(--accent-ink); }
+.turn .tn { width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-2); display: grid; place-items: center; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.turn .twrap { display: grid; gap: 2px; min-width: 0; }
+.turn .tq { font-weight: 650; color: var(--ink); }
+.turn .tg { color: var(--ink-2); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turn[open] .tg { display: none; }
+.turn .tchev { color: var(--muted); font-size: 11px; transition: transform .15s; }
+.turn[open] .tchev { transform: rotate(90deg); }
+.turn .tbody { border-top: 1px solid var(--line); padding: 4px 18px 16px 54px; }
+.turn .tbody .ah { font-size: 15px; margin: 14px 0 4px; }
+.turn .tfigs { display: flex; gap: 10px; overflow-x: auto; margin-top: 12px; }
+.turn .tfigs a { flex: none; border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 4px; }
+.turn .tfigs img { height: 150px; width: auto; display: block; }
+.turn .tlinks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 13px; }
+.turn.live .tn { border-color: var(--accent); color: var(--accent-ink); }
+.turnsnote { font-size: 13px; color: var(--ink-2); margin: 0 2px; }
+.qno { font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+@media (max-width: 760px) { .turn .tbody { padding-left: 16px; } .turn .tfigs img { height: 120px; } }
 .follow { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
 .follow .q { font-weight: 650; margin-bottom: 4px; }
 .follow textarea { width: 100%; min-height: 64px; margin: 8px 0 10px; }
@@ -615,11 +630,164 @@ details.ritem > summary .apill { min-width: 0; }
 .zb.key { background: var(--navy); opacity: .06; border-color: var(--navy); }
 .ztable tr.key td { background: var(--navy-soft); }
 .ztable tr.key td:first-child { box-shadow: inset 3px 0 0 var(--navy); }
+
+/* ---------- how it was computed: the answer's lineage, from the measured logs through the Petrophys steps ---------- */
+.lin { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.lin-inner { position: relative; min-width: 940px; padding: 14px 16px 16px; }
+.lin-cols { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(84px, .5fr) minmax(220px, 1.5fr) minmax(160px, 1fr) minmax(170px, 1.1fr) minmax(104px, .55fr); gap: 38px; align-items: start; }
+.lin-cols.noclaims { grid-template-columns: minmax(84px, .5fr) minmax(220px, 1.5fr) minmax(190px, 1.25fr) minmax(110px, .6fr); }
+.lin-col { display: grid; gap: 7px; align-content: start; min-width: 0; }
+.lin-col h4 { margin: 0 0 4px; font: 600 10.5px/1.2 var(--sans); letter-spacing: .09em; text-transform: uppercase; color: var(--faint); display: flex; align-items: center; gap: 6px; }
+.lin-col h4 img { height: 13px; width: auto; }
+.ln { border: 1px solid var(--line); border-radius: 9px; background: var(--surface); padding: 6px 9px; font-size: 12px; line-height: 1.4; cursor: pointer; min-width: 0; transition: opacity .2s, border-color .2s, box-shadow .2s; }
+.ln:hover { border-color: var(--faint); }
+.ln:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ln.log { font-family: var(--mono); font-size: 11.5px; padding: 3px 8px; display: flex; justify-content: space-between; gap: 6px; }
+.ln.log small { color: var(--faint); }
+.ln.step { border-color: var(--pp); background: var(--pp-soft); }
+.ln.step .sh { font-weight: 650; color: var(--pp); }
+.ln.step .sm { color: var(--muted); font-weight: 400; }
+.ln.step .io { margin-top: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); overflow-wrap: anywhere; }
+.ln.step .io b { color: var(--pp); font-weight: 600; }
+.ln.step .kp { margin-top: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.ln.res .rid { font-family: var(--mono); font-weight: 650; margin-right: 5px; }
+.ln.res .rt { color: var(--muted); }
+.ln.claim { display: grid; gap: 3px; }
+.ln.claim .g { font: 600 10px/1 var(--sans); letter-spacing: .05em; text-transform: uppercase; }
+.ln.claim .g.high { color: #1f7a4d; } .ln.claim .g.moderate { color: var(--ink-2); } .ln.claim .g.low, .ln.claim .g.hypothesis { color: #9a5b00; }
+.ln.claim .ct { color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ln.ans { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.ln.ans small { display: block; font-weight: 400; color: var(--muted); }
+.lin.sel .ln:not(.hl) { opacity: .25; }
+.ln.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); opacity: 1; }
+.lin-edges { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 0; overflow: visible; }
+.lin-edges path { fill: none; stroke: var(--faint); stroke-width: 1.1; opacity: .5; }
+.lin-edges path.chain { stroke: var(--pp); opacity: .45; stroke-width: 1.2; }
+.lin.sel .lin-edges path { opacity: .06; }
+.lin.sel .lin-edges path.hl { opacity: 1; stroke: var(--accent); stroke-width: 1.8; }
+.lin-detail { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); padding: 12px 14px; font-size: 13px; color: var(--ink-2); display: grid; gap: 8px; }
+.lin-detail .dh { font-weight: 650; color: var(--ink); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lin-detail .dh .pp { color: var(--pp); }
+.lin-detail .params { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px 18px; font-family: var(--mono); font-size: 11.5px; }
+.lin-detail .params span { overflow-wrap: anywhere; } .lin-detail .params i { font-style: normal; color: var(--muted); }
+.lin-detail .chain { font-family: var(--mono); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.lin-detail .chain b { color: var(--pp); font-weight: 600; }
+
+/* ---------- interpretation settings: what Petrophys interprets the well with, and the zone rule ---------- */
+.isum { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 10px 12px; display: grid; gap: 8px; }
+.isum .ih { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.isum .ih img { height: 15px; width: auto; }
+.isum .ih .cnt { margin-left: auto; color: var(--muted); font-size: 12px; }
+.isum .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ichip { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; padding: 2px 2px 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); }
+.ichip button { border: 0; background: none; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 6px; border-radius: 999px; }
+.ichip button:hover { background: var(--surface); }
+.idlg-scrim { position: fixed; inset: 0; background: rgba(15, 20, 30, .38); z-index: 80; display: grid; place-items: center;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+.idlg { width: min(1140px, 100%); height: min(900px, 100%); background: var(--bg); border-radius: 16px; box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+  display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; overflow: hidden; }
+.idlg-head { display: flex; align-items: flex-start; gap: 14px; padding: 16px 20px 12px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.idlg-head h2 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.idlg-head h2 img { height: 19px; width: auto; }
+.idlg-head p { margin: 5px 0 0; color: var(--muted); font-size: 13px; max-width: 80ch; line-height: 1.5; }
+.idlg-head .x { margin-left: auto; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; width: 32px; height: 32px; font-size: 18px; cursor: pointer; color: var(--muted); flex: none; }
+.idlg-well { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 1.3fr); gap: 6px 16px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: 13px; min-height: 52px; }
+.idlg-well .zs { position: relative; height: 18px; border-radius: 4px; background: var(--line-2); border: 1px solid var(--line); overflow: hidden; }
+.idlg-well .zs span { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--surface); }
+.idlg-well .wn { grid-column: 1 / -1; color: var(--ink-2); }
+.idlg-well .wn b { font-variant-numeric: tabular-nums; }
+.idlg-body { display: grid; grid-template-columns: 228px minmax(0, 1fr); min-height: 0; }
+.idlg-nav { border-right: 1px solid var(--line); overflow-y: auto; padding: 12px; display: grid; gap: 2px; align-content: start; background: var(--surface); }
+.idlg-nav input { margin-bottom: 8px; width: 100%; }
+.idlg-nav button { text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13.5px; color: var(--ink-2); display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.idlg-nav button:hover { background: var(--surface-2); }
+.idlg-nav button.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.idlg-nav .nc { font-size: 11px; background: var(--accent); color: #fff; border-radius: 999px; padding: 0 7px; line-height: 18px; }
+.idlg-main { overflow-y: auto; padding: 16px 24px 32px; }
+.idlg-main h3 { margin: 6px 0 2px; font-size: 16px; }
+.idlg-main .gabout { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+.irow { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(170px, .85fr) minmax(0, 1fr); gap: 16px; align-items: start; padding: 12px 0; border-top: 1px solid var(--line-2); }
+.irow .il b { font-size: 13.5px; display: flex; align-items: center; gap: 7px; }
+.irow .il .k { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.irow .il .h { color: var(--muted); font-size: 12.5px; margin-top: 3px; line-height: 1.45; }
+.irow .il details summary { cursor: pointer; color: var(--accent-ink); font-size: 12px; margin-top: 4px; }
+.irow .il details p { font-size: 12px; color: var(--muted); margin: 4px 0 0; line-height: 1.5; }
+.irow .ic { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.irow .ic input, .irow .ic select { width: 100%; min-width: 0; }
+.irow .ic .u { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.irow .id { font-size: 12px; color: var(--muted); display: grid; gap: 3px; }
+.irow .id .tw { color: var(--pp); }
+.irow .id .err { color: #c0392b; }
+.irow.chg .il b::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.irow.chg .ic input, .irow.chg .ic select { border-color: var(--accent); }
+.idlg-foot { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--surface); flex-wrap: wrap; }
+.idlg-foot .grow { flex: 1; }
+.idlg-foot .btn { width: auto; flex: none; }
+@media (max-width: 760px) {
+  .idlg-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .idlg-nav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px; }
+  .idlg-nav input { width: 160px; margin: 0 6px 0 0; flex: none; }
+  .idlg-nav button { flex: none; }
+  .irow { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .idlg-well { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- the page as a chat: the runs in a drawer, the composer docked at the bottom ---------- */
+.shell, body.panel-closed .shell { display: block; min-height: calc(100vh - 52px); }
+.side, body.panel-closed .side { position: fixed; left: 0; top: 52px; bottom: 0; height: auto; width: min(380px, 92vw); z-index: 45;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, .22); transition: transform .18s ease; visibility: visible; }
+body.panel-closed .side { transform: translateX(-102%); box-shadow: none; }
+body:not(.panel-closed) .scrim { display: block; position: fixed; inset: 52px 0 0 0; background: rgba(0, 0, 0, .22); z-index: 44; }
+.sidehead { display: flex; align-items: center; gap: 8px; padding: 14px 18px 10px; border-bottom: 1px solid var(--line); }
+.main { padding: 20px 28px 230px; }
+@media (max-width: 760px) { .main { padding: 14px 16px 250px; } .newconv { padding: 6px 10px; font-size: 12px; } }
+.newconv { white-space: nowrap; }
+.composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--bg);
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.composer .cwrap { position: relative; max-width: 900px; margin: 0 auto; padding-top: 10px; }
+.cbox { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 6px 24px rgba(15, 20, 30, .08); padding: 10px 10px 10px 14px; display: grid; gap: 8px; }
+.cbox:focus-within { border-color: var(--accent); }
+.cchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cchip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font: 500 12.5px/1.2 var(--sans); padding: 5px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); cursor: pointer; }
+.cchip:hover { border-color: var(--accent); color: var(--accent-ink); }
+.cchip .k { color: var(--muted); font-weight: 600; }
+.cchip .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.cchip.want { border-style: dashed; border-color: var(--accent); color: var(--accent-ink); }
+.cchip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+.cchip.lock { cursor: default; background: var(--surface); }
+.cchip.lock:hover { border-color: var(--line); color: var(--ink-2); }
+.cchip img { height: 13px; width: auto; }
+.cchip.ghost { background: none; border-style: dashed; }
+.crow { display: flex; align-items: flex-end; gap: 8px; }
+.crow textarea { flex: 1; min-height: 26px; max-height: 220px; resize: none; border: 0; background: transparent; padding: 4px 2px; font: inherit; font-size: 15px; line-height: 1.5; outline: none; }
+.crow textarea:focus { outline: none; border: 0; }
+.send { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; display: grid; place-items: center; cursor: pointer; flex: none; }
+.send:disabled { background: var(--line); color: var(--faint); cursor: default; }
+.cfoot { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); padding: 6px 8px 0; min-height: 18px; }
+.cfoot .err { color: var(--bad); }
+.sheet { position: absolute; left: 0; right: 0; bottom: calc(100% - 4px); max-height: min(64vh, 640px); display: grid; grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 14px 44px rgba(15, 20, 30, .18); overflow: hidden; }
+.sheet-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px 0 14px; border-bottom: 1px solid var(--line); }
+.sheet-tabs { display: flex; gap: 2px; }
+.sheet-tabs button { border: 0; background: none; padding: 9px 12px; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font-weight: 500; }
+.sheet-tabs button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 650; }
+.sheet .x { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; width: 30px; height: 30px; cursor: pointer; color: var(--muted); margin-bottom: 6px; }
+.sheet-body { overflow-y: auto; padding: 14px 16px 18px; }
+.sheet-body section { display: grid; gap: 4px; }
+@media (max-width: 760px) {
+  .cchips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .cchips::-webkit-scrollbar { display: none; }
+  .cchip { flex: none; }
+  .cchip .v { max-width: 180px; }
+  .cfoot .long { display: none; }
+  .sheet { max-height: 70vh; }
+}
 </style>
 </head>
 <body>
 <header class="top">
-  <button class="iconbtn" id="panelbtn" title="Show or hide the question panel" aria-label="Toggle the question panel">
+  <button class="iconbtn" id="panelbtn" title="Runs" aria-label="Show the runs">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>
   </button>
   <a class="logo" href="/" title="PetroHarness"><img class="logo-light" src="/img/petroharness_logo.svg" alt="PetroHarness"><img class="logo-dark" src="/img/petroharness_logo_dark.png" alt="PetroHarness"></a>
@@ -627,17 +795,27 @@ details.ritem > summary .apill { min-width: 0; }
   <div class="sub">Ask about a LAS file<span id="modelname"></span></div>
   <div class="grow"></div>
   <div class="health" id="health">checking endpoints…</div>
+  <button class="btn fix newconv" id="newconv" title="Start a new conversation">+ New conversation</button>
 </header>
 
 <div class="shell">
-  <aside class="side" id="side">
-    <div class="sidetabs">
-      <button data-side="ask" class="on">Ask</button>
-      <button data-side="runs">Runs<span class="count" id="runcount">0</span></button>
+  <aside class="side" id="side" aria-label="Runs">
+    <div class="sidehead"><b>Runs</b><span class="count" id="runcount">0</span><span class="grow"></span><button class="link fix" id="refresh">Refresh</button></div>
+    <div class="sidebody" id="side-runs">
+      <div class="row" style="margin-bottom:12px"><input type="text" id="runfilter" placeholder="Filter runs"></div>
+      <div id="history"></div>
     </div>
-    <div class="sidebody" id="side-ask">
-      <div class="field">
-        <div class="flabel"><span class="n">1</span>Well (LAS file)</div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+  <main class="main"><div class="wrap" id="run"></div></main>
+</div>
+
+<div class="composer" id="composer">
+  <div class="cwrap">
+    <div class="sheet" id="sheet" hidden>
+      <div class="sheet-head"><div class="sheet-tabs" id="sheettabs" role="tablist"><button data-sheet="well" class="on">Well</button><button data-sheet="interval">Interval</button><button data-sheet="options">Options</button></div><span class="grow"></span><button class="x" id="sheetclose" aria-label="Close">×</button></div>
+      <div class="sheet-body">
+        <section data-sec="well">
         <div class="row">
           <input type="text" id="laspath" class="mono" placeholder="path of a .las file on the server" list="recentlas">
           <button class="btn fix" id="lasload">Load</button>
@@ -649,10 +827,8 @@ details.ritem > summary .apill { min-width: 0; }
           <span class="hint" id="lasmsg" style="margin:0"></span>
         </div>
         <div class="card0" id="wellinfo" hidden></div>
-      </div>
-
-      <div class="field">
-        <div class="flabel"><span class="n">2</span>Interval</div>
+        </section>
+        <section data-sec="interval" hidden>
         <div class="seg" id="ivmode"><button data-m="whole" class="on">Whole well</button><button data-m="tops">Formation (tops)</button><button data-m="depths">Depths</button></div>
         <div id="iv-whole" class="hint">From the log's first sample to its last. Near the top of a log, often behind casing, only some curves may be recorded, and porosity and saturation there are not meaningful: a named interval gets a more focused and more reliable answer.</div>
         <div id="iv-tops" hidden>
@@ -680,16 +856,8 @@ details.ritem > summary .apill { min-width: 0; }
           <input type="text" id="ivname" placeholder="name (optional), e.g. lower sand" style="margin-top:8px">
           <div class="hint">Measured depths; both are included. Leave the top empty to start at the top of the log, or the base to run to its end.</div>
         </div>
-      </div>
-
-      <div class="field">
-        <div class="flabel"><span class="n">3</span>Question</div>
-        <textarea id="question" placeholder="e.g. Where are the best reservoir intervals? Give their porosity, shale volume and water saturation, and say whether any looks hydrocarbon-bearing."></textarea>
-      </div>
-
-      <div class="field">
-        <details class="more" id="more">
-          <summary><span class="caret">▶</span>More options</summary>
+        </section>
+        <section data-sec="options" hidden>
           <label class="lab" for="lithcurve">Lithology curve</label>
           <select id="lithcurve"><option value="">Detect (none: zones from shale-volume bands)</option></select>
           <label class="lab" for="lithtext">The formation's lithology, as you know it</label>
@@ -703,21 +871,16 @@ details.ritem > summary .apill { min-width: 0; }
           <input type="number" id="maxsteps" min="1" max="30" step="1">
           <label class="lab" for="depth">Depth of the answer</label>
           <select id="depth"><option value="">The model decides: a short answer to a direct question, an investigation for the rest</option><option value="investigate">A full investigation for every question</option></select>
-        </details>
+        </section>
       </div>
-
-      <button class="btn primary" id="ask">Ask</button>
-      <div class="hint">Ctrl+Enter asks. A direct question (a value, a setting) takes about a minute, an investigation a few minutes; several can run at once, and the rest wait their turn.</div>
-      <div class="hint" id="envnote" hidden></div>
-      <div class="err" id="formerr"></div>
     </div>
-    <div class="sidebody" id="side-runs" hidden>
-      <div class="row" style="margin-bottom:12px"><input type="text" id="runfilter" placeholder="Filter runs"><button class="link fix" id="refresh">Refresh</button></div>
-      <div id="history"></div>
+    <div class="cbox">
+      <div class="cchips" id="cchips"></div>
+      <div class="crow"><textarea id="question" rows="1" placeholder="Ask about this well"></textarea>
+        <button class="send" id="ask" aria-label="Ask" title="Ask (Enter)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14V4M4.5 8.5 9 4l4.5 4.5"/></svg></button></div>
     </div>
-  </aside>
-  <div class="scrim" id="scrim"></div>
-  <main class="main"><div class="wrap" id="run"></div></main>
+    <div class="cfoot"><span id="cmode"></span><span class="err" id="formerr"></span><span class="hint" id="envnote" hidden></span></div>
+  </div>
 </div>
 
 <script>
@@ -739,7 +902,7 @@ const host = u => { try { return new URL(u).host; } catch (e) { return u || ""; 
 const hostname = u => { try { return new URL(u).hostname.split(".")[0]; } catch (e) { return u || ""; } };
 const narrow = () => window.matchMedia("(max-width: 1180px)").matches;
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 1800); }
-const S = {cfg: null, las: null, tops: null, mode: "whole", job: null, since: 0, events: [], last: null, tab: "main", pinned: false, sig: "", poll: null, runs: [], det: {}, open: {}, raw: {}, evMode: "", hlZone: null, wellZoom: 1, wellData: null, m: null, res: null};
+const S = {lin: {}, cfg: null, las: null, tops: null, mode: "whole", job: null, since: 0, events: [], last: null, tab: "main", pinned: false, sig: "", poll: null, runs: [], det: {}, open: {}, raw: {}, evMode: "", hlZone: null, wellZoom: 1, wellData: null, m: null, res: null};
 
 // ---------- inline text: evidence ids, zones, code, bold; in the answer, numbers traced to the results ----------
 const HL = /(\[?\bE\d{1,3}\b\]?)|(\bZ\d{1,3}\b)/g;
@@ -841,13 +1004,8 @@ function md(text, opt = {}) {
 
 // ---------- the side panel ----------
 function setPanel(open) { document.body.classList.toggle("panel-closed", !open); }
-$("#panelbtn").onclick = () => setPanel(document.body.classList.contains("panel-closed"));
 $("#scrim").onclick = () => setPanel(false);
-$$(".sidetabs button").forEach(b => b.onclick = () => {
-  $$(".sidetabs button").forEach(x => x.classList.toggle("on", x === b));
-  $("#side-ask").hidden = b.dataset.side !== "ask"; $("#side-runs").hidden = b.dataset.side !== "runs";
-  if (b.dataset.side === "runs") loadRuns();
-});
+$("#panelbtn").onclick = () => { const open = document.body.classList.contains("panel-closed"); setPanel(open); if (open) loadRuns(); };
 function setMode(m) {
   S.mode = m;
   $$("#ivmode button").forEach(b => b.classList.toggle("on", b.dataset.m === m));
@@ -861,7 +1019,7 @@ async function loadLas(path) {
   $("#lasmsg").textContent = ""; $("#formerr").textContent = "";
   if (!path) return;
   try { showLas(await api(`/api/las?path=${encodeURIComponent(path)}`)); }
-  catch (e) { S.las = null; $("#wellinfo").hidden = true; $("#formerr").textContent = e.message; }
+  catch (e) { S.las = null; $("#wellinfo").hidden = true; $("#formerr").textContent = e.message; chipsRender(); }
 }
 function showLas(info) {
   S.las = info; $("#laspath").value = info.path;
@@ -879,6 +1037,7 @@ function showLas(info) {
     [...info.curves].sort((a, b) => lith.has(b.mnemonic) - lith.has(a.mnemonic)).map(c => `<option value="${esc(c.mnemonic)}">${esc(c.mnemonic)}${lith.has(c.mnemonic) ? " (looks like a lithology log)" : ""}</option>`).join("");
   if (info.curves.some(c => c.mnemonic === keep)) $("#lithcurve").value = keep;
   if ($("#topspath").value.trim()) loadTops($("#topspath").value.trim());
+  chipsRender();
 }
 $("#lasload").onclick = () => loadLas($("#laspath").value.trim());
 $("#laspath").addEventListener("keydown", e => { if (e.key === "Enter") loadLas($("#laspath").value.trim()); });
@@ -924,6 +1083,7 @@ function showFormation() {
   const f = S.tops && S.tops.formations.find(x => x.name === $("#formation").value);
   $("#formnote").textContent = f ? `${f.name}: ${fmtD(f.top)} – ${f.base == null ? "the end of the log" : fmtD(f.base)}${f.unit ? " " + f.unit : ""} (base: ${f.base_from}).` :
     "The interval runs from the formation's top to its stated base, else to the next deeper top, else to the end of the log.";
+  chipsRender();
 }
 $("#formation").onchange = showFormation;
 $("#topsunit").onchange = () => { if ($("#topspath").value.trim()) loadTops($("#topspath").value.trim()); };
@@ -948,23 +1108,242 @@ function formInputs() {
   inputs.skills = $("#skills").value === "path" ? $("#skillspath").value.trim() : $("#skills").value;
   if ($("#maxsteps").value) inputs.max_steps = +$("#maxsteps").value;
   if ($("#depth").value) inputs.depth = $("#depth").value;
+  if (S.interp && Object.keys(S.interp).length) inputs.interpretation = {...S.interp};
   return inputs;
 }
+// ---------- interpretation settings: what Petrophys interprets the well with, and the zone rule ----------
+Object.assign(S, {interp: {}, schema: null, preview: null, previewErr: "", igroup: "zones", iquery: ""});
+const FT = 0.3048;
+const depthUnit = () => (S.preview && S.preview.unit) || (S.las && S.las.depth_unit) || "m";
+async function interpSchema() { if (!S.schema) S.schema = await api("/api/settings"); return S.schema; }
+const ifields = () => S.schema ? S.schema.groups.flatMap(g => g.fields) : [];
+const ifield = k => ifields().find(f => f.key === k);
+function ishow(f, v) {                     // a value as the panel shows it (a zone thickness in the well's depth unit)
+  if (v == null || v === "") return "";
+  if (f.key === "zone_min_thickness_m") return depthUnit() === "ft" ? `${+(v / FT).toFixed(2)} ft` : `${+(+v).toFixed(2)} m`;
+  if (f.kind === "bands") return `${v[0]} / ${v[1]}`;
+  if (f.kind === "switch") return v ? "on" : "off";
+  if (f.kind === "choice") return (f.choice_labels && f.choice_labels[v]) || String(v).replace(/_/g, " ");
+  return `${typeof v === "number" ? +v.toPrecision(6) : v}${f.unit ? " " + f.unit : ""}`;
+}
+function isumRender() { chipsRender(); }
+function idefault(f) {
+  if (f.kind === "bands") return `${f.default[0]} / ${f.default[1]}`;
+  return f.default == null ? "auto, from the LAS header or the data" : ishow(f, f.default);
+}
+function idHtml(f) {
+  const has = f.key in S.interp, used = S.preview && S.preview.used && S.preview.used[f.key];
+  return `<span>Default: ${esc(idefault(f))}</span>${used ? `<span class="tw">This well: ${esc(ishow(f, used.value))} <span class="subtle">(${esc(used.step)} step)</span></span>` : ""}${has ? `<button class="link" data-ireset="${esc(f.key)}">Reset to default</button>` : ""}<span class="err" data-ierr="${esc(f.key)}"></span>`;
+}
+function irow(f) {
+  const v = S.interp[f.key], has = f.key in S.interp, k = esc(f.key);
+  let ctl;
+  if (f.kind === "choice") ctl = `<select data-ik="${k}" aria-label="${esc(f.label)}"><option value="">Default${f.default != null ? ` (${esc(ishow(f, f.default))})` : ""}</option>${f.choices.map(c => `<option value="${esc(c)}"${has && v === c ? " selected" : ""}>${esc((f.choice_labels && f.choice_labels[c]) || c.replace(/_/g, " "))}</option>`).join("")}</select>`;
+  else if (f.kind === "switch") ctl = `<select data-ik="${k}" aria-label="${esc(f.label)}"><option value="">Default (${f.default ? "on" : "off"})</option><option value="1"${has && v ? " selected" : ""}>On</option><option value="0"${has && !v ? " selected" : ""}>Off</option></select>`;
+  else if (f.kind === "bands") ctl = `<input type="number" step="0.01" min="0" max="1" data-ik="${k}" data-bi="0" value="${has ? v[0] : ""}" placeholder="${f.default[0]}" aria-label="clean below"><span class="u">to</span><input type="number" step="0.01" min="0" max="1" data-ik="${k}" data-bi="1" value="${has ? v[1] : ""}" placeholder="${f.default[1]}" aria-label="shale-prone above"><span class="u">v/v</span>`;
+  else {
+    const zone = f.key === "zone_min_thickness_m", u = zone ? depthUnit() : f.unit;
+    const shown = has ? (zone && u === "ft" ? +(v / FT).toFixed(3) : v) : "";
+    const ph = f.default == null ? "auto" : zone && u === "ft" ? +(f.default / FT).toFixed(2) : f.default;
+    ctl = `<input type="number" step="any" data-ik="${k}" value="${shown}" placeholder="${esc(ph)}" aria-label="${esc(f.label)}">${u ? `<span class="u">${esc(u)}</span>` : ""}`;
+  }
+  return `<div class="irow${has ? " chg" : ""}" data-row="${k}">
+    <div class="il"><b>${esc(f.label)}</b><span class="k">${k}</span><div class="h">${esc(f.help)}</div>${f.more && f.more !== f.help ? `<details><summary>More</summary><p>${esc(f.more)}</p></details>` : ""}</div>
+    <div class="ic">${ctl}</div><div class="id">${idHtml(f)}</div></div>`;
+}
+function iwellHtml(busy) {
+  const inp = formInputs();
+  if (!inp.las) return `<span class="wn subtle">Load a LAS file (step 1) to preview the interpretation on it: the zones you get and the values Petrophys takes for this well.</span>`;
+  if (S.previewErr) return `<span class="wn" style="color:#c0392b">${esc(S.previewErr)}</span>`;
+  const p = S.preview;
+  if (!p) return `<span class="wn"><span class="spin"></span> Petrophys is interpreting the well…</span>`;
+  const iv = p.interval, u = p.unit || "", tot = p.interval_thickness || 0;
+  const strip = tot ? p.zones.map(z => `<span title="${esc(z.zone)} ${esc(z.lithology)} ${fmtD(z.top)}–${fmtD(z.base)} ${esc(u)}" style="left:${100 * (z.top - iv.top) / tot}%;width:${Math.max(.4, 100 * (z.base - z.top) / tot)}%;background:${lithColor(z.lithology)}"></span>`).join("") : "";
+  const how = p.lithology.source === "shale-volume bands" ? "zoned by shale-volume bands (no lithology log)" : p.lithology.source === "lithology log" ? `zoned by the lithology log ${p.lithology.curve}` : "";
+  return `<div><b>${esc(iv.name)}</b> <span class="subtle">${fmtD(iv.top)}–${fmtD(iv.base)} ${esc(u)} · ${fmtN(iv.samples)} samples</span>${busy ? ' <span class="spin"></span>' : ""}</div>
+    <div class="zs" role="img" aria-label="${p.zones.length} zones over the interval">${strip}</div>
+    <div class="wn"><b>${p.zones.length}</b> zone${p.zones.length === 1 ? "" : "s"}, <b>${fmtD(p.zoned)}</b> of ${fmtD(tot)} ${esc(u)} zoned · minimum ${fmtD(p.min_thickness)} ${esc(u)} · ${esc(how)}</div>`;
+}
+let ipSeq = 0, ipTimer = null;
+function ischedule() { clearTimeout(ipTimer); ipTimer = setTimeout(interpPreview, 650); }
+async function interpPreview() {
+  const box = $("#iwell"); if (!box) return;
+  const inp = formInputs(); delete inp.question;
+  if (!inp.las) { S.preview = null; box.innerHTML = iwellHtml(); return; }
+  const seq = ++ipSeq; S.previewErr = ""; box.innerHTML = iwellHtml(true);
+  try { const r = await post("/api/preview", inp); if (seq !== ipSeq) return; S.preview = r; }
+  catch (e) { if (seq !== ipSeq) return; S.previewErr = e.message; }
+  box.innerHTML = iwellHtml(false);
+  $$("#imain [data-row]").forEach(row => { const f = ifield(row.dataset.row); if (f) { row.querySelector(".id").innerHTML = idHtml(f); iwireRow(row); } });
+}
+function iset(key, el) {
+  const f = ifield(key); if (!f) return;
+  if (f.kind === "bands") {
+    const a = $(`#imain [data-ik="${key}"][data-bi="0"]`).value, b = $(`#imain [data-ik="${key}"][data-bi="1"]`).value;
+    if (a === "" && b === "") delete S.interp[key]; else S.interp[key] = [a === "" ? f.default[0] : +a, b === "" ? f.default[1] : +b];
+  } else if (f.kind === "choice") { if (el.value === "") delete S.interp[key]; else S.interp[key] = el.value; }
+  else if (f.kind === "switch") { if (el.value === "") delete S.interp[key]; else S.interp[key] = el.value === "1"; }
+  else if (el.value === "") delete S.interp[key];
+  else { let x = +el.value; if (key === "zone_min_thickness_m" && depthUnit() === "ft") x *= FT; S.interp[key] = f.kind === "integer" ? Math.round(x) : x; }
+  irefresh(key); ischedule();
+}
+function irefresh(key) {
+  const row = $(`#imain [data-row="${key}"]`), f = ifield(key);
+  if (row && f) { row.classList.toggle("chg", key in S.interp); row.querySelector(".id").innerHTML = idHtml(f); iwireRow(row); }
+  inavCounts(); $("#ichg").textContent = `${Object.keys(S.interp).length} changed`;
+}
+function inavCounts() {                    // the changed counts, in place (redrawing the buttons would lose a click)
+  $$("#ignav [data-ig]").forEach(b => {
+    const g = S.schema.groups.find(x => x.key === b.dataset.ig), n = g ? g.fields.filter(f => f.key in S.interp).length : 0;
+    let c = b.querySelector(".nc");
+    if (n && !c) { c = document.createElement("span"); c.className = "nc"; b.appendChild(c); }
+    if (c) { c.textContent = n || ""; c.hidden = !n; }
+  });
+}
+function iwireRow(row) {
+  $$("[data-ik]", row).forEach(el => { el.onchange = () => iset(el.dataset.ik, el); if (el.tagName === "INPUT") el.oninput = () => { clearTimeout(el._t); el._t = setTimeout(() => iset(el.dataset.ik, el), 500); }; });
+  $$("[data-ireset]", row).forEach(b => b.onclick = () => { delete S.interp[b.dataset.ireset]; const f = ifield(b.dataset.ireset); row.outerHTML = irow(f); const nr = $(`#imain [data-row="${f.key}"]`); iwireRow(nr); irefresh(f.key); ischedule(); });
+}
+function inavRender() {
+  const nav = $("#ignav"); if (!nav) return;
+  const q = S.iquery.trim();
+  nav.innerHTML = S.schema.groups.map(g => { const n = g.fields.filter(f => f.key in S.interp).length;
+    return `<button data-ig="${g.key}" class="${!q && g.key === S.igroup ? "on" : ""}">${esc(g.title)}${n ? `<span class="nc">${n}</span>` : ""}</button>`; }).join("");
+  $$("#ignav [data-ig]").forEach(b => b.onclick = () => { S.igroup = b.dataset.ig; S.iquery = ""; $("#iq").value = ""; imainRender(); inavRender(); });
+}
+function imainRender() {
+  const q = S.iquery.trim().toLowerCase();
+  const groups = q ? S.schema.groups.map(g => ({...g, fields: g.fields.filter(f => `${f.label} ${f.key} ${f.help} ${f.more || ""}`.toLowerCase().includes(q))})).filter(g => g.fields.length)
+                   : S.schema.groups.filter(g => g.key === S.igroup);
+  const main = $("#imain");
+  main.innerHTML = groups.map(g => `<h3>${esc(g.title)}</h3><p class="gabout">${esc(g.about)}</p>${g.fields.map(irow).join("")}`).join("")
+    || `<p class="subtle">No setting matches “${esc(S.iquery)}”.</p>`;
+  $$("#imain [data-row]").forEach(iwireRow);
+  main.scrollTop = 0;
+}
+async function interpOpen() {
+  try { await interpSchema(); } catch (e) { toast(e.message); return; }
+  let m = $("#idlg");
+  if (!m) { m = document.createElement("div"); m.id = "idlg"; m.className = "idlg-scrim"; document.body.appendChild(m); }
+  m.hidden = false;
+  const lib = (S.schema.petrophys || "").split("@")[0];
+  m.innerHTML = `<div class="idlg" role="dialog" aria-modal="true" aria-labelledby="idlgt">
+    <div class="idlg-head"><div><h2 id="idlgt"><img src="/img/petrophys_mark.png" alt="">Interpretation settings</h2>
+      <p>Petrophys interprets the LAS before the model reads it. Each setting shows its default; a value you set is used instead, and the well is interpreted again with it. The run records every value it used.${lib ? ` <span class="subtle">Petrophys ${esc(lib)}</span>` : ""}</p></div>
+      <button class="x" id="iclose" aria-label="Close">×</button></div>
+    <div class="idlg-well" id="iwell"></div>
+    <div class="idlg-body"><nav class="idlg-nav" aria-label="Setting groups"><input type="search" id="iq" placeholder="Search settings" value="${esc(S.iquery)}"><div id="ignav" style="display:contents"></div></nav>
+      <div class="idlg-main" id="imain"></div></div>
+    <div class="idlg-foot"><span id="ichg">${Object.keys(S.interp).length} changed</span><button class="link" id="ireset">Reset all</button><span class="grow"></span>
+      <button class="btn fix" id="iprev">Preview on this well</button><button class="btn primary fix" id="idone">Done</button></div></div>`;
+  inavRender(); imainRender();
+  $("#iq").oninput = e => { S.iquery = e.target.value; imainRender(); inavRender(); };
+  $("#iclose").onclick = $("#idone").onclick = interpClose;
+  $("#iprev").onclick = interpPreview;
+  $("#ireset").onclick = () => { S.interp = {}; imainRender(); inavRender(); $("#ichg").textContent = "0 changed"; ischedule(); };
+  m.onclick = e => { if (e.target === m) interpClose(); };
+  interpPreview();
+  const first = $("#imain input, #imain select"); if (first) first.focus();
+}
+function interpClose() { const m = $("#idlg"); if (m) { m.hidden = true; m.innerHTML = ""; } isumRender(); }
+document.addEventListener("keydown", e => { const m = $("#idlg"); if (e.key === "Escape" && m && !m.hidden) interpClose(); });
+
+// ---------- the composer: the question at the bottom; a new conversation, or the next question of the one open ----------
+Object.assign(S, {followId: null});
+function wellName(inp) { const p = String((inp && inp.las) || ""); return p.split("/").pop() || "a well"; }
+function intervalName(inp) {
+  const iv = (inp && inp.interval) || {mode: "whole"};
+  if (iv.mode === "tops") return iv.formation || "a formation";
+  if (iv.mode === "depths") return iv.name || `${iv.top ?? "top"}–${iv.base ?? "base"} ${iv.unit || ""}`.trim();
+  return "whole well";
+}
+function intervalNow() {
+  if (S.mode === "tops") return $("#formation").value || "choose a formation";
+  if (S.mode === "depths") { const t = $("#top").value, b = $("#base").value; return (t || b) ? `${t || "top"}–${b || "base"} ${$("#unit").value || (S.las && S.las.depth_unit) || ""}`.trim() : "give the depths"; }
+  return "Whole well";
+}
+function optionsSet() {
+  return [$("#lithcurve").value, $("#lithtext").value.trim(), $("#profile").value, $("#skills").value !== "default" ? 1 : "",
+          $("#maxsteps").value, $("#depth").value].filter(Boolean).length;
+}
+function chipsRender() {
+  const box = $("#cchips"); if (!box) return;
+  const j = S.last, running = j && !R.run && ["queued", "running"].includes(j.status);
+  const nI = Object.keys(S.interp || {}).length, mark = '<img src="/img/petrophys_mark.png" alt="">';
+  if (j && !R.run && j.conversation && (S.followId || running)) {   // a conversation on screen: its setup, locked
+    const inp = j.inputs || {}, chosen = Object.keys(inp.interpretation || {}).length;
+    const c = convOf(j), n = c && c.turns.length ? c.turns[c.turns.length - 1].turn : ((j.conversation && j.conversation.thread) || []).length || 1;
+    box.innerHTML = `<span class="cchip lock" title="This conversation's well and interval"><span class="k">Well</span><span class="v">${esc(wellName(inp))} · ${esc(intervalName(inp))}</span></span>
+      <span class="cchip lock">${mark}<span class="v">${chosen ? `${chosen} interpretation setting${chosen > 1 ? "s" : ""} changed` : "Petrophys defaults"}</span></span>
+      <button class="cchip ghost" id="cnew">+ New conversation</button>`;
+    $("#cmode").innerHTML = running ? `Question ${turnNo(j) || n} is being answered<span class="long">; ask the next one when it finishes</span>.` :
+      `Continues this conversation as question ${n + 1}<span class="long">: the same well, interval and settings, with the results already found</span>.`;
+    $("#cnew").onclick = newFrom;
+  } else {
+    box.innerHTML = `<button class="cchip${S.las ? "" : " want"}" data-open="well"><span class="k">Well</span><span class="v">${esc(S.las ? S.las.name : "Choose a LAS file")}</span></button>
+      <button class="cchip" data-open="interval"><span class="k">Interval</span><span class="v">${esc(intervalNow())}</span></button>
+      <button class="cchip${nI ? " on" : ""}" id="cinterp">${mark}<span class="k">Interpretation</span><span class="v">${nI ? `${nI} changed` : "Petrophys defaults"}</span></button>
+      <button class="cchip${optionsSet() ? " on" : ""}" data-open="options"><span class="k">Options</span><span class="v">${optionsSet() ? `${optionsSet()} set` : "defaults"}</span></button>`;
+    $("#cmode").textContent = running ? "" : S.las ? "Starts a new conversation about this well and interval." : "Choose a LAS file to start.";
+    $$("#cchips [data-open]").forEach(b => b.onclick = e => { e.stopPropagation(); sheet(b.dataset.open); });
+    $("#cinterp").onclick = e => { e.stopPropagation(); sheet(null); interpOpen(); };
+  }
+  $("#ask").disabled = !!running;
+  $("#question").placeholder = running ? "Answering… ask the next question when this one finishes" : S.followId ? "Ask a follow-up" : "Ask about this well";
+}
+function sheet(sec) {                       // the sheet above the composer, at a section (null: closed)
+  const sh = $("#sheet");
+  if (!sec || S.followId) { sh.hidden = true; return; }
+  sh.hidden = false;
+  $$("#sheettabs button").forEach(b => b.classList.toggle("on", b.dataset.sheet === sec));
+  $$("#sheet [data-sec]").forEach(x => { x.hidden = x.dataset.sec !== sec; });
+}
+$$("#sheettabs button").forEach(b => b.onclick = e => { e.stopPropagation(); sheet(b.dataset.sheet); });
+$("#sheetclose").onclick = () => { sheet(null); chipsRender(); };
+document.addEventListener("click", e => {
+  const sh = $("#sheet");
+  if (!sh.hidden && !e.target.closest("#composer") && !e.target.closest("#idlg")) { sheet(null); chipsRender(); }
+});
+["#formation", "#top", "#base", "#unit", "#ivname", "#lithcurve", "#lithtext", "#profile", "#skills", "#maxsteps", "#depth", "#topsunit"]
+  .forEach(id => { const el = $(id); if (el) el.addEventListener("change", chipsRender); });
+$$("#ivmode button").forEach(b => b.addEventListener("click", chipsRender));
+function autosize() { const t = $("#question"); t.style.height = "auto"; t.style.height = `${Math.min(220, t.scrollHeight)}px`; }
+$("#question").addEventListener("input", autosize);
+function composerFor(j) {                   // after each render: a finished answer of a conversation is followed by the next question
+  S.followId = j && !R.run && j.status === "done" && j.conversation ? j.id : null;
+  if (S.followId) sheet(null);
+  chipsRender();
+}
+function newConversation() {
+  clearTimeout(S.poll); replayStop();
+  S.job = null; S.last = null; S.followId = null; S.sig = "";
+  history.replaceState(null, "", location.pathname);
+  emptyPage(); chipsRender(); $("#question").focus();
+}
+function newFrom() {                        // the button: a new conversation about the well and interval on screen
+  const inputs = S.last && S.last.inputs;
+  if (inputs && inputs.las) fillForm({...inputs, question: ""}); else newConversation();
+}
+$("#newconv").onclick = newFrom;
+
 async function ask() {
   $("#formerr").textContent = "";
+  const q = $("#question").value.trim();
+  if (!q) { $("#formerr").textContent = "Write the question first."; $("#question").focus(); return; }
   const btn = $("#ask"); btn.disabled = true;
   try {
-    const {id} = await post("/api/ask", formInputs());
-    if (narrow()) setPanel(false);
+    const body = S.followId ? {follow: S.followId, question: q} : formInputs();
+    if (!S.followId && !body.las) { sheet("well"); throw new Error("Choose a LAS file first."); }
+    const {id} = await post("/api/ask", body);
+    $("#question").value = ""; autosize(); sheet(null);
     S.pinned = false; openRun(id); loadRuns();
   } catch (e) { $("#formerr").textContent = e.message; }
-  finally { btn.disabled = false; }
+  finally { btn.disabled = false; chipsRender(); }
 }
 $("#ask").onclick = ask;
-$("#question").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) ask(); });
+$("#question").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!$("#ask").disabled) ask(); } });
 async function fillForm(inputs) {
-  setPanel(true);
-  $$(".sidetabs button")[0].click();
+  newConversation();
   $("#question").value = inputs.question || "";
   if (inputs.las) { $("#laspath").value = inputs.las; await loadLas(inputs.las); }
   const iv = inputs.interval || {mode: "whole"};
@@ -977,8 +1356,7 @@ async function fillForm(inputs) {
   $("#skills").value = ["default", "none"].includes(sk) ? sk : "path"; $("#skillspath").value = ["default", "none"].includes(sk) ? "" : sk; $("#skills").onchange();
   $("#maxsteps").value = inputs.max_steps || "";
   $("#depth").value = inputs.depth === "investigate" ? "investigate" : "";
-  if (inputs.lithology_curve || inputs.formation_lithology || inputs.profile || inputs.max_steps || inputs.depth || sk !== "default") $("#more").open = true;
-  $("#question").focus();
+  S.interp = {...(inputs.interpretation || {})}; S.preview = null; chipsRender(); autosize(); $("#question").focus();
 }
 
 // ---------- endpoints and the queue ----------
@@ -1012,7 +1390,7 @@ function showRuns() {
     <div class="rm"><span class="pill status ${esc(r.status)}" style="padding:0 8px">${esc(r.status)}</span><span>${esc(r.las)}</span><span>${esc(r.label)}</span>
     ${r.elapsed ? `<span>${fmtS(r.elapsed)}</span>` : ""}${r.verdict ? `<span class="v-${esc(r.verdict)}">${esc(r.verdict)}</span>` : ""}</div></div>`).join("") :
     `<div class="hint">No runs yet.</div>`;
-  $$(".runitem").forEach(x => x.onclick = () => { if (narrow()) setPanel(false); S.pinned = false; openRun(x.dataset.id); });
+  $$(".runitem").forEach(x => x.onclick = () => { setPanel(false); S.pinned = false; openRun(x.dataset.id); });
 }
 $("#runfilter").oninput = showRuns;
 $("#refresh").onclick = loadRuns;
@@ -1176,13 +1554,15 @@ function render() {
   if (sig === S.sig) { const el = $("#elapsed"); if (el) el.textContent = fmtS(j.elapsed); return; }
   S.sig = sig; S.m = m; S.res = res;
   closePop();
+  composerFor(j);
   const scroll = window.scrollY;
   const i = j.inputs || {};
   const calls = new Map(((res && res.opened) || []).map(o => [o.id, o.call]));
   const nRes = new Set([...m.results.keys(), ...calls.keys()]).size;
   const tabs = [["main", "Interpretation"], ["well", "Well logs"], ["evidence", `Evidence${nRes ? ` · ${nRes}` : ""}`], ["story", "Investigation log"], ["details", "Details"]];
   const qpos = j.queue_position ? `<span class="pill"><span class="k">queue</span>${j.queue_position}</span>` : "";
-  let html = `<div class="runhead"><h1>${esc(i.question)}</h1><div class="meta">
+  const no = turnNo(j);
+  let html = `<div id="turns">${turnsHtml(j)}</div><div class="runhead">${no ? `<div class="qno">Question ${no} of this conversation</div>` : ""}<h1>${esc(i.question)}</h1><div class="meta">
     <span class="pill status ${esc(j.status)}">${esc(j.status)}</span>
     <span class="pill" title="${esc(i.las)}"><span class="k">well</span>${esc(String(i.las || "").split("/").pop())}</span>
     <span class="pill"><span class="k">interval</span>${esc(j.label || "")}</span>${qpos}
@@ -1202,7 +1582,7 @@ function render() {
   html += `</div>`;
   $("#run").innerHTML = html;
   window.scrollTo(0, scroll);
-  wire(j);
+  wire(j); turnsWire(); convLoad(j);
 }
 function rerender() { S.sig = ""; render(); }
 function wire(j) {
@@ -1227,10 +1607,7 @@ function wire(j) {
   const sr = $("#stopreplay"); if (sr) sr.onclick = () => { replayStop(); openRun(j.id); };
   const ru = $("#reuse"); if (ru) ru.onclick = () => fillForm(j.inputs || {});
   const cp = $("#copyans"); if (cp) cp.onclick = () => navigator.clipboard.writeText(j.answer || "").then(() => toast("Answer copied"));
-  $$(".thread button[data-run]").forEach(b => b.onclick = () => { S.pinned = false; openRun(b.dataset.run); });
-  const fq = $("#followq"); if (fq) { fq.oninput = () => { S.followDraft = fq.value; };
-    fq.addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) askFollow(j); }); }
-  const fa = $("#followask"); if (fa) fa.onclick = () => askFollow(j);
+  if (S.tab === "main" || S.tab === "answer") lineageWire(j);
   const rf = $("#rfilter"); if (rf) { rf.oninput = () => filterResults(rf.value); rf.value = S.rfilter || ""; filterResults(rf.value); }
   $$(".rate .opts button").forEach(b => b.onclick = () => { $$(".rate .opts button").forEach(x => x.classList.toggle("on", x === b)); });
   const rs = $("#ratesave"); if (rs) rs.onclick = async () => {
@@ -1275,7 +1652,6 @@ function errorBox(j, res) {
   const tb = res && res.traceback;
   return `<div class="errbox">${esc(j.error || (res && res.error) || j.status)}${tb ? `<details><summary><span class="caret">▶</span>Traceback</summary><pre>${esc(tb)}</pre></details>` : ""}</div>`;
 }
-function zonesOf(m, res) { return (m.well && m.well.zones) || ((res && res.zones) || []).map(z => ({...z, thickness: z.base - z.top})); }
 function lithChips(zones) {
   const by = new Map();
   for (const z of zones) { const t = by.get(z.lithology) || [0, 0]; by.set(z.lithology, [t[0] + 1, t[1] + (z.thickness || 0)]); }
@@ -1309,51 +1685,168 @@ function answerSections(text) {
   }
   return {title, secs: secs.filter(s => s.head || s.body.trim())};
 }
-function answerPane(j, m, res, finished) {
-  if (!finished) return `<div class="card"><div class="cb"><div class="thinking"><span class="spin"></span>The answer appears here when the run ends. <button class="morebtn" data-goto="story">Follow how it is being reached →</button></div></div></div>`;
-  let html = "";
-  if (res && res.interval) {
-    const zones = zonesOf(m, res), ck = checkerState(res), iv = res.interval;
-    const unresolved = res.status === "unresolved_numbers", ok = !unresolved && ck.clean;
-    html += `<div class="glance">
-      <div class="gbox"><div class="gl">Interval</div><div class="gv"><b>${esc(iv.name)}</b><div class="subtle">${fmtD(iv.top)}–${fmtD(iv.base)} ${esc(iv.unit || "")} · ${fmtN(iv.samples)} samples</div></div></div>
-      <div class="gbox" style="grid-column: span 2"><div class="gl">${zones.length} lithology zone${zones.length === 1 ? "" : "s"}</div>
-        ${zoneStrip(zones, iv.top, iv.base, iv.unit)}<div class="subtle" style="margin-top:4px">${esc(lithText(res.lithology))} · <button class="morebtn" data-goto="well">See the logs →</button></div></div>
-      <div class="gbox"><div class="gl">The investigation</div><div class="gv tiles2"><span class="stat"><b>${res.steps.length}</b>steps</span><span class="stat"><b>${res.opened.length}</b>results</span><span class="stat"><b>${res.claims.length}</b>claims</span></div>
-        ${res.claims.length ? gradeBar(res.claims) : ""}<button class="morebtn" data-goto="story">How it was reached →</button></div>
-      <div class="gbox ${ok ? "ok" : "warn"}"><div class="ckicon">${ok ? MINI.ok : MINI.warn}</div><div class="gv">${unresolved ? "A number in the answer appears in no computed result: read numbers with care." :
-        ck.clean ? `Every number is in a result the investigation opened${ck.repairs ? ` (after ${ck.repairs} repair${ck.repairs > 1 ? "s" : ""})` : ""}.` : "The checker's last findings stand."}</div></div></div>`;
-  }
-  if (j.status !== "done" && !j.answer) return html + errorBox(j, j.result);
-  html += threadHtml(j);
-  const {title, secs} = answerSections(j.answer);
-  const key = Math.max(0, secs.findIndex(s => /^answer\b/i.test(s.head)));
-  html += `<div class="hintline">${title ? `<h2 class="anstitle" style="margin:0">${inline(title)}</h2>` : ""}<span class="grow"></span><button class="btn small" id="copyans">Copy answer</button></div>`;
-  if (secs.length > 2) html += `<div class="secnav">${secs.map((s, i) => s.head ? `<button data-jump="as-${i}">${inline(s.head)}</button>` : "").join("")}</div>`;
-  html += `<div class="hintline"><span>Click a <span class="numref">number</span> to see the results that show it, a <span class="zone">Z1</span> zone to find it on the logs.</span></div>`;
-  // the key section in full; the others folded to their opening lines and their tables, opened on a click
-  const folds = secs.map((s, i) => i !== key && s.body.length > 600 ? `as-${i}` : null).filter(Boolean);
-  if (folds.length) html += `<div class="expandall" style="margin:0 0 8px"><button class="link" data-foldall="${folds.join(",")}" data-open="1">Open every section</button><button class="link" data-foldall="${folds.join(",")}" data-open="">Fold them</button></div>`;
-  html += secs.map((s, i) => {
-    const k = `as-${i}`, fold = folds.includes(k), open = !fold || !!S.det[k];
-    return `<section class="asec${i === key ? " key" : ""}${open ? "" : " folded"}" id="as-${i}">${s.head ? `<h2 class="ah"${fold ? ` data-secfold="${k}" style="cursor:pointer"` : ""}>${inline(s.head)}${fold ? `<span class="chev"${open ? ' style="transform:rotate(90deg)"' : ""}>▶</span>` : ""}</h2>` : ""}
-      <div class="prose">${md(s.body, {nums: true})}</div>${fold ? `<button class="secmore" data-secfold="${k}">${open ? "Fold the section" : "Read the section"}</button>` : ""}</section>`;
-  }).join("");
-  html += figuresHtml(j, res) + basisHtml(res) + auditHtml(j) + followHtml(j);
-  const r = j.rating || {};
-  html += `<div class="rate"><div class="q">Is this answer right?</div><div class="opts">${["good", "partly", "wrong"].map(v => `<button data-v="${v}" class="${v}${r.verdict === v ? " on" : ""}">${v}</button>`).join("")}</div>
-    <textarea id="ratenote" placeholder="What was right or wrong (optional)">${esc(r.note || "")}</textarea>
-    <div class="row" style="margin-top:10px"><button class="btn fix" id="ratesave">Save verdict</button><span class="hint" id="ratemsg" style="margin:0">${r.rated ? `Saved ${esc(r.rated)}` : ""}</span></div></div>`;
-  return html;
+// ---------- how it was computed: the answer's lineage (EvidenceGraph.trail), from the measured logs ----------
+const TOOL_WORDS = {stats: "statistics", runs: "depth runs", compare: "comparison", overlap: "overlap", profile: "depth profile",
+  crossplot: "crossplot", lag_correlation: "lag correlation", section: "analyzer section", step: "step record", calc: "arithmetic",
+  get: "a result read again", find: "search of results"};
+function lineageModel(T) {
+  const curves = new Map(T.curves.map(c => [c.name, c]));
+  const steps = new Map(T.steps.map(s => [s.step, {...s, outs: T.curves.filter(c => c.step === s.step).map(c => c.name)}]));
+  const analyzer = T.curves.filter(c => !c.step && c.source === "analyzer").map(c => c.name);
+  if (analyzer.length || T.results.some(r => r.tool === "section"))
+    steps.set("analyzers", {step: "analyzers", method: "run on each lithology zone", parameters: {}, reads: [], outs: analyzer, pseudo: true});
+  const prod = n => { const c = curves.get(n); if (!c) return null; if (c.step && steps.has(c.step)) return `step:${c.step}`;
+    return c.source === "analyzer" ? "step:analyzers" : `log:${n}`; };
+  const order = [], seen = new Set(), visiting = new Set();     // each step after the steps whose curves it reads
+  const visit = k => { if (seen.has(k) || visiting.has(k)) return; visiting.add(k);
+    for (const c of steps.get(k).reads) { const q = curves.get(c); if (q && q.step && steps.has(q.step) && q.step !== k) visit(q.step); }
+    visiting.delete(k); seen.add(k); order.push(k); };
+  [...steps.keys()].forEach(visit);
+  const edges = [], add = (from, to, kind) => { if (from && !edges.some(e => e.from === from && e.to === to)) edges.push({from, to, kind}); };
+  for (const k of order) for (const c of steps.get(k).reads) { const p = prod(c); if (p !== `step:${k}`) add(p, `step:${k}`, p && p.startsWith("step:") ? "chain" : "reads"); }
+  const res = [...T.results].sort((a, b) => +a.id.slice(1) - +b.id.slice(1));
+  for (const r of res) { for (const c of r.curves) add(prod(c), `res:${r.id}`, "names"); if (r.tool === "section") add("step:analyzers", `res:${r.id}`, "names"); }
+  for (const c of T.claims) { for (const e of c.results) add(`res:${e}`, `claim:${c.id}`, "cites"); add(`claim:${c.id}`, "ans", "states"); }
+  if (!T.claims.length) { const shown = new Set(Object.values(T.numbers).flat()); for (const r of res) if (shown.has(r.id)) add(`res:${r.id}`, "ans", "shows"); }
+  const logs = T.curves.filter(c => !c.step && c.source !== "analyzer" && edges.some(e => e.from === `log:${c.name}`));
+  return {curves, steps, order, logs, res, claims: T.claims, numbers: T.numbers, edges, prod, T};
 }
+const resWords = r => { const k = /["']key["']\s*:\s*["']([^"']+)["']/.exec(r.args || ""); return k ? k[1].split(".").pop().replace(/_/g, " ") : (r.curves.length ? r.curves.slice(0, 4).join(", ") + (r.curves.length > 4 ? " …" : "") : ""); };
+const KEY_ORDER = ["a", "m", "n", "rw", "rw_min", "rw_max", "rcl", "matrix_type", "rho_ma", "nphi_ma", "dt_ma", "gr_min", "gr_max",
+  "vcl_cutoff", "phie_cutoff", "sw_cutoff", "phi_cl", "sw_model", "k_model", "model", "method"];
+const keyParams = ps => KEY_ORDER.filter(k => k in (ps || {})).slice(0, 5).map(k => [k, ps[k]]);
+function lineageHtml(j) {
+  const L = S.lin[j.id];
+  const head = `<h2 class="ch2">How it was computed</h2>`;
+  if (!L || L.loading) return `<section class="chap" id="lineage">${head}<div class="thinking"><span class="spin"></span>Reading the record of this answer…</div></section>`;
+  if (L.error || !L.model) return "";
+  const M = L.model, hasClaims = M.claims.length > 0;
+  const step = k => { const s = M.steps.get(k), outs = s.outs.filter(c => M.curves.get(c) && M.curves.get(c).named);
+    const keys = keyParams(s.parameters);
+    return `<div class="ln step" tabindex="0" data-node="step:${esc(k)}"><span class="sh">${esc(s.pseudo ? "analyzers" : k)}</span> <span class="sm">· ${esc(s.method || "")}</span>
+      ${s.reads.length ? `<div class="io">reads ${s.reads.map(esc).join(" ")}</div>` : ""}
+      ${s.outs.length ? `<div class="io">→ ${s.outs.map(c => outs.includes(c) ? `<b>${esc(c)}</b>` : esc(c)).join(" ")}</div>` : ""}
+      ${keys.length ? `<div class="kp">${keys.map(([a, v]) => `${esc(a)} = ${esc(typeof v === "number" ? +v.toPrecision(5) : v)}`).join(" · ")}</div>` : ""}</div>`; };
+  const cols = [
+    `<div class="lin-col"><h4>Measured logs</h4>${M.logs.map(c => `<div class="ln log" tabindex="0" data-node="log:${esc(c.name)}">${esc(c.name)}<small>${esc(c.unit || "")}</small></div>`).join("")}</div>`,
+    `<div class="lin-col"><h4><img src="/img/petrophys_mark.png" alt="">Petrophys steps</h4>${M.order.map(step).join("")}</div>`,
+    `<div class="lin-col"><h4>Results the model opened</h4>${M.res.map(r => `<div class="ln res" tabindex="0" data-node="res:${esc(r.id)}"><span class="rid">${esc(r.id)}</span><span class="rt">${esc(TOOL_WORDS[r.tool] || (r.tool || "").replace(/_/g, " "))}</span><div class="mono" style="font-size:11px">${esc(resWords(r))}</div></div>`).join("")}</div>`,
+    hasClaims ? `<div class="lin-col"><h4>Findings</h4>${M.claims.map(c => `<div class="ln claim" tabindex="0" data-node="claim:${esc(c.id)}"><span class="g ${esc(c.grade)}">${esc(c.grade)}</span><span class="ct">${esc(c.text)}</span></div>`).join("")}</div>` : "",
+    `<div class="lin-col"><h4>The answer</h4><div class="ln ans" tabindex="0" data-node="ans">The answer<small>${Object.keys(M.numbers).length} numbers traced to results · click one in the text to see its path</small></div></div>`];
+  return `<section class="chap" id="lineage">${head}
+    <p class="lede2">From the measured logs to this answer: the <b style="color:var(--pp)">Petrophys</b> steps that computed the curves it rests on, in the order they ran, the results the model opened${hasClaims ? ", the findings it settled" : ""}, and the answer. Click any box, or a number in the answer, to follow its path; click it again to clear.</p>
+    <div class="lin${L.sel ? " sel" : ""}" id="linbox"><div class="lin-inner"><svg class="lin-edges" id="linedges"></svg><div class="lin-cols${hasClaims ? "" : " noclaims"}">${cols.join("")}</div></div></div>
+    <div class="lin-detail" id="lindet">${lineageDetail(M, L.sel)}</div></section>`;
+}
+const numEq = (t, v, tol) => Math.abs(parseFloat(String(t).replace(/[,%]/g, "")) - v) <= tol;
+function numberCurves(id, n) {    // the curves of result id whose block shows number n (a stats block opens with "PERM [mD] = ...")
+  const r = S.m && S.m.results && S.m.results.get(id); if (!r) return [];
+  const v = parseFloat(String(n).replace(/[,%]/g, "")), tol = 0.5 * Math.pow(10, -((String(n).split(".")[1] || "").replace(/\D/g, "").length)) + 1e-9;
+  const out = new Set(); let cur = null;
+  for (const line of String(r.text || "").split("\n")) {
+    const h = /^\s*([A-Z][A-Z0-9_]*)\s*\[[^\]]*\]\s*=/.exec(line); if (h) cur = h[1];
+    if (cur && (line.match(NUM) || []).some(t => numEq(t, v, tol))) out.add(cur);
+  }
+  return [...out];
+}
+function lineageSet(M, sel) {     // the nodes on the selection's path: everything upstream and downstream of it
+  if (!sel) return null;
+  if (sel.num != null) {
+    const key = lineageNumber(M, sel.num); if (!key) return {up: new Set(), down: new Set(), all: new Set(), start: []};
+    const v = parseFloat(String(key).replace(/[,%]/g, "")), tol = 0.5 * Math.pow(10, -((String(key).split(".")[1] || "").replace(/\D/g, "").length)) + 1e-9;
+    const start = M.numbers[key].map(e => `res:${e}`), up = new Set(start), q = [], entry = new Set(), curves = {};
+    for (const e of M.numbers[key]) {            // into each result: only from the producers of the curve the number sits under
+      const cs = numberCurves(e, key); curves[e] = cs;
+      const from = cs.length ? cs.map(M.prod).filter(Boolean) : M.edges.filter(x => x.to === `res:${e}`).map(x => x.from);
+      for (const f of from) { entry.add(`${f}>res:${e}`); if (!up.has(f)) { up.add(f); q.push(f); } }
+    }
+    while (q.length) { const x = q.pop(); for (const e of M.edges) if (e.to === x && !up.has(e.from)) { up.add(e.from); q.push(e.from); } }
+    const said = M.claims.filter(c => (String(c.text).match(NUM) || []).some(t => numEq(t, v, tol))).map(c => `claim:${c.id}`);
+    const down = new Set([...said, "ans"]);
+    const edgeOk = e => e.to.startsWith("res:") ? entry.has(`${e.from}>${e.to}`)
+      : e.to.startsWith("claim:") ? up.has(e.from) && start.includes(e.from) && down.has(e.to)
+      : e.to === "ans" ? down.has(e.from) || (!M.claims.length && start.includes(e.from))
+      : up.has(e.from) && up.has(e.to);
+    return {up, down, all: new Set([...up, ...down]), start, curves, edgeOk};
+  }
+  const start = [sel.node];
+  const up = new Set(start), down = new Set(start), q1 = [...start], q2 = [...start];
+  while (q1.length) { const x = q1.pop(); for (const e of M.edges) if (e.to === x && !up.has(e.from)) { up.add(e.from); q1.push(e.from); } }
+  while (q2.length) { const x = q2.pop(); for (const e of M.edges) if (e.from === x && !down.has(e.to)) { down.add(e.to); q2.push(e.to); } }
+  return {up, down, all: new Set([...up, ...down]), start};
+}
+function lineageNumber(M, n) {
+  if (M.numbers[n]) return n;
+  const v = parseFloat(String(n).replace(/[,%]/g, ""));
+  return Object.keys(M.numbers).find(k => Math.abs(parseFloat(k.replace(/[,%]/g, "")) - v) < 1e-9) || null;
+}
+function lineageDetail(M, sel) {
+  if (!sel) return `<span class="subtle">Click a box, or any number in the answer, to follow its path back to the measured logs.</span>`;
+  const producer = c => { const q = M.curves.get(c); return q && q.step ? q.step : (q && q.source === "analyzer" ? "analyzers" : "the LAS file"); };
+  if (sel.num != null) {
+    const key = lineageNumber(M, sel.num);
+    if (!key) return `<div class="dh">${esc(sel.num)}</div><span class="subtle">No opened result shows this number at this precision: it may be arithmetic on results, a rounding, or a number from the question.</span>`;
+    const set = lineageSet(M, sel), stepsOn = M.order.filter(k => set.up.has(`step:${k}`));
+    return `<div class="dh">${esc(key)} <span class="subtle">appears in ${M.numbers[key].map(esc).join(", ")}</span></div>
+      <div class="chain">${M.numbers[key].map(e => { const r = M.res.find(x => x.id === e); const cs = (set.curves || {})[e] || []; const shown = cs.length ? cs : (r ? r.curves : []);
+        return r ? `${esc(e)} ${esc(TOOL_WORDS[r.tool] || r.tool)}${shown.length ? ` ${cs.length ? "under" : "of"} ${shown.map(c => `${esc(c)} <span class="subtle">(${esc(producer(c))})</span>`).join(", ")}` : ""}` : esc(e); }).join("<br>")}
+      ${stepsOn.length ? `<br>computed by <b>Petrophys</b>: ${stepsOn.map(k => `${esc(k)} · ${esc(M.steps.get(k).method)}`).join(" → ")}` : ""}</div>`;
+  }
+  const [kind, id] = sel.node.includes(":") ? sel.node.split(/:(.+)/) : [sel.node, ""];
+  if (kind === "step") {
+    const s = M.steps.get(id);
+    if (s.pseudo) return `<div class="dh"><span class="pp">Petrophys analyzers</span></div><span>They run on each lithology zone and give the classes, flags and quality views the model reads as analyzer sections${s.outs.length ? `, and the curves ${s.outs.map(esc).join(", ")}` : ""}.</span>`;
+    const params = Object.entries(s.parameters || {});
+    return `<div class="dh"><span class="pp">Petrophys step: ${esc(id)}</span><span class="subtle">method ${esc(s.method)}</span></div>
+      <div class="chain">reads ${s.reads.map(c => `${esc(c)} <span class="subtle">(${esc(producer(c))})</span>`).join(", ") || "nothing from this answer's path"}<br>computes <b>${s.outs.map(esc).join(", ")}</b></div>
+      ${params.length ? `<div class="params">${params.map(([k, v]) => `<span><i>${esc(k)}</i> = ${esc(typeof v === "number" ? +v.toPrecision(6) : v)}</span>`).join("")}</div>` : `<span class="subtle">No parameters recorded for this step.</span>`}`;
+  }
+  if (kind === "log") { const c = M.curves.get(id); const by = M.order.filter(k => M.steps.get(k).reads.includes(id));
+    return `<div class="dh">${esc(id)} <span class="subtle">${esc(c.unit || "")} · ${c.source === "copy" ? "a measured log, renamed and unit-checked on input" : "measured, from the LAS file"}</span></div><span>Read by ${by.length ? by.map(esc).join(", ") : "the results directly"}.</span>`; }
+  if (kind === "res") { const r = M.res.find(x => x.id === id);
+    return `<div class="dh"><span class="mono">${esc(id)}</span> ${esc(TOOL_WORDS[r.tool] || r.tool)} <button class="morebtn" data-evopen="${esc(id)}">Open this result →</button></div>
+      <div class="chain">${r.curves.length ? `names ${r.curves.map(c => `${esc(c)} <span class="subtle">(${esc(producer(c))})</span>`).join(", ")}<br>` : ""}<span class="subtle">${esc(r.args || "")}</span></div>`; }
+  if (kind === "claim") { const c = M.claims.find(x => x.id === id);
+    return `<div class="dh">Finding · ${esc(c.grade)}</div><span>${esc(c.text)}</span><span class="subtle">rests on ${c.results.map(esc).join(", ")}</span>`; }
+  return `<div class="dh">The answer</div><span>${Object.keys(M.numbers).length} of its numbers appear in the results the model opened. Click one in the text to see where it came from.</span>`;
+}
+function lineageDraw() {
+  const box = $("#linbox"), svg = $("#linedges"), L = S.lin[S.job];
+  if (!box || !svg || !L || !L.model) return;
+  const inner = box.querySelector(".lin-inner"), base = inner.getBoundingClientRect(), M = L.model, set = lineageSet(M, L.sel);
+  svg.setAttribute("width", inner.scrollWidth); svg.setAttribute("height", inner.scrollHeight);
+  const at = id => { const el = inner.querySelector(`[data-node="${CSS.escape(id)}"]`); if (!el) return null; const r = el.getBoundingClientRect();
+    return {l: r.left - base.left, r: r.right - base.left, y: r.top - base.top + r.height / 2}; };
+  let d = "";
+  M.edges.forEach((e, i) => {
+    const a = at(e.from), b = at(e.to); if (!a || !b) return;
+    const hl = set && (set.edgeOk ? set.edgeOk(e) : set.all.has(e.from) && set.all.has(e.to));
+    let path;
+    if (e.kind === "chain") { const bend = 16 + Math.min(40, Math.abs(b.y - a.y) / 8); path = `M${a.l},${a.y} C${a.l - bend},${a.y} ${b.l - bend},${b.y} ${b.l},${b.y}`; }
+    else { const dx = Math.max(24, (b.l - a.r) / 2); path = `M${a.r},${a.y} C${a.r + dx},${a.y} ${b.l - dx},${b.y} ${b.l},${b.y}`; }
+    d += `<path class="${e.kind}${hl ? " hl" : ""}" d="${path}"/>`;
+  });
+  svg.innerHTML = d;
+  inner.querySelectorAll("[data-node]").forEach(el => { const on = set && set.all.has(el.dataset.node); el.classList.toggle("hl", !!on); el.classList.toggle("on", !!(set && set.start.includes(el.dataset.node))); });
+  box.classList.toggle("sel", !!set);
+  const det = $("#lindet"); if (det) { det.innerHTML = lineageDetail(M, L.sel); det.querySelectorAll("[data-evopen]").forEach(b => b.onclick = () => openEvidence(b.dataset.evopen)); }
+}
+function lineageWire(j) {
+  if (!j || j.status !== "done" || !j.answer) return;
+  if (!S.lin[j.id]) {
+    S.lin[j.id] = {loading: true};
+    api(`/api/run/${encodeURIComponent(j.id)}/lineage`).then(T => { S.lin[j.id] = {model: lineageModel(T), sel: null}; if (S.job === j.id) rerender(); })
+      .catch(() => { S.lin[j.id] = {error: true}; if (S.job === j.id) rerender(); });
+    return;
+  }
+  const L = S.lin[j.id]; if (!L.model) return;
+  $$("#linbox [data-node]").forEach(el => { const pick = () => { L.sel = L.sel && L.sel.node === el.dataset.node ? null : {node: el.dataset.node}; lineageDraw(); };
+    el.onclick = pick; el.onkeydown = ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } }; });
+  requestAnimationFrame(lineageDraw);
+}
+window.addEventListener("resize", () => requestAnimationFrame(lineageDraw));
 
 // ---------- a conversation: the questions asked so far, the answer's figures, the next question ----------
-function threadHtml(j) {
-  const th = (j.conversation && j.conversation.thread) || [];
-  if (th.length < 2) return "";
-  return `<div class="thread"><div class="tl">This conversation: ${th.length} questions about this interval</div>${th.map(q =>
-    `<button ${q.run && q.run !== j.id ? `data-run="${esc(q.run)}"` : `class="cur"`}><span class="tn">${q.turn}</span>${esc(q.question)}</button>`).join("")}</div>`;
-}
 function figuresHtml(j, res) {
   const figs = (res && res.figures) || [];
   if (!figs.length) return "";
@@ -1381,18 +1874,76 @@ function basisHtml(res) {
     <div class="bnote">Read from the well's record, not written by the model: the steps that computed the curves this answer names${up.length ? ", and the steps those read from" : ""}.</div>
     ${named.map(step).join("")}${up.length ? `<div class="bsub">The steps those read from</div>${up.map(step).join("")}` : ""}</details>`;
 }
-function followHtml(j) {
-  if (j.status !== "done" || R.run) return "";
-  return `<div class="follow"><div class="q">Ask a follow-up</div><div class="hint" style="margin:0">The next question about this interval: it starts from the results already opened. Ask about this answer, try another method or parameter, or go further.</div>
-    <textarea id="followq" placeholder="For example: what if I use the density porosity instead?">${esc(S.followDraft || "")}</textarea>
-    <div class="row"><button class="btn fix" id="followask">Ask</button><span class="hint" id="followmsg" style="margin:0"></span></div></div>`;
+// ---------- the conversation: the earlier questions stay on screen, each a box that opens to its answer ----------
+Object.assign(S, {conv: null, convKey: "", turnOpen: {}, turnsAll: false});
+function convOf(j) {                         // the conversation fetched for this run's, if it is this run's
+  const root = (j && j.conversation && j.conversation.root) || (j && j.id);
+  return S.conv && S.conv.root === root ? S.conv : null;
 }
-async function askFollow(j) {
-  const q = $("#followq").value.trim(), msg = $("#followmsg"), btn = $("#followask");
-  if (!q) { msg.textContent = "Write the question first."; return; }
-  btn.disabled = true;
-  try { const {id} = await post("/api/ask", {follow: j.id, question: q}); S.followDraft = ""; S.pinned = false; openRun(id); loadRuns(); }
-  catch (e) { msg.textContent = e.message; btn.disabled = false; }
+function turnsSplit(j) {
+  const c = convOf(j), turns = c ? c.turns : [];
+  const at = turns.findIndex(t => t.id === j.id);
+  return at < 0 ? {before: turns, after: []} : {before: turns.slice(0, at), after: turns.slice(at + 1)};
+}
+function turnNo(j) {
+  const c = convOf(j), mine = c && c.turns.find(t => t.id === j.id);
+  if (mine) return c.turns.length > 1 ? mine.turn : 0;
+  if (c && c.turns.length) return c.turns[c.turns.length - 1].turn + 1;
+  const tn = j.conversation && j.conversation.turn;
+  return tn && tn > 1 ? tn : 0;
+}
+function gist(answer) {                      // the answer's first sentence, as plain text
+  const a = answerSections(answer), k = a.secs.find(x => /^answer\b/i.test(x.head)) || a.secs[0];
+  const para = k ? k.body.trim().split(/\n\s*\n/)[0].replace(/\s+/g, " ") : "";
+  return para.split(/(?<=[.!?])\s+(?=[A-Z(*])/)[0].replace(/\*\*|__|`/g, "").replace(/^#+\s*/, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+}
+function turnHtml(t) {
+  const done = t.status === "done" && t.answer, live = ["queued", "running"].includes(t.status);
+  const g = done ? gist(t.answer) : live ? "Being answered…" : t.status === "error" ? "No answer: the run failed." : `No answer (${t.status}).`;
+  const a = done ? answerSections(t.answer) : null;
+  return `<details class="turn${live ? " live" : ""}" data-tid="${esc(t.id)}"${S.turnOpen[t.id] ? " open" : ""}>
+    <summary><span class="tn">${t.turn}</span><span class="twrap"><span class="tq">${esc(t.question)}</span><span class="tg">${esc(g)}</span></span><span class="tchev">▶</span></summary>
+    <div class="tbody">${a ? a.secs.map(x => `${x.head ? `<h3 class="ah">${inline(x.head)}</h3>` : ""}<div class="prose">${md(x.body)}</div>`).join("") : `<p class="hint">${esc(g)}</p>`}
+      ${t.figures && t.figures.length ? `<div class="tfigs">${t.figures.map(f => `<a href="/api/run/${esc(t.id)}/figures/${esc(f.file)}" target="_blank" rel="noopener" title="${esc(f.caption)}"><img src="/api/run/${esc(t.id)}/figures/${esc(f.file)}" alt="${esc(f.caption)}" loading="lazy"></a>`).join("")}</div>` : ""}
+      <div class="tlinks"><button class="link" data-openrun="${esc(t.id)}">Open this question's page: its evidence, logs and how it was computed →</button>
+        ${done ? `<a class="link" href="/api/run/${esc(t.id)}/audit" target="_blank" rel="noopener">Audit trail</a>` : ""}</div></div></details>`;
+}
+function turnsHtml(j) {
+  const {before, after} = turnsSplit(j);
+  if (!before.length && !after.length) return "";
+  const hidden = S.turnsAll || before.length <= 3 ? 0 : before.length - 2;
+  let html = "";
+  if (before.length) html += `<div class="thd"><span>Earlier in this conversation</span>${hidden ? `<button class="link" id="turnsall">Show ${hidden} earlier question${hidden > 1 ? "s" : ""}</button>` : ""}</div>` +
+    before.slice(hidden).map(turnHtml).join("");
+  if (after.length) {
+    const last = after[after.length - 1];
+    html += `<div class="turnsnote">The conversation went on after this question, to question ${last.turn}. <button class="link" data-openrun="${esc(last.id)}">Open the latest →</button></div>`;
+  }
+  return `<div class="turns">${html}</div>`;
+}
+function turnsWire() {
+  $$("#turns details.turn").forEach(d => d.addEventListener("toggle", () => { S.turnOpen[d.dataset.tid] = d.open; }));
+  $$("#turns [data-openrun]").forEach(b => b.onclick = e => { e.preventDefault(); S.pinned = false; openRun(b.dataset.openrun); });
+  const all = $("#turnsall"); if (all) all.onclick = () => { S.turnsAll = true; turnsFill(); };
+}
+function turnsFill() {                       // the boxes again, with the question on screen kept where it was
+  const el = $("#turns"), j = S.last; if (!el || !j) return;
+  const head = $(".runhead"), top = head ? head.getBoundingClientRect().top : 0;
+  el.innerHTML = turnsHtml(j); turnsWire();
+  const qno = $(".runhead .qno"), no = turnNo(j);
+  if (head && no && !qno) head.insertAdjacentHTML("afterbegin", `<div class="qno">Question ${no} of this conversation</div>`);
+  else if (qno) qno.textContent = no ? `Question ${no} of this conversation` : "";
+  if (head && window.scrollY > 0) window.scrollBy(0, head.getBoundingClientRect().top - top);
+}
+async function convLoad(j) {
+  const key = `${j.id}|${j.status}`;
+  if (S.convKey === key) return;
+  S.convKey = key;
+  try {
+    const c = await api(`/api/run/${encodeURIComponent(j.id)}/conversation`);
+    if (!S.last || S.last.id !== j.id) return;
+    S.conv = c; turnsFill(); chipsRender();
+  } catch (e) { /* a server without the route: the page goes on without the boxes */ }
 }
 
 // ---------- a number in the answer: the results that show it ----------
@@ -1435,6 +1986,7 @@ function showSources(el) {
   p.style.left = `${Math.max(12, Math.min(window.scrollX + r.left - 20, window.scrollX + document.documentElement.clientWidth - w - 12))}px`;
   p.querySelector(".x").onclick = closePop;
   p.querySelectorAll(".eid").forEach(x => x.onclick = () => { closePop(); openEvidence(x.dataset.e); });
+  const L = S.lin[S.job]; if (L && L.model && $("#linbox")) { L.sel = {num: s}; lineageDraw(); }
 }
 document.addEventListener("click", e => { const p = $("#pop"); if (p && !p.contains(e.target) && !e.target.classList.contains("numref")) closePop(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") closePop(); });
@@ -1963,9 +2515,10 @@ function mainPane(j, m, res, finished, calls) {
   const counts = new Map();
   if (keySec) for (const mm of keySec.body.matchAll(/\bZ\d{1,3}\b/g)) counts.set(mm[0], (counts.get(mm[0]) || 0) + 1);
   const key = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([z]) => z);
+  // the questions asked so far in this conversation (none above a first question)
   let html = "";
   // 1. the answer
-  if (finished && j.status !== "done" && !j.answer) return errorBox(j, j.result);
+  if (finished && j.status !== "done" && !j.answer) return html + errorBox(j, j.result);
   if (keySec) {
     const paras = keySec.body.trim().split(/\n\s*\n/);
     const ck = checkerState(res), unresolved = res && res.status === "unresolved_numbers";
@@ -1981,6 +2534,12 @@ function mainPane(j, m, res, finished, calls) {
       m.calls.some(c => c.type === "settle") ? "Settling the findings" : m.lastStep ? `Investigating · step ${m.lastStep}` : "Reading the question";
     html += `<section class="hero"><div class="hl">The answer</div><div class="thinking"><span class="spin"></span>${esc(stage)}… The story below fills in as the investigation goes; <button class="morebtn" data-goto="story">every step is in the Investigation log →</button></div></section>`;
   }
+  // the answer's figures, under the answer: drawn by Petrophys from the results the answer rests on
+  const figs = figuresHtml(j, res);
+  if (figs) html += `<section class="chap" id="figures"><h2 class="ch2">Figures</h2>
+    <p class="lede2">Drawn by <span style="color:var(--pp);font-weight:600">Petrophys</span> from the computed results this answer rests on.</p>${figs}</section>`;
+  // how it was computed: the answer's path back to the measured logs, through the Petrophys steps
+  if (finished && j.status === "done" && j.answer) html += lineageHtml(j);
   // 2. the well
   if (w) {
     const iv = res && res.interval;
@@ -2021,6 +2580,8 @@ function mainPane(j, m, res, finished, calls) {
         return `<section class="asec${i === keyIdx ? " key" : ""}${open ? "" : " folded"}" id="as-${i}">${s.head ? `<h2 class="ah"${fold ? ` data-secfold="${k}" style="cursor:pointer"` : ""}>${inline(s.head)}${fold ? `<span class="chev"${open ? ' style="transform:rotate(90deg)"' : ""}>▶</span>` : ""}</h2>` : ""}
           <div class="prose">${md(s.body, {nums: true})}</div>${fold ? `<button class="secmore" data-secfold="${k}">${open ? "Fold the section" : "Read the section"}</button>` : ""}</section>`;
       }).join("") + `</section>`;
+    // the methods and parameters the answer rests on, every number's path to the LAS file, the next question
+    html += basisHtml(res) + auditHtml(j);
     const r = j.rating || {};
     html += `<div class="rate"><div class="q">Is this answer right?</div><div class="opts">${["good", "partly", "wrong"].map(v => `<button data-v="${v}" class="${v}${r.verdict === v ? " on" : ""}">${v}</button>`).join("")}</div>
       <textarea id="ratenote" placeholder="What was right or wrong (optional)">${esc(r.note || "")}</textarea>
@@ -2037,6 +2598,10 @@ function detailsPane(j, res, m) {
   if (res) {
     const u = res.usage || {};
     html += `<div class="tiles">${[["status", res.status], ["steps", res.steps.length], ["model calls", u.calls], ["prompt tokens", fmtN(u.prompt_tokens)], ["output tokens", fmtN(u.completion_tokens)], ["model time", fmtS(u.seconds)], ["run time", fmtS(j.elapsed)], ["results opened", res.opened.length]].map(([l, v]) => `<div class="tile"><div class="tv">${esc(v)}</div><div class="tl2">${l}</div></div>`).join("")}</div>`;
+    const chosen = (j.inputs || {}).interpretation || {};
+    html += `<h3 class="sec">Interpretation settings</h3><div class="card"><div class="cb">${Object.keys(chosen).length
+      ? `<div class="kv">${Object.entries(chosen).map(([k, v]) => `<span class="l">${esc(k)}</span><span class="v">${esc(Array.isArray(v) ? v.join(" / ") : v)}${k === "zone_min_thickness_m" ? " m" : ""}</span>`).join("")}</div><div class="subtle" style="margin-top:6px">Set by the user before Petrophys interpreted the well; every other setting kept its default.</div>`
+      : `<span class="subtle">Petrophys defaults: no setting was changed.</span>`}</div></div>`;
     html += `<h3 class="sec">The interval</h3><div class="card"><div class="cb"><div class="kv"><span class="l">interval</span><span class="v">${intervalText(res.interval)}</span>
       <span class="l">zones</span><span class="v">${esc(lithText(res.lithology))}</span>
       ${res.question_sent ? `<span class="l">sent as</span><span class="v">${esc(res.question_sent)}</span>` : ""}</div>
@@ -2074,7 +2639,8 @@ function lithText(l) {
 
 // ---------- the empty page ----------
 function emptyPage() {
-  $("#run").innerHTML = `<div class="empty"><h2>Ask a well a question</h2><div>Choose a well, the interval and the question on the left.</div>
+  S.followId = null; chipsRender();
+  $("#run").innerHTML = `<div class="empty"><h2>Ask a well a question</h2><div>Choose a well and its interval with the chips below, then ask in your own words. Every next question continues the conversation.</div>
     <div class="steps3"><div><span class="n">1</span>A LAS file: a path on the server, or an upload</div><div><span class="n">2</span>The interval: a formation from a tops file, depths, or the whole well</div><div><span class="n">3</span>The question, in your own words</div></div>
     <div class="flow3"><div><b>Petrophys interprets</b><span>the well: logs, zones, the record</span></div><i>→</i><div><b>The model investigates</b><span>step by step, citing every result</span></div><i>→</i><div><b>Code checks</b><span>every number against the results</span></div><i>→</i><div><b>You audit</b><span>the answer, its claims and the logs</span></div></div>
     <div class="tagline"><span class="pp"><img src="/img/petrophys_mark.png" alt=""><b>Petrophys</b>&nbsp;calculates</span><span class="sep">·</span><span><b>PetroHarness</b> investigates and records</span><span class="sep">·</span><span><b>${esc((S.cfg && S.cfg.label) || "The model")}</b> interprets</span></div></div>`;
@@ -2088,8 +2654,9 @@ function route() {
   else emptyPage();
 }
 window.addEventListener("hashchange", route);
-if (narrow()) setPanel(false);
+setPanel(false);
 loadConfig(); loadRuns(); route();
+isumRender(); interpSchema().then(isumRender).catch(() => {});
 setInterval(loadConfig, 20000);
 </script>
 </body>

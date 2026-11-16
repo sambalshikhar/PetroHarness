@@ -115,6 +115,24 @@ def _settings(las: Path, settings: Path | None, profile: str | None, lithology_c
     return data, (str(path) if path is not None else "built from the LAS")
 
 
+def _interpretation(data: dict, interpretation: dict) -> None:
+    """The user's interpretation settings (petroharness.well.settings) into the data settings: Petrophys's into
+    petrophys.interpret's options (over the policy's cutoffs), the zone rule into data.zone_*."""
+    from petroharness.well import settings as T
+    wrong = T.validate(interpretation)
+    if wrong:
+        raise ValueError("WHAT: interpretation settings that cannot be used: "
+                         + "; ".join(f"{k}: {v}" for k, v in wrong.items()) + ". FIX: correct or remove them.")
+    petro, zones = T.split(interpretation)
+    if petro:
+        options = data.get("interpret")
+        if data.get("interpreter") or options is None or options.get("context_profile"):
+            raise ValueError("WHAT: Petrophys settings with a context profile or a data interpreter. WHY: those fix their "
+                             "own settings. FIX: drop the profile (or the interpreter), or the settings.")
+        data["interpret"] = {**options, **petro}
+    data.update(zones)
+
+
 def _interval(las: Path, formation: str | None, tops: Path | None, top: float | None, base: float | None,
               depth_unit: str | None, data: dict) -> dict:
     """The interval asked about: {name, top, base, closed, unit (m/ft, or None for the LAS's own), from, report}.
@@ -194,11 +212,12 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
         formation_lithology: str | None = None, profile: str | None = None, out=None,
         model_url: str | None = None, model: str | None = None, model_card: str | None = None, settings=None,
         skills: str | None = None, max_steps: int | None = None, llm_factory: Callable | None = None,
-        on_view: Callable | None = None, direct: bool = True) -> AskResult:
+        on_view: Callable | None = None, direct: bool = True, interpretation: dict | None = None) -> AskResult:
     """One question about one LAS file -> AskResult (answer, status, trace, the interval used). The interval: the
     formation `formation` of the tops file `tops`; or the depths `top`/`base` (`formation` names it); or, with
     neither, the whole well. `depth_unit` (m or ft): the unit of the depths given and of the answer's depths (default:
-    the tops file's, else the LAS's own). `skills`: the skill library the model reads guides from (a library folder, or
+    the tops file's, else the LAS's own). `interpretation`: settings Petrophys interprets the well with, and the zone
+    rule ({setting: value}; petroharness.well.settings lists them; unset ones keep their defaults). `skills`: the skill library the model reads guides from (a library folder, or
     "none" for no guides; None: PETROHARNESS_SKILLS, else the packaged library). `model`: the served model's name
     (any chat model; the generic card); `model_card`: a model card's YAML file or a packaged card's name (default:
     K2-Horizon-7B's); `model_url`: the endpoint(s), comma-separated (default: PETROHARNESS_MODEL_URL). `out`: a folder
@@ -225,7 +244,7 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
         cache = out_dir / ".cache" if out_dir is not None else Path(tmp)
         p = prepare(las, key, formation=formation, tops=tops, top=top, base=base, depth_unit=depth_unit,
                     lithology_curve=lithology_curve, formation_lithology=formation_lithology, profile=profile,
-                    settings=settings, skills=skills, cache=cache)
+                    settings=settings, skills=skills, interpretation=interpretation, cache=cache)
         task, sent = task_for(p, question)
         check(p, task, on_view)
         with given_settings(p.given):
@@ -263,12 +282,14 @@ class Prepared:
 
 def prepare(las: Path, key: str, *, formation=None, tops=None, top=None, base=None, depth_unit=None,
             lithology_curve=None, formation_lithology=None, profile=None, settings=None, skills=None,
-            cache: Path) -> Prepared:
+            interpretation=None, cache: Path) -> Prepared:
     """The data settings and the interval for this LAS (the arguments as ask()'s), with `cache` as the folder the
     interpreted well is kept in."""
     from petroharness.config import ResourcePaths
     data, source = _settings(las, Path(settings) if settings else None, profile, lithology_curve, cache,
                              ResourcePaths().policy_file)
+    if interpretation:
+        _interpretation(data, interpretation)
     span = _interval(las, formation, Path(tops) if tops else None, top, base, depth_unit, data)
     las_unit = span["las_unit"]
     data.setdefault("depth_unit", "las" if span["report"] in (None, las_unit) else span["report"])

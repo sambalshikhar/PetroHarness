@@ -35,8 +35,22 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
   `docs/GRAPH.md`.
 - **The setup record.** `petroharness setup` prints what answers a question, with one hash; every conversation logs
   it and every trace names it. `docs/SETUP.md`.
-- **The web UI** asks follow-up questions in a thread, shows the figures, the methods and parameters, and the
-  interval's log display.
+- **The web UI** is laid out as a chat: one question box docked at the bottom, with the conversation's well, interval,
+  interpretation settings and options as chips above it, and the runs in a drawer. While an answer is open, the next
+  question continues its conversation (no separate follow-up box), and the earlier questions stay above it, each a
+  box that opens to its whole answer and figures; *New conversation* starts another. Under each
+  answer: its figures, the methods and parameters, the audit trail, and **How it was computed**, a graph from the
+  measured logs through the Petrophys steps (method, parameters) and the results to the answer's numbers; click a
+  number to see its path. **Interpretation settings**: every setting `petrophys.interpret` takes, with Petrophys's
+  own help, choices and defaults, and the harness's zone rule (minimum zone thickness, shale-volume bands), previewed
+  on the well before asking; the API's `ask(..., interpretation=)` takes the same settings. `docs/UI.md`.
+- **Answers carry no evidence ids.** The delivered answer has no evidence id in any form a model writes one: a
+  bracket that cites and says something keeps what it says ("(E10, n = 161)" becomes "(n = 161)"), a label naming
+  part of the writer's input goes with its id, and an id used as a noun becomes "the result". On the 3,123 saved
+  answers of the 4.0 model comparison, ids had been left in up to 48% of a model's answers; with this code, none.
+  The trace keeps the writer's draft (`trace["draft"]`), so a later delivery change is judged on the same drafts.
+  Judged with GPT-5 on K2-Horizon-7B, the changed answers against the old delivery: +0.02 W per changed answer on
+  two saved runs (201 answers), −0.09 on two fresh runs (338 answers), both within the judge's noise.
 - **One definition per tool.** Each tool is one `Tool` (`petroharness.tools.spec`) in `agent/toolset.py`: its
   function, arguments, description, group and how a call of it is listed. The lists that lived in six places are read
   from the definitions; every request is unchanged. `docs/TOOLS.md`, "Adding a tool".

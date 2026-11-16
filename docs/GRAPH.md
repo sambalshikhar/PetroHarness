@@ -66,7 +66,7 @@ retried, so the tapes, not LangGraph's checkpoints, are how a run is reproduced.
 | `write_brief` | model | the short answer of a direct question (and, in the later-question graph, of a later question the model chose to answer briefly): the writer's call under the short brief, with no zone table; the checker and the repair rounds follow as for `write`. A direct question's writer may hand the question to an investigation instead of answering, where the results do not state what is asked |
 | `verify` | code | the checker: numbers no result (or the card, the map, the zone table, the question) shows, words about the process, statements the record contradicts, working notes left in the text |
 | `repair` | model | one repair round on the checker's findings (at most two with the `open` writer, one otherwise) |
-| `finalize` | code | the zone table placed, numbers as the results show them, the status |
+| `finalize` | code | the draft kept in the trace; the answer delivered from it (`delivered`: the zone table placed, evidence ids out, numbers as the results show them); the status |
 
 ## The direct route
 

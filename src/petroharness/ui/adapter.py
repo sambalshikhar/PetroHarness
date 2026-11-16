@@ -9,7 +9,8 @@ The page's inputs (POST /api/ask):
                | {"mode": "tops", "tops": PATH, "formation": NAME[, "unit": "m"|"ft"]}
                | {"mode": "depths", "top": D, "base": D[, "unit": "m"|"ft"][, "name": LABEL]},
      "lithology_curve": MNEMONIC, "formation_lithology": TEXT, "profile": NAME,
-     "skills": "default" | "none" | PATH, "max_steps": N, "depth": "investigate"}
+     "skills": "default" | "none" | PATH, "max_steps": N, "depth": "investigate",
+     "interpretation": {SETTING: VALUE, ...}}      (petroharness.well.settings: Petrophys's settings and the zone rule)
 
 Everything but the LAS, the question and the interval is optional.
 """
@@ -204,7 +205,49 @@ def arguments(inputs: dict) -> dict:
     elif depth not in ("", "auto"):
         raise InputError(f"WHAT: depth {depth!r}. FIX: leave it out (the model decides), or give 'investigate' for a "
                          "full investigation of every question.")
+    chosen = inputs.get("interpretation") or {}
+    if chosen:
+        if not isinstance(chosen, dict):
+            raise InputError("WHAT: the interpretation settings are not a table of setting -> value. FIX: send "
+                             "{\"setting\": value, ...}, or leave them out for the defaults.")
+        from petroharness.well import settings as T
+        wrong = T.validate(chosen)
+        if wrong:
+            raise InputError("WHAT: interpretation settings that cannot be used: "
+                             + "; ".join(f"{k}: {v}" for k, v in wrong.items()) + ". FIX: correct or reset them.")
+        if kw.get("profile") and T.split(chosen)[0]:
+            raise InputError("WHAT: Petrophys settings with a context profile. WHY: a profile fixes its own settings. "
+                             "FIX: choose no profile, or reset the Petrophys settings.")
+        kw["interpretation"] = dict(chosen)
     return kw
+
+
+PREPARE_KEYS = ("formation", "tops", "top", "base", "depth_unit", "lithology_curve", "formation_lithology", "profile",
+                "skills", "interpretation")
+
+
+def preview(inputs: dict, cache: Path) -> dict:
+    """What Petrophys makes of this well under these settings, before any question: the interval, its zones under the
+    zone rule, how the zones were read (the lithology log, or shale-volume bands), and the value each setting took
+    ({setting: {"value", "step"}}: the defaults the data decides, for this well). The interpreted well is kept in
+    `cache` (the runs' shared cache), so the question that follows reuses it."""
+    from petroharness import ask as A
+    from petroharness.well import settings as T
+    kw = arguments({**inputs, "question": "(a preview of the interpretation)"})
+    las = kw.pop("las")
+    p = A.prepare(las, "preview", cache=cache, **{k: v for k, v in kw.items() if k in PREPARE_KEYS})
+    A.check(p, A.task_for(p, "(the interval)")[0])
+    view = p.view
+    zones = view.zones
+    thick = [float(z.base - z.top) for z in zones]
+    return {"interval": p.used, "lithology": p.litho, "unit": view.depth_unit,
+            "zones": [{"zone": z.zone_id, "lithology": z.lithology, "top": round(float(z.top), 4),
+                       "base": round(float(z.base), 4)} for z in zones],
+            "zoned": round(sum(thick), 4), "interval_thickness": round(float(view.interval.base - view.interval.top), 4)
+            if view.interval.base is not None and view.interval.top is not None else None,
+            "min_thickness": round(view.to_unit(float(view.policy["zones"]["min_thickness_m"])), 4)
+            if hasattr(view, "to_unit") else None,
+            "used": T.used(view.prep)}
 
 
 def context_profiles() -> list:

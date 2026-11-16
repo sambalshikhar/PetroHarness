@@ -24,6 +24,7 @@ API (JSON):
     GET  /api/runs                  the runs, newest first (running and saved)
     GET  /api/run/<id>              a saved run in full
     GET  /api/run/<id>/answer.md | trace.json
+    GET  /api/run/<id>/conversation the run's conversation as it stands: every question in order, with answer and figures
     POST /api/rate/<id>             {verdict: good|partly|wrong, note}
 """
 
@@ -208,15 +209,47 @@ class App:
             for j in done[:max(0, len(done) - keep)]:
                 self.jobs.pop(j.id, None)
 
-    def audit(self, run_id: str) -> str:
-        """The audit trail of a run's answer (petroharness.evidence), from its conversation's session folder."""
-        from petroharness.evidence import EvidenceGraph, audit
+    def _evidence(self, run_id: str):
+        """(the evidence graph of a run's conversation, the run's turn in it), from the conversation's session folder."""
+        from petroharness.evidence import EvidenceGraph
         rec = self.jobs[run_id].record() if run_id in self.jobs else self.store.load(run_id)
         conv = rec.get("conversation") or {}
         session = self.store.folder(conv.get("root") or run_id) / "session"
         if not (session / "log.jsonl").is_file() or not conv.get("turn"):
             raise KeyError(f"{run_id} has no audit trail (it has no answer yet, or was answered by an earlier version)")
-        return audit.markdown(EvidenceGraph.from_log(session), int(conv["turn"]))
+        return EvidenceGraph.from_log(session), int(conv["turn"])
+
+    def audit(self, run_id: str) -> str:
+        """The audit trail of a run's answer (petroharness.evidence), from its conversation's session folder."""
+        from petroharness.evidence import audit
+        return audit.markdown(*self._evidence(run_id))
+
+    def lineage(self, run_id: str) -> dict:
+        """What a run's answer rests on, for the page's computation graph (EvidenceGraph.trail): its claims and the
+        results they cite, which results show each number it states, the curves those name, the Petrophys steps behind
+        them with their methods and parameters, and the measured logs they start from."""
+        graph, turn = self._evidence(run_id)
+        return graph.trail(turn)
+
+    def conversation(self, run_id: str) -> dict:
+        """The conversation a run belongs to, as it stands now: every question of it in order (those asked after this
+        run's too, and one still waiting or running), each with its answer and its figures, for the page to keep the
+        earlier questions on screen. A question not yet run is numbered after the last one that ran."""
+        def record(i: str) -> dict:
+            job = self.jobs.get(i)
+            return job.record() if job is not None else self.store.load(i)
+        root = (record(run_id).get("conversation") or {}).get("root") or run_id       # an unknown run: KeyError (404)
+        turns = []
+        for b in sorted((b for b in self.runs() if b.get("root") == root), key=lambda b: (b.get("created") or "", b["id"])):
+            r = record(b["id"])
+            res = r.get("result") if isinstance(r.get("result"), dict) else {}
+            n = (r.get("conversation") or {}).get("turn") or (turns[-1]["turn"] + 1 if turns else 1)
+            turns.append({"id": r["id"], "turn": n, "question": (r.get("inputs") or {}).get("question", ""),
+                          "status": r.get("status"), "created": r.get("created"), "elapsed": r.get("elapsed"),
+                          "answer": r.get("answer") or "",
+                          "figures": [{"file": f.get("file"), "caption": f.get("caption", "")}
+                                      for f in res.get("figures") or [] if isinstance(f, dict) and f.get("file")]})
+        return {"root": root, "turns": turns}
 
     def position(self, run_id: str) -> int | None:
         with self._lock:
@@ -332,6 +365,11 @@ class Handler(BaseHTTPRequestHandler):
             what, arg = (parts[1] if len(parts) > 1 else ""), (parts[2] if len(parts) > 2 else "")
             if method == "GET" and what == "config":
                 return self._json(app.config())
+            if method == "GET" and what == "settings":            # the interpretation settings, their defaults and help
+                from petroharness.well import settings as T
+                return self._json(T.schema())
+            if method == "POST" and what == "preview":            # Petrophys on this well with these settings
+                return self._json(A.preview(self._payload(), app.store.cache))
             if method == "GET" and what == "las":
                 return self._json(A.las_info(q.get("path")))
             if method == "GET" and what == "tops":
@@ -359,6 +397,10 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET" and what == "run" and len(parts) == 4 and parts[3] == "audit":
                 return self._send(200, app.audit(arg).encode(), "text/markdown; charset=utf-8",
                                   {"Content-Disposition": f'inline; filename="{arg}-audit.md"'})
+            if method == "GET" and what == "run" and len(parts) == 4 and parts[3] == "lineage":
+                return self._json(app.lineage(arg))
+            if method == "GET" and what == "run" and len(parts) == 4 and parts[3] == "conversation":
+                return self._json(app.conversation(arg))
             if method == "GET" and what == "run" and len(parts) == 4:
                 path = app.store.file(arg, parts[3])
                 ctype = "text/markdown; charset=utf-8" if path.suffix == ".md" else "application/json"

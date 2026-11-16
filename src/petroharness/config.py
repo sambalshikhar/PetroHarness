@@ -105,6 +105,11 @@ class DataPaths(_Strict):
     # "formation" (the whole formation interval is one zone, labelled by the log's majority lithology: data whose
     # context lays out one group per formation).
     zone_layout: Literal["lithology_runs", "formation"] = "lithology_runs"
+    # The zone rule, where a user changes it (petroharness.well.settings: the web UI's interpretation settings). Null:
+    # the policy's (zones.min_thickness_m, zones.fallback_vcl_bands). A lithology run thinner than the minimum (metres)
+    # is not a zone; the bands are the VCL edges that zone a well without a lithology log.
+    zone_min_thickness_m: Optional[float] = None
+    zone_vcl_bands: Optional[list[float]] = None
     # The statistics' bases: "all" (each zone, the zones pooled, and the whole interval where it differs, with what the
     # samples outside the zones hold) or "zones" (each zone and the zones pooled only: data whose references report on
     # the lithology zones, a benchmark's convention, set in its data file).

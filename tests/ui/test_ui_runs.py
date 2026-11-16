@@ -132,6 +132,31 @@ def test_the_three_interval_forms(ui, form):
     assert (folder / ".cache").is_symlink()                             # interpreted wells shared between runs
 
 
+def test_interpretation_settings_preview_and_run(ui):
+    """The settings panel's endpoints: the settings and their defaults; a preview of the interval under a zone rule
+    (a smaller minimum keeps at least as many zones); a question asked with settings runs under them and records them;
+    settings that cannot be used are refused before the queue."""
+    app, c = ui
+    status, schema = c.json("/api/settings")
+    assert status == 200 and schema["groups"][0]["key"] == "zones"
+    inputs = {"las": str(LAS), "interval": {"mode": "tops", "tops": str(TOPS), "formation": "Mount Messenger"}}
+    status, base = c.json("/api/preview", inputs)
+    assert status == 200 and base["zones"] and base["unit"] in ("m", "ft"), base
+    assert base["used"]["a"]["step"] == "saturation"                       # what Petrophys took on this well
+    status, finer = c.json("/api/preview", {**inputs, "interpretation": {"zone_min_thickness_m": 0.3}})
+    assert status == 200 and len(finer["zones"]) >= len(base["zones"]) and finer["min_thickness"] < base["min_thickness"]
+    status, bad = c.json("/api/preview", {**inputs, "interpretation": {"sw_model": "nope"}})
+    assert status == 400 and "sw_model" in bad["error"]
+    status, got = c.json("/api/ask", {**inputs, "question": QUESTION, "interpretation": {"zone_min_thickness_m": 0.3}})
+    assert status == 200, got
+    _, view = wait(c, got["id"])
+    assert view["status"] == "done", view.get("error")
+    assert view["inputs"]["interpretation"] == {"zone_min_thickness_m": 0.3}
+    assert len(view["result"]["zones"]) == len(finer["zones"])
+    status, bad = c.json("/api/ask", {**inputs, "question": QUESTION, "interpretation": {"zone_vcl_bands": [0.7, 0.2]}})
+    assert status == 400 and "zone_vcl_bands" in bad["error"]
+
+
 def test_a_run_is_listed_rated_and_replayable(ui):
     app, c = ui
     got, events, view = ask(c, WINDOW)
@@ -291,6 +316,22 @@ def test_a_follow_up_is_the_next_question_of_the_runs_conversation(env, tmp_path
             assert status == 200 and kind.startswith("text/markdown") and f"# Audit trail: question {n}" in body.decode()
             assert "## Steps Petrophys ran" in body.decode() and "- LAS file: " in body.decode()
         assert c.json("/api/run/20200101-000000-abcdef/audit")[0] == 404
+        # each answer's lineage for the page's computation graph: the trail of that question (EvidenceGraph.trail)
+        for run_id, n in ((first["id"], 1), (got["id"], 2)):
+            status, line = c.json(f"/api/run/{run_id}/lineage")
+            assert status == 200 and line["question"]["n"] == n
+            assert {"claims", "numbers", "results", "curves", "steps", "las"} <= set(line)
+            assert all({"step", "method", "parameters", "reads"} <= set(s) for s in line["steps"])
+            assert all({"name", "source", "step", "named"} <= set(x) for x in line["curves"])
+        assert c.json("/api/run/20200101-000000-abcdef/lineage")[0] == 404
+        # the conversation as it stands, from any of its runs: every question in order, with its answer and figures
+        for run_id in (first["id"], got["id"]):
+            status, conv = c.json(f"/api/run/{run_id}/conversation")
+            assert status == 200 and conv["root"] == first["id"]
+            assert [(t["turn"], t["id"], t["status"]) for t in conv["turns"]] == [(1, first["id"], "done"), (2, got["id"], "done")]
+            assert conv["turns"][0]["question"] == QUESTION and conv["turns"][0]["answer"] == view1["answer"]
+            assert conv["turns"][0]["figures"] == [{"file": figs[0]["file"], "caption": figs[0]["caption"]}]
+        assert c.json("/api/run/20200101-000000-abcdef/conversation")[0] == 404
         # what cannot be followed
         status, bad = c.json("/api/ask", {"follow": first["id"], "question": "  "})
         assert status == 400 and "question is empty" in bad["error"]

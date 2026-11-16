@@ -5,6 +5,7 @@ header, the formations a tops file names, the checks on the inputs, the model en
     python -m pytest tests/ui -q
 """
 import json
+import re
 import sys
 import threading
 import urllib.error
@@ -106,6 +107,64 @@ def test_the_page_and_its_images_are_served(ui):
         with pytest.raises(urllib.error.HTTPError) as e:
             c.get(bad)
         assert e.value.code == 404
+
+
+def _js_function(page: str, name: str) -> str:
+    """The source of one top-level function of the page's script, to the next top-level function or comment."""
+    start = page.find(f"\nfunction {name}(")
+    start = start if start >= 0 else page.index(f"\nasync function {name}(")
+    end = min(i for i in (page.find("\nfunction ", start + 1), page.find("\n// ", start + 1), page.find("\nasync function ", start + 1)) if i > 0)
+    return page[start:end]
+
+
+def test_the_shown_tab_carries_the_answers_blocks():
+    """What a finished answer brings beside its text (its figures, the methods it rests on, the audit trail) is drawn in
+    the tab the page opens on, and every pane the page defines is one a tab shows (a pane no tab shows once hid all of
+    these)."""
+    page = (U.STATIC / "index.html").read_text()
+    tabs = _js_function(page, "render")
+    shown = set(re.findall(r"html \+= (\w+Pane)\(", tabs))
+    defined = set(re.findall(r"\nfunction (\w+Pane)\(", page))
+    assert defined <= shown, f"panes no tab shows: {sorted(defined - shown)}"
+    assert re.search(r'S\.tab === "main"[^\n]*mainPane\(', tabs)
+    main = _js_function(page, "mainPane")
+    for block in ("figuresHtml(j, res)", "lineageHtml(j)", "basisHtml(res)", "auditHtml(j)"):
+        assert block in main, block
+    assert "lineageWire(j)" in _js_function(page, "wire")          # the computation graph is fetched and drawn
+
+
+def test_the_earlier_questions_stay_on_screen():
+    """A conversation's earlier questions are drawn above the question on screen, on every tab, each a box that opens
+    to its whole answer (its first sentence shows while closed), with its figures and a way to its own page; what the
+    page shows comes from the server's conversation route, fetched again when the run on screen changes status."""
+    page = (U.STATIC / "index.html").read_text()
+    tabs = _js_function(page, "render")
+    assert tabs.index('<div id="turns">${turnsHtml(j)}</div>') < tabs.index('<div class="runhead">')
+    assert tabs.index("turnsHtml(j)") < tabs.index('if (S.tab === "main"')       # above the tabs: on each of them
+    assert "convLoad(j)" in tabs
+    load = _js_function(page, "convLoad")
+    assert "/conversation`" in load and "${j.id}|${j.status}" in load
+    box = _js_function(page, "turnHtml")
+    assert "<details" in box and "gist(t.answer)" in box and "answerSections(t.answer)" in box
+    assert "t.figures" in box and "data-openrun" in box
+    assert "before" in _js_function(page, "turnsHtml") and "threadHtml" not in page
+
+
+def test_the_composer_continues_the_open_conversation():
+    """One question box, docked at the bottom: while a finished answer of a conversation is open, the question asked
+    there is that conversation's next (the server's follow); otherwise it starts a new conversation with the composer's
+    well, interval and settings. There is no second, follow-up box; Enter sends and Shift+Enter starts a new line."""
+    page = (U.STATIC / "index.html").read_text()
+    assert 'id="composer"' in page and 'id="question"' in page and 'id="followq"' not in page
+    assert page.index('id="composer"') > page.index('<main class="main">')             # after the answer, at the bottom
+    assert "composerFor(j)" in _js_function(page, "render")
+    follow = _js_function(page, "composerFor")
+    assert 'j.status === "done"' in follow and "j.conversation" in follow and "S.followId" in follow
+    ask = _js_function(page, "ask")
+    assert re.search(r"S\.followId \? \{follow: S\.followId, question: q\} : formInputs\(\)", ask)
+    assert 'e.key === "Enter" && !e.shiftKey' in page
+    fresh = _js_function(page, "newConversation")
+    assert "S.followId = null" in fresh and "emptyPage()" in fresh
 
 
 def test_the_page_names_no_benchmark_or_version_history():
