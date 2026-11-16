@@ -317,6 +317,13 @@ r = ask("tuhua-7.las", "Which zone has the best reservoir quality?", formation="
 Without `out`, nothing is written. Wrong inputs raise `ValueError` (a formation the tops file lacks: `FormationNotFound`), with a message that
 says what is wrong, why it matters and how to fix it.
 
+## Field notes (optional)
+
+A team's standing choices for a field, as a YAML file of `name`, `settings` (interpretation settings, such as `m`,
+`rw` and the cutoffs) and `notes` (standing choices in words): `--field-notes north.yaml`. The settings are in force,
+under any you give; the notes go with the question; the answer's header names them ([SESSIONS.md](SESSIONS.md),
+"Field notes").
+
 ## A data settings file (optional)
 
 `--settings FILE` (or the environment variable `PETROHARNESS_DATA`) gives a data settings file to start from, with

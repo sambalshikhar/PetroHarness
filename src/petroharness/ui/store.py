@@ -23,6 +23,7 @@ RUN_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{6}")
 VERDICTS = ("good", "partly", "wrong")
 LAS_SUFFIXES = (".las",)
 TOPS_SUFFIXES = (".csv", ".tsv", ".txt", ".xlsx", ".xls")
+NOTES_SUFFIXES = (".yaml", ".yml")
 
 
 class Store:
@@ -123,10 +124,10 @@ class Store:
     # uploads ------------------------------------------------------------------------------------------------------
     def upload(self, kind: str, name: str, body: bytes) -> Path:
         """An uploaded file, kept under uploads/ by its own name (a different file of the same name gets a suffix)."""
-        suffixes = LAS_SUFFIXES if kind == "las" else TOPS_SUFFIXES
+        suffixes = {"las": LAS_SUFFIXES, "notes": NOTES_SUFFIXES}.get(kind, TOPS_SUFFIXES)
         stem, suffix = Path(str(name or "")).stem, Path(str(name or "")).suffix.lower()
         if suffix not in suffixes:
-            raise ValueError(f"WHAT: {name!r} is not a {'LAS' if kind == 'las' else 'tops'} file. FIX: upload a file "
+            raise ValueError(f"WHAT: {name!r} is not a {dict(las='LAS', notes='field notes').get(kind, 'tops')} file. FIX: upload a file "
                              f"ending in {', '.join(suffixes)}.")
         if not body:
             raise ValueError(f"WHAT: {name!r} is empty. FIX: upload the file again.")

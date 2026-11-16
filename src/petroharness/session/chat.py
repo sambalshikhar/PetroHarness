@@ -6,6 +6,11 @@
 
 Questions come from --question (repeatable) and --questions-file (one per line), then from the terminal: type a
 question and press Enter; an empty line or Ctrl-D ends the conversation. Answers go to stdout, what was run to stderr.
+
+Two commands change or show the interpretation settings (docs/SESSIONS.md, "Changing a setting"), from the next
+question on; the well is interpreted again with them:
+    /set m=1.8 rw=0.04         a setting's new value (several at once); name=default takes it back to its default
+    /settings                  the settings in force and the changes made
 The conversation is kept in --session (default ./petroharness-sessions/<LAS name>-<time>): resume it later with --resume.
 """
 from __future__ import annotations
@@ -33,6 +38,49 @@ def parser() -> argparse.ArgumentParser:
     A.interval_options(ap)
     A.run_options(ap)
     return ap
+
+
+def _value(text: str):
+    """A /set value: a number, on/off, default (back to the default), a pair of numbers (a,b) or the text itself."""
+    t = text.strip()
+    if t.lower() in ("default", "none"):
+        return None
+    if t.lower() in ("true", "on", "yes"):
+        return True
+    if t.lower() in ("false", "off", "no"):
+        return False
+    if "," in t:
+        try:
+            return [float(x) for x in t.split(",")]
+        except ValueError:
+            return t
+    try:
+        return int(t) if t.lstrip("-").isdigit() else float(t)
+    except ValueError:
+        return t
+
+
+def command(c: Conversation, line: str) -> str:
+    """A /set or /settings line -> what to print (the change made, or the settings in force)."""
+    from petroharness.well.settings import describe
+    word, _, rest = line.strip().partition(" ")
+    if word == "/settings":
+        made = "; ".join(f"before question {x['turn']}: {describe(x['changes'])}" for x in c.changes())
+        src = c.sources()
+        shown = ", ".join(f"{k}={v}" + (" (field notes)" if src.get(k) == "field notes" else "")
+                          for k, v in c.settings.items()) or "Petrophys defaults"
+        return f"settings in force: {shown}" + (f"\nchanged {made}" if made else "")
+    if word == "/set":
+        pairs = [p for p in rest.split() if p.strip()]
+        if not pairs or any("=" not in p for p in pairs):
+            return "usage: /set name=value [name=value ...]   (name=default takes a setting back to its default)"
+        try:
+            made = c.adopt({k.strip(): _value(v) for k, v in (p.split("=", 1) for p in pairs)})
+        except ValueError as exc:
+            return f"not changed: {exc}"
+        return (f"from question {len(c.turns) + 1}: {describe(made)} (the well was interpreted again)" if made
+                else "no change: those are the settings in force")
+    return f"unknown command {word}: /set name=value, or /settings"
 
 
 def _say(turn) -> None:
@@ -64,7 +112,8 @@ def main(argv: list | None = None) -> int:
                                    formation_lithology=args.formation_lithology, profile=args.profile,
                                    settings=args.settings, skills=args.skills, model_url=args.model_url,
                                    model=args.model, model_card=args.model_card, max_steps=args.max_steps,
-                                   figures=not args.no_figures, direct=not args.investigate)
+                                   figures=not args.no_figures, direct=not args.investigate,
+                                   field_notes=args.field_notes)
             print(f"conversation in {c.folder}\n{c.p.las.name}: {A._interval_text(c.p.used)}", file=sys.stderr)
             shown = c.overview()
             if shown is not None:
@@ -80,6 +129,9 @@ def main(argv: list | None = None) -> int:
         asked += [ln.strip() for ln in Path(args.questions_file).read_text().splitlines() if ln.strip()]
     failed = False
     for q in asked:
+        if q.startswith("/"):                       # a /set or /settings line among the questions
+            print(command(c, q), file=sys.stderr)
+            continue
         turn = c.ask(q)
         _say(turn)
         failed = failed or not turn.ok
@@ -92,6 +144,9 @@ def main(argv: list | None = None) -> int:
             break
         if not q:
             break
+        if q.startswith("/"):
+            print(command(c, q), file=sys.stderr)
+            continue
         turn = c.ask(q)
         _say(turn)
         failed = failed or not turn.ok

@@ -5,6 +5,7 @@ Nodes (id: kind):
     las             the LAS file (its path and SHA-256)
     curve:<NAME>    a curve: measured (from the LAS) or computed (by a step), with its unit
     step:<name>     a workflow step Petrophys ran: its method and its parameters
+                    (after a settings change the well is a new generation k: curve:<NAME>@gen<k>, step:<name>@gen<k>)
     Q<n>            question n
     E<k>            a result the investigation opened: the tool, its arguments, the SHA-256 of its text
     A<n>            the answer to question n: its status and the SHA-256 of its text
@@ -30,10 +31,23 @@ Links (kind: from -> to):
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from petroharness.evidence import record as R
+
+_GEN = re.compile(r"@gen\d+$")
+
+
+def _at(prefix: str, name: str, gen: int) -> str:
+    """A curve's or a step's node id in generation `gen` (the first generation keeps the plain id)."""
+    return f"{prefix}:{name}" if gen <= 1 else f"{prefix}:{name}@gen{gen}"
+
+
+def _name(nid: str) -> str:
+    """A curve's or a step's name from its node id."""
+    return _GEN.sub("", nid.split(":", 1)[1])
 
 
 @dataclass
@@ -52,27 +66,35 @@ class EvidenceGraph:
                 x["kind"] == kind and x["from"] == src and x["to"] == dst for x in self.links):
             self.links.append({"kind": kind, "from": src, "to": dst, **data})
 
-    def _record(self, snap: dict) -> None:
+    def _record(self, snap: dict, gen: int = 1) -> None:
         """The computation graph: curves, steps and what read what. A later snapshot of the same conversation adds
-        the curves computed on request since."""
+        the curves computed on request since; one after a settings change is generation `gen` (its own nodes)."""
+        c, s = (lambda name: _at("curve", name, gen)), (lambda name: _at("step", name, gen))
         for step in snap["steps"]:
-            self.node(f"step:{step['step']}", "step", method=step["method"], parameters=step["parameters"])
+            self.node(s(step["step"]), "step", method=step["method"], parameters=step["parameters"])
         owner = R.step_of(snap)
         for name, cv in snap["curves"].items():
             step = owner.get(name, "")
-            self.node(f"curve:{name}", "curve", unit=cv["unit"], source=cv["source"])
+            self.node(c(name), "curve", unit=cv["unit"], source=cv["source"])
             if step:
-                self.node(f"step:{step}", "step")           # a curve computed on request: its label is its step
-                self.link("computed_by", f"curve:{name}", f"step:{step}")
+                self.node(s(step), "step")                  # a curve computed on request: its label is its step
+                self.link("computed_by", c(name), s(step))
             elif cv["source"] == "input" and "las" in self.nodes:
-                self.link("from", f"curve:{name}", "las")
+                self.link("from", c(name), "las")
         for step in snap["steps"]:
             for name in R.NAME.findall(" ".join(step["inputs"])):
-                self.link("reads", f"step:{step['step']}", f"curve:{name}")
+                self.link("reads", s(step["step"]), c(name))
             for name in step["outputs"]:                    # an output the interval holds no samples of
-                if f"curve:{name}" not in self.nodes:
-                    self.node(f"curve:{name}", "curve", source="computed")
-                    self.link("computed_by", f"curve:{name}", f"step:{step['step']}")
+                if c(name) not in self.nodes:
+                    self.node(c(name), "curve", source="computed")
+                    self.link("computed_by", c(name), s(step["step"]))
+
+    def _curve(self, name: str, gen: int) -> str:
+        """The curve a result of generation `gen` read: that generation's, else the latest earlier one holding it."""
+        for k in range(gen, 1, -1):
+            if _at("curve", name, k) in self.nodes:
+                return _at("curve", name, k)
+        return f"curve:{name}"
 
     @classmethod
     def from_log(cls, folder) -> EvidenceGraph:
@@ -81,6 +103,8 @@ class EvidenceGraph:
         events = [json.loads(line) for line in (folder / "log.jsonl").read_text().splitlines() if line.strip()]
         blob = lambda sha: (folder / "blobs" / sha).read_text()
         g, figures = cls(), {}
+        changed = sorted(e["turn"] for e in events if e["type"] == "settings")
+        gen = lambda n: 1 + sum(1 for t in changed if t <= n)     # the well's generation at question n
         for e in events:                                    # the file and the record first: results link to curves
             if e["type"] == "session_start":
                 if e.get("las"):
@@ -88,7 +112,10 @@ class EvidenceGraph:
                 g.nodes.setdefault("session", {"kind": "session"}).update(
                     {k: e[k] for k in ("mode", "interval", "model", "petrophys", "harness") if e.get(k) is not None})
             elif e["type"] == "record":
-                g._record(json.loads(blob(e["sha256"])))
+                g._record(json.loads(blob(e["sha256"])), gen(e.get("turn", 0)))
+            elif e["type"] == "settings":                   # a settings change: what, who asked, from which question
+                s = g.nodes.setdefault("session", {"kind": "session"})
+                s["settings"] = s.get("settings", []) + [{k: e.get(k) for k in ("turn", "changes", "by")}]
             elif e["type"] == "setup":                      # what the answers were made with; the last one stands,
                 s = g.nodes.setdefault("session", {"kind": "session"})      # earlier ones are kept by their hashes
                 s["setups"] = s.get("setups", []) + [e["hash"]]
@@ -102,7 +129,7 @@ class EvidenceGraph:
                        chars=e.get("chars"), question=n)
                 g.link("opened", f"Q{n}", e["id"])
                 for name in R.names(json.dumps(e.get("args") or {})):
-                    g.link("reads", e["id"], f"curve:{name}")
+                    g.link("reads", e["id"], g._curve(name, gen(n)))
             elif kind == "figure":
                 k = figures[n] = figures.get(n, 0) + 1
                 g.node(f"F{n}.{k}", "figure", figure=e.get("kind"), file=e.get("file"), caption=e.get("caption"),
@@ -172,19 +199,21 @@ class EvidenceGraph:
         ids = list(dict.fromkeys([e for c in claims for e in c["results"]] + [e for v in numbers.values() for e in v]))
         ids = [e for e in ids if e in self.nodes]
         results = [{"id": e, **{k: self.nodes[e].get(k) for k in ("tool", "args", "sha256", "question")},
-                    "curves": [c.split(":", 1)[1] for c in self.out(e, "reads")]} for e in ids]
-        named = list(dict.fromkeys(f"curve:{c}" for r in results for c in r["curves"]))
+                    "curves": [_name(c) for c in self.out(e, "reads")]} for e in ids]
+        named = list(dict.fromkeys(c for e in ids for c in self.out(e, "reads")))
         curves, steps = self.upstream(named)
+        session = self.nodes.get("session") or {}
         return {"question": {"n": n, "text": self.nodes.get(f"Q{n}", {}).get("text")},
                 "answer": {k: self.nodes[a].get(k) for k in ("status", "sha256", "opening")},
                 "claims": claims, "numbers": numbers, "results": results,
-                "curves": [{"name": c.split(":", 1)[1], "unit": self.nodes[c].get("unit"),
+                "curves": [{"name": _name(c), "unit": self.nodes[c].get("unit"),
                             "source": self.nodes[c].get("source"),
-                            "step": next((s.split(":", 1)[1] for s in self.out(c, "computed_by")), None),
+                            "step": next((_name(s) for s in self.out(c, "computed_by")), None),
                             "named": c in named} for c in curves],
-                "steps": [{"step": s.split(":", 1)[1], "method": self.nodes[s].get("method"),
+                "steps": [{"step": _name(s), "method": self.nodes[s].get("method"),
                            "parameters": self.nodes[s].get("parameters") or {},
-                           "reads": [c.split(":", 1)[1] for c in self.out(s, "reads")]} for s in steps],
+                           "reads": [_name(c) for c in self.out(s, "reads")]} for s in steps],
+                "settings": [x for x in session.get("settings") or [] if x["turn"] <= n],
                 "figures": [{k: self.nodes[f].get(k) for k in ("figure", "file", "caption", "source")}
                             for f in self.out(a, "carries")],
                 "las": self.nodes.get("las"), "session": self.nodes.get("session")}

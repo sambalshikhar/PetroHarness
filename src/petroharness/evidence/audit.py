@@ -39,6 +39,12 @@ def markdown(g: EvidenceGraph, n: int) -> str:
            f"**Answer:** status {a['status']}; text SHA-256 `{a['sha256']}`"]
     if a.get("opening"):
         out += ["", f"> {a['opening']}"]
+    if t.get("settings"):                                  # the conversation's settings changed before this answer
+        from petroharness.well.settings import describe
+        out += ["", "## Settings changed in this conversation", ""]
+        out += [f"- Before question {x['turn']} (by the {x.get('by') or 'user'}): {describe(x['changes'])}. The well was "
+                "interpreted again; the curves and steps below are those this answer's results read."
+                for x in t["settings"]]
     out += ["", "## Claims and the results they cite", ""]
     if t["claims"]:
         out += [f"{i}. {c['text']} ({c['grade']}): {', '.join(c['results']) or 'no result cited'}"

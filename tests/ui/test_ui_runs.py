@@ -332,6 +332,24 @@ def test_a_follow_up_is_the_next_question_of_the_runs_conversation(env, tmp_path
             assert conv["turns"][0]["question"] == QUESTION and conv["turns"][0]["answer"] == view1["answer"]
             assert conv["turns"][0]["figures"] == [{"file": figs[0]["file"], "caption": figs[0]["caption"]}]
         assert c.json("/api/run/20200101-000000-abcdef/conversation")[0] == 404
+        # a follow-up that changes the settings from it on: adopted before the question, said in its result, logged
+        status, got3 = c.json("/api/ask", {"follow": got["id"], "question": "And with m at 1.8?",
+                                           "interpretation": {"m": 1.8}})
+        assert status == 200, got3
+        _, view3 = wait(c, got3["id"])
+        assert view3["status"] == "done", view3.get("error")
+        assert view3["result"]["settings_changes"]["changed"] == [{"key": "m", "from": None, "to": 1.8}]
+        assert view3["inputs"]["interpretation"] == {"m": 1.8} and view3["conversation"]["turn"] == 3
+        events = [json.loads(x) for x in (session / "log.jsonl").read_text().splitlines() if x.strip()]
+        assert [e["turn"] for e in events if e["type"] == "settings"] == [3]
+        status, got4 = c.json("/api/ask", {"follow": got3["id"], "question": "And the clay volume?"})
+        _, view4 = wait(c, got4["id"])
+        assert view4["status"] == "done" and view4["inputs"]["interpretation"] == {"m": 1.8}   # in force, unchanged
+        assert not (view4["result"].get("settings_changes") or {}).get("changed")
+        turns = c.json(f"/api/run/{got4['id']}/conversation")[1]["turns"]
+        assert [t["settings_changed"] for t in turns] == [[], [], [{"key": "m", "from": None, "to": 1.8}], []]
+        status, bad = c.json("/api/ask", {"follow": got4["id"], "question": "Then?", "interpretation": {"m": -1}})
+        assert status == 400 and "cannot be used" in bad["error"]
         # what cannot be followed
         status, bad = c.json("/api/ask", {"follow": first["id"], "question": "  "})
         assert status == 400 and "question is empty" in bad["error"]

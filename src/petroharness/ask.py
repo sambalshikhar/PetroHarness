@@ -212,12 +212,15 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
         formation_lithology: str | None = None, profile: str | None = None, out=None,
         model_url: str | None = None, model: str | None = None, model_card: str | None = None, settings=None,
         skills: str | None = None, max_steps: int | None = None, llm_factory: Callable | None = None,
-        on_view: Callable | None = None, direct: bool = True, interpretation: dict | None = None) -> AskResult:
+        on_view: Callable | None = None, direct: bool = True, interpretation: dict | None = None,
+        field_notes=None) -> AskResult:
     """One question about one LAS file -> AskResult (answer, status, trace, the interval used). The interval: the
     formation `formation` of the tops file `tops`; or the depths `top`/`base` (`formation` names it); or, with
     neither, the whole well. `depth_unit` (m or ft): the unit of the depths given and of the answer's depths (default:
     the tops file's, else the LAS's own). `interpretation`: settings Petrophys interprets the well with, and the zone
-    rule ({setting: value}; petroharness.well.settings lists them; unset ones keep their defaults). `skills`: the skill library the model reads guides from (a library folder, or
+    rule ({setting: value}; petroharness.well.settings lists them; unset ones keep their defaults). `field_notes`: a
+    field notes file (petroharness.well.notes): its settings are in force under `interpretation`'s, and its notes reach
+    the model with the question. `skills`: the skill library the model reads guides from (a library folder, or
     "none" for no guides; None: PETROHARNESS_SKILLS, else the packaged library). `model`: the served model's name
     (any chat model; the generic card); `model_card`: a model card's YAML file or a packaged card's name (default:
     K2-Horizon-7B's); `model_url`: the endpoint(s), comma-separated (default: PETROHARNESS_MODEL_URL). `out`: a folder
@@ -239,12 +242,18 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
     if not question:
         raise ValueError("WHAT: the question is empty. FIX: give the question to answer.")
     key = _model_key(model_url, llm_factory, model, model_card)
+    notes = None
+    if field_notes:
+        from petroharness.well.notes import load
+        notes = load(field_notes)
+        interpretation = {**notes["settings"], **(interpretation or {})}
     out_dir = Path(out).expanduser().resolve() if out is not None else None
     with tempfile.TemporaryDirectory(prefix="petroharness-ask-") as tmp:
         cache = out_dir / ".cache" if out_dir is not None else Path(tmp)
         p = prepare(las, key, formation=formation, tops=tops, top=top, base=base, depth_unit=depth_unit,
                     lithology_curve=lithology_curve, formation_lithology=formation_lithology, profile=profile,
-                    settings=settings, skills=skills, interpretation=interpretation, cache=cache)
+                    settings=settings, skills=skills, interpretation=interpretation, field_notes=notes,
+                    cache=cache)
         task, sent = task_for(p, question)
         check(p, task, on_view)
         with given_settings(p.given):
@@ -278,11 +287,12 @@ class Prepared:
     view: object = None
     used: dict = field(default_factory=dict)
     litho: dict = field(default_factory=dict)
+    notes: dict = field(default_factory=dict)     # the field notes in force (petroharness.well.notes.load), if any
 
 
 def prepare(las: Path, key: str, *, formation=None, tops=None, top=None, base=None, depth_unit=None,
             lithology_curve=None, formation_lithology=None, profile=None, settings=None, skills=None,
-            interpretation=None, cache: Path) -> Prepared:
+            interpretation=None, field_notes=None, cache: Path) -> Prepared:
     """The data settings and the interval for this LAS (the arguments as ask()'s), with `cache` as the folder the
     interpreted well is kept in."""
     from petroharness.config import ResourcePaths
@@ -299,7 +309,7 @@ def prepare(las: Path, key: str, *, formation=None, tops=None, top=None, base=No
     given = {"data": data, "eval": {}, **({"skills": library} if library else {})}
     return Prepared(las=las, key=key, data=data, source=source, span=span,
                     said=str(formation_lithology or "").strip(), given=given, skills_given=skills,
-                    lithology_curve=lithology_curve)
+                    lithology_curve=lithology_curve, notes=dict(field_notes or {}))
 
 
 def task_for(p: Prepared, question: str, turn: int = 1):
@@ -312,6 +322,9 @@ def task_for(p: Prepared, question: str, turn: int = 1):
         # the zones are lithology-log runs or shale-volume bands: the operator's lithology reaches the model with
         # the question (the "formation" layout shows it on the zone)
         sent = f"{question}\n\n(The operator states this formation's lithology: {p.said}.)"
+    if p.notes.get("notes"):                     # the user's field notes, with every question
+        from petroharness.well.notes import statement
+        sent = f"{sent}\n\n{statement(p.notes)}"
     ident = f"{p.las}|{question}|{span}" + (f"|question {turn}" if turn > 1 else "")
     task = Task(task_id="a" + hashlib.sha256(ident.encode()).hexdigest()[:10],
                 question=sent, well=p.las.stem, formation=span["name"], las_path=p.las, top=span["top"],
@@ -365,7 +378,8 @@ def ask_record(p: Prepared, question: str, sent: str, trace: dict) -> dict:
             "model": _model_label(p.key), "settings": p.source, "skills": trace.get("skills"),
             "skills_given": p.skills_given,
             "interpret": p.data.get("interpret"), "interpreter": p.data.get("interpreter"),
-            "petrophys": library_identity()}
+            "petrophys": library_identity(),
+            **({"field_notes": {k: p.notes[k] for k in ("name", "sha256", "settings", "notes")}} if p.notes else {})}
 
 
 def _model_label(key: str) -> str:
@@ -400,6 +414,26 @@ def _route_text(trace: dict) -> str:
     return route_text(trace)
 
 
+def _settings_lines(trace: dict) -> list:
+    """The header's lines on the field notes (when given) and on a conversation's settings, once they were changed."""
+    from petroharness.well.settings import describe, values
+    out = []
+    fn = (trace.get("ask") or {}).get("field_notes")
+    if fn:
+        shown = values(fn["settings"])
+        out.append(f"- **Field notes:** {fn['name']}" + (f" ({shown})" if shown else "")
+                   + (f"; {len(fn['notes'])} note{'s' if len(fn['notes']) != 1 else ''} with the question"
+                      if fn["notes"] else ""))
+    s = trace.get("settings")
+    if not s:
+        return out
+    if s.get("changed"):
+        out.append(f"- **Settings changed for this question:** {describe(s['changed'])}")
+    for e in [e for e in s.get("changes") or [] if e["turn"] < s.get("turn", 0)]:
+        out.append(f"- **Settings changed before question {e['turn']}:** {describe(e['changes'])}")
+    return out
+
+
 def _answer_md(result: AskResult, las: Path) -> str:
     a = result.trace["ask"]
     head = [f"# {las.stem}: {result.interval['name']}", "",
@@ -408,7 +442,8 @@ def _answer_md(result: AskResult, las: Path) -> str:
             f"- **Lithology:** {_lithology_text(a['lithology'])}",
             f"- **Model:** {a['model']}",
             f"- **Skill library:** {_skills_text(a['skills'])}",
-            f"- **Status:** {result.status}, {_route_text(result.trace)}", "", "---", ""]
+            f"- **Status:** {result.status}, {_route_text(result.trace)}", *_settings_lines(result.trace),
+            "", "---", ""]
     body = result.answer if result.answer else f"(no answer: {result.trace.get('error', result.status)})"
     return "\n".join(head) + body.rstrip() + "\n"
 
@@ -461,6 +496,8 @@ def interval_options(ap: argparse.ArgumentParser) -> None:
     lith.add_argument("--lithology-curve", help="the lithology log's mnemonic (default: detected; none: zones from "
                                                 "shale-volume bands)")
     lith.add_argument("--formation-lithology", help="the formation's lithology as you know it, e.g. 'sandstone'")
+    ap.add_argument("--field-notes", type=Path, help="a field notes file: the team's standing settings and notes for "
+                                                     "this field (YAML: name, settings, notes; docs/SESSIONS.md)")
     ap.add_argument("--profile", help="a Petrophys context profile for wells of a known package (default: "
                                       "Petrophys's default interpretation)")
 
@@ -492,7 +529,8 @@ def options(args: argparse.Namespace) -> dict:
             "formation_lithology": args.formation_lithology, "profile": args.profile,
             "out": args.out if args.out is not None else Path.cwd() / "petroharness-out" / Path(args.las).stem,
             "model_url": args.model_url, "model": args.model, "model_card": args.model_card, "settings": args.settings,
-            "skills": args.skills, "max_steps": args.max_steps, "direct": not args.investigate}
+            "skills": args.skills, "max_steps": args.max_steps, "direct": not args.investigate,
+            "field_notes": args.field_notes}
 
 
 def main(argv: list | None = None) -> int:

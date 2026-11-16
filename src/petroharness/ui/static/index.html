@@ -298,7 +298,8 @@ h3.sec:first-child { margin-top: 0; }
 .basis .bparams { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; }
 .basis .bparams span { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
 .basis .bsub { font-size: 12px; color: var(--muted); margin: 12px 0 2px; text-transform: uppercase; letter-spacing: .04em; }
-.turns { display: grid; gap: 8px; margin: 0 0 14px; }
+.turns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 0 0 14px; }
+.turn { min-width: 0; }
 .turns .thd { font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 2px 2px 0; display: flex; gap: 10px; align-items: baseline; }
 .turns .thd .link { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .turn { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
@@ -312,7 +313,8 @@ h3.sec:first-child { margin-top: 0; }
 .turn[open] .tg { display: none; }
 .turn .tchev { color: var(--muted); font-size: 11px; transition: transform .15s; }
 .turn[open] .tchev { transform: rotate(90deg); }
-.turn .tbody { border-top: 1px solid var(--line); padding: 4px 18px 16px 54px; }
+.turn .tbody { border-top: 1px solid var(--line); padding: 4px 18px 16px 54px; overflow-x: auto; min-width: 0; }
+.turn .tbody table { display: block; max-width: 100%; overflow-x: auto; }
 .turn .tbody .ah { font-size: 15px; margin: 14px 0 4px; }
 .turn .tfigs { display: flex; gap: 10px; overflow-x: auto; margin-top: 12px; }
 .turn .tfigs a { flex: none; border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 4px; }
@@ -320,6 +322,11 @@ h3.sec:first-child { margin-top: 0; }
 .turn .tlinks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 13px; }
 .turn.live .tn { border-color: var(--accent); color: var(--accent-ink); }
 .turnsnote { font-size: 13px; color: var(--ink-2); margin: 0 2px; }
+.setchg { margin: 10px 0 0; font-size: 13.5px; color: var(--ink-2); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.setchg b { color: var(--pp); }
+.setchg img { height: 13px; width: auto; position: relative; top: 2px; }
+.turn .tbefore { display: inline-block; margin-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.cchip.pend { background: var(--pp-soft, #e3f2ee); border-color: var(--pp); color: var(--pp); }
 .qno { font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
 @media (max-width: 760px) { .turn .tbody { padding-left: 16px; } .turn .tfigs img { height: 120px; } }
 .follow { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
@@ -862,6 +869,9 @@ body:not(.panel-closed) .scrim { display: block; position: fixed; inset: 52px 0 
           <select id="lithcurve"><option value="">Detect (none: zones from shale-volume bands)</option></select>
           <label class="lab" for="lithtext">The formation's lithology, as you know it</label>
           <input type="text" id="lithtext" placeholder="e.g. fine sandstone with siltstone">
+          <label class="lab" for="notespath">Field notes</label>
+          <div class="row"><input type="text" id="notespath" class="mono" placeholder="a field notes file (YAML: name, settings, notes)"><button class="btn fix" id="notesload">Load</button></div>
+          <div class="row" style="margin-top:6px"><button class="btn fix" id="notesup">Upload field notes…</button><input type="file" id="notesfile" accept=".yaml,.yml" hidden><span class="hint" id="notesmsg"></span><button class="link" id="notesclear" hidden>Remove</button></div>
           <label class="lab" for="profile">Petrophys context profile</label>
           <select id="profile"><option value="">None (Petrophys's default interpretation)</option></select>
           <label class="lab" for="skills">Skill library</label>
@@ -1056,6 +1066,29 @@ $("#lasfile").onchange = async e => {
   e.target.value = "";
 };
 
+// ---------- field notes: the team's standing settings and notes for the field ----------
+S.notes = null;
+function showNotes(n) {
+  S.notes = n; $("#notespath").value = n ? n.path : "";
+  const k = n ? Object.keys(n.settings || {}).length : 0, t = n ? (n.notes || []).length : 0;
+  $("#notesmsg").textContent = n ? `${n.name}: ${k} setting${k === 1 ? "" : "s"}, ${t} note${t === 1 ? "" : "s"}` : "";
+  $("#notesclear").hidden = !n; S.preview = null; chipsRender();
+}
+async function loadNotes(path) {
+  $("#formerr").textContent = "";
+  if (!path) { showNotes(null); return; }
+  try { showNotes(await api(`/api/notes?path=${encodeURIComponent(path)}`)); }
+  catch (e) { showNotes(null); $("#formerr").textContent = e.message; }
+}
+$("#notesload").onclick = () => loadNotes($("#notespath").value.trim());
+$("#notesup").onclick = () => $("#notesfile").click();
+$("#notesfile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { showNotes(await upload("notes", f, $("#notesmsg"))); } catch (err) { $("#formerr").textContent = err.message; }
+  e.target.value = "";
+};
+$("#notesclear").onclick = () => showNotes(null);
+
 // ---------- the tops file ----------
 async function loadTops(path) {
   $("#topsmsg").textContent = ""; $("#formerr").textContent = "";
@@ -1109,10 +1142,32 @@ function formInputs() {
   if ($("#maxsteps").value) inputs.max_steps = +$("#maxsteps").value;
   if ($("#depth").value) inputs.depth = $("#depth").value;
   if (S.interp && Object.keys(S.interp).length) inputs.interpretation = {...S.interp};
+  if (S.notes) inputs.field_notes = S.notes.path;
   return inputs;
 }
 // ---------- interpretation settings: what Petrophys interprets the well with, and the zone rule ----------
-Object.assign(S, {interp: {}, schema: null, preview: null, previewErr: "", igroup: "zones", iquery: ""});
+// S.interp is what the open dialog edits: the form's settings (a new conversation), or, opened on a conversation
+// (S.iconv: its inputs), the settings its next questions run under; S.pending holds those until the next question.
+Object.assign(S, {interp: {}, schema: null, preview: null, previewErr: "", igroup: "zones", iquery: "", iconv: null, pending: null});
+function ipInputs() {                      // the well and interval the dialog previews on
+  if (!S.iconv) return formInputs();
+  const i = S.iconv, out = {las: i.las, interval: i.interval || {mode: "whole"}};
+  for (const k of ["lithology_curve", "profile"]) if (i[k]) out[k] = i[k];      // (the settings in force hold the notes')
+  if (Object.keys(S.interp).length) out.interpretation = {...S.interp};
+  return out;
+}
+function convSettings(j) {                 // the settings in force in this run's conversation (its latest question's)
+  const c = convOf(j), last = c && c.turns.length ? c.turns[c.turns.length - 1] : null;
+  return {...((last && last.interpretation) || (j && j.inputs && j.inputs.interpretation) || {})};
+}
+function setDiff(a, b) {                   // [{key, from, to}] between two settings tables
+  const keys = [...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])];
+  return keys.filter(k => JSON.stringify((a || {})[k]) !== JSON.stringify((b || {})[k])).map(k => ({key: k, from: (a || {})[k], to: (b || {})[k]}));
+}
+function setWords(changes) {               // a change in words: "m default → 1.8"
+  const v = (k, x) => { const f = ifield(k); return x == null ? "default" : f ? ishow(f, x) : String(x); };
+  return changes.map(c => `${(ifield(c.key) || {}).label || c.key} ${v(c.key, c.from)} → ${v(c.key, c.to)}`).join("; ");
+}
 const FT = 0.3048;
 const depthUnit = () => (S.preview && S.preview.unit) || (S.las && S.las.depth_unit) || "m";
 async function interpSchema() { if (!S.schema) S.schema = await api("/api/settings"); return S.schema; }
@@ -1133,7 +1188,8 @@ function idefault(f) {
 }
 function idHtml(f) {
   const has = f.key in S.interp, used = S.preview && S.preview.used && S.preview.used[f.key];
-  return `<span>Default: ${esc(idefault(f))}</span>${used ? `<span class="tw">This well: ${esc(ishow(f, used.value))} <span class="subtle">(${esc(used.step)} step)</span></span>` : ""}${has ? `<button class="link" data-ireset="${esc(f.key)}">Reset to default</button>` : ""}<span class="err" data-ierr="${esc(f.key)}"></span>`;
+  const fn = !S.iconv && S.notes && S.notes.settings && f.key in S.notes.settings ? S.notes.settings[f.key] : undefined;
+  return `<span>Default: ${esc(idefault(f))}</span>${fn !== undefined ? `<span class="tw">Field notes: ${esc(ishow(f, fn))}${has ? " <span class=\"subtle\">(your value is used instead)</span>" : ""}</span>` : ""}${used ? `<span class="tw">This well: ${esc(ishow(f, used.value))} <span class="subtle">(${esc(used.step)} step)</span></span>` : ""}${has ? `<button class="link" data-ireset="${esc(f.key)}">Reset to default</button>` : ""}<span class="err" data-ierr="${esc(f.key)}"></span>`;
 }
 function irow(f) {
   const v = S.interp[f.key], has = f.key in S.interp, k = esc(f.key);
@@ -1152,7 +1208,7 @@ function irow(f) {
     <div class="ic">${ctl}</div><div class="id">${idHtml(f)}</div></div>`;
 }
 function iwellHtml(busy) {
-  const inp = formInputs();
+  const inp = ipInputs();
   if (!inp.las) return `<span class="wn subtle">Load a LAS file (step 1) to preview the interpretation on it: the zones you get and the values Petrophys takes for this well.</span>`;
   if (S.previewErr) return `<span class="wn" style="color:#c0392b">${esc(S.previewErr)}</span>`;
   const p = S.preview;
@@ -1168,7 +1224,7 @@ let ipSeq = 0, ipTimer = null;
 function ischedule() { clearTimeout(ipTimer); ipTimer = setTimeout(interpPreview, 650); }
 async function interpPreview() {
   const box = $("#iwell"); if (!box) return;
-  const inp = formInputs(); delete inp.question;
+  const inp = ipInputs(); delete inp.question;
   if (!inp.las) { S.preview = null; box.innerHTML = iwellHtml(); return; }
   const seq = ++ipSeq; S.previewErr = ""; box.innerHTML = iwellHtml(true);
   try { const r = await post("/api/preview", inp); if (seq !== ipSeq) return; S.preview = r; }
@@ -1221,21 +1277,25 @@ function imainRender() {
   $$("#imain [data-row]").forEach(iwireRow);
   main.scrollTop = 0;
 }
-async function interpOpen() {
+async function interpOpen(mode) {
   try { await interpSchema(); } catch (e) { toast(e.message); return; }
+  if (mode === "conv" && S.last) {         // the open conversation: its settings, changed from the next question on
+    S.iconv = S.last.inputs || {}; S.formInterp = S.interp;
+    S.interp = {...(S.pending ? S.pending.settings : convSettings(S.last))}; S.preview = null;
+  }
   let m = $("#idlg");
   if (!m) { m = document.createElement("div"); m.id = "idlg"; m.className = "idlg-scrim"; document.body.appendChild(m); }
   m.hidden = false;
   const lib = (S.schema.petrophys || "").split("@")[0];
   m.innerHTML = `<div class="idlg" role="dialog" aria-modal="true" aria-labelledby="idlgt">
     <div class="idlg-head"><div><h2 id="idlgt"><img src="/img/petrophys_mark.png" alt="">Interpretation settings</h2>
-      <p>Petrophys interprets the LAS before the model reads it. Each setting shows its default; a value you set is used instead, and the well is interpreted again with it. The run records every value it used.${lib ? ` <span class="subtle">Petrophys ${esc(lib)}</span>` : ""}</p></div>
+      <p>${S.iconv ? "Settings for the rest of this conversation. From your next question the well is interpreted again with them; earlier answers keep the settings they were made with, and say so." : "Petrophys interprets the LAS before the model reads it. Each setting shows its default; a value you set is used instead, and the well is interpreted again with it. The run records every value it used."}${lib ? ` <span class="subtle">Petrophys ${esc(lib)}</span>` : ""}</p></div>
       <button class="x" id="iclose" aria-label="Close">×</button></div>
     <div class="idlg-well" id="iwell"></div>
     <div class="idlg-body"><nav class="idlg-nav" aria-label="Setting groups"><input type="search" id="iq" placeholder="Search settings" value="${esc(S.iquery)}"><div id="ignav" style="display:contents"></div></nav>
       <div class="idlg-main" id="imain"></div></div>
     <div class="idlg-foot"><span id="ichg">${Object.keys(S.interp).length} changed</span><button class="link" id="ireset">Reset all</button><span class="grow"></span>
-      <button class="btn fix" id="iprev">Preview on this well</button><button class="btn primary fix" id="idone">Done</button></div></div>`;
+      <button class="btn fix" id="iprev">Preview on this well</button><button class="btn primary fix" id="idone">${S.iconv ? "Use from the next question" : "Done"}</button></div></div>`;
   inavRender(); imainRender();
   $("#iq").oninput = e => { S.iquery = e.target.value; imainRender(); inavRender(); };
   $("#iclose").onclick = $("#idone").onclick = interpClose;
@@ -1245,7 +1305,15 @@ async function interpOpen() {
   interpPreview();
   const first = $("#imain input, #imain select"); if (first) first.focus();
 }
-function interpClose() { const m = $("#idlg"); if (m) { m.hidden = true; m.innerHTML = ""; } isumRender(); }
+function interpClose() {
+  const m = $("#idlg"); if (m) { m.hidden = true; m.innerHTML = ""; }
+  if (S.iconv) {                           // a conversation's settings: kept for its next question, if they differ
+    const now = convSettings(S.last), root = (S.last && S.last.conversation && S.last.conversation.root) || (S.last && S.last.id);
+    S.pending = setDiff(now, S.interp).length ? {root, settings: {...S.interp}} : null;
+    S.interp = S.formInterp || {}; S.iconv = null; S.preview = null;
+  }
+  isumRender();
+}
 document.addEventListener("keydown", e => { const m = $("#idlg"); if (e.key === "Escape" && m && !m.hidden) interpClose(); });
 
 // ---------- the composer: the question at the bottom; a new conversation, or the next question of the one open ----------
@@ -1273,16 +1341,22 @@ function chipsRender() {
   if (j && !R.run && j.conversation && (S.followId || running)) {   // a conversation on screen: its setup, locked
     const inp = j.inputs || {}, chosen = Object.keys(inp.interpretation || {}).length;
     const c = convOf(j), n = c && c.turns.length ? c.turns[c.turns.length - 1].turn : ((j.conversation && j.conversation.thread) || []).length || 1;
+    const now = convSettings(j), root = (j.conversation && j.conversation.root) || j.id;
+    if (S.pending && S.pending.root !== root) S.pending = null;
+    const pend = S.pending ? setDiff(now, S.pending.settings) : [], nNow = Object.keys(now).length;
     box.innerHTML = `<span class="cchip lock" title="This conversation's well and interval"><span class="k">Well</span><span class="v">${esc(wellName(inp))} · ${esc(intervalName(inp))}</span></span>
-      <span class="cchip lock">${mark}<span class="v">${chosen ? `${chosen} interpretation setting${chosen > 1 ? "s" : ""} changed` : "Petrophys defaults"}</span></span>
+      <button class="cchip${pend.length ? " pend" : ""}" id="cset" title="Change the interpretation settings for the next questions"${running ? " disabled" : ""}>${mark}<span class="v">${pend.length ? `${pend.length} change${pend.length > 1 ? "s" : ""} from the next question` : nNow ? `${nNow} interpretation setting${nNow > 1 ? "s" : ""} changed` : "Petrophys defaults"}</span><span class="k">· change</span></button>
       <button class="cchip ghost" id="cnew">+ New conversation</button>`;
     $("#cmode").innerHTML = running ? `Question ${turnNo(j) || n} is being answered<span class="long">; ask the next one when it finishes</span>.` :
+      pend.length ? `Continues this conversation as question ${n + 1}, with ${esc(setWords(pend))}<span class="long">: the well is interpreted again with it; earlier answers keep their settings</span>. <button class="link" id="cundo">Keep the settings</button>` :
       `Continues this conversation as question ${n + 1}<span class="long">: the same well, interval and settings, with the results already found</span>.`;
     $("#cnew").onclick = newFrom;
+    $("#cset").onclick = e => { e.stopPropagation(); interpOpen("conv"); };
+    const undo = $("#cundo"); if (undo) undo.onclick = () => { S.pending = null; chipsRender(); };
   } else {
     box.innerHTML = `<button class="cchip${S.las ? "" : " want"}" data-open="well"><span class="k">Well</span><span class="v">${esc(S.las ? S.las.name : "Choose a LAS file")}</span></button>
       <button class="cchip" data-open="interval"><span class="k">Interval</span><span class="v">${esc(intervalNow())}</span></button>
-      <button class="cchip${nI ? " on" : ""}" id="cinterp">${mark}<span class="k">Interpretation</span><span class="v">${nI ? `${nI} changed` : "Petrophys defaults"}</span></button>
+      <button class="cchip${nI || S.notes ? " on" : ""}" id="cinterp">${mark}<span class="k">Interpretation</span><span class="v">${S.notes ? `${esc(S.notes.name)}${nI ? ` + ${nI} changed` : ""}` : nI ? `${nI} changed` : "Petrophys defaults"}</span></button>
       <button class="cchip${optionsSet() ? " on" : ""}" data-open="options"><span class="k">Options</span><span class="v">${optionsSet() ? `${optionsSet()} set` : "defaults"}</span></button>`;
     $("#cmode").textContent = running ? "" : S.las ? "Starts a new conversation about this well and interval." : "Choose a LAS file to start.";
     $$("#cchips [data-open]").forEach(b => b.onclick = e => { e.stopPropagation(); sheet(b.dataset.open); });
@@ -1316,7 +1390,7 @@ function composerFor(j) {                   // after each render: a finished ans
 }
 function newConversation() {
   clearTimeout(S.poll); replayStop();
-  S.job = null; S.last = null; S.followId = null; S.sig = "";
+  S.job = null; S.last = null; S.followId = null; S.sig = ""; S.pending = null;
   history.replaceState(null, "", location.pathname);
   emptyPage(); chipsRender(); $("#question").focus();
 }
@@ -1332,10 +1406,10 @@ async function ask() {
   if (!q) { $("#formerr").textContent = "Write the question first."; $("#question").focus(); return; }
   const btn = $("#ask"); btn.disabled = true;
   try {
-    const body = S.followId ? {follow: S.followId, question: q} : formInputs();
+    const body = S.followId ? {follow: S.followId, question: q, ...(S.pending ? {interpretation: S.pending.settings} : {})} : formInputs();
     if (!S.followId && !body.las) { sheet("well"); throw new Error("Choose a LAS file first."); }
     const {id} = await post("/api/ask", body);
-    $("#question").value = ""; autosize(); sheet(null);
+    $("#question").value = ""; autosize(); sheet(null); S.pending = null;
     S.pinned = false; openRun(id); loadRuns();
   } catch (e) { $("#formerr").textContent = e.message; }
   finally { btn.disabled = false; chipsRender(); }
@@ -1356,7 +1430,12 @@ async function fillForm(inputs) {
   $("#skills").value = ["default", "none"].includes(sk) ? sk : "path"; $("#skillspath").value = ["default", "none"].includes(sk) ? "" : sk; $("#skills").onchange();
   $("#maxsteps").value = inputs.max_steps || "";
   $("#depth").value = inputs.depth === "investigate" ? "investigate" : "";
-  S.interp = {...(inputs.interpretation || {})}; S.preview = null; chipsRender(); autosize(); $("#question").focus();
+  S.interp = {...(inputs.interpretation || {})}; S.preview = null;
+  if (inputs.field_notes) {                  // the notes file it ran with; its settings are in the interpretation
+    await loadNotes(typeof inputs.field_notes === "string" ? inputs.field_notes : inputs.field_notes.path);
+    if (S.notes) for (const [k, v] of Object.entries(S.notes.settings || {})) if (JSON.stringify(S.interp[k]) === JSON.stringify(v)) delete S.interp[k];
+  } else showNotes(null);
+  chipsRender(); autosize(); $("#question").focus();
 }
 
 // ---------- endpoints and the queue ----------
@@ -1572,7 +1651,7 @@ function render() {
     ${R.run ? `<span class="hint" style="margin:0">Replay at ${R.speed}× · ${fmtS(R.t)} of ${fmtS(replayEnd())}</span><button class="link" id="stopreplay">Show the run</button>` : ""}
     ${finished && !R.run ? `<a class="link" href="/api/run/${esc(j.id)}/answer.md" target="_blank">answer.md</a><a class="link" href="/api/run/${esc(j.id)}/trace.json" target="_blank">trace.json</a>` : ""}
     <button class="link" id="reuse">Ask again or edit →</button></div>
-    ${phases(j, m)}</div>
+    ${settingsLine(j)}${phases(j, m)}</div>
     <div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? "on" : ""}">${esc(l)}</button>`).join("")}</div><div class="pane">`;
   if (S.tab === "main" || S.tab === "answer") html += mainPane(j, m, res, finished, calls);
   else if (S.tab === "story") html += storyPane(j, m, res, finished, calls);
@@ -1876,6 +1955,13 @@ function basisHtml(res) {
 }
 // ---------- the conversation: the earlier questions stay on screen, each a box that opens to its answer ----------
 Object.assign(S, {conv: null, convKey: "", turnOpen: {}, turnsAll: false});
+function settingsLine(j) {                 // a question that changed the conversation's settings says so
+  const r = j.result && j.result.settings_changes, ch = (r && r.changed) || [];
+  const mark = '<img src="/img/petrophys_mark.png" alt="">';
+  if (ch.length) return `<div class="setchg">${mark}<span><b>Settings changed for this question:</b> ${esc(setWords(ch))}. The well was interpreted again; earlier answers rest on the earlier settings.</span></div>`;
+  if (j.inputs && j.inputs.adopt && !j.result) return `<div class="setchg">${mark}<span><b>Changing the settings for this question</b>: the well is interpreted again first.</span></div>`;
+  return "";
+}
 function convOf(j) {                         // the conversation fetched for this run's, if it is this run's
   const root = (j && j.conversation && j.conversation.root) || (j && j.id);
   return S.conv && S.conv.root === root ? S.conv : null;
@@ -1895,14 +1981,15 @@ function turnNo(j) {
 function gist(answer) {                      // the answer's first sentence, as plain text
   const a = answerSections(answer), k = a.secs.find(x => /^answer\b/i.test(x.head)) || a.secs[0];
   const para = k ? k.body.trim().split(/\n\s*\n/)[0].replace(/\s+/g, " ") : "";
-  return para.split(/(?<=[.!?])\s+(?=[A-Z(*])/)[0].replace(/\*\*|__|`/g, "").replace(/^#+\s*/, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  return para.split(/(?<=[.!?])\s+(?=[A-Z(*])/)[0].replace(/\*\*|__|`/g, "").replace(/^(#+|[-*+]|\d+[.)])\s+/, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
 }
-function turnHtml(t) {
+function turnHtml(t, later) {
   const done = t.status === "done" && t.answer, live = ["queued", "running"].includes(t.status);
+  const chg = (later || []).find(u => u.turn > t.turn && (u.settings_changed || []).length);
   const g = done ? gist(t.answer) : live ? "Being answered…" : t.status === "error" ? "No answer: the run failed." : `No answer (${t.status}).`;
   const a = done ? answerSections(t.answer) : null;
   return `<details class="turn${live ? " live" : ""}" data-tid="${esc(t.id)}"${S.turnOpen[t.id] ? " open" : ""}>
-    <summary><span class="tn">${t.turn}</span><span class="twrap"><span class="tq">${esc(t.question)}</span><span class="tg">${esc(g)}</span></span><span class="tchev">▶</span></summary>
+    <summary><span class="tn">${t.turn}</span><span class="twrap"><span class="tq">${esc(t.question)}${chg ? `<span class="tbefore" title="${esc(setWords(chg.settings_changed))}">before the settings change at question ${chg.turn}</span>` : ""}</span><span class="tg">${esc(g)}</span></span><span class="tchev">▶</span></summary>
     <div class="tbody">${a ? a.secs.map(x => `${x.head ? `<h3 class="ah">${inline(x.head)}</h3>` : ""}<div class="prose">${md(x.body)}</div>`).join("") : `<p class="hint">${esc(g)}</p>`}
       ${t.figures && t.figures.length ? `<div class="tfigs">${t.figures.map(f => `<a href="/api/run/${esc(t.id)}/figures/${esc(f.file)}" target="_blank" rel="noopener" title="${esc(f.caption)}"><img src="/api/run/${esc(t.id)}/figures/${esc(f.file)}" alt="${esc(f.caption)}" loading="lazy"></a>`).join("")}</div>` : ""}
       <div class="tlinks"><button class="link" data-openrun="${esc(t.id)}">Open this question's page: its evidence, logs and how it was computed →</button>
@@ -1914,7 +2001,7 @@ function turnsHtml(j) {
   const hidden = S.turnsAll || before.length <= 3 ? 0 : before.length - 2;
   let html = "";
   if (before.length) html += `<div class="thd"><span>Earlier in this conversation</span>${hidden ? `<button class="link" id="turnsall">Show ${hidden} earlier question${hidden > 1 ? "s" : ""}</button>` : ""}</div>` +
-    before.slice(hidden).map(turnHtml).join("");
+    before.slice(hidden).map(t => turnHtml(t, [...before, ...(convOf(j) ? convOf(j).turns : [])].filter(u => u.turn <= (turnNo(j) || 1e9)))).join("");
   if (after.length) {
     const last = after[after.length - 1];
     html += `<div class="turnsnote">The conversation went on after this question, to question ${last.turn}. <button class="link" data-openrun="${esc(last.id)}">Open the latest →</button></div>`;

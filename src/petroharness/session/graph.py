@@ -93,6 +93,10 @@ def turn(state: State, runtime: Runtime[Ctx]) -> dict:
     trace = got["trace"]
     trace["answer"] = got["answer"]
     trace["setup"] = c.setup.hash()
+    changes = c.changes() if c.p is not None else []
+    if changes:                                           # the settings changed in this conversation: in force, and how
+        trace["settings"] = {"turn": n, "in_force": c.settings, "sources": c.sources(), "changes": changes,
+                             "changed": [x for e in changes if e["turn"] == n for x in e["changes"]]}
     if c.p is not None:
         trace["ask"] = A.ask_record(c.p, state["question"], state["sent"], trace)
     items = c.live.ledger.items[state["start"]:] if c.live is not None else []
@@ -162,6 +166,8 @@ def commit(state: State, runtime: Runtime[Ctx]) -> dict:
            "prompt_tokens": sum(u.get("prompt_tokens") or 0 for u in usage),
            "completion_tokens": sum(u.get("completion_tokens") or 0 for u in usage),
            "seconds": trace.get("seconds")}
+    if (trace.get("settings") or {}).get("changed"):       # the settings were changed for this question
+        rec["settings_changed"] = trace["settings"]["changed"]
     if not settled and state.get("cited"):                # a short answer: the results it was read from (it has no
         rec["read_from"] = list(state["cited"])           # claims to cite them by); the next question is shown them
     if c.p is not None:

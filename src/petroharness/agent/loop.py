@@ -289,6 +289,19 @@ class Session:
         f = Formation(from_view(view, store), view, store)
         return cls(task, f, render(f.inv), Ledger(f), library=direction.plugged(cfg))
 
+    def rewell(self, task, cfg, change: str) -> None:
+        """A conversation's settings changed: the well as Petrophys interpreted it again (`task`: the new prepared
+        well), read from here on; the ledger goes on and marks what was opened before (Ledger.rewell)."""
+        from petroharness.well.view import FormationView
+        from petroharness.record.store import build as build_store
+        from petroharness.agent.inventory import from_view
+        view = FormationView.build(task, cfg)
+        store = build_store(view)
+        self.f = Formation(from_view(view, store), view, store)
+        self.ledger.rewell(self.f, change)
+        self.task = task
+        self.map = render(self.f.inv)
+
     def next_turn(self, task, earlier: str) -> None:
         """A further question of the same conversation: the well, the ledger and its ids stay (results opened before
         are read with get and find, and may be cited); the question's own state (topics, points, claims, guides)

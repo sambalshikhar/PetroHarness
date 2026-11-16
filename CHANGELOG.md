@@ -44,6 +44,21 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
   number to see its path. **Interpretation settings**: every setting `petrophys.interpret` takes, with Petrophys's
   own help, choices and defaults, and the harness's zone rule (minimum zone thickness, shale-volume bands), previewed
   on the well before asking; the API's `ask(..., interpretation=)` takes the same settings. `docs/UI.md`.
+- **Changing a setting in a conversation.** A setting changed mid-conversation (`/set m=1.8` in `petroharness chat`,
+  `Conversation.adopt`, or the web UI's Interpretation chip) holds from the next question on: the well is interpreted
+  again as a new generation, the ledger goes on and marks what was opened before as resting on the earlier settings
+  (the same call asked again is computed anew), the next questions' prompts and the answer's header name the change,
+  the log keeps it (a `settings` event, replayed on resume), and the evidence graph gives each answer the curves and
+  parameters of its own generation. A conversation without a change sends the requests it sent before (the public
+  mini set and the golden tapes replay unchanged). Seen live on K2-Horizon-7B: m 2 -> 1.8 on a conversation's fifth
+  question; the answer cited m = 1.8 from the saturation step and compared its SW with the earlier result. Not
+  judged on the benchmark: a benchmark question never changes a setting. `docs/SESSIONS.md`.
+- **Field notes.** A YAML file of a team's standing choices for a field (`name`, `settings`, `notes`): its settings in
+  force from the start under the user's own, each marked as the field notes'; its notes with every question as the
+  user's statement; named in the answer's header; kept in the log (content and SHA-256). `--field-notes`, `field_notes=`,
+  the web UI's Options. Never in a benchmark run. `docs/SESSIONS.md`.
+- **Fix: a cutoff set in the settings panel** (VCL, SW or porosity) no longer stops the interpretation: the policy the
+  view describes the well with takes the user's cutoff, as Petrophys used it.
 - **Answers carry no evidence ids.** The delivered answer has no evidence id in any form a model writes one: a
   bracket that cites and says something keeps what it says ("(E10, n = 161)" becomes "(n = 161)"), a label naming
   part of the writer's input goes with its id, and an id used as a noun becomes "the result". On the 3,123 saved

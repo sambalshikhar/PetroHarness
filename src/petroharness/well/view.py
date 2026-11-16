@@ -167,6 +167,22 @@ def fmt_pct(p: float, decimals: int = 0, sign: bool = True) -> str:
     return text + ("%" if sign else "")
 
 
+
+def user_cutoffs(policy: dict, interpret: Optional[dict]) -> dict:
+    """The policy this view describes the well with, under the user's cutoffs: a VCL, SW or porosity cutoff the user
+    set (an interpretation setting, in petrophys.interpret's options) is the one Petrophys used, so the policy's cutoff
+    follows it for this view (the card and the checks quote the cutoffs the interpretation used). Unchanged without one."""
+    opts, cut = interpret or {}, dict(policy.get("cutoffs") or {})
+    over = {}
+    if opts.get("vcl_cutoff") is not None:
+        over["vcl_max"] = opts["vcl_cutoff"]
+    if opts.get("sw_cutoff") is not None:
+        over["sw_max"] = opts["sw_cutoff"]
+    if opts.get("phie_cutoff") is not None:
+        over["phie_min_clastic"] = over["phie_min_carbonate"] = opts["phie_cutoff"]
+    changed = {k: v for k, v in over.items() if cut.get(k) != v}
+    return {**policy, "cutoffs": {**cut, **changed}} if changed else policy
+
 @dataclass
 class FormationView:
     """One formation in one well. Depths (`depth`, `interval`, zones) are in the reporting unit (`report_unit`, metres by default);
@@ -203,7 +219,7 @@ class FormationView:
     @classmethod
     def build(cls, task: Task, cfg: Optional[HarnessConfig] = None) -> "FormationView":
         cfg = cfg or HarnessConfig()
-        policy = load_policy(cfg.resources.policy_file)
+        policy = user_cutoffs(load_policy(cfg.resources.policy_file), cfg.data.interpret)
         prep, interval, scale, unit, rep_m = _prepare_in_metres(task, policy, cfg)
         depth = prep.depth * scale if scale != 1.0 else prep.depth
         mask = interval.contains(depth)

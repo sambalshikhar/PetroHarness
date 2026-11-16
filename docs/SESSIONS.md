@@ -102,7 +102,8 @@ in `Turn.basis`.
 A conversation lives in one folder (`--session DIR`; by default `./petroharness-sessions/<LAS name>-<time>`):
 
 ```text
-log.jsonl              the events, in order: session_start, display, question, result, figure, turn_end, session_resume
+log.jsonl              the events, in order: session_start, display, question, result, figure, turn_end, settings,
+                       session_resume
 overview.png           the interval's log display by Petrophys, drawn when the conversation starts
 blobs/                 the texts the events name (each result as shown, each answer), kept once, by SHA-256
 turns/01/answer.md     question 1's answer with its header, figures, methods and parameters
@@ -121,7 +122,8 @@ turns/01/figures/      its figures
 | `question` | The question and its task |
 | `result` | One result the question opened: its id (E1, E2, ...), the tool, the arguments, the SHA-256 of its text |
 | `figure` | One figure drawn: its kind, the result it draws, its caption, its file |
-| `turn_end` | The question's summary: status, how the answer opens, the settled claims with the results they cite, the results opened, steps, model calls, tokens, seconds |
+| `turn_end` | The question's summary: status, how the answer opens, the settled claims with the results they cite, the results opened, steps, model calls, tokens, seconds (and the settings changed for it, when they were) |
+| `settings` | A settings change: the question it takes effect at, what changed (from, to), who asked, the settings now in force, and the zones the well was interpreted into |
 | `session_resume` | A resume: the questions and results rebuilt, and any difference found |
 
 ## Resume
@@ -132,7 +134,64 @@ petroharness chat --resume DIR
 
 The well is prepared again from the cache, and every recorded result is opened again in order. Each must come back
 with the same id and the same text. A difference (for example after a Petrophys upgrade) is written to the
-`session_resume` event and the conversation goes on.
+`session_resume` event and the conversation goes on. A settings change is replayed where it was made, so the results
+opened after it are opened again on the well as it was interpreted then.
+
+## Changing a setting
+
+The interpretation settings (the ones the web UI's settings panel lists: Petrophys's, such as `m`, `rw` and the
+cutoffs, and the zone rule) can change in the middle of a conversation. A change holds from the next question on:
+
+```text
+question> What is the mean water saturation of zone Z3?
+question> /set m=1.8
+from question 2: m the default -> 1.8 (the well was interpreted again)
+question> And now?
+question> /settings
+settings in force: m=1.8
+changed before question 2: m the default -> 1.8
+```
+
+`/set name=value` takes several pairs at once; `name=default` takes a setting back to its default. In Python it is
+`c.adopt({"m": 1.8})` (None for the default), which returns what changed.
+
+What happens:
+
+- **The well is interpreted again** under the settings now in force: a new generation of its curves. Every later
+  question reads it.
+- **The ledger goes on.** Its ids continue. A result opened before the change says, whenever it is read again, that it
+  rests on the earlier settings, and the same call asked again is computed anew on the new well.
+- **The change is said.** The next questions' prompts carry it in EARLIER IN THIS SESSION ("Settings changed before
+  question 2 (by the user): m the default -> 1.8. The well was interpreted again with them. Results E1 to E9 and
+  the answers before rest on the earlier settings"). The answer's header names the change, and its methods and
+  parameters show the values used.
+- **It is in the log** as a `settings` event (what changed, from, to, who asked, which question), replayed in its place
+  on resume, and in the audit trail ([EVIDENCE.md](EVIDENCE.md)): each answer's trail shows the parameters it was
+  made with.
+- **Nothing changes without it.** A conversation with no change sends the requests it sent before; a question about a
+  method ("what if m were 1.8?") is answered as a comparison and changes nothing.
+
+## Field notes
+
+A field notes file holds a team's standing choices for a field or project:
+
+```yaml
+name: North field, 2026 study
+settings:              # interpretation settings in force from the start (the settings panel's names)
+  m: 1.8
+  rw: 0.04
+  sw_cutoff: 0.6
+notes:                 # standing choices in words, read with every question
+  - Report water saturation from the Indonesia model.
+  - Call the upper sand the A sand.
+```
+
+Give it with `--field-notes FILE` (`petroharness` and `petroharness chat`), `field_notes=` in Python, or in the web
+UI's Options. Its settings are in force from the start, each marked as coming from the field notes; settings you give
+at the start take precedence, and a later change is yours. Its notes reach the model with every question as your
+statement, as `--formation-lithology` does. The answer's header names the notes. The log keeps what the file held
+(and its SHA-256), so a conversation resumed later does not read the file again. What is wrong in the file is said
+entry by entry, with the fix. A benchmark run never reads field notes.
 
 ## In Python
 
@@ -149,7 +208,12 @@ for figure in second.figures:
 
 later = Conversation.resume("my-session", model_url="http://HOST:PORT/v1")
 later.ask("Now relate water saturation to porosity.")
+later.adopt({"m": 1.8})                      # from the next question on (None: back to the default)
+later.ask("And the water saturation now?")
+print(later.settings, later.sources(), later.changes())
 ```
+
+`Conversation.start(..., field_notes="north.yaml")` starts under a field notes file.
 
 `Turn` has `number`, `question`, `answer`, `status`, `trace`, `folder`, `figures` and `basis`.
 
@@ -181,5 +245,7 @@ question a full investigation, start with `--investigate` ([GRAPH.md](GRAPH.md),
 ## Limits today
 
 - One interval per conversation. Another interval of the same well is another conversation.
-- A what-if is a comparison. It does not change the settings later questions use.
+- A what-if is a comparison. It does not change the settings later questions use; `/set` (or the web UI's settings,
+  or `adopt`) does.
+- A settings change is the user's action. The model does not change settings itself when asked in words.
 - A later question costs about as many model calls as a first question when it needs new results.

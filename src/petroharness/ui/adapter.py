@@ -219,11 +219,30 @@ def arguments(inputs: dict) -> dict:
             raise InputError("WHAT: Petrophys settings with a context profile. WHY: a profile fixes its own settings. "
                              "FIX: choose no profile, or reset the Petrophys settings.")
         kw["interpretation"] = dict(chosen)
+    notes = str(inputs.get("field_notes") or "").strip()
+    if notes:                                     # checked now: the file, its settings, and a profile's conflict
+        info = notes_info(notes)
+        from petroharness.well import settings as T
+        if kw.get("profile") and T.split(info["settings"])[0]:
+            raise InputError("WHAT: field notes with Petrophys settings and a context profile. WHY: a profile fixes "
+                             "its own settings. FIX: choose no profile, or field notes without Petrophys settings.")
+        kw["field_notes"] = info["path"]
     return kw
 
 
 PREPARE_KEYS = ("formation", "tops", "top", "base", "depth_unit", "lithology_curve", "formation_lithology", "profile",
                 "skills", "interpretation")
+
+
+def notes_info(path) -> dict:
+    """A field notes file as the page shows it: {path, name, settings, notes}, checked (petroharness.well.notes)."""
+    from petroharness.well.notes import load
+    p = _file(path, "field notes file")
+    try:
+        n = load(p)
+    except (ValueError, OSError) as exc:
+        raise InputError(str(exc)) from None
+    return {k: n[k] for k in ("path", "name", "settings", "notes")}
 
 
 def preview(inputs: dict, cache: Path) -> dict:
@@ -235,6 +254,9 @@ def preview(inputs: dict, cache: Path) -> dict:
     from petroharness.well import settings as T
     kw = arguments({**inputs, "question": "(a preview of the interpretation)"})
     las = kw.pop("las")
+    if kw.get("field_notes"):                    # the field notes' settings, under the ones set here
+        from petroharness.well.notes import load
+        kw["interpretation"] = {**load(kw["field_notes"])["settings"], **(kw.get("interpretation") or {})}
     p = A.prepare(las, "preview", cache=cache, **{k: v for k, v in kw.items() if k in PREPARE_KEYS})
     A.check(p, A.task_for(p, "(the interval)")[0])
     view = p.view
@@ -379,6 +401,14 @@ def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | No
                                        on_view=plot)
             else:
                 c = Conversation.resume(session, model_url=model_url, llm_factory=factory, on_view=plot)
+                if job.inputs.get("adopt"):               # the settings to run under from this question on
+                    want = kw.get("interpretation") or {}
+                    delta = {k: v for k, v in want.items() if c.settings.get(k) != v}
+                    delta.update({k: None for k in c.settings if k not in want})
+                    made = c.adopt(delta, by="user")
+                    job.emit({"kind": "settings", "changes": made})
+            if c.settings or "interpretation" in job.inputs:   # what the question runs under (a follow-up: the
+                job.inputs["interpretation"] = c.settings     # settings in force, changed or not)
             shown = c.overview()                              # the interval's log display by Petrophys, once
             if shown is not None:
                 (out / "figures").mkdir(parents=True, exist_ok=True)
@@ -400,6 +430,8 @@ def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | No
         job.result["figures"] = [{"caption": g["caption"], "file": Path(g["file"]).name, "kind": g["kind"],
                                   "source": g["source"]} for g in turn.figures]
         job.result["basis"] = turn.basis
+        if turn.trace.get("settings"):                    # the conversation's settings changed: in force, and how
+            job.result["settings_changes"] = turn.trace["settings"]
         job.status = "done" if turn.ok else "error"
         if not turn.ok:
             job.error = str(turn.trace.get("error") or turn.status)

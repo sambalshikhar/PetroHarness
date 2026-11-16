@@ -371,7 +371,7 @@ def test_the_command_line(tmp_path, monkeypatch):
                   "top": None, "base": None, "depth_unit": "ft", "lithology_curve": "LITH",
                   "formation_lithology": "sandstone", "profile": None, "out": Path.cwd() / "petroharness-out" / "TW1",
                   "model_url": "http://h:8100/v1", "model": None, "model_card": None, "settings": None, "skills": None,
-                  "max_steps": None, "direct": True}
+                  "max_steps": None, "direct": True, "field_notes": None}
     kw = A.options(A.parser().parse_args(["--las", "a.las", "--question", "q", "--model", "Qwen/Qwen3-32B",
                                           "--investigate"]))
     assert (kw["model"], kw["model_card"], kw["direct"]) == ("Qwen/Qwen3-32B", None, False)

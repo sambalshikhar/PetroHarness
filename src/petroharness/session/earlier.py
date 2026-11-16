@@ -50,9 +50,22 @@ def entry(rec: dict, full: bool = True) -> str:
     return "\n".join(lines)
 
 
-def block(turns: list, budget: int = EARLIER_CHARS) -> str:
+def changed(change: dict, turns: list) -> str:
+    """A settings change of the conversation (its settings event) as the block names it, before the question it
+    took effect at: what changed, who asked, and the results that rest on the earlier settings."""
+    from petroharness.well.settings import describe
+    n = change["turn"]
+    ids = [x for r in turns if r["turn"] < n for x in r.get("opened") or []]
+    rest = (f" Results {ids[0]} to {ids[-1]} and the answers before rest on the earlier settings; read again, a result "
+            "says so." if len(ids) > 1 else f" Result {ids[0]} rests on the earlier settings." if ids else "")
+    return (f"Settings changed before question {n} (by the {change.get('by') or 'user'}): {describe(change['changes'])}. "
+            f"The well was interpreted again with them.{rest}")
+
+
+def block(turns: list, budget: int = EARLIER_CHARS, changes: list | None = None) -> str:
     """The block for the next question ("" before any question): the newest questions with their findings while the
-    budget lasts, older ones by question and opening, the oldest as a count."""
+    budget lasts, older ones by question and opening, the oldest as a count. `changes`: the conversation's settings
+    changes (its settings events), each named before the question it took effect at; none, no line."""
     if not turns:
         return ""
     head = C.text("C3", "earlier_head")
@@ -70,5 +83,10 @@ def block(turns: list, budget: int = EARLIER_CHARS) -> str:
     if left:
         out.append(f"Questions {left[0]} to {left[-1]}: {len(left)} earlier questions not shown here (find reads their "
                    "results)")
-    out += [kept[r["turn"]] for r in turns if r["turn"] in kept]
+    for r in turns:
+        out += [changed(c, turns) for c in changes or [] if c["turn"] == r["turn"]]
+        if r["turn"] in kept:
+            out.append(kept[r["turn"]])
+    last = turns[-1]["turn"]
+    out += [changed(c, turns) for c in changes or [] if c["turn"] > last]
     return "\n".join(out)

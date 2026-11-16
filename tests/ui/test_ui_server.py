@@ -150,6 +150,31 @@ def test_the_earlier_questions_stay_on_screen():
     assert "before" in _js_function(page, "turnsHtml") and "threadHtml" not in page
 
 
+def test_a_conversation_s_settings_change_from_the_composer():
+    """In an open conversation the interpretation chip opens the settings for its next questions (the dialog on the
+    conversation's own well and settings); the follow-up carries the settings to adopt; the run that changed them
+    says so, and earlier questions say they rest on the earlier settings."""
+    page = (U.STATIC / "index.html").read_text()
+    chips = _js_function(page, "chipsRender")
+    assert 'interpOpen("conv")' in chips and "S.pending" in chips
+    opened = _js_function(page, "interpOpen")
+    assert 'mode === "conv"' in opened and "convSettings(S.last)" in opened
+    assert "S.iconv" in _js_function(page, "ipInputs") and "ipInputs()" in _js_function(page, "interpPreview")
+    assert "interpretation: S.pending.settings" in _js_function(page, "ask")
+    assert "settingsLine(j)" in _js_function(page, "render")
+    assert "before the settings change at question" in _js_function(page, "turnHtml")
+
+
+def test_field_notes_are_chosen_in_the_options_and_sent_with_the_question():
+    """Options takes a field notes file (a path, or an upload of kind notes, checked by /api/notes); the form sends
+    its path; the settings panel shows the notes' value of a setting they set."""
+    page = (U.STATIC / "index.html").read_text()
+    assert 'id="notespath"' in page and 'id="notesfile"' in page and 'upload("notes"' in page
+    assert "/api/notes?path=" in _js_function(page, "loadNotes")
+    assert "inputs.field_notes = S.notes.path" in _js_function(page, "formInputs")
+    assert "Field notes: " in _js_function(page, "idHtml")
+
+
 def test_the_composer_continues_the_open_conversation():
     """One question box, docked at the bottom: while a finished answer of a conversation is open, the question asked
     there is that conversation's next (the server's follow); otherwise it starts a new conversation with the composer's
@@ -161,7 +186,7 @@ def test_the_composer_continues_the_open_conversation():
     follow = _js_function(page, "composerFor")
     assert 'j.status === "done"' in follow and "j.conversation" in follow and "S.followId" in follow
     ask = _js_function(page, "ask")
-    assert re.search(r"S\.followId \? \{follow: S\.followId, question: q\} : formInputs\(\)", ask)
+    assert "S.followId ? {follow: S.followId, question: q" in ask and ": formInputs();" in ask
     assert 'e.key === "Enter" && !e.shiftKey' in page
     fresh = _js_function(page, "newConversation")
     assert "S.followId = null" in fresh and "emptyPage()" in fresh

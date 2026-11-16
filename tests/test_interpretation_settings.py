@@ -104,3 +104,14 @@ def test_used_reads_the_step_record():
     assert got["gr_min"] == {"value": 40.8, "step": "vclay"} and "gr_curve" not in got
     assert got["phie_cutoff"] == {"value": 0.08, "step": "net_pay"}         # the cutoffs net pay used
     assert got["a"]["value"] == 0.81
+
+
+def test_the_policy_follows_the_users_cutoffs():
+    """A cutoff the user sets is the one Petrophys used: the view's policy takes it (its card and checks quote it, and
+    the check that the engine used the policy's cutoffs passes); without one the policy is the policy."""
+    from petroharness.well.view import user_cutoffs
+    pol = {"name": "p", "cutoffs": {"vcl_max": 0.35, "sw_max": 0.7, "phie_min_clastic": 0.08, "phie_min_carbonate": 0.05}}
+    assert user_cutoffs(pol, None) is pol and user_cutoffs(pol, {"vcl_cutoff": 0.35, "sw_cutoff": 0.7}) is pol
+    got = user_cutoffs(pol, {"sw_cutoff": 0.6, "phie_cutoff": 0.1})["cutoffs"]
+    assert got == {"vcl_max": 0.35, "sw_max": 0.6, "phie_min_clastic": 0.1, "phie_min_carbonate": 0.1}
+    assert pol["cutoffs"]["sw_max"] == 0.7                                   # the policy itself is untouched

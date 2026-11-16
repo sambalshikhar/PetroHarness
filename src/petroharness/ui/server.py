@@ -18,7 +18,8 @@ API (JSON):
                                     each tool's group
     GET  /api/las?path=             a LAS file's header (well, depth range and unit, curves)
     GET  /api/tops?path=[&las=&unit=]  the formations a tops file names, with the interval each would use
-    POST /api/upload?kind=las|tops  the file's bytes, header X-Filename -> {path, ...}
+    POST /api/upload?kind=las|tops|notes  the file's bytes, header X-Filename -> {path, ...}
+    GET  /api/notes?path=           a field notes file: its name, settings and notes, checked
     POST /api/ask                   the inputs (petroharness.ui.adapter) -> {id}
     GET  /api/job/<id>?since=N      status, the events from N on, then the answer and the result
     GET  /api/runs                  the runs, newest first (running and saved)
@@ -161,7 +162,11 @@ class App:
             if not (self.store.folder(root) / "session" / "log.jsonl").is_file():
                 raise A.InputError("WHAT: that run has no conversation to go on with (it was answered by an earlier "
                                    "version). FIX: ask its question again, then follow up on the new answer.")
+            change = inputs.get("interpretation") if "interpretation" in inputs else None
             inputs = {**prev["inputs"], "question": inputs.get("question"), "follow": follow}
+            inputs.pop("adopt", None)
+            if change is not None:                  # the settings to run under from this question on (adopted)
+                inputs.update(interpretation=change or {}, adopt=True)
         kwargs = A.arguments(inputs) | self.choice  # wrong inputs are said now, not after the queue
         job = A.Job(self.store.new_id(), inputs, kwargs)
         job.root = root or job.id
@@ -233,8 +238,9 @@ class App:
 
     def conversation(self, run_id: str) -> dict:
         """The conversation a run belongs to, as it stands now: every question of it in order (those asked after this
-        run's too, and one still waiting or running), each with its answer and its figures, for the page to keep the
-        earlier questions on screen. A question not yet run is numbered after the last one that ran."""
+        run's too, and one still waiting or running), each with its answer, its figures, the interpretation settings
+        it ran under and the settings changed for it, for the page to keep the earlier questions on screen. A question
+        not yet run is numbered after the last one that ran."""
         def record(i: str) -> dict:
             job = self.jobs.get(i)
             return job.record() if job is not None else self.store.load(i)
@@ -247,6 +253,8 @@ class App:
             turns.append({"id": r["id"], "turn": n, "question": (r.get("inputs") or {}).get("question", ""),
                           "status": r.get("status"), "created": r.get("created"), "elapsed": r.get("elapsed"),
                           "answer": r.get("answer") or "",
+                          "interpretation": (r.get("inputs") or {}).get("interpretation") or {},
+                          "settings_changed": (res.get("settings_changes") or {}).get("changed") or [],
                           "figures": [{"file": f.get("file"), "caption": f.get("caption", "")}
                                       for f in res.get("figures") or [] if isinstance(f, dict) and f.get("file")]})
         return {"root": root, "turns": turns}
@@ -376,8 +384,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(A.tops_info(q.get("path"), q.get("las") or None, q.get("unit") or None))
             if method == "POST" and what == "upload":
                 kind = q.get("kind", "las")
-                if kind not in ("las", "tops"):
-                    raise A.InputError("WHAT: upload kind. FIX: kind=las or kind=tops.")
+                if kind not in ("las", "tops", "notes"):
+                    raise A.InputError("WHAT: upload kind. FIX: kind=las, kind=tops or kind=notes.")
                 path = app.store.upload(kind, self.headers.get("X-Filename") or "", self._body(MAX_UPLOAD))
                 if kind == "las":
                     try:
@@ -385,7 +393,11 @@ class Handler(BaseHTTPRequestHandler):
                     except A.InputError:
                         path.unlink(missing_ok=True)
                         raise
+                if kind == "notes":
+                    return self._json(A.notes_info(path))
                 return self._json({"path": str(path), "name": path.name})
+            if method == "GET" and what == "notes":
+                return self._json(A.notes_info(q.get("path")))
             if method == "POST" and what == "ask":
                 return self._json({"id": app.submit(self._payload()).id})
             if method == "GET" and what == "job":

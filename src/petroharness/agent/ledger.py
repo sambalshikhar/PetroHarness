@@ -341,6 +341,9 @@ class Ledger:
         # read a curve a later question computed again (item id -> (curve, the item that computed it again))
         self.turn_start: int = 0
         self.superseded: dict = {}
+        # a conversation's settings change (petroharness.session: Conversation.adopt): the well was interpreted again;
+        # the items opened before it -> the change, in words ("the settings change before question 3: m 2 -> 1.8")
+        self.before: dict = {}
 
     def has(self, tool: str, args: dict) -> bool:
         """Whether an identical call is already opened."""
@@ -386,8 +389,20 @@ class Ledger:
                 if self._keys.get(e.key) is e:
                     del self._keys[e.key]
 
+    def rewell(self, f: Formation, change: str) -> None:
+        """The well interpreted again under changed settings: the items go on (their ids stay and continue), each
+        item opened so far says when read again that it rests on the earlier settings (`change`, in words), and the
+        same call asked again is computed anew on the new well instead of served from them."""
+        self.f = f
+        for e in self.items:
+            self.before.setdefault(e.id, change)
+        self._keys = {}
+
     def show(self, item: Item, new: bool = True) -> str:
         """The item whole: a call opened before shows its item again in full, never only a pointer to it."""
+        if item.id in self.before:                        # read again after the settings changed
+            return (f"[{item.id}] (opened before {self.before[item.id]}: these values rest on the earlier settings; "
+                    f"{item.call_text()}) {item.text}")
         if item.id in self.superseded:                    # read again after a later question computed its curve again
             curve, by = self.superseded[item.id]
             return (f"[{item.id}] (opened before {curve} was computed again in [{by}]: these are the earlier values; "
@@ -410,6 +425,8 @@ class Ledger:
         """The item in at most DIGEST_CHARS: itself when small; else its summary lines (verbatim, in order) and how to
         fetch the rest."""
         full = f"[{item.id}] {item.text}"
+        if item.id in self.before:                        # opened before the settings changed: said in its digest
+            full = f"[{item.id}] (before {self.before[item.id]}) {item.text}"
         section = item.tool == "section"
         if len(full) <= (SECTION_DIGEST_CHARS if section else DIGEST_CHARS):
             return full
@@ -449,7 +466,8 @@ class Ledger:
         zs = sorted(zones_in("\n".join(lines)), key=lambda z: int(z[1:]))
         what = (f"a zone ({zs[0]}-{zs[-1]})" if zs else "") + (", " if zs else "") + "a curve, class, parameter or depth"
         hint = f"  ({left} more lines: get {item.id} with find: {what})"
-        out = "\n".join([f"[{item.id}] {keep[0]}"] + keep[1:] + [hint])
+        mark = f"(before {self.before[item.id]}) " if item.id in self.before else ""
+        out = "\n".join([f"[{item.id}] {mark}{keep[0]}"] + keep[1:] + [hint])
         return out if len(out) < len(full) else full
 
     def get(self, eid, find: str) -> str:
@@ -465,7 +483,9 @@ class Ledger:
         if not out:
             names = ", ".join(_names(item)[:MISS_NAMES])
             return f"[{item.id}] nothing in {item.id} matches {find} ({read_as(find)})" + (f"; its names: {names}" if names else "")
-        text = "\n".join([f"[{item.id}] {item.call_text()} (find: {find})"] + out)
+        mark = (f" (opened before {self.before[item.id]}: these values rest on the earlier settings)"
+                if item.id in self.before else "")
+        text = "\n".join([f"[{item.id}] {item.call_text()} (find: {find}){mark}"] + out)
         cap = max(GET_CHARS, max_chars())                    # a tool's output is at most the result cap: any line fits
         if len(text) > cap:
             text = text[:cap].rsplit("\n", 1)[0] + f"\n... ({len(text) - cap} more characters: narrow find with a zone or a word)"

@@ -272,3 +272,47 @@ def used(prep) -> dict:
                     continue
                 out[k] = {"value": v, "step": step}
     return out
+
+
+# --- a conversation's settings change (petroharness.session: Conversation.adopt) -----------------------------------------
+
+def merged(in_force: dict, changes: dict) -> dict:
+    """The settings after a change: `changes` over `in_force`, a value of None taking the setting back to its
+    default (leaving it out of the settings)."""
+    out = dict(in_force or {})
+    for k, v in (changes or {}).items():
+        if v is None:
+            out.pop(k, None)
+        else:
+            out[k] = v
+    return out
+
+
+def diff(before: dict, after: dict) -> list:
+    """[{key, from, to}] for each setting whose value differs (None: the default), in the order of the settings."""
+    keys = list(dict.fromkeys([*(before or {}), *(after or {})]))
+    return [{"key": k, "from": (before or {}).get(k), "to": (after or {}).get(k)}
+            for k in keys if (before or {}).get(k) != (after or {}).get(k)]
+
+
+def _shown(key: str, value) -> str:
+    if value is None:
+        d = _fields().get(key, {}).get("default")
+        return "the default" + (f" ({_shown(key, d)})" if d is not None else "")
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    if isinstance(value, (list, tuple)):
+        return " / ".join(_shown(key, x) for x in value)
+    if isinstance(value, float):
+        return f"{value:g}"
+    return str(value)
+
+
+def describe(changes: list) -> str:
+    """A change in words, as the log, the prompts and the answer's header name it: "m 2 -> 1.8; rw the default -> 0.04"."""
+    return "; ".join(f"{c['key']} {_shown(c['key'], c['from'])} -> {_shown(c['key'], c['to'])}" for c in changes)
+
+
+def values(settings: dict) -> str:
+    """Settings as values in words: "m 1.8; sw_cutoff 0.6"."""
+    return "; ".join(f"{k} {_shown(k, v)}" for k, v in (settings or {}).items())

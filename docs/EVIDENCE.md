@@ -83,6 +83,11 @@ g.to_json()                             # the whole graph, in a fixed order
 - **The well's record is kept once.** When the first question has run, the curves and steps as Petrophys recorded them
   are written to the log (a `record` event naming a blob). A new one is written only when the record changes, for
   example after a curve is computed on request.
+- **Generations after a settings change.** A settings change ([SESSIONS.md](SESSIONS.md), "Changing a setting")
+  interprets the well again: its record from then on is a new generation, with its own curve and step nodes
+  (`curve:SW@gen2`, `step:saturation@gen2`). A result links to the curves of the generation in force when it was
+  opened, so each answer's trail shows the parameters it was made with, and lists the changes made before it. A
+  conversation without a change builds the graph it built before.
 - **The number links use the checker's own matching.** The check that every number of an answer comes from a result
   is applied result by result, so the graph says which results show each number.
 - **Nothing here reaches a prompt.** The graph is read off the record of a conversation, after each answer is final,

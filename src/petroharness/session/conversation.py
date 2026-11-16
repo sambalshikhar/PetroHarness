@@ -2,7 +2,8 @@
 the question graph on the same session, so the ledger and its ids go on and a later question reads what earlier ones
 opened. Each question runs through the session graph (petroharness.session.graph). The session folder:
 
-    log.jsonl              the events: session_start, question, result, turn_end, session_resume (session/log.py)
+    log.jsonl              the events: session_start, question, result, turn_end, settings, session_resume
+                           (session/log.py)
     blobs/                 the texts the events name (results as shown, answers), each once, by SHA-256
     overview.png           the interval's log display by Petrophys, drawn when the conversation starts
     turns/NN/answer.md     question NN's answer with its header
@@ -16,6 +17,10 @@ question as text. `Conversation.on_tasks` runs prepared tasks (petroharness.task
 
 Resuming rebuilds the session from the log: the well is prepared again (from the cache) and every recorded result is
 opened again in order, which must give the same ids and texts (a difference is logged with the resume event).
+
+Changing a setting (`adopt`, docs/SESSIONS.md): the user's interpretation settings from the next question on. The well
+is interpreted again under them, the ledger goes on, and what was opened before is marked as resting on the earlier
+settings; the change is a settings event in the log, replayed in its place when the conversation is resumed.
 """
 from __future__ import annotations
 
@@ -32,7 +37,8 @@ from petroharness.session.log import SessionLog
 # what a conversation on a LAS file is started with, kept in the log so it can be resumed (the model endpoint is not:
 # it can change)
 INPUTS = ("formation", "tops", "top", "base", "depth_unit", "lithology_curve", "formation_lithology", "profile",
-          "settings", "skills", "model", "model_card", "max_steps", "figures", "direct", "interpretation")
+          "settings", "skills", "model", "model_card", "max_steps", "figures", "direct", "interpretation",
+          "field_notes")
 
 
 @dataclass
@@ -72,6 +78,7 @@ class Conversation:
         self.setup = None                 # what this process answers under (core.setup), set by the first question
         self.turns: list = []             # one record per question asked (the log's turn_end events)
         self.live = None                  # the session the questions run on (petroharness.agent.loop.Session)
+        self.on_view = None               # called with the interval's view when the well is interpreted (the UI's plot)
 
     # --- opening ------------------------------------------------------------------------------------------------------
     @classmethod
@@ -81,20 +88,28 @@ class Conversation:
               skills: str | None = None, model_url: str | None = None, model: str | None = None,
               model_card: str | None = None, max_steps: int | None = None, llm_factory: Callable | None = None,
               on_view: Callable | None = None, figures: bool = True, direct: bool = True,
-              interpretation: dict | None = None) -> Conversation:
+              interpretation: dict | None = None, field_notes=None) -> Conversation:
         """A new conversation about one interval of a LAS file, kept in `folder` (the arguments are ask()'s). The
         interval is checked and the well interpreted here, before any question. `figures`: draw each answer's
         figures (one more model call per answer chooses them). `direct`: the model first says whether a question is
-        direct (a short route and a short answer) or needs an investigation; False: always an investigation."""
+        direct (a short route and a short answer) or needs an investigation; False: always an investigation.
+        `field_notes`: a field notes file (petroharness.well.notes): its settings are in force from the start under
+        `interpretation`'s, its notes reach the model with every question; the log keeps what the file held."""
         folder = cls._new(folder)
         las = Path(las).expanduser().resolve()
         if not las.is_file():
             raise FileNotFoundError(f"WHAT: no LAS file at {las}. FIX: give the path of the well's LAS file.")
+        notes = None
+        if field_notes:
+            from petroharness.well.notes import load
+            notes = load(field_notes)
+            interpretation = {**notes["settings"], **(interpretation or {})}
         given = {"formation": formation, "tops": tops, "top": top, "base": base, "depth_unit": depth_unit,
                  "lithology_curve": lithology_curve, "formation_lithology": formation_lithology, "profile": profile,
                  "settings": settings, "skills": skills, "model": model, "model_card": model_card,
                  "max_steps": max_steps, "figures": figures, "direct": direct,
-                 **({"interpretation": dict(interpretation)} if interpretation else {})}
+                 **({"interpretation": dict(interpretation)} if interpretation else {}),
+                 **({"field_notes": notes} if notes else {})}
         inputs = {k: (str(v) if isinstance(v, Path) else v) for k, v in given.items()}
         c = cls._open(folder, las, inputs, model_url, llm_factory, on_view)
         from petroharness.cli import COMMIT
@@ -160,15 +175,86 @@ class Conversation:
                      differences=differences)
         return c
 
-    @classmethod
-    def _open(cls, folder: Path, las: Path, inputs: dict, model_url, llm_factory, on_view) -> Conversation:
-        key = A._model_key(model_url, llm_factory, inputs.get("model"), inputs.get("model_card"))
+    @staticmethod
+    def _prepared(las: Path, key: str, folder: Path, inputs: dict, on_view) -> A.Prepared:
+        """The well interpreted and the interval checked under `inputs` (the conversation's, settings included)."""
         p = A.prepare(las, key, cache=folder / ".cache",
                       **{k: inputs.get(k) for k in INPUTS
                          if k not in ("model", "model_card", "max_steps", "figures", "direct")})
         A.check(p, A.task_for(p, "(the interval)")[0], on_view)
-        return cls(folder, key, prepared=p, inputs=inputs, llm_factory=llm_factory, max_steps=inputs.get("max_steps"),
-                   figures=bool(inputs.get("figures", True)), depth=bool(inputs.get("direct", True)))
+        return p
+
+    @classmethod
+    def _open(cls, folder: Path, las: Path, inputs: dict, model_url, llm_factory, on_view) -> Conversation:
+        key = A._model_key(model_url, llm_factory, inputs.get("model"), inputs.get("model_card"))
+        p = cls._prepared(las, key, folder, inputs, on_view)
+        c = cls(folder, key, prepared=p, inputs=inputs, llm_factory=llm_factory, max_steps=inputs.get("max_steps"),
+                figures=bool(inputs.get("figures", True)), depth=bool(inputs.get("direct", True)))
+        c.on_view = on_view
+        return c
+
+    # --- settings -----------------------------------------------------------------------------------------------------
+    @property
+    def settings(self) -> dict:
+        """The interpretation settings in force: the field notes' and start()'s `interpretation`, as changed since
+        with adopt."""
+        return dict(self.inputs.get("interpretation") or {})
+
+    def sources(self) -> dict:
+        """{setting in force: "field notes" | "user"}: where each setting in force comes from."""
+        from petroharness.well.notes import sources
+        changed = {x["key"] for e in self.changes() for x in e["changes"]}
+        return sources(self.settings, self.inputs.get("field_notes"), changed)
+
+    def changes(self) -> list:
+        """The settings changes so far (the log's settings events): each with the question it took effect at."""
+        return [{k: e[k] for k in ("turn", "changes", "by") if k in e} for e in self.log.events("settings")]
+
+    def adopt(self, changes: dict, by: str = "user") -> list:
+        """Adopt interpretation settings from the next question on (docs/SESSIONS.md, "Changing a setting"):
+        `changes` maps a setting (as start()'s `interpretation` names them, petroharness.well.settings) to its new
+        value, None taking it back to its default. The well is interpreted again under the settings now in force (a
+        new generation of its curves); the ledger goes on and its ids continue; every result opened before says, read
+        again, that it rests on the earlier settings, and the same call asked again is computed anew; the change is
+        logged with who asked and the question it takes effect at, and the next questions' prompts name it. -> the
+        changes made ([{key, from, to}]; [] when the settings asked for are those in force: nothing is logged)."""
+        from petroharness.well import settings as T
+        if self.p is None:
+            raise ValueError("WHAT: this conversation runs prepared tasks, under the data settings in force. FIX: "
+                             "change settings in a conversation started from a LAS file.")
+        after = T.merged(self.settings, changes)
+        made = T.diff(self.settings, after)
+        if not made:
+            return []
+        wrong = T.validate(after)
+        if wrong:
+            raise ValueError("WHAT: interpretation settings that cannot be used: "
+                             + "; ".join(f"{k}: {v}" for k, v in wrong.items()) + ". FIX: correct or reset them.")
+        if self.inputs.get("profile") and T.split(after)[0]:
+            raise ValueError("WHAT: Petrophys settings in a conversation with a context profile. WHY: a profile fixes "
+                             "its own settings. FIX: change only the zone rule, or start a conversation without a "
+                             "profile.")
+        n = len(self.turns) + 1
+        self._apply(after, n, made)
+        self.log.append("settings", n, changes=made, by=by, interpretation=after, interval=self.p.used,
+                        zones=[{"zone": z.zone_id, "lithology": z.lithology, "top": z.top, "base": z.base}
+                               for z in self.p.view.zones])
+        return made
+
+    def _apply(self, after: dict, n: int, made: list) -> None:
+        """The settings `after` in force from question n: the well interpreted again, the live session moved to it."""
+        from petroharness.well.settings import describe
+        if after:
+            self.inputs["interpretation"] = dict(after)
+        else:
+            self.inputs.pop("interpretation", None)
+        self.p = self._prepared(self.p.las, self.key, self.folder, self.inputs, self.on_view)
+        if self.live is not None:
+            from petroharness.agent import graph
+            task, _ = A.task_for(self.p, "(the interval)", n)
+            with self._settings():
+                self.live.rewell(task, graph.task_config(task, self.key, 1),
+                                 f"the settings change before question {n} ({describe(made)})")
 
     def overview(self) -> Path | None:
         """The interval's log display by Petrophys (petroharness.figures.overview), drawn once per conversation into
@@ -205,8 +291,11 @@ class Conversation:
             results.setdefault(e["turn"], []).append(e)
         for e in self.log.events("question"):
             tasks[e["turn"]] = Task(**e["task"])
-        with self._settings():
-            for rec in self.turns:
+        changes = self.log.events("settings")
+        for rec in self.turns:
+            for e in [e for e in changes if e["turn"] == rec["turn"]]:     # a settings change, where it was made
+                self._apply(e.get("interpretation") or {}, e["turn"], e["changes"])
+            with self._settings():
                 task = tasks[rec["turn"]]
                 if self.live is None:
                     if rec["turn"] not in results and str(rec.get("status", "")).startswith("error"):
@@ -227,12 +316,15 @@ class Conversation:
                         bad.append({"id": e["id"], "what": f"opened again as {item.id}"})
                     elif _sha(item.text) != e["sha256"]:
                         bad.append({"id": e["id"], "what": "its text differs from the recorded one"})
+        last = self.turns[-1]["turn"] if self.turns else 0
+        for e in [e for e in changes if e["turn"] > last]:                 # made after the last question
+            self._apply(e.get("interpretation") or {}, e["turn"], e["changes"])
         return bad
 
     # --- asking -------------------------------------------------------------------------------------------------------
     def earlier(self) -> str:
         """EARLIER IN THIS SESSION as the next question's prompts will show it ("" before the first question)."""
-        return block(self.turns)
+        return block(self.turns, changes=self.changes())
 
     def ask(self, question: str) -> Turn:
         """The next question of a conversation on a LAS file -> its Turn. The first question is answered as

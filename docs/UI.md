@@ -79,6 +79,19 @@ To ask about another well or interval, or under other settings, start a **New co
 right, or the chip): it keeps the open conversation's well, interval and settings in the chips, ready to change.
 Opening any run from the drawer makes the box continue that run's conversation.
 
+**Changing a setting in a conversation.** In an open conversation the Interpretation chip opens the settings panel on
+the conversation's own well and settings in force. Change any of them and choose *Use from the next question*: the chip
+and the note under the box say what changes ("Continues this conversation as question 5, with Cementation m default
+→ 1.8"; *Keep the settings* drops it). The next question is answered after the well is interpreted again with them;
+its header says "Settings changed for this question", and the earlier questions above it are marked "before the
+settings change at question 5". Later questions keep the settings ([SESSIONS.md](SESSIONS.md), "Changing a
+setting").
+
+**Field notes.** Options takes a field notes file (a path on the server, or *Upload field notes…*): its name, settings
+and notes are checked at once. Its settings show in the settings panel as "Field notes: value" and are previewed on the
+well; a value you set there is used instead. The interpretation chip names the notes ([SESSIONS.md](SESSIONS.md),
+"Field notes").
+
 **Earlier questions stay on screen.** Above the question shown, on every tab, each earlier question of its
 conversation is a box with its number, the question and the answer's first sentence. Opening a box shows the whole
 answer with its figures, a link to that question's own page (its evidence, logs and how it was computed) and its audit
@@ -225,6 +238,7 @@ The page uses a small JSON API, which also serves scripts:
 | `GET /api/run/ID/audit` | the audit trail of the run's answer, as Markdown |
 | `GET /api/settings` | the interpretation settings: groups, each setting's kind, unit, choices, default and help |
 | `POST /api/preview` | the inputs of a question (without the question) and `interpretation`: the interval, its zones under the zone rule, and the value each setting took on this well |
+| `GET /api/notes?path=` | a field notes file, checked: its name, settings and notes |
 | `GET /api/run/ID/conversation` | the conversation the run belongs to, as it stands: every question in order (the run's later ones too, and one still waiting or running), each with its run id, number, status, answer and figures |
 | `GET /api/run/ID/lineage` | what the run's answer rests on, as JSON (`EvidenceGraph.trail`): its findings and the results they cite, which results show each number, the curves they name, the Petrophys steps behind them with their methods and parameters, and the measured logs |
 | `POST /api/rate/ID` | `{"verdict": "good" \| "partly" \| "wrong", "note": "..."}` |
