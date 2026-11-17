@@ -239,7 +239,7 @@ def test_prompts_stay_bounded_on_the_largest_formation():
     investigate(llm, s, Usage(), 4000, trace, max_steps=8)
     sizes = [r["prompt_chars"] for r in trace["steps"]]
     assert max(sizes) < 72000, sizes            # map + direction + claims + opened (6k) + new (12k); the brief's
-    #   tool list grouped by verb, with the verbs over Petrophys and their menus, adds about 11.5k (3.5.2)
+    #   tool list grouped by verb, with the verbs over Petrophys and their menus, adds about 11.5k
 
 
 @pytest.mark.data

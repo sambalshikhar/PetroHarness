@@ -1,9 +1,9 @@
 # Changelog
 
-## 4.0 (in development)
+## 1.0.0 (2026-11-17)
 
-Questions that need an investigation are answered as 3.5.6 answers them; a direct question now takes a short route
-(below), measured on the whole benchmark with both models. With `--investigate` every request is the 3.5.6 build's,
+Questions that need an investigation are answered as 0.2.1 answers them; a direct question now takes a short route
+(below), measured on the whole benchmark with both models. With `--investigate` every request is the 0.2.1 build's,
 proven on its 1,388 saved runs. The rest is new around the question: conversations, the evidence graph, figures.
 
 - **Conversations.** Ask, read the answer, ask again: `petroharness chat` keeps one interval of one well open. A later
@@ -28,7 +28,7 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
   look steps and a short answer with its basis: three model calls instead of eight or more. Where the lookups do not
   state what is asked, the question still gets an investigation (the look step or the writer hands it over). This is the default
   everywhere (the command, chat, the web UI, benchmark mode); `--investigate` gives every question the full
-  investigation, the 3.5.6 route. Measured on all 347 benchmark questions, two runs per model, GPT-5 judge, against the two 3.5.6
+  investigation, the 0.2.1 route. Measured on all 347 benchmark questions, two runs per model, GPT-5 judge, against the two 0.2.1
   runs: K2-Horizon-7B W 67.03 against 66.67, Qwen3.5-27B GRPO 66.57 against 66.23 (both within the run-to-run
   interval); the questions read as direct (12-13% and 6%) score higher, at about a quarter of their tokens. Thinking is not
   reduced on the route: in the look steps that cost about 7 points of reference alignment and saved no time.
@@ -62,7 +62,7 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
 - **Answers carry no evidence ids.** The delivered answer has no evidence id in any form a model writes one: a
   bracket that cites and says something keeps what it says ("(E10, n = 161)" becomes "(n = 161)"), a label naming
   part of the writer's input goes with its id, and an id used as a noun becomes "the result". On the 3,123 saved
-  answers of the 4.0 model comparison, ids had been left in up to 48% of a model's answers; with this code, none.
+  answers of the 1.0 model comparison, ids had been left in up to 48% of a model's answers; with this code, none.
   The trace keeps the writer's draft (`trace["draft"]`), so a later delivery change is judged on the same drafts.
   Judged with GPT-5 on K2-Horizon-7B, the changed answers against the old delivery: +0.02 W per changed answer on
   two saved runs (201 answers), −0.09 on two fresh runs (338 answers), both within the judge's noise.
@@ -76,7 +76,7 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
   ids are taken out of the answer; an installed Petrophys is named by its own build; the web UI reports a run finished only once its
   record is saved.
 
-## 3.5.6 (2026-11-14)
+## 0.2.1 (2026-11-14)
 
 - **The writer reads the results for each point itself.** The writer is given the question's points and every result
   the investigation opened, not the investigation's claims. The limits the investigation found come with them, by
@@ -91,13 +91,13 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
 
   | Answering model | Version | RA | W |
   |---|---|---|---|
-  | K2-Horizon-7B | 3.5.3 | 66.76 | 66.36 |
-  | K2-Horizon-7B | 3.5.6 | 67.46 | 66.67 |
-  | Qwen3.5-27B GRPO | 3.5.3 | 62.41 | 64.05 |
-  | Qwen3.5-27B GRPO | 3.5.6 | 65.73 | 66.22 |
+  | K2-Horizon-7B | 0.2.0 | 66.76 | 66.36 |
+  | K2-Horizon-7B | 0.2.1 | 67.46 | 66.67 |
+  | Qwen3.5-27B GRPO | 0.2.0 | 62.41 | 64.05 |
+  | Qwen3.5-27B GRPO | 0.2.1 | 65.73 | 66.22 |
 
   The changes were made for answering models other than the default. They do not cost the default model anything:
-  K2-Horizon-7B is +0.69 RA [-0.78, +2.12] against 3.5.3. A question costs more tokens than in 3.5.3 (K2-Horizon-7B
+  K2-Horizon-7B is +0.69 RA [-0.78, +2.12] against 0.2.0. A question costs more tokens than in 0.2.0 (K2-Horizon-7B
   281k to 307k, Qwen3.5-27B GRPO 225k to 268k).
 - **No switches.** The six changes were measured as switches and are now the code. The 17 switches that were measured
   and not adopted are removed with their code and texts; `agent/options.py` defines none.
@@ -106,9 +106,8 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
   were recorded again on K2-Horizon-7B.
 - **Fix:** an installed Petrophys in a virtual environment inside a git repository was named in traces by that
   repository's commit. It is now named by its own build.
-- **How this version was proven** is in `docs/LOCK_v3.5.6.md`.
 
-## 3.5.3 (2026-11-01)
+## 0.2.0 (2026-11-01)
 
 - **The writer concludes from all the evidence.** The investigation still builds its claims as results come in. The
   writer now reads them with every result the investigation opened, in full, and where the two differ, the results
@@ -141,7 +140,7 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
 - **Documentation:** `docs/ARCHITECTURE.md` opens with a diagram of the whole harness and describes the reporting
   settings.
 
-## 3.5.2 (2026-10-29)
+## 0.1.2 (2026-10-29)
 
 - **Petrophys on request.** The model can now ask Petrophys for what the record does not hold.
   - `calculate` recomputes a property with another method or parameters, through Petrophys's own workflow step,
@@ -167,7 +166,7 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
 - **Own wells:** a well whose default interpretation sets the porosity cutoff per lithology no longer stops the run.
 - **Documentation:** `docs/TOOLS.md`.
 
-## 3.5.1 (2026-10-29)
+## 0.1.1 (2026-10-29)
 
 - **Any chat model.** PetroHarness runs on any chat model behind an OpenAI-compatible endpoint (vLLM, SGLang, Ollama,
   LM Studio or a hosted API):
@@ -182,7 +181,7 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
   `docs/DEVELOPMENT.md` (configuration, benchmark mode, testing, layout).
 - **Citation:** the paper (ADIPEC 2026, SPE-236034-MS) in the README and in `CITATION.cff`.
 
-## 3.5.0 (2026-10-29)
+## 0.1.0 (2026-10-29)
 
 First public release.
 

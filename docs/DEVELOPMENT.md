@@ -119,7 +119,7 @@ export PETROHARNESS_MODEL_URL=http://host-a:8100/v1,http://host-b:8100/v1
 | `--max-steps N` | the step cap (default 8) |
 | `--writer open` | the writer's repair rounds: `open` (default) allows two, `''` one |
 | `--format profile` | the answer format: the report style's (`profile`, default) or the writer's own (`default`) |
-| `--investigate` | every question gets the full investigation: the 3.5.6 route (default: the model first says whether a question is direct, as for a user's question; [GRAPH.md](GRAPH.md), "The direct route") |
+| `--investigate` | every question gets the full investigation (default: the model first says whether a question is direct, as for a user's question; [GRAPH.md](GRAPH.md), "The direct route") |
 
 **The output**, under `runs/` in the checkout:
 
@@ -158,7 +158,7 @@ route, kept outside the repository with the benchmark data. Their scores are wha
 runs, so that the difference between them shows the run-to-run noise), and the request gate's base is recorded from
 them ([tests/gate/README.md](../tests/gate/README.md)). When a change is adopted because it was meant to alter what
 the model is sent, its measured runs become the new reference runs, and the gate's base is recorded again from them.
-The 3.5.6 runs stay the reference of the `--investigate` route.
+Runs made with `--investigate` stay the reference of that route.
 
 ## Testing
 

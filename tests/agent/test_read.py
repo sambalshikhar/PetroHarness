@@ -71,7 +71,7 @@ def _session(t, f):
 
 def _run(monkeypatch, reads, pred=lambda f: "PHIE" in f.inv.curves and "RDEP" in f.inv.curves, depth=True):
     """One question through the question graph on a built session, the model stubbed. depth: graph.answer's (False:
-    the 3.5.6 route, --investigate)."""
+    every question investigated, --investigate)."""
     from petroharness.agent import graph
     from petroharness.agent.loop import Session
     t, f = _formation(pred)

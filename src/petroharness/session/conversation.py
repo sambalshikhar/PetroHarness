@@ -69,7 +69,7 @@ class Conversation:
         self.folder, self.key, self.p, self.inputs = Path(folder), key, prepared, dict(inputs or {})
         self.llm_factory, self.writer, self.fmt, self.max_steps = llm_factory, writer, fmt, max_steps
         # whether the model first says if a question is direct (the direct route, docs/GRAPH.md); False: every
-        # question gets the investigation (the 3.5.6 route: --investigate, direct=False)
+        # question gets the investigation (--investigate, direct=False)
         self.depth = bool(depth)
         self.figures = figures            # draw an answer's figures (petroharness.figures); never for a benchmark run
         self.log = SessionLog(self.folder)

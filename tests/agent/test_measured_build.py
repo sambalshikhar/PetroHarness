@@ -1,5 +1,5 @@
-"""The measured build's six behaviours. Each was a switch while it was measured (3.5.4: zone_order, see_first,
-stop_check, writer_points; 3.5.6: writer_fresh, fresh_doubts); the 3.5.6 lock built them in and left no switch
+"""The measured build's six behaviours. Each was a switch while it was measured (zone_order, see_first, stop_check,
+writer_points, writer_fresh, fresh_doubts); the measured build made them the code and left no switch
 (agent/options.py), so each test asserts the behaviour as the code has it:
 
 - an order over fewer than five zones is said untestable, with its number and without direction words or legend;

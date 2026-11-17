@@ -2,7 +2,7 @@
 takes look steps instead of the investigation, no settle call, and a short answer; every call thinks as the model card
 says (thinking was reduced in the look steps at first and measured: it cost accuracy and saved no time). A look step
 or the writer can still hand the question to an investigation. Every question is read that way, a user's and a
-benchmark's; a run that asks for the investigation every time (--investigate, direct=False) takes the 3.5.6 route.
+benchmark's; a run that asks for the investigation every time (--investigate, direct=False) gets it.
 A scripted model on a real formation (no server).
 
     .venv/bin/python -m pytest tests/session/test_depth.py -q   (PETROHARNESS_DATA selects the dataset)

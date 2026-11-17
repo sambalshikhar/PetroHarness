@@ -1,12 +1,12 @@
 """The switch framework (petroharness.agent.options): no switches; a name that is not a switch raises (the six switches
-of the measured build are the code since the 3.5.6 lock, and the others it ran without are removed)."""
+of the measured build are the code, and the others it ran without are removed)."""
 import pytest
 
 from petroharness.agent import options
 
 
 def test_no_switch_is_under_test_and_an_empty_setting_parses():
-    assert options.as_dict() == {}                             # depth, measured in 4.0, is the code (direct=False is a setting)
+    assert options.as_dict() == {}                             # depth, measured, is the code (direct=False is a setting)
     assert options.parse("") == options.Options()
 
 
@@ -14,7 +14,7 @@ def test_no_switch_is_under_test_and_an_empty_setting_parses():
                                   "zone_order=true", "see_first=true", "stop_check=true",      # built in at the lock
                                   "writer_points=true", "writer_fresh=true", "fresh_doubts=true",
                                   "new_budget=true", "writer_decide=true", "writer_parts=true",   # removed at the lock
-                                  "depth=true"])                                                  # the code since 4.0
+                                  "depth=true"])                                                  # the code
 def test_a_name_that_is_not_a_switch_raises(text):
     with pytest.raises(ValueError, match="no option"):
         options.parse(text)

@@ -4,14 +4,14 @@ docs/UI.md); `petroharness benchmark ...` is the validation mode below.
 
 Benchmark mode runs the harness on benchmark questions, each as a user's question is run: the model first says
 whether the question is direct (the direct route) or needs an investigation (petroharness.agent.graph; --investigate
-gives every question the investigation, the 3.5.6 route). The run takes the question, the well and the formation; the
+gives every question the full investigation). The run takes the question, the well and the formation; the
 evaluation index's category only groups the output files.
 
     PETROHARNESS_DATA=<data config> PETROHARNESS_MODEL_URL=<servers> petroharness benchmark --arm A1 --rep 1 \
         --cats hydrocarbon,porosity --ids IDS.json --gt-dir GT --workers 40
 writes runs/<ARM>_<model>[r<rep>]_<cat>/{responses,traces} and the judge's reference subset runs/gt_subsets/<prefix>
 (the evaluation side; the harness never reads it). Resumes from saved traces of the same commit. The defaults are
-the configuration the v3.5 benchmark ran with (model k200t, writer open, the reporting profile's format). Another
+the configuration the benchmark runs with (model k200t, writer open, the reporting profile's format). Another
 model: --model NAME (any chat model on an OpenAI-compatible endpoint) or --model-card CARD (docs/MODELS.md).
 """
 
@@ -63,7 +63,7 @@ def save(prefix: str, model_key: str, arm: str, items: list, index: dict, gt_dir
 def answer(task, model_key: str, rep: int, max_steps: int, writer: str = "", fmt: str = "profile",
            direct: bool = True) -> dict:
     """One question through the question graph (src/petroharness/agent/graph.py, docs/GRAPH.md) -> {"answer", "status",
-    "trace"}. direct=False: the full investigation for every question (the 3.5.6 route)."""
+    "trace"}. direct=False: the full investigation for every question."""
     return graph_answer(task, model_key, rep, max_steps, writer, fmt, commit=COMMIT, depth=direct)
 
 
@@ -112,7 +112,7 @@ def benchmark(argv=None):
     ap.add_argument("--format", default="profile", choices=["profile", "default"],
                     help="the answer format: the reporting profile's format block, or the writer's own")
     ap.add_argument("--investigate", action="store_true",
-                    help="give every question the full investigation (the 3.5.6 route; default: the model first "
+                    help="give every question the full investigation (default: the model first "
                          "says whether a question is direct, and a direct question takes the direct route)")
     args = ap.parse_args(argv)
     cfg = HarnessConfig()

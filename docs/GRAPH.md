@@ -75,7 +75,7 @@ The READ call also says what kind of answer the question asks for: `direct` for 
 or a yes or no that one or two lookups will state, `investigate` for an interpretation that takes several results
 weighed together. The decision is the model's; the graph carries it. `--investigate` (the command, chat, benchmark
 mode; `direct=False` in Python; "A full investigation for every question" in the web UI) leaves the route out of the
-READ call, and every question gets the investigation: the 3.5.6 route, which the request gate still proves unchanged.
+READ call, and every question gets the investigation, a route the request gate proves unchanged.
 
 | | An investigation | A direct question |
 |---|---|---|

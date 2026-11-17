@@ -18,7 +18,7 @@ same requests? The golden tapes hold every reply verbatim, for the questions the
               settings are the environment's (PETROHARNESS_DATA), as for a benchmark run. PYTHONPATH selects the code
               under test. One process replays one run at a time (--workers 1, the default): replays in several
               threads of one process are not fully deterministic. --investigate: the runs were made with every
-              question investigated (the 3.5.6 route, the benchmark runner's --investigate).
+              question investigated (the benchmark runner's --investigate).
     compare:  python tests/gate/request_gate.py compare BASE.jsonl NEW.jsonl [BASE2.jsonl NEW2.jsonl ...]
               every difference is counted by kind (stage, messages, parameters, status, answer); exit 0 when none.
 
@@ -218,7 +218,7 @@ def main(argv=None) -> int:
     rec.add_argument("--out", required=True)
     rec.add_argument("--workers", type=int, default=1)
     rec.add_argument("--investigate", action="store_true",
-                     help="the runs gave every question the investigation (the 3.5.6 route; benchmark --investigate)")
+                     help="the runs gave every question the investigation (benchmark --investigate)")
     cmp_ = sub.add_parser("compare", help="compare hash files pair by pair")
     cmp_.add_argument("files", nargs="+", help="BASE.jsonl NEW.jsonl [BASE2.jsonl NEW2.jsonl ...]")
     args = ap.parse_args(argv)
