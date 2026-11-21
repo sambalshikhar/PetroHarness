@@ -165,7 +165,10 @@ def test_the_solver_volumes_say_where_they_have_values_and_which_supports_are_he
     assert f"with values at {int(ok.sum())} of {ok.size} samples here" in line, line
     for name, on in (("PEF", f.view.available("PEF")), ("RHOB", f.view.available("RHOB"))):
         assert (name in line.split("here,")[-1]) == on or not on, (name, line)
-    assert "QC flagged" not in m or not re.search(r"QC flagged \d+(?![\d.%])", m), "a well count left unscoped"
+    for ln in m.splitlines():                          # O3: a count of the record is the well's, in a record line
+        if re.search(r"QC flagged \d+(?![\d.%])", ln):  #   under the map's header that says so
+            assert ln.strip().startswith(("record:", "equations:")), ln
+    assert "counts included, are the well's" in m
 
 
 @pytest.mark.data

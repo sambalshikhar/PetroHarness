@@ -24,7 +24,7 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 import b2_reference as R  # noqa: E402
-from petroharness.well.summary import curve_kind  # noqa: E402
+from petroharness.well.summary import code_labels, curve_kind  # noqa: E402
 from test_b2_tools import F, Mutated  # noqa: E402
 from petroharness.agent.engine import max_chars  # noqa: E402
 from petroharness.agent.map import num  # noqa: E402
@@ -211,9 +211,10 @@ def check_stats(f, kw, r) -> list:
         text = "\n".join(lines)
         away = ~np.asarray(f.view.zoned)                          # the whole interval only where a sample
         parts = []                                                #   outside the zones has a value, then those samples
+        whole = "  every sample where " if keep is not None else "  whole interval ("   # a where names its samples
         if np.isfinite(x[away]).any():
-            parts += [("  whole interval (", x, d), ("  outside any zone (", x[away], d[away])]
-        elif any(l.startswith(("  whole interval (", "  outside any zone (")) for l in lines):
+            parts += [(whole, x, d), ("  outside any zone (", x[away], d[away])]
+        elif any(l.startswith((whole, "  outside any zone (")) for l in lines):
             bad.append(("whole interval shown where it is the zones pooled", c))
         name, idx = pooled_group(f, kw)
         parts.append((f"  {name}:", x[idx], d[idx]))
@@ -235,7 +236,7 @@ def check_stats(f, kw, r) -> list:
                 bad += check_flag(f, c, kw, head, ln, x)
                 continue
             if kind != "values":                                   # class codes: the samples of each class
-                bad += check_classes(c, head, ln, xs)
+                bad += check_classes(c, head, ln, xs, code_labels(f.view, c))   # the record's labels
                 continue
             got_f, want = R.fields(ln), R.summary(xs, log)
             if got_f.get("n") != want["n"] or got_f.get("n_of") != xs.size:
@@ -280,7 +281,7 @@ def check_flag(f, c, kw, head, ln, x) -> list:
     with np.errstate(invalid="ignore"):
         on = np.isfinite(x) & (x > 0.5)
     zs = asked(f, kw)
-    if head.startswith("  whole interval"):
+    if head.startswith(("  whole interval", "  every sample where")):     # the whole, or a where's samples
         idx, th = np.arange(x.size), f.inv.gross * on.sum() / x.size
     elif head.startswith("  outside any zone"):                    # the samples outside the zones
         idx = np.flatnonzero(~np.asarray(f.view.zoned))
@@ -302,8 +303,9 @@ def check_flag(f, c, kw, head, ln, x) -> list:
     return out
 
 
-def check_classes(c, head, ln, xs) -> list:
-    """A class-codes line against numpy: n, and each class's samples and share of those with a value (no statistic)."""
+def check_classes(c, head, ln, xs, labels=None) -> list:
+    """A class-codes line against numpy: n, and each class's samples and share of those with a value (no statistic);
+    codes the record's labels (labels: code -> label) name alike are one class."""
     ok = np.isfinite(xs)
     g = R.fields(ln)
     out = [] if g.get("n") == ok.sum() else [("classes n", c, head, g.get("n"), int(ok.sum()))]
@@ -311,8 +313,15 @@ def check_classes(c, head, ln, xs) -> list:
     got = R.class_shares(ln)
     if "every value" in ln:
         return out + ([] if len(want) <= 1 else [("one value", c, head, want)])
-    if {k: v[1] for k, v in got.items()} != want:
+    # each class's samples are its codes' counts (a class is written by all its codes, those absent here too); every
+    # code present in exactly one class; codes in one class share a label
+    listed = [x for cs in got for x in cs]
+    if (any(listed.count(x) != 1 for x in want) or any(m != sum(want.get(x, 0) for x in cs) for cs, (_, m) in got.items())):
         out.append(("class samples", c, head, got, want))
+    for cs in got:
+        names = {str(labels.get(x, "")).strip().upper() for x in cs} if labels else set()
+        if len(cs) > 1 and (len(names) != 1 or "" in names):
+            out.append(("class of codes named apart", c, head, cs, names))
     out += [("class share", c, head, k, p) for k, (p, m) in got.items() if abs(p - 100 * m / ok.sum()) > 0.051]
     if re.search(r"\b(mean|median|min|max|p10|p90) -?\d", ln):
         out.append(("statistics of codes", c, head, ln[:80]))
@@ -465,7 +474,7 @@ def check_profile(f, kw, r) -> list:
         if curve_kind(f.view, c).kind == "flag":                    # a flag: its share, as stats gives it (test_t9 stats)
             continue
         if curve_kind(f.view, c).kind != "values":                  # class codes: their samples by class
-            bad += check_classes(c, z.zone_id, ln, x)
+            bad += check_classes(c, z.zone_id, ln, x, code_labels(f.view, c))
             continue
         s = R.summary(x)
         g = R.fields(ln)

@@ -52,6 +52,7 @@ def test_a_toolset_gives_every_list_from_its_definitions():
     (Tool("stare", _run, "LOOK", "  "), "no description"),
     (Tool("stare", _run, "LOOK", "Text.", {"curves": {}}, ("curve",)), "requires curve"),
     (Tool("stare", _run, "LOOK", "Text.", {"curves": {}}, (), lead="curve"), "listed by its argument 'curve'"),
+    (Tool("stare", _run, "LOOK", "Text.", {"zones": {}}), "a bare value given to the tool stare fills 'curves'"),
 ])
 def test_a_wrong_definition_is_said_when_it_is_added(tool, says):
     ts = Toolset(("LOOK",))
@@ -73,6 +74,7 @@ def test_every_definition_is_whole():
         assert fn["description"].strip(), f"{t.name} has no description"
         assert set(fn["parameters"]["required"]) <= set(props), t.name
         assert not t.lead or t.lead in props, f"{t.name}: its listing argument {t.lead!r} is not one of its arguments"
+        assert not props or t.main in props, f"{t.name}: a bare value fills {t.main!r}, not one of its arguments"
         # every argument the model is shown is one the function takes (else a call would be told it was ignored)
         unknown = [a for a in props if a not in t.parameters()]
         assert not unknown, f"{t.name} shows arguments its function does not take: {unknown}"
@@ -92,6 +94,8 @@ def test_every_list_of_tools_follows_the_definitions():
     assert set(S.LIBRARY_NAMES) == {t.name for t in TOOLSET if t.verb}
     for t in TOOLSET:
         assert L.coerce_action({t.name: "X"}) == ("tool", t.name, {t.main: "X"}), t.name   # a bare value: its main argument
+    assert L.coerce_action({"what_if": "net_pay"}) == ("tool", "what_if", {"property": "net_pay"})
+    assert L.coerce_action({"unit_roles": "Z2"}) == ("tool", "unit_roles", {"zones": "Z2"})
 
 
 def test_the_brief_lists_each_tool_once_under_its_group():
@@ -121,4 +125,12 @@ def test_a_call_is_listed_by_its_tools_lead():
     assert item("crossplot", {"y": "RHOB", "x": "NPHI"}) == "crossplot RHOB on NPHI"
     assert item("zone_classes", {"topic": "flow_units"}) == "zone_classes flow_units"
     assert item("calc", {"expression": "1 + 2"}) == "calc 1 + 2"
-    assert item("check", {"what": "bad_hole"}) == "check  (what bad_hole)"                # a verb: no lead
+    assert item("check", {"what": "bad_hole"}) == "check (what bad_hole)"                 # a verb: no lead, no gap
+
+
+def test_a_call_of_a_tool_with_no_lead_is_listed_without_a_gap():
+    from petroharness.agent.ledger import Item
+    item = lambda tool, args: Item(id="E1", tool=tool, args=args, key="", rows=[], text="")
+    assert item("unit_roles", {"zones": ["Z1", "Z2"]}).call_text() == "unit_roles (zones Z1, Z2)"
+    assert item("pay_summary", {}).call_text() == "pay_summary"
+    assert item("stats", {"curves": ["GR"], "zones": ["Z1"]}).call_text() == "stats GR (zones Z1)"

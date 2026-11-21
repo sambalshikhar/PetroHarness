@@ -22,10 +22,10 @@ What the harness is: `README.md`, `docs/ARCHITECTURE.md`, `docs/GRAPH.md`. The c
 6. **Every step is one call rebuilt from the state.** No multi-turn conversation inside the investigation. *Why:
    what the model sees at each step is exactly what the trace records.*
 7. **A change that should not alter behaviour passes the public mini set** (`tests/gate`, which needs no data and no
-   server), **the golden tapes** (`tests/agent/test_golden_tapes.py`), the
-   prompt fixture (`tests/agent/fixtures/prompts.json.gz`, compared by `tests/agent/test_skill_library.py`) and the
-   ledger replay (`tests/agent/replay.py`). A change that should is a switch (`agent/options.py`, off by default)
-   until it is measured. *Why: the proof of no change, and comparable A/Bs.*
+   server). The maintainers, who hold the benchmark data, also check it against the golden tapes
+   (`tests/agent/test_golden_tapes.py`), the prompt fixture (compared by `tests/agent/test_skill_library.py`) and the
+   ledger replay (`tests/agent/replay.py`). A change that should alter behaviour is a switch (`agent/options.py`, off
+   by default) until it is measured. *Why: the proof of no change, and comparable A/Bs.*
 8. **Measure end to end.** Judge a behaviour change by the answers on a fixed set of questions, against a control run
    at the same time, with two runs of each; read the answers yourself before any automatic scoring. Record
    what you measured with the change (commit message or PR). *Why: scores of a single run are noisy, and a check that

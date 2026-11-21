@@ -91,6 +91,9 @@ class Toolset:
                 if missing:
                     raise ValueError(f"WHAT: the tool {t.name} requires {', '.join(missing)}, which its arguments do "
                                      f"not define. FIX: define them, or take them out of required.")
+                if names and t.main not in names:
+                    raise ValueError(f"WHAT: a bare value given to the tool {t.name} fills {t.main!r}, which it does "
+                                     f"not define. FIX: main=one of {', '.join(names)}.")
                 if t.lead and t.lead not in names:
                     raise ValueError(f"WHAT: the tool {t.name} is listed by its argument {t.lead!r}, which it does "
                                      f"not define. FIX: lead=one of {', '.join(names) or 'none'}, or no lead.")

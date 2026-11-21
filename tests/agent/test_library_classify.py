@@ -61,7 +61,7 @@ def test_gas_writes_a_flag_runs_reads(teapot):
     assert "Petrophys detect_gas_effect: PHID > PHIN + 0.05" in r.text and "GAS_FLAG" in teapot.inv.curves
     assert "other zones at 0" in r.text                                   # 124 zones: only the flagged ones listed
     runs = schemas.call(teapot, "runs", {"condition": "GAS_FLAG == 1", "limit": 3})
-    assert "Runs where GAS_FLAG == 1" in runs.text
+    assert runs.text.startswith("Intervals where GAS_FLAG == 1 (")        # reach well: intervals first
 
 
 @pytest.mark.data

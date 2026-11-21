@@ -17,7 +17,7 @@ class Registry:
     rules_dir: Path
 
     def _load(self, name: str) -> dict:
-        return yaml.safe_load((self.rules_dir / name).read_text()) or {}
+        return yaml.safe_load((self.rules_dir / name).read_text(encoding="utf-8")) or {}
 
     # --- curves.yaml -------------------------------------------------------------------------------
     @cached_property

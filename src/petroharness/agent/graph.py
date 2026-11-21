@@ -22,20 +22,33 @@ from petroharness.agent.claims import Claims, coerce_edit
 from petroharness.agent.inventory import calibrated_twins
 from petroharness.agent import loop as L                    # the loop's tunables and prompt texts, read where used (tests set them)
 from petroharness.agent.loop import (MAX_STEPS, Session, action_text, brief, coerce_action, parse, read_question,
-                                     read_reply, settle, topics_text)
+                                     read_reply, settle, split_actions, topics_text)
 
-HARNESS = "petroharness 3.5"
+from petroharness import __version__ as _VERSION
+
+HARNESS = f"petroharness {_VERSION}"                # the trace's harness field: the package and its version
+
+
+def public_model(key: str) -> str:
+    """The model as a trace names it: its name as people read it (--model, else its card's label), never the
+    registry key or the endpoints it is served from."""
+    from petroharness.models import MODELS, label
+    entry = MODELS.get(key)
+    if entry is None:
+        return str(key).split("@", 1)[0]
+    file, _, *named = entry
+    return label(file, named[0] if named else None)
 
 
 def no_hosted_tracing() -> None:
-    """The data stays on the cluster: LangSmith (installed with langgraph) turns tracing on from the environment and
+    """The data stays on this machine: LangSmith (installed with langgraph) turns tracing on from the environment and
     would send every prompt, well data included, to its service. Refuse to run instead."""
     import os
     on = [k for k in ("LANGSMITH_TRACING", "LANGSMITH_TRACING_V2", "LANGCHAIN_TRACING", "LANGCHAIN_TRACING_V2")
           if os.environ.get(k, "").strip().lower() in ("true", "1")]
     if on:
         raise RuntimeError(f"WHAT: hosted tracing is switched on ({', '.join(on)}). WHY: LangSmith would send every "
-                           f"prompt, with the well data, off the cluster. FIX: unset {on[0]} or set it to false.")
+                           f"prompt, with the well data, to its hosted service. FIX: unset {on[0]} or set it to false.")
 
 
 no_hosted_tracing()
@@ -109,6 +122,29 @@ def read_step(state: State, runtime: Runtime[Run]) -> dict:
     return {}
 
 
+def holders(action) -> str:
+    """A misplaced action's way in: an action whose key is an argument of tools (a bare {"run": ...} or {"search": ...})
+    -> the tools that take it, with the action written as one of them; "" when its key is no tool's argument."""
+    from petroharness.agent.schemas import TOOLS, known_args
+    if not isinstance(action, dict) or len(action) != 1:
+        return ""
+    key, val = next(iter(action.items()))
+    takes = [name for name in TOOLS if key in known_args(name, {key: val})]
+    if not takes:
+        return ""
+    if key == "run" and isinstance(val, str):          # a function: the verb whose list holds it first
+        from petroharness.agent import library_api
+        try:
+            home = library_api.lookup(val.strip()).verb
+        except Exception:                              # noqa: BLE001 - not a function of the library: no verb first
+            home = None
+        takes = ([home] if home in takes else []) + [t for t in takes if t != home]
+    shown = json.dumps({takes[0]: {key: val}}, default=str)
+    shown = shown if len(shown) <= 160 else json.dumps({takes[0]: {key: "..."}})
+    return (f" {key} is an argument of {', '.join(takes)}: write it inside the tool, as {shown}"
+            + (" (each tool's own list holds its functions)" if len(takes) > 1 else "") + ".")
+
+
 def first_look(state: State, runtime: Runtime[Run]) -> dict:
     """The brief, the prompt head (with the note of what the question names that this well's record lacks, and the
     DIRECTION index when a skill library is plugged) and the first look (the key curves of the topics the model chose
@@ -116,14 +152,17 @@ def first_look(state: State, runtime: Runtime[Run]) -> dict:
     zones pooled and the whole interval, with the default statistics), before step 1."""
     r = runtime.context
     s, trace = r.session, r.trace
-    r.system = brief(s.library)
+    r.system = brief(s.library, L._reach(s))
     absent = vocabulary.note(s)
     trace["absent"] = [{"name": n, "curves": c} for n, c in vocabulary.absent(s)]
+    if absent:                                           # what the model is told under the question, and the same
+        trace["question_notes"] = absent                 # as data for the answer's reader (the page words it)
+        trace["reader_notes"] = vocabulary.facts(s)
     from petroharness.agent.writer import conventions_block
     conv = conventions_block(s)
     r.head = (f"QUESTION:\n{s.task.question}\n" + (f"{absent}\n" if absent else "")
               + (f"\n{s.earlier}\n" if s.earlier else "") + (f"\n{conv}\n" if conv else "")
-              + f"\nTHE MAP\n{s.map}\n\n"
+              + f"\nTHE MAP\n{s.map}\n\n" + L.scope_text(s)
               + (f"DIRECTION\n{s.library.index(s.topics)}\n\n" if s.library is not None else ""))
     look = ""
     curves = [c for c in direction.overview(s.topics) if c in s.f.inv.curves][:8]
@@ -177,9 +216,10 @@ def ask(state: State, runtime: Runtime[Run]) -> dict:
     if not (text or "").strip():
         text = llm.chat(f"step_{k}_retry", [{"role": "system", "content": system}, {"role": "user", "content": user}],
                         usage, max_tokens, retry=True)
+    tokens = usage.log[-1].get("prompt_tokens") if usage.log else None     # the step's call, not a fix call parse makes
     obj = parse(llm, k, text, usage, max_tokens, rec)
     rec["prompt_chars"] = len(system) + len(user)
-    rec["prompt_tokens"] = usage.log[-1].get("prompt_tokens") if usage.log else None
+    rec["prompt_tokens"] = tokens
     rec["reply"] = (text or "")[:6000]
     return {"rec": rec, "reply": obj, "text": text, "user": user, "call_errors": call_errors, "shown_new": [],
             "guides_new": []}
@@ -236,17 +276,17 @@ def look(state: State, runtime: Runtime[Run]) -> dict:
     text = llm.chat(f"step_{k}", messages, usage, r.max_tokens)
     if not (text or "").strip():
         text = llm.chat(f"step_{k}_retry", messages, usage, r.max_tokens, retry=True)
+    tokens = usage.log[-1].get("prompt_tokens") if usage.log else None     # the step's call, not a fix call parse makes
     text = _reply_proper(llm, text)
     back = re.search(r'"depth"\s*:\s*"investigate"', text) is not None      # its way back, read before the step parser
     obj = {"depth": "investigate"} if back else parse(llm, k, text, usage, r.max_tokens, rec)
-    rec.update(prompt_chars=len(r.system) + len(user), reply=text[:6000],
-               prompt_tokens=usage.log[-1].get("prompt_tokens") if usage.log else None)
-    read = [] if obj is None or back else [(a, coerce_action(a, s.library is not None)) for a in (obj.get("next") or [])]
+    rec.update(prompt_chars=len(r.system) + len(user), reply=text[:6000], prompt_tokens=tokens)
+    read = [] if obj is None or back else [(a, coerce_action(a, s.library is not None)) for a in split_actions(obj.get("next"))]
     wanted = [c for _, c in read if c]
     why = ("unreadable reply" if obj is None else "the model asked for it" if back else
            "its lookups could not be read" if read and not wanted and not obj.get("done") else "")
     if why:
-        s.depth, s.claims, s.points, s.fetched = "investigate", None, [], []    # the investigation starts from its own step 1
+        s.depth, s.claims, s.points, s.fetched, s.got = "investigate", None, [], [], {}    # the investigation starts from its own step 1
         rec["to_investigation"] = why
         if read:
             rec["unread"] = [json.dumps(a, default=str)[:200] for a, _ in read]
@@ -292,7 +332,7 @@ def plan(state: State, runtime: Runtime[Run]) -> dict:
         again = llm.chat("step_1_points", [{"role": "system", "content": r.system},
                                            {"role": "user", "content": user},
                                            assistant_turn(text, usage, llm.replays_reasoning()),
-                                           {"role": "user", "content": L.POINTS.format(n=n)}], usage, r.max_tokens)
+                                           {"role": "user", "content": C.fill("C5", "points_ask", n=n)}], usage, r.max_tokens)
         try:
             got = read_reply(again) if '"points"' in again else {}
         except ValueError:
@@ -329,11 +369,12 @@ def decide(state: State, runtime: Runtime[Run]) -> dict:
     raw_edits = obj.get("edits") if isinstance(obj.get("edits"), list) else []
     settled_before = k > 1 and not s.claims.done_issues()
     msgs = s.claims.apply(raw_edits) + state["call_errors"]
-    read = [(a, coerce_action(a, s.library is not None)) for a in (obj.get("next") or [])]
+    read = [(a, coerce_action(a, s.library is not None)) for a in split_actions(obj.get("next"))]
     acts = [c for _, c in read if c]
     unread = [a for a, c in read if not c]                          # said back, not dropped silently
-    guides = [a for a in acts if a[0] == "guide"][:L.MAX_GUIDES]      # reading direction does not use an action slot
-    calcs = [a for a in acts if a[0] == "calc"][:L.MAX_CALCS]         # nor does arithmetic on shown numbers
+    asked_guides, asked_calcs = [a for a in acts if a[0] == "guide"], [a for a in acts if a[0] == "calc"]
+    guides = asked_guides[:L.MAX_GUIDES]                              # reading direction does not use an action slot
+    calcs = asked_calcs[:L.MAX_CALCS]                                 # nor does arithmetic on shown numbers
     work = [a for a in acts if a[0] not in ("guide", "calc")]
     cap = L.ACTIONS
     dropped = max(0, len(work) - cap)
@@ -367,9 +408,13 @@ def decide(state: State, runtime: Runtime[Run]) -> dict:
     if unread:
         rec["unread"] = [json.dumps(a, default=str)[:200] for a in unread]
         notes.append(C.fill("C8", "not_run", items="; ".join(rec["unread"][:3]),
-                            guide=C.text("C8", "not_run_guide") if s.library is not None else ""))
+                            guide=C.text("C8", "not_run_guide") if s.library is not None else "")
+                     + "".join(holders(a) for a in unread[:3]))
     if dropped:
         notes.append(C.fill("C8", "actions_left_out", cap=cap, dropped=dropped))
+    for what, asked, kept in (("guides", asked_guides, guides), ("calculations", asked_calcs, calcs)):
+        if len(asked) > len(kept):                                    # said, as the actions left out are
+            notes.append(C.fill("C8", "extra_left_out", cap=len(kept), what=what, dropped=len(asked) - len(kept)))
     if obj.get("done") and not last and state.get("withheld"):
         rec["held_done"] = list(state["withheld"])          # opened, not yet shown: shown first, then decide again
         notes.append(C.fill("C8", "done_waits", items=", ".join(state["withheld"])))
@@ -461,6 +506,19 @@ def close(state: State, runtime: Runtime[Run]) -> dict:
     return {}
 
 
+ASK_USER = "ask_user"
+
+
+def ask_user(state: State, runtime: Runtime[Run]) -> dict:
+    """The question back to the user (loop.ask_listed_twice): the answer, nothing computed."""
+    s = runtime.context.session
+    return {"answer": s.ask_user, "status": getattr(s, "ask_status", "") or ASK_USER}
+
+
+def after_read(state: State, runtime: Runtime[Run]) -> str:
+    return "ask_user" if runtime.context.session.ask_user else "first_look"
+
+
 def no_answer(state: State, runtime: Runtime[Run]) -> dict:
     raise RuntimeError("the investigation produced no answer state (step 1 unreadable)")
 
@@ -491,7 +549,7 @@ def write_brief(state: State, runtime: Runtime[Run]) -> dict:
     out = _write(r, brief=True)
     draft = out["draft"].strip()
     if s.depth == "direct" and len(draft) < 200 and HANDS_OVER.match(draft):
-        s.depth, s.claims, s.points, s.fetched = "investigate", None, [], []
+        s.depth, s.claims, s.points, s.fetched, s.got = "investigate", None, [], [], {}
         r.trace["depth"] = {"read": "direct", "investigated_from": "the writer",
                             "why": "the writer found that the results do not state what is asked"}
         return {"draft": "", "k": 1, "new": "", "shown_new": [], "withheld": [], "guides_new": [], "refused": False,
@@ -508,6 +566,8 @@ def _write(r: Run, brief: bool = False) -> dict:
     trace["writer_format"] = "profile" if reader_format(s.f.view.policy, r.fmt) else "default"
     trace["writer_user_chars"], trace["shape"], trace["writer_variant"] = len(user), shape, variant
     trace["cited_lines_chars"] = len(cited_lines(s.claims))
+    if getattr(s, "got", None):                         # the lines get and find fetched, read with their results
+        trace["fetched_lines"] = {k: len(v) for k, v in s.got.items()}
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     r.w_messages, r.w_table = messages, table
     draft = llm.chat("writer", messages, usage, cap)
@@ -524,32 +584,67 @@ def _write(r: Run, brief: bool = False) -> dict:
     return {"draft": draft}
 
 
-def _repair_ask(bad: list, talk: list, contra: list, notes: list) -> str:
-    """The repair request for the checker's findings ("" when there are none): the repair node's texts."""
+WHERE_CHARS = 180           # the words around a number the repair request quotes (half on each side)
+
+
+def where_said(draft: str, raw: str) -> str:
+    """The clause of the draft a flagged number stands in (its sentence, cut to WHERE_CHARS around it), so the repair
+    finds it: a bare "50" was kept twice in an answer that also wrote "50.8 %"."""
+    import re as _re
+    num = "[-\u2212\u2013]".join(_re.escape(p) for p in _re.split("[-\u2212\u2013]", raw.rstrip("%")))   # any dash
+    m = _re.search(r"(?<![\d.,])" + num + r"(?!\d|[.,]\d)", draft or "")      # not inside 50.8 or 20,700
+    if m is None:
+        return ""
+    a = max([draft.rfind(c, 0, m.start()) for c in (". ", "\n", "; ", "|")] + [-1]) + 1
+    b = min([i for i in (draft.find(c, m.end()) for c in (". ", "\n", "; ", "|")) if i >= 0] + [len(draft)])
+    if m.start() - a > WHERE_CHARS // 2:                 # a long sentence: the words around it, cut at spaces
+        a = draft.find(" ", m.start() - WHERE_CHARS // 2, m.start()) + 1 or a
+    if b - m.end() > WHERE_CHARS // 2:
+        b = draft.rfind(" ", m.end(), m.end() + WHERE_CHARS // 2) if draft.rfind(" ", m.end(), m.end() + WHERE_CHARS // 2) > 0 else b
+    return " ".join(draft[a:b].split())
+
+
+def _repair_ask(bad: list, talk: list, contra: list, notes: list, draft: str = "", names: list = (),
+                worked: dict = None) -> str:
+    """The repair request for the checker's findings ("" when there are none): the repair node's texts; each
+    flagged number with the words it stands in, and the arithmetic of numbers the answer states elsewhere that gives
+    it (`worked`: writer.derived); each curve name the record does not hold with the one it holds."""
     asks = []
+    worked = worked or {}
     if contra:
         asks.append(C.text("C2", "repair_contradictions") + " ".join(contra[:4]))
     if bad:
-        asks.append(C.fill("C2", "repair_numbers", numbers=", ".join(bad[:12])))
+        def how(x):                                 # how to pass: its inputs, or the value of the arithmetic written
+            w = worked.get(x)
+            if not w:
+                return ""
+            if w[0] == "wrong":
+                return f": {w[1]} is {w[2]}, write {w[2]}"
+            return f" = {w[1]}, numbers the answer states elsewhere: keep it and write them beside it"
+        located = [(f'{x} (in "{w}")' if (w := where_said(draft, x)) else x) + how(x) for x in bad[:12]]
+        asks.append(C.fill("C2", "repair_numbers", numbers="; ".join(located)))
     if talk:
         asks.append(C.fill("C2", "repair_words", words=", ".join(repr(x) for x in talk[:8])))
     if notes:
         asks.append(C.fill("C2", "repair_leaks", leaks=", ".join(repr(x) for x in notes[:4])))
+    if names:
+        asks.append(C.fill("C2", "repair_names", names="; ".join(f"{a} (the record holds {b})" for a, b in names[:6])))
     return " ".join(asks) + C.text("C2", "repair_keep") if asks else ""
 
 
 def _check(draft: str, r: Run) -> tuple:
-    from petroharness.agent.writer import contradictions, leaks, process_words, strip_ids, unsupported
+    from petroharness.agent.writer import contradictions, leaks, process_words, strip_ids, unknown_names, unsupported
+    shown = "\n".join(str(m.get("content") or "") for m in (r.w_messages or []))
     return (unsupported(strip_ids(draft), r.session, r.w_table), process_words(strip_ids(draft)),
-            contradictions(draft, r.session), leaks(strip_ids(draft)))
+            contradictions(draft, r.session), leaks(strip_ids(draft)), unknown_names(strip_ids(draft), r.session, shown))
 
 
 def verify(state: State, runtime: Runtime[Run]) -> dict:
     """The checker (code): numbers no result shows, words about the process, statements the data contradicts, working
-    notes left in the text."""
-    bad, talk, contra, notes = _check(state["draft"], runtime.context)
+    notes left in the text, curve names the record does not hold (close to one it holds)."""
+    bad, talk, contra, notes, names = _check(state["draft"], runtime.context)
     return {"rounds": [{"round": len(state.get("rounds") or []), "unsupported": bad, "process": talk,
-                        "contradictions": contra, "leaks": notes}]}
+                        "contradictions": contra, "leaks": notes, **({"names": names} if names else {})}]}
 
 
 def repair(state: State, runtime: Runtime[Run]) -> dict:
@@ -559,17 +654,12 @@ def repair(state: State, runtime: Runtime[Run]) -> dict:
     llm, usage, cap, draft = r.llm, r.usage, r.max_tokens_writer, state["draft"]
     last = state["rounds"][-1]
     bad, talk, contra, n = last["unsupported"], last["process"], last["contradictions"], len(state["rounds"])
-    notes = last.get("leaks") or []
-    asks = []
-    if contra:
-        asks.append(C.text("C2", "repair_contradictions") + " ".join(contra[:4]))
-    if bad:
-        asks.append(C.fill("C2", "repair_numbers", numbers=", ".join(bad[:12])))
-    if talk:
-        asks.append(C.fill("C2", "repair_words", words=", ".join(repr(t) for t in talk[:8])))
-    if notes:
-        asks.append(C.fill("C2", "repair_leaks", leaks=", ".join(repr(t) for t in notes[:4])))
-    fix = " ".join(asks) + C.text("C2", "repair_keep")
+    notes, names = last.get("leaks") or [], last.get("names") or []
+    worked = {}
+    if bad:                                         # a number worked out from numbers stated elsewhere: how to keep it
+        from petroharness.agent.writer import derived, strip_ids
+        worked = derived(strip_ids(draft), r.session, bad, r.w_table)
+    fix = _repair_ask(bad, talk, contra, notes, draft, names, worked) or C.text("C2", "repair_keep")
     msgs = r.w_messages + [assistant_turn(draft, usage, llm.replays_reasoning()), {"role": "user", "content": fix}]
     repaired = clean_reply(llm.chat(f"repair_{n}", msgs, usage, cap), draft)
     if not repaired:                                # notes instead of an answer: ask once more
@@ -589,6 +679,17 @@ def delivered(draft: str, table: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", report_numbers(strip_ids(compose(draft, table))))
 
 
+EMPTY_ANSWER = "error: empty answer (the writer's last draft was empty)"
+
+
+def answer_status(text: str, rounds: list) -> str:
+    """The delivered answer's status: an error when there is no text to deliver, unresolved_numbers when a number no
+    result shows survived the checker's rounds, else ok."""
+    if not (text or "").strip():
+        return EMPTY_ANSWER
+    return "ok" if not (rounds and rounds[-1].get("unsupported")) else "unresolved_numbers"
+
+
 def finalize(state: State, runtime: Runtime[Run]) -> dict:
     """The zone table placed, numbers as the results show them, the status."""
     from petroharness.agent.compose import leftover_citations
@@ -603,7 +704,10 @@ def finalize(state: State, runtime: Runtime[Run]) -> dict:
     left = leftover_citations(text)
     if left:
         trace["render_leftovers"] = left
-    return {"answer": text, "status": "ok" if not rounds[-1]["unsupported"] else "unresolved_numbers"}
+    status = answer_status(text, rounds)
+    if status == EMPTY_ANSWER:
+        trace["error"] = "the writer's last draft was empty"
+    return {"answer": text, "status": status}
 
 
 # --- routes (docs/GRAPH.md "Routes") --------------------------------------------------------------------------------
@@ -669,7 +773,7 @@ def after_write_brief(state: State, runtime: Runtime[Run]) -> str:
 def after_verify(state: State, runtime: Runtime[Run]) -> str:
     rounds, max_rounds = state["rounds"], (2 if runtime.context.writer == "open" else 1)
     last = rounds[-1]
-    issues = last["unsupported"] or last["process"] or last["contradictions"] or last.get("leaks")
+    issues = last["unsupported"] or last["process"] or last["contradictions"] or last.get("leaks") or last.get("names")
     return "repair" if issues and state["draft"].strip() and len(rounds) - 1 < max_rounds else "finalize"
 
 
@@ -706,7 +810,9 @@ def question_graph():
         g.add_node(name, fn)
     g.add_edge(START, "build")
     g.add_edge("build", "read")
-    g.add_edge("read", "first_look")
+    g.add_node("ask_user", ask_user)
+    g.add_edge("ask_user", END)
+    g.add_conditional_edges("read", after_read, ["ask_user", "first_look"])
     _investigation(g)
     g.add_conditional_edges("close", after_close, ["no_answer", "settle", "write", "write_brief"])
     g.add_edge("settle", "write")
@@ -725,7 +831,9 @@ def later_graph():
             + (("no_answer", no_answer), ("settle", settle_step), ("write_brief", write_brief)) + WRITER_NODES:
         g.add_node(name, fn)
     g.add_edge(START, "read")
-    g.add_edge("read", "first_look")
+    g.add_node("ask_user", ask_user)
+    g.add_edge("ask_user", END)
+    g.add_conditional_edges("read", after_read, ["ask_user", "first_look"])
     _investigation(g)
     g.add_conditional_edges("close", after_close_later, ["no_answer", "settle", "write", "write_brief"])
     g.add_conditional_edges("settle", reply_form, ["write", "write_brief"])
@@ -792,10 +900,16 @@ def task_config(task, model_key: str, rep: int):
 
 
 def answer(task, model_key: str, rep: int, max_steps: int = MAX_STEPS, writer: str = "", fmt: str = "profile",
-           llm_factory: Optional[Callable] = None, commit: str = "", depth: bool = True) -> dict:
+           llm_factory: Optional[Callable] = None, commit: str = "", depth: bool = True, mode: str = "tasks") -> dict:
     """One question through the graph -> {"answer", "status", "trace"} (src/petroharness/cli.py's record). llm_factory(cfg) builds the
-    model client (default: petroharness.llm.LLM on the registry's endpoint for this task). depth: turn()'s."""
-    return turn(task, model_key, rep, max_steps, writer, fmt, llm_factory, commit, depth=depth)[0]
+    model client (default: petroharness.llm.LLM on the registry's endpoint for this task). depth: turn()'s. The trace
+    names the setup it answered under (petroharness setup; mode: "interactive" for a LAS file and a question, "tasks"
+    for prepared questions): its hash, and its parts, which a single question has no session log to hold."""
+    from petroharness.core import setup as S
+    got = turn(task, model_key, rep, max_steps, writer, fmt, llm_factory, commit, depth=depth)[0]
+    s = S.of(task_config(task, model_key, rep), writer=writer, fmt=fmt, max_steps=max_steps, mode=mode, depth=depth)
+    got["trace"]["setup"], got["trace"]["setup_parts"] = s.hash(), s.to_dict()
+    return got
 
 
 def route(trace: dict) -> str:
@@ -825,19 +939,19 @@ def turn(task, model_key: str, rep: int, max_steps: int = MAX_STEPS, writer: str
     builds the session (`session` None: the whole question graph, as answer()). A later one runs on the session the
     earlier questions left, already moved to this task (Session.next_turn): the graph starts at the READ call, the
     well is not prepared again and the ledger's ids go on. `depth`: the READ call also says whether the question is
-    direct (the direct route, docs/GRAPH.md); False: every question gets the investigation (the 3.5.6 route)."""
+    direct (the direct route, docs/GRAPH.md); False: every question gets the full investigation."""
     tcfg = task_config(task, model_key, rep)
     library = direction.plugged(tcfg)                # the skill library, checked as it loads: a bad one stops here
     llm, usage = (llm_factory or LLM)(tcfg), Usage()
     _light(llm, False)                               # a client shared across questions starts each at normal thinking
     trace = {"task_id": task.task_id, "well": task.well, "formation": task.formation, "topics": [],
-             "harness": HARNESS, "commit": commit, "model": model_key, "skills": direction.stamp(library)}
+             "harness": HARNESS, "commit": commit, "model": public_model(model_key), "skills": direction.stamp(library)}
     trace["components"] = C.versions()               # each component's version (src/petroharness/agent/components)
     C.recording(llm, trace, library)                 # every call's attribution: trace["calls"]
     run = Run(task=task, cfg=tcfg, llm=llm, usage=usage, trace=trace, writer=writer, fmt=fmt,
               max_tokens=tcfg.model.max_tokens_spec, max_tokens_writer=tcfg.model.max_tokens_writer, session=session,
               depth=bool(depth))
-    trace["reads_depth"] = run.depth                 # the route setting: False is the 3.5.6 route
+    trace["reads_depth"] = run.depth                 # the route setting: False gives every question the investigation
     if session is not None:
         session.reads_depth = run.depth
         trace["session"] = {"turn": session.turn, "ledger_start": session.turn_start,

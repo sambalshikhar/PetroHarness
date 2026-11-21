@@ -111,7 +111,14 @@ def test_simandoux_saturation_then_its_statistics(topeka):
     r = schemas.call(f, "calculate", {"property": "saturation", "method": "simandoux"})
     assert "model simandoux (asked)" in r.text and re.search(r"rcl 3\.39\d* \(record\)", r.text)
     assert "vsh_exp" not in r.text.split("\n")[0]                    # North Sea's input, not Simandoux's
-    assert "the baseline reproduces the record's SW (100.0%" in r.text
+    # the record's saturation routed its shaly samples by the salinity of the Rw step's water: a record that holds that
+    # salinity (salinity_ppm) rebuilds its SW; one that does not (Petrophys 0b31d72 as published) cannot, and says so
+    routed = ((f.view.prep.steps or {}).get("saturation") or {}).get("parameters", {}).get("salinity_ppm")
+    if routed:
+        assert "the baseline reproduces the record's SW (every sample within 1%)" in r.text
+    else:
+        assert "the baseline differs from the record's SW" in r.text and "read the change as its effect" in r.text
+    assert "the baseline reproduces the record's NET_PAY (every sample within 1%)" in r.text
     assert "SW_SIMANDOUX" in f.inv.curves and "written: SW_SIMANDOUX, SXO_SIMANDOUX, BVW_SIMANDOUX" in r.text
     assert "mhi: Needs RMF" in r.text                                 # the library's own reason, said back
     s = schemas.call(f, "stats", {"curves": ["SW_SIMANDOUX"]})
@@ -133,13 +140,27 @@ def test_a_changed_matrix_sets_its_own_densities(topeka):
     assert "matrix_density from the asked choice (the record's 2.65 not used)" in r.text
     m = re.search(r"PHIE: mean ([\d.]+) -> ([\d.]+) \(\+", r.text)      # against the baseline run, as reported
     assert m and float(m.group(2)) > float(m.group(1)) and "the baseline differs from the record's PHIE" in r.text
+    assert re.search(r"the baseline differs from the record's PHIE at \d+ of \d+ samples \([\d.]+% within 1%\)", r.text)
+
+
+@pytest.mark.data
+def test_a_change_whose_step_does_not_run_is_refused_not_reported():
+    """Porosity by neutron-density on a well with no neutron log: the step does not run, so the steps after it ran on
+    the record's porosity, and what they wrote is no effect of the change (it was once reported as one: SW +0.40)."""
+    import petrophys
+    f = _session(Path(petrophys.sample("16/7-1")))
+    with pytest.raises(ToolError, match=r"Petrophys did not compute porosity with method neutron_density: .*NPHI"):
+        schemas.call(f, "calculate", {"property": "porosity", "method": "neutron_density"})
 
 
 @pytest.mark.data
 def test_what_if_cutoffs_and_models(topeka):
     r = schemas.call(topeka, "what_if", {"property": "net_pay", "parameter": "sw_cutoff", "values": [0.4, 0.5, 0.6]})
-    pooled = [float(ln.split(": ")[1].split(" pooled")[0]) for ln in r.text.splitlines() if ln.strip().startswith("sw_cutoff")]
-    assert pooled == sorted(pooled) and len(pooled) == 3                 # a looser SW cutoff never shrinks pay
+    rows = [ln for ln in r.text.splitlines() if ln.strip().startswith("sw_cutoff")]
+    whole = [float(re.search(r": ([\d.]+) whole interval \(", ln).group(1)) for ln in rows]      # the headline
+    pooled = [float(re.search(r"; ([\d.]+) pooled", ln).group(1)) for ln in rows]                # its breakdown
+    for got in (whole, pooled):
+        assert got == sorted(got) and len(got) == 3                     # a looser SW cutoff never shrinks pay
     m = schemas.call(topeka, "what_if", {"property": "saturation", "parameter": "model",
                                          "values": ["archie", "simandoux"]})
     assert "model archie:" in m.text and "model simandoux:" in m.text and "baseline (record's parameters)" in m.text
@@ -195,6 +216,47 @@ def estimate_kw(f, parameter, method=None, **kw):
     return L.estimate(f, parameter, method, **kw)
 
 
+@pytest.fixture(scope="module")
+def tuhua():
+    las, tops = SAMPLES / "tuhua-7.las", SAMPLES / "formations_tuhua-7.csv"
+    if not las.exists():
+        pytest.skip("no sample wells (PETROHARNESS_SAMPLE_LAS)")
+    return _session(las, tops, "Mount Messenger")
+
+
+@pytest.mark.data
+def test_the_clay_point_names_each_value_by_its_log(tuhua):
+    """Petrophys's nd_shale_point returns (den_clay, neu_clay): the NPHI value is a porosity (v/v), the RHOB value a
+    bulk density (g/cm3), not the other way round."""
+    r = estimate_kw(tuhua, "clay_point")
+    m = re.search(r"NPHI (-?[\d.]+), RHOB (-?[\d.]+)", r.text)
+    assert m, r.text
+    nphi, rhob = float(m.group(1)), float(m.group(2))
+    assert 0.0 < nphi < 1.0 and 1.5 < rhob < 3.2, r.text
+
+
 def test_the_estimates_listed():
     assert set(L.ESTIMATES) == {"rw", "archie_m", "clay_point", "gr_endpoints", "matrix", "temperature"}
     assert L.ESTIMATES["rw"] == ["rwa", "pickett", "sp"]
+
+
+@pytest.mark.data
+def test_a_flag_a_verb_writes_reads_as_a_flag_in_a_condition(tuhua):
+    """check bad_hole writes WASHOUT (unit flag): a condition naming it selects WASHOUT > 0.5, not 'has a value'."""
+    from petroharness.agent import engine
+    from petroharness.agent.library_check import check
+    check(tuhua, "bad_hole")
+    assert "WASHOUT" in tuhua.inv.curves and tuhua.view.is_flag("WASHOUT")
+    sel = engine.select(tuhua, "WASHOUT")
+    assert sel.read == "WASHOUT > 0.5", sel.read
+    flag = np.asarray(tuhua.view.values("WASHOUT"), dtype=float)
+    assert int(sel.mask.sum()) == int((flag > 0.5).sum())
+
+
+def test_a_method_the_step_does_not_take_says_how_to_change_parameters_alone():
+    """A record's method the library step cannot rerun (component_based porosity) asked with a parameter change: the
+    refusal says to give the parameters without a method (a model asked it four times, then gave up the change)."""
+    from petroharness.agent import library as L
+    with pytest.raises(ToolError, match=r"porosity has no method 'component_based'; methods: .*To change matrix and keep "
+                                        r"the rest, give the parameters without a method"):
+        L._changes("porosity", "component_based", {"matrix": "sandstone"})

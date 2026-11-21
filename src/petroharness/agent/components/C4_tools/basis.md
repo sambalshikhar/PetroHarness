@@ -1,0 +1,1 @@
+the interval's or a named stretch's value is its whole line, over every sample of it: the zones pooled leave out the samples outside the zones

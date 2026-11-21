@@ -111,7 +111,7 @@ def main(argv=None) -> int:
         print(f"petroharness audit: {exc.args[0]}", file=sys.stderr)
         return 2
     if args.out:
-        Path(args.out).write_text(text)
+        Path(args.out).write_text(text, encoding="utf-8")
     else:
         print(text)
     return 0

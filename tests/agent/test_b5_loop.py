@@ -172,6 +172,33 @@ def test_loop_runs_tools_edits_and_stops_when_settled(monkeypatch):
 
 
 @pytest.mark.data
+def test_guides_and_calculations_beyond_a_step_s_caps_are_said_as_actions_are():
+    """Three guides and four calculations asked in one step: two guides are read and three calculations run, and the
+    next step says what was left out (as for actions beyond the cap), not silently."""
+    from petroharness.agent import loop as L
+    s = _session()
+    llm = Script([
+        {"points": ["Where is net pay?"], "intent": "locate", "focus": "where",
+         "edits": [{"op": "add", "point": 1, "text": "Pay likely in the upper zones", "grade": "hypothesis"}],
+         "next": [{"guide": "net_reservoir_pay"}, {"guide": "water_saturation"}, {"guide": "porosity"}]
+                 + [{"calc": f"{i} + 1"} for i in range(L.MAX_CALCS + 1)],
+         "done": False},
+    ])
+    seen = {}
+    orig = llm.chat
+
+    def chat(stage, messages, usage, max_tokens, retry=False):
+        if stage == "step_2":
+            seen["user"] = messages[-1]["content"]
+        return orig(stage, messages, usage, max_tokens, retry)
+    llm.chat = chat
+    investigate(llm, s, Usage(), 4000, {})
+    assert f"Only the first {L.MAX_GUIDES} guides were taken (1 left out)" in seen["user"]
+    assert f"Only the first {L.MAX_CALCS} calculations were taken (1 left out)" in seen["user"]
+    assert s.guides == ["net_reservoir_pay", "water_saturation"]
+
+
+@pytest.mark.data
 def test_done_is_refused_once_while_points_are_open_then_the_last_step_ends_it():
     s = _session()
     llm = Script([
@@ -238,8 +265,11 @@ def test_prompts_stay_bounded_on_the_largest_formation():
     trace = {}
     investigate(llm, s, Usage(), 4000, trace, max_steps=8)
     sizes = [r["prompt_chars"] for r in trace["steps"]]
-    assert max(sizes) < 72000, sizes            # map + direction + claims + opened (6k) + new (12k); the brief's
-    #   tool list grouped by verb, with the verbs over Petrophys and their menus, adds about 11.5k
+    assert max(sizes) < 75000, sizes            # map + direction + claims + opened (6k) + new (12k); the brief's
+    #   tool list grouped by verb, with the verbs over Petrophys and their menus, adds about 11.5k; since 11-19 the
+    #   steps' menus list every word argument's choices (Petrophys step_choices) and the map names an analysis that
+    #   wrote a curve (about 0.6k: 71988 -> 72556 on this formation); the readings tool (0.4k) and a step's one curve
+    #   of values with its range here (0.3k) bring it to 73579
 
 
 @pytest.mark.data
@@ -259,7 +289,7 @@ def test_points_are_asked_for_when_the_draft_numbers_points_it_did_not_write():
 @pytest.mark.data
 @pytest.mark.parametrize("act", [
                                  ("tool", "stats", {"curves": True}),
-                                 ("tool", "runs", {"condition": ["SW < 0.5"]}),
+                                 ("tool", "runs", {"condition": ["SW < 0.5", "PHIE > 0.1"]}),   # one: its text
                                  ("tool", "compare", {"a": "PHIE", "b": 3}),
                                  ("tool", "runs", {"condition": "NET_PAY", "limit": True})])
 def test_malformed_arguments_are_a_message_not_a_crash(act):
@@ -302,6 +332,20 @@ def test_the_zone_table_gets_lines_of_its_own():
     from petroharness.agent.compose import compose
     out = compose(fixed, "| a | b |\n|---|---|\n| 1 | 2 |")
     assert "sentence.\n\n| a | b |" in out and "| 1 | 2 |\n\nNext" in out
+
+
+@pytest.mark.parametrize("draft,want", [
+    ("## Porosity\nPHIE 0.2.\n\n## Saturation\nSW 0.3.\n\n## Limits\nNone.",
+     "## Porosity\nPHIE 0.2.\n\nTABLE\n\n## Saturation\nSW 0.3.\n\n## Limits\nNone."),
+    ("Opening line.\n## Porosity\nPHIE 0.2.\n## Saturation\nSW 0.3.",
+     "Opening line.\n## Porosity\nPHIE 0.2.\n\nTABLE\n\n## Saturation\nSW 0.3."),
+    ("## Porosity\nPHIE 0.2.\n## Saturation\nSW 0.3.", "## Porosity\nPHIE 0.2.\n\nTABLE\n\n## Saturation\nSW 0.3."),
+    ("## Porosity\nPHIE 0.2.", "## Porosity\nPHIE 0.2.\n\nTABLE"),
+    ("PHIE 0.2, no sections.", "PHIE 0.2, no sections.\n\nTABLE"),
+])
+def test_a_table_the_writer_left_out_goes_after_the_first_section(draft, want):
+    from petroharness.agent.compose import compose
+    assert compose(draft, "TABLE") == want
 
 
 @pytest.mark.parametrize("reply,want", [

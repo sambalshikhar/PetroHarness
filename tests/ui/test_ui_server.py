@@ -109,6 +109,14 @@ def test_the_page_and_its_images_are_served(ui):
         assert e.value.code == 404
 
 
+def test_a_404_says_what_is_missing_whole(ui):
+    _, c = ui
+    status, got = c.json("/api/run/20260101-000000-abcdef")
+    assert status == 404 and got["error"] == "no run '20260101-000000-abcdef'"           # both quotes kept
+    status, got = c.json("/api/run/20260101-000000-abcdef/conversation")
+    assert status == 404 and got["error"].endswith("'20260101-000000-abcdef'")
+
+
 def _js_function(page: str, name: str) -> str:
     """The source of one top-level function of the page's script, to the next top-level function or comment."""
     start = page.find(f"\nfunction {name}(")
@@ -161,7 +169,10 @@ def test_a_conversation_s_settings_change_from_the_composer():
     assert 'mode === "conv"' in opened and "convSettings(S.last)" in opened
     assert "S.iconv" in _js_function(page, "ipInputs") and "ipInputs()" in _js_function(page, "interpPreview")
     assert "interpretation: S.pending.settings" in _js_function(page, "ask")
-    assert "settingsLine(j)" in _js_function(page, "render")
+    assert "settingsLine(j, m)" in _js_function(page, "render")
+    assert 'e.kind === "settings"' in _js_function(page, "digest")       # the change named as soon as it is made
+    line = _js_function(page, "settingsLine")
+    assert "m.settings.changes" in line and "if (live && !live.length) return" in line
     assert "before the settings change at question" in _js_function(page, "turnHtml")
 
 
@@ -240,7 +251,9 @@ def test_the_tops_listing(ui, files):
     assert list(rows) == ["Upper", "Lower", "Repeat"]
     assert (rows["Upper"]["top"], rows["Upper"]["base"], rows["Upper"]["base_from"]) == (1000.0, 1002.0, "stated base")
     assert (rows["Lower"]["base"], rows["Lower"]["base_from"]) == (1003.0, "next top Repeat")
-    assert [r["top"] for r in rows["Repeat"]["repeated"]] == [1000.5, 1003.0]        # asked about by its depths
+    rep = rows["Repeat"]["repeated"]                     # a name listed twice: each listing, chosen by its top
+    assert [(r["top"], r["base"], r["base_from"]) for r in rep] == [(1000.5, 1002.0, "next top Lower"),
+                                                                    (1003.0, None, "end of log")]
     # a table of several wells: this well's rows only
     wells = tops.parent / "wells.csv"
     wells.write_text(WELLS)
@@ -302,6 +315,10 @@ def test_the_inputs_as_ask_arguments(files, tmp_path):
     assert got == {"las": las.resolve(), "question": "What is the porosity?", "tops": tops.resolve(),
                    "formation": "upper", "depth_unit": None, "lithology_curve": "LITHO",
                    "formation_lithology": "sandstone", "skills": "none", "max_steps": 5}
+    got = A.arguments(_ask(las, interval={"mode": "tops", "tops": str(tops), "formation": "Repeat", "top": 1003}))
+    assert (got["formation"], got["top"]) == ("Repeat", 1003.0)       # one listing of a name the file lists twice
+    with pytest.raises(A.InputError, match="no row with top 1001"):
+        A.arguments(_ask(las, interval={"mode": "tops", "tops": str(tops), "formation": "Repeat", "top": 1001}))
     got = A.arguments(_ask(las, interval={"mode": "depths", "top": "1001", "base": "", "unit": "M", "name": " sand "},
                            skills="default"))
     assert (got["top"], got["base"], got["depth_unit"], got["formation"]) == (1001.0, None, "m", "sand")
@@ -409,3 +426,231 @@ def test_runs_a_stopped_server_left_are_marked_interrupted(tmp_path):
     assert store.history()[0]["status"] == "interrupted" and store.history()[0]["las"] == "w.las"
     with pytest.raises(KeyError):
         store.load("../../etc/passwd")
+
+
+def test_a_card_that_names_no_model_needs_the_model_s_name(tmp_path):
+    with pytest.raises(ValueError, match="names no model. FIX: give the served model's name"):
+        U.App(tmp_path / "runs", workers=1, urls=["http://127.0.0.1:9/v1"], model_card="generic")
+    app = U.App(tmp_path / "runs", workers=1, urls=["http://127.0.0.1:9/v1"], model_card="generic", model="my-llm")
+    assert app.endpoints.model == "my-llm"
+
+
+def test_a_conversation_keeps_every_question_however_many_runs_came_after(tmp_path):
+    """The run list shows the newest runs; a conversation's view reads all of its own (an old conversation followed up
+    after many other runs keeps its first question)."""
+    app = U.App(tmp_path / "runs", workers=1, model_factory=lambda cfg: StubModel(cfg))
+    root, follow = "20260101-000000-aaaaaa", "20260103-000000-cccccc"
+
+    def run(rid, question, conversation=None):
+        app.store.save({"id": rid, "status": "done", "created": rid, "inputs": {"question": question, "las": "/x/w.las"},
+                        "events": [], **({"conversation": conversation} if conversation else {})})
+
+    run(root, "first", {"root": root, "turn": 1})
+    for i in range(501):
+        run(f"20260102-{i // 3600:02d}{i // 60 % 60:02d}{i % 60:02d}-bbbbbb", "another conversation")
+    run(follow, "second", {"root": root, "turn": 2})
+    assert root not in [r["id"] for r in app.runs()]                    # the run list: the newest 500
+    assert [(t["turn"], t["question"]) for t in app.conversation(follow)["turns"]] == [(1, "first"), (2, "second")]
+    assert [b["id"] for b in app.store.conversation(root)] == [root, follow]
+
+
+# --- requests another site's page could send through the user's browser -------------------------------------------
+
+def test_a_request_from_another_site_is_refused(ui):
+    _, client = ui
+    port = client.base.rsplit(":", 1)[1]
+    code, body = client.json("/api/ask", {"las": "/etc/hostname", "question": "q"},
+                             headers={"Content-Type": "application/json", "Origin": "http://evil.example"})
+    assert code == 403 and "another site" in body["error"]
+    code, body = client.json("/api/config", None, headers={"Origin": f"http://127.0.0.1:{port}"})
+    assert code == 200                                       # the server's own page
+
+
+def test_a_post_the_page_does_not_send_is_refused(ui):
+    _, client = ui
+    code, body = client.json("/api/ask", None, raw=b'{"question": "q"}', headers={"Content-Type": "text/plain"})
+    assert code == 403 and "does not send" in body["error"]
+
+
+def test_a_loopback_server_answers_its_own_host_names_only(ui):
+    _, client = ui
+    port = client.base.rsplit(":", 1)[1]
+    code, body = client.json("/api/config", None, headers={"Host": f"evil.example:{port}"})
+    assert code == 403 and "host" in body["error"]
+    code, _ = client.json("/api/config", None, headers={"Host": f"localhost:{port}"})
+    assert code == 200
+
+
+def test_a_proxys_host_name_is_answered_when_allowed(tmp_path):
+    app = U.App(tmp_path / "runs", workers=1, model_factory=lambda cfg: StubModel(cfg))
+    srv = U.make_servers(app, "127.0.0.1", 0, allow_hosts=["proxy.example"])[0]
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        client = Client(f"http://127.0.0.1:{srv.server_address[1]}")
+        code, _ = client.json("/api/config", None, headers={"Host": "proxy.example"})
+        assert code == 200
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_the_context_profiles_offered_are_petrophys_s():
+    """The page offers every context profile Petrophys has (petrophys.reporting.context_profiles; the top-level
+    petrophys.list_context_profiles is gone from Petrophys 0b31d72)."""
+    from petrophys.reporting.context_profiles import list_context_profiles
+    assert U.A.context_profiles() == list(list_context_profiles())
+    assert U.A.context_profiles()
+
+
+def test_the_notes_before_the_answer_are_worded_for_the_reader():
+    """The notes under the question reach the page as data (agent.vocabulary.facts), worded for the person reading
+    the answer, without the model's instructions; a run saved before shows the lines the model was given."""
+    A = U.A
+    trace = {"question_notes": "Your zones with no sample here: ... Name them when the question is about your zones.",
+             "reader_notes": [
+                 {"kind": "absent", "name": "shear sonic", "curves": ["DTS"], "computes": []},
+                 {"kind": "empty", "name": "DTC", "curves": [{"curve": "DTC", "why": "range screening removed 12%"}]},
+                 {"kind": "absent_unit", "names": ["Hugin"], "units": ["Brent", "Ness", "Etive"]},
+                 {"kind": "zones_left", "zones": [{"name": "Below TD", "top": 3600.0, "base": 3700.0, "unit": "m",
+                                                   "why": "no sample of the log, which runs 176.61-3556.08 m"}]}]}
+    assert A._notes(trace) == [
+        "Not in this well's record: shear sonic (no DTS curve).",
+        "In this well's record but with no value in this interval: DTC (DTC: range screening removed 12%).",
+        "Not a unit of the tops file: Hugin. No value of another stretch is given for it; the file lists Brent, Ness, "
+        "Etive.",
+        "Your zone Below TD, 3600–3700 m: no sample of the log, which runs 176.61-3556.08 m. Nothing is computed for it."]
+    assert not any("Name them" in n for n in A._notes(trace))
+    assert A._notes({"question_notes": "line one\n\nline two"}) == ["line one", "line two"]
+
+
+def test_a_zones_file_is_checked_as_it_loads(ui, files):
+    """The user's zones (zone, top, bottom) are listed with what is wrong in them before any question is asked: zones
+    that overlap (a question would refuse the file) and zones beyond the log (no sample; said with every answer)."""
+    _, c = ui
+    las, _ = files
+    zones = las.parent / "zones.csv"
+    zones.write_text("zone,top,bottom\nUpper,1000,1002\nMiddle,1001.5,1003\nDeep,2000,2100\n")
+    status, got = c.json(f"/api/zones?path={zones}&las={las}")
+    assert status == 200, got
+    assert [(z["name"], z["top"], z["base"]) for z in got["zones"]] == [
+        ("Upper", 1000.0, 1002.0), ("Middle", 1001.5, 1003.0), ("Deep", 2000.0, 2100.0)]
+    assert [z.get("outside", False) for z in got["zones"]] == [False, False, True]
+    assert any(p.startswith("Upper and Middle overlap (1001.5-1002)") for p in got["problems"]), got["problems"]
+    assert any(p.startswith("Deep (2000-2100) lies beyond the log (1000-1004 m)") for p in got["problems"]), got["problems"]
+    status, up = c.json("/api/upload?kind=zones", raw=zones.read_bytes(), headers={"X-Filename": "zones.csv"})
+    assert status == 200 and up["name"].endswith("zones.csv"), up
+    assert c.json(f"/api/zones?path={up['path']}&las={las}")[1]["zones"] == got["zones"]   # the stored copy reads the same
+    status, bad = c.json(f"/api/zones?path={las.parent / 'none.csv'}")
+    assert status == 400 and "no zones file" in bad["error"]
+    assert got["overlaps"] == got["problems"][:1]
+    # overlapping zones would be refused when the question runs: refused before it waits for a worker
+    status, bad = c.json("/api/ask", {"las": str(las), "question": "Mean GR of each of my zones?", "zones": str(zones)})
+    assert status == 400 and "zones of zones.csv overlap: Upper and Middle overlap" in bad["error"], bad
+    zones.write_text("zone,top,bottom\nUpper,1000,1002\nDeep,2000,2100\n")         # a zone beyond the log: said, not refused
+    assert U.A.arguments({"las": str(las), "question": "q?", "zones": str(zones)})["zones"] == str(zones.resolve())
+    status, bad = c.json("/api/upload?kind=zones", raw=b"x", headers={"X-Filename": "zones.las"})
+    assert status == 400 and "is not a zones file" in bad["error"]
+
+
+def test_a_scope_is_a_list_of_stretches_or_refused(ui, files):
+    """The stretches a question is on, as the user chose them (a choice's scope): a list of texts, for a first question
+    or a follow-up; anything else is refused before the queue."""
+    A = U.A
+    assert A.scope_input(None) is None and A.scope_input([]) is None
+    assert A.scope_input([" 874-1250 m ", "Ness Fm."]) == ["874-1250 m", "Ness Fm."]
+    for bad in ("874-1250 m", [874, 1250], [""], ["x"] * 13, ["x" * 201]):
+        with pytest.raises(A.InputError):
+            A.scope_input(bad)
+    _, c = ui
+    las, _ = files
+    status, got = c.json("/api/ask", {"las": str(las), "question": "Mean GR?", "scope": "1000-1002 m"})
+    assert status == 400 and "scope must be a list" in got["error"]
+    assert A.interval_label({"interval": {"mode": "tops", "formation": "Repeat", "top": "1003.0"}}) == "Repeat from 1003"
+    assert A.interval_label({"interval": {"mode": "tops", "formation": "Upper"}}) == "Upper"
+
+
+def test_a_tops_file_in_feet_labelled_metres_is_said_as_it_loads(ui, files):
+    """Formations wholly beyond the log are marked, and when most are but would fit read in the other unit, the file's
+    depth unit is said to be the likely fault (question suite U18), before a question waits for a worker."""
+    _, c = ui
+    las, _ = files
+    tops = las.parent / "feet.csv"
+    tops.write_text("formation,top,bottom,depth_unit\nA,3281,3287,m\nB,3287,3294,m\nC,1000,1001,m\n")
+    status, got = c.json(f"/api/tops?path={tops}&las={las}")
+    assert status == 200, got
+    assert [r.get("outside", False) for r in got["formations"]] == [True, True, False]
+    assert got["fits"]["outside"] == 2 and got["fits"]["of"] == 3
+    assert "read in ft they fit it" in got["fits"]["hint"] and "depth unit (m) may be wrong" in got["fits"]["hint"]
+    tops.write_text("formation,top,bottom,depth_unit\nA,1000,1002,m\nB,1002,1004,m\n")
+    assert "hint" not in c.json(f"/api/tops?path={tops}&las={las}")[1]["fits"]      # on the log: nothing said
+
+
+def test_the_run_summary_carries_the_question_back_its_notes_and_scope():
+    """What the page shows of a run that asked back (status ask_user or outside): the text and the choices to click,
+    each a question with the stretch to set first; of any run, the notes before the answer and the stretch it was
+    computed on, and whether the user chose it."""
+    A = U.A
+    choices = [{"label": "Manganui 874-1250 m", "question": "q?", "scope": ["874-1250 m"]}, {"label": "no question"}]
+    trace = {"ask_user": "Which Manganui?", "ask_choices": choices}
+    got = A.summary(trace, {}, "ask_user")
+    assert got["ask"] == {"text": "Which Manganui?", "outside": False, "choices": choices[:1]}
+    assert A.summary(trace, {}, "done")["ask"] is None
+    trace = {"scope": {"used": ["874-1250 m"], "by": "user"}, "scope_chosen": True}
+    assert A.summary(trace, {}, "done")["scope"]["by"] == "your choice"
+    trace = {"scope": {"used": ["874-1250 m"]}}
+    assert A.summary(trace, {}, "done")["scope"] == {"used": ["874-1250 m"], "by": "the question", "merged": "", "note": ""}
+
+
+def test_the_page_sends_a_chosen_listing_and_checks_zones_against_the_well():
+    """A listing of a name the tops file lists twice is sent with its top; zones loaded for one well are checked again
+    when another LAS is loaded."""
+    page = (U.STATIC / "index.html").read_text()
+    assert "inputs.interval.top = f.row" in _js_function(page, "formInputs")
+    assert "loadZones(S.zones.path)" in _js_function(page, "showLas")
+    assert "S.formOpts[value] = f" in _js_function(page, "showTops") and "f.repeated.map(" in _js_function(page, "showTops")
+
+
+def test_config_gives_questions_to_start_with_and_how_long_a_question_takes(ui):
+    """The start page's questions are the harness's own examples (C9 outside_examples, with {interval}); the time a
+    question usually takes is the median of this server's answered runs of the same kind, once there are three."""
+    app, c = ui
+    cfg = c.json("/api/config")[1]
+    assert cfg["examples"] and all("{interval}" in q for q in cfg["examples"]) and cfg["typical"] == {}
+    for k, (secs, route) in enumerate([(30, "direct"), (50, "direct"), (40, "direct"), (600, "investigation"),
+                                       (20, "direct")]):
+        f = app.store.root / f"20260101-00000{k}-abcdef"
+        f.mkdir(parents=True)
+        status = "error" if k == 4 else "done"                  # a run that failed does not count
+        (f / "run.json").write_text(json.dumps({"id": f.name, "status": status, "elapsed": secs,
+                                                "result": {"status": "ok", "route": route}}))
+    app._typical = None
+    assert c.json("/api/config")[1]["typical"] == {"direct": [40, 3]}      # an investigation needs three runs too
+
+
+def test_the_sample_wells_come_from_petrophys_each_with_the_tops_that_list_it():
+    """The one-click start lists Petrophys's log samples (the harness names none); a tops sample pairs with a well
+    when the tops reader finds rows for it: a well column naming it, or the file's name holding the well's."""
+    from petrophys.datasets import list_samples
+    from petroharness.ask import _las_header
+    from petroharness.well.tops import read_tops
+    got = U.A.samples()
+    assert {r["name"] for r in got} == set(list_samples("logs"))              # every log sample, as Petrophys names it
+    for r in got:
+        assert Path(r["las"]).is_file() and r["folder"] and r["curves"] > 0 and r["unit"] in ("m", "ft", None)
+        if r["tops"]:
+            table = read_tops(Path(r["tops"]["path"]), _las_header(Path(r["las"]))[1], None, r["unit"])
+            assert table.tops and len(table.names()) == r["tops"]["formations"]
+    assert any(r["tops"] for r in got) and not any("lithology" in (r["tops"] or {}).get("name", "") for r in got)
+
+
+def test_the_start_page_offers_wells_questions_drops_and_progress_in_words():
+    page = (U.STATIC / "index.html").read_text()
+    start = _js_function(page, "startRender")
+    assert "Drop a LAS file here" in start and "Or start with a sample well from Petrophys" in start
+    assert "Questions to start with" in start and "suggestions()" in start
+    assert 'api("/api/samples")' in page and "S.cfg.examples" in _js_function(page, "suggestions")
+    drop = _js_function(page, "dropFiles")
+    assert 'upload("las"' in drop and 'upload("tops"' in drop and 'upload("zones"' in drop and 'upload("notes"' in drop
+    words = _js_function(page, "nowWords")
+    assert "Petrophys is interpreting the well" in words and "of at most" in words and "timeLeft(j, m)" in words
+    assert "S.cfg.typical" in _js_function(page, "timeLeft")

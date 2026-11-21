@@ -90,9 +90,14 @@ class TopsTable:
     def names(self) -> list[str]:
         return list(dict.fromkeys(t.name for t in self.tops))
 
-    def interval(self, formation: str) -> FormationInterval:
+    def within(self, iv: FormationInterval) -> list:
+        """The table's other units inside the interval: (name, top, base), shallowest first (_units_within)."""
+        return _units_within(self, iv)
+
+    def interval(self, formation: str, top: float | None = None) -> FormationInterval:
         """The formation's interval (see the module's docstring). A name matches case-, space- and
-        punctuation-insensitively; a name the table lists twice (a repeated section) must be given by its depths."""
+        punctuation-insensitively; a name the table lists twice (a repeated section) is chosen by `top`, the top of
+        the row meant as the file writes it."""
         key = name_key(formation)
         hits = [t for t in self.tops if name_key(t.name) == key]
         where = f" for well {self.wells[0]}" if self.wells else ""
@@ -104,13 +109,20 @@ class TopsTable:
                 f"WHAT: formation {formation!r} is not in the tops file {self.path.name}{where}.{hint} WHY: its interval "
                 f"comes from its row there. FIX: use one of the names it lists ({', '.join(names)}), or give the "
                 "interval's depths (--top/--base) instead of the tops file.")
+        listed = "; ".join(f"line {t.line}: top {t.top:g}" + (f", base {t.base:g}" if t.base is not None else "")
+                           for t in hits)
+        if top is not None:
+            hits = [t for t in hits if abs(t.top - top) <= 1e-6 * max(1.0, abs(top))][:1] or []
+            if not hits:
+                raise FormationNotFound(
+                    f"WHAT: formation {formation!r} has no row with top {top:g} in {self.path.name}{where} ({listed}). "
+                    "FIX: give the top of one of its rows (--top D), as the file writes it.")
         if len(hits) > 1:
-            listed = "; ".join(f"line {t.line}: top {t.top:g}" + (f", base {t.base:g}" if t.base is not None else "")
-                               for t in hits)
             raise FormationNotFound(
                 f"WHAT: formation {formation!r} is listed {len(hits)} times in {self.path.name}{where} ({listed}). "
-                "WHY: a repeated name (e.g. a repeated section) does not say which interval is meant. FIX: give the "
-                "one you mean by its depths: --formation NAME --top D --base D.")
+                "WHY: a repeated name (e.g. a repeated section) does not say which interval is meant. FIX: choose the "
+                "one you mean by its top: --formation NAME --tops FILE --top D, or give its depths alone: --formation "
+                "NAME --top D --base D.")
         hit = hits[0]
         if hit.base is not None:
             if hit.base <= hit.top:
@@ -124,16 +136,48 @@ class TopsTable:
         return FormationInterval(hit.name, hit.top, None, False, hit.unit, "end of log")
 
 
+def _units_within(table: "TopsTable", iv: FormationInterval) -> list:
+    """The table's other units inside an interval (a group's formations, a formation's members): (name, top, base) in
+    the interval's unit, shallowest first. Inside: its top and base within the interval's, and not the interval's own
+    span. A name listed twice is left out (its rows do not say which is meant), as is one with no base."""
+    if iv.base is None:
+        return []
+    keys = [name_key(t.name) for t in table.tops]
+    out, eps = [], 1e-6 * max(1.0, abs(iv.base))
+    for t in table.tops:
+        key = name_key(t.name)
+        if key == name_key(iv.name) or keys.count(key) > 1:
+            continue
+        try:
+            u = table.interval(t.name)
+        except (ValueError, LookupError):
+            continue
+        if u.base is None:
+            continue
+        top, base = _in_unit(u.top, u.unit, iv.unit), _in_unit(u.base, u.unit, iv.unit)
+        if top >= iv.top - eps and base <= iv.base + eps and (top > iv.top + eps or base < iv.base - eps):
+            out.append((t.name, top, base))
+    return sorted(out, key=lambda x: (x[1], x[2]))
+
+
 def _in_unit(depth: float, unit: str | None, to: str | None) -> float:
     return depth if unit is None or to is None else convert(depth, unit, to)
 
 
 def _read_frame(path: Path, header) -> pd.DataFrame:
-    if path.suffix.lower() in (".xlsx", ".xls"):
-        return pd.read_excel(path, header=header, dtype=str)
-    first = next((ln for ln in path.read_text(errors="replace").splitlines() if ln.strip()), "")
-    sep = "\t" if "\t" in first else ";" if ";" in first and "," not in first else ","
-    return pd.read_csv(path, sep=sep, header=header, dtype=str, skipinitialspace=True, skip_blank_lines=True)
+    """The table in a tops file (CSV, tab- or semicolon-separated, or Excel); one that cannot be read as a table is a
+    ValueError saying where (WHAT / FIX)."""
+    try:
+        if path.suffix.lower() in (".xlsx", ".xls"):
+            return pd.read_excel(path, header=header, dtype=str)
+        first = next((ln for ln in path.read_text(errors="replace", encoding="utf-8").splitlines() if ln.strip()), "")
+        sep = "\t" if "\t" in first else ";" if ";" in first and "," not in first else ","
+        return pd.read_csv(path, sep=sep, header=header, dtype=str, skipinitialspace=True, skip_blank_lines=True)
+    except (pd.errors.ParserError, pd.errors.EmptyDataError, UnicodeDecodeError) as exc:
+        said = " ".join(str(exc).split()).replace("Error tokenizing data. C error: ", "")
+        raise ValueError(f"WHAT: the tops file {path.name} cannot be read as a table ({said}). FIX: give every row "
+                         "the same columns, separated by commas (leave a missing value empty, e.g. 'B,1100,'), with "
+                         "a header line naming them (formation,top[,base][,depth_unit][,well]).") from exc
 
 
 def _number(text) -> float | None:

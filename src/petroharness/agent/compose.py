@@ -53,7 +53,8 @@ _SECTION_REF = re.compile(r"[ \t]?\((?:[ \t]*(?:THE MAP|MAP|WHAT THE CURVES ARE|
 # what follows it (punctuation, a bracket, or a word that cannot be the noun it qualifies).
 _BEFORE_NOUN = frozenset(
     "of in on from by with for to into per via than between across within under over at as like vs versus "
-    "and or but because since whereas although though while if when where whether "
+    "and or but because since whereas although though while if when where whether so yet thus hence then once unless "
+    "until after before "
     "use uses used using see read reads follow follows following cite cites trust favour favor prefer "
     "take takes check checks".split())
 _DETERMINERS = frozenset("the a an this that these those its their each every any".split())
@@ -66,7 +67,11 @@ _NOUN_FOLLOWERS = (
     r"classified|computes?|computed|uses?|used|reads?|holds?|held|carr(?:y|ies|ied)|confirms?|confirmed|says|"
     r"leaves?|left|treats?|sets?|takes?|keeps?|excludes?|includes?|applies|applied|assigns?|defines?|derives?|"
     r"yields?|provides?|indicates?|suggests?|supports?|agrees?|matches|contains?|describes?|measures?|caps?|"
-    r"supply|supplies|supplied|show")
+    r"supply|supplies|supplied|show|cites?|cited|notes|noted|documented|establish(?:es|ed)?|demonstrates?|"
+    r"demonstrated|proves?|proved|impl(?:y|ies|ied)|ranked|lacks?|lacked|misses|missed|fitted|reproduces?|reproduced|"
+    r"differs?|differed|exceeds?|exceeded|falls?|fell|stays?|remains?|tracked|follows?|followed|captures?|captured|"
+    r"reveals?|revealed|attests?|corroborates?|contradicts?|equals?|separates?|named|identifies|identified|"
+    r"resolves?|resolved|puts|gets?|got|sees?|saw|seen|added|lowers?|raises?|raised|dropped|moved|shifted")
 _AFTER_NOUN = re.compile(rf"(?:\*\*|__)?\s*(?:[.,;:!?)\]]|$|\(|(?:{_NOUN_FOLLOWERS})\b)", re.I)
 # a chain's tail after a slash, which older code left when it removed the chain's head (";/E9 show", "the/E11"):
 # the slash becomes a space and the id is read where it stands (not after a claim id or the map: "C8b/E7" is a chain)
@@ -198,14 +203,80 @@ def leftover_citations(text: str) -> list[str]:
 ZONE_TABLE_TOKEN = "{{ZONE_TABLE}}"
 
 
+_SPAN = re.compile(r"(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)")
+
+
+def _spans(rows: list) -> set:
+    """The depth intervals a markdown table's rows give (the first cell that is one), to 0.1."""
+    out = set()
+    for ln in rows:
+        for cell in ln.strip().strip("|").split("|"):
+            m = _SPAN.fullmatch(cell.strip().replace("*", ""))
+            if m:
+                out.add((round(float(m.group(1)), 1), round(float(m.group(2)), 1)))
+                break
+    return out
+
+
+def _names(text: str) -> set:
+    """The curve mnemonics a table names (units in brackets aside)."""
+    return set(re.findall(r"\b[A-Z][A-Z0-9_]+\b", re.sub(r"\([^)]*\)", "", text)))
+
+
+_ID_COLUMN = re.compile(r"(?:zone|depth(?: interval)?|interval|lithology|top|base|formation)\b", re.I)
+
+
+def _adds(header: str, has: set) -> bool:
+    """Whether a table's header has a column the zone table lacks: a curve it does not show, or a column of the
+    writer's own (a count, a thickness, a role). The zone, depth and lithology columns identify the rows."""
+    for cell in header.strip().strip("|").split("|"):
+        c = cell.strip().strip("*_ ")
+        if not c or _ID_COLUMN.match(c):
+            continue
+        names = _names(c)
+        if not names or not names <= has:
+            return True
+    return False
+
+
+def _without_repeats(draft: str, table: str) -> str:
+    """The draft without a table of its own that repeats the zone table: the same zones (every zone's depth interval)
+    and no curve the zone table lacks. The zone table is the answer's table of the zones, once; a table of some zones,
+    or one with a curve of its own, stays."""
+    zones, has = _spans(table.splitlines()), _names(table)
+    if len(zones) < 2:
+        return draft
+    lines, out, i = draft.split("\n"), [], 0
+    while i < len(lines):
+        if not lines[i].lstrip().startswith("|"):
+            out.append(lines[i])
+            i += 1
+            continue
+        j = i
+        while j < len(lines) and lines[j].lstrip().startswith("|"):
+            j += 1
+        if _spans(lines[i:j]) == zones and not _adds(lines[i], has):
+            while out and not out[-1].strip():               # its label, when a bold line names it alone
+                out.pop()
+            if out and re.fullmatch(r"\s*\*\*[^*]+\*\*:?\s*", out[-1]):
+                out.pop()
+            out.append("")
+        else:
+            out.extend(lines[i:j])
+        i = j
+    return "\n".join(out)
+
+
 def compose(draft: str, table: str) -> str:
     """Replace the table token; if the writer omitted it, place the table after the first section, or at the end
-    of an answer without sections."""
+    of an answer without sections. A table of the draft's own that repeats the zone table's zones is left out."""
+    draft = re.sub(r"(?m)^[ \t]*#{1,6}[ \t]*(?:\n|$)", "", draft)        # a heading with no text ("###")
     if not table:
         return draft.replace(ZONE_TABLE_TOKEN, "").strip()
+    draft = _without_repeats(draft, table)
     if ZONE_TABLE_TOKEN in draft:
         return draft.replace(ZONE_TABLE_TOKEN, table, 1).replace(ZONE_TABLE_TOKEN, "")
-    parts = draft.split("\n## ")
-    if len(parts) >= 3:
-        return parts[0] + "\n## " + parts[1].rstrip() + "\n\n" + table + "\n\n## " + "\n## ".join(parts[2:])
+    head, *sections = re.split(r"(?m)^(?=## )", draft)     # the text before the first heading (maybe none), each section
+    if len(sections) >= 2:
+        return head + sections[0].rstrip() + "\n\n" + table + "\n\n" + "".join(sections[1:])
     return draft.rstrip() + "\n\n" + table

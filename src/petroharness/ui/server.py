@@ -16,9 +16,14 @@ in a queue.
 API (JSON):
     GET  /api/config                endpoints and their health, workers, queue, defaults, topic areas, context profiles,
                                     each tool's group
+    GET  /api/settings              the interpretation settings, grouped, with their defaults and help
+    POST /api/preview               the inputs, before any question -> the interval, its zones, how they were read and
+                                    the value each setting took on this well
+    GET  /api/samples               Petrophys's sample wells, each with its header and its tops sample
     GET  /api/las?path=             a LAS file's header (well, depth range and unit, curves)
     GET  /api/tops?path=[&las=&unit=]  the formations a tops file names, with the interval each would use
-    POST /api/upload?kind=las|tops|notes  the file's bytes, header X-Filename -> {path, ...}
+    POST /api/upload?kind=las|tops|zones|notes  the file's bytes, header X-Filename -> {path, ...}
+    GET  /api/zones?path=[&las=]    the user's zones a zones file gives, and what is wrong in them
     GET  /api/notes?path=           a field notes file: its name, settings and notes, checked
     POST /api/ask                   the inputs (petroharness.ui.adapter) -> {id}
     GET  /api/job/<id>?since=N      status, the events from N on, then the answer and the result
@@ -26,6 +31,9 @@ API (JSON):
     GET  /api/run/<id>              a saved run in full
     GET  /api/run/<id>/answer.md | trace.json
     GET  /api/run/<id>/conversation the run's conversation as it stands: every question in order, with answer and figures
+    GET  /api/run/<id>/figures/<name>  one figure of the answer (PNG)
+    GET  /api/run/<id>/audit        the answer's audit trail (Markdown)
+    GET  /api/run/<id>/lineage      what the answer rests on: claims, results, curves, Petrophys steps, measured logs
     POST /api/rate/<id>             {verdict: good|partly|wrong, note}
 """
 
@@ -35,6 +43,7 @@ import argparse
 import json
 import os
 import queue
+import statistics
 import socket
 import sys
 import threading
@@ -60,9 +69,15 @@ KEEP_FINISHED = 100          # finished jobs kept in memory; older ones are read
 # --- the model endpoints -------------------------------------------------------------------------------------------
 
 def served_model(model: str | None = None, card: str | None = None) -> str:
-    """The model id the harness asks the endpoints for: --model, else its model card's."""
+    """The model id the harness asks the endpoints for: --model, else its model card's (a card that names none, as
+    the generic card, needs --model: a ValueError, as the question command says it)."""
     from petroharness.models import card_file, card_settings
-    return model or str(card_settings(card_file(card, model))["model"])
+    file = card_file(card, model)
+    served = model or str(card_settings(file)["model"] or "")
+    if not served:
+        raise ValueError(f"WHAT: the model card {Path(file).name} names no model. FIX: give the served model's name "
+                         "(--model NAME, as the server lists it at /v1/models).")
+    return served
 
 
 class Endpoints:
@@ -153,6 +168,7 @@ class App:
     def submit(self, inputs: dict) -> A.Job:
         root = None
         follow = str(inputs.get("follow") or "").strip() if isinstance(inputs, dict) else ""
+        scope = A.scope_input(inputs.get("scope")) if isinstance(inputs, dict) else None   # wrong: said now
         if follow:                                  # a follow-up: the next question of that run's conversation
             prev = self.jobs[follow].record() if follow in self.jobs else self.store.load(follow)
             if prev.get("status") != "done":
@@ -167,7 +183,11 @@ class App:
             inputs.pop("adopt", None)
             if change is not None:                  # the settings to run under from this question on (adopted)
                 inputs.update(interpretation=change or {}, adopt=True)
-        kwargs = A.arguments(inputs) | self.choice  # wrong inputs are said now, not after the queue
+        if isinstance(inputs, dict):                # the stretches this question is on, chosen by the user (an answer
+            inputs = {k: v for k, v in inputs.items() if k != "scope"} | ({"scope": scope} if scope else {})
+            #                                         to a question back), set before the question is read
+        kwargs = A.arguments({k: v for k, v in inputs.items() if k != "scope"}) | self.choice   # wrong inputs are
+        #                                             said now, not after the queue
         job = A.Job(self.store.new_id(), inputs, kwargs)
         job.root = root or job.id
         with self._lock:
@@ -245,14 +265,16 @@ class App:
             job = self.jobs.get(i)
             return job.record() if job is not None else self.store.load(i)
         root = (record(run_id).get("conversation") or {}).get("root") or run_id       # an unknown run: KeyError (404)
+        live = {j.id: brief(j.record()) for j in list(self.jobs.values()) if j.finished is None and j.root == root}
+        mine = list(live.values()) + [b for b in self.store.conversation(root) if b["id"] not in live]
         turns = []
-        for b in sorted((b for b in self.runs() if b.get("root") == root), key=lambda b: (b.get("created") or "", b["id"])):
+        for b in sorted(mine, key=lambda b: (b.get("created") or "", b["id"])):
             r = record(b["id"])
             res = r.get("result") if isinstance(r.get("result"), dict) else {}
             n = (r.get("conversation") or {}).get("turn") or (turns[-1]["turn"] + 1 if turns else 1)
             turns.append({"id": r["id"], "turn": n, "question": (r.get("inputs") or {}).get("question", ""),
-                          "status": r.get("status"), "created": r.get("created"), "elapsed": r.get("elapsed"),
-                          "answer": r.get("answer") or "",
+                          "status": r.get("status"), "outcome": res.get("status"), "created": r.get("created"),
+                          "elapsed": r.get("elapsed"), "answer": r.get("answer") or "",
                           "interpretation": (r.get("inputs") or {}).get("interpretation") or {},
                           "settings_changed": (res.get("settings_changes") or {}).get("changed") or [],
                           "figures": [{"file": f.get("file"), "caption": f.get("caption", "")}
@@ -278,6 +300,31 @@ class App:
         out = [brief(j.record()) | {"elapsed": j.elapsed()} for j in sorted(live.values(), key=lambda j: j.id, reverse=True)]
         return out + [r for r in saved if r["id"] not in live]
 
+    def typical(self) -> dict:
+        """How long a question takes on this server, from its saved runs that answered: the median seconds and the
+        number of runs, for a direct answer and for an investigation ({"direct": [s, n], "investigation": [s, n]}),
+        each once it has TYPICAL_MIN runs. The page's time left. Read again at most every TYPICAL_TTL seconds."""
+        now = time.time()
+        with self._lock:
+            got = getattr(self, "_typical", None)
+            if got and now - got[0] < TYPICAL_TTL:
+                return got[1]
+        times: dict = {"direct": [], "investigation": []}
+        for path in sorted(self.store.root.glob("*/run.json"))[-TYPICAL_RUNS:]:
+            try:
+                r = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            res = r.get("result") if isinstance(r.get("result"), dict) else {}
+            if r.get("status") != "done" or res.get("status") not in ("ok", "unresolved_numbers") or not r.get("elapsed"):
+                continue
+            kind = "direct" if res.get("route") == "direct" else "investigation"
+            times[kind].append(float(r["elapsed"]))
+        out = {k: [round(statistics.median(v)), len(v)] for k, v in times.items() if len(v) >= TYPICAL_MIN}
+        with self._lock:
+            self._typical = (now, out)
+        return out
+
     def config(self) -> dict:
         from petroharness import __version__
         from petroharness.agent import direction
@@ -291,8 +338,19 @@ class App:
                 "max_steps": MAX_STEPS, "profiles": A.context_profiles(),
                 "topics": {k: v.get("when", "") for k, v in direction.areas().items()},
                 "verbs": verbs(), "petrophys_verbs": petrophys_verbs(),
+                "examples": examples(), "typical": self.typical(),
                 "skills_env": os.environ.get("PETROHARNESS_SKILLS", ""),
                 "settings_env": os.environ.get("PETROHARNESS_DATA", "")}
+
+
+TYPICAL_MIN, TYPICAL_RUNS, TYPICAL_TTL = 3, 400, 300     # runs needed for a typical time; the latest read; seconds kept
+
+
+def examples() -> list:
+    """Questions to start with, as the harness offers them when a request is outside what it does (C9
+    outside_examples): each with {interval} for the interval's name."""
+    from petroharness.agent import components as C
+    return [str(x) for x in C.text("C9", "outside_examples")]
 
 
 def verbs() -> dict:
@@ -314,9 +372,35 @@ def _env_urls() -> list:
 
 # --- HTTP ------------------------------------------------------------------------------------------------------------
 
+LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "PetroHarnessUI"
     app: App = None                                 # set by make_servers
+    loopback = True                                 # set by make_servers: the server listens on a loopback address
+    allow_hosts: frozenset = frozenset()            # set by make_servers: further host names it answers (--allow-host)
+
+    def _refused(self, method: str, path: str) -> str | None:
+        """Why an API request is refused, or None. Another site's page cannot use this server through the user's
+        browser: a request from another origin is refused; a POST must be the page's own (JSON, or an upload with
+        its X-Filename header), which a browser does not send across sites without the server's leave; and a server
+        on a loopback address answers its own host names only (a renamed host could otherwise reach it)."""
+        host = (self.headers.get("Host") or "").strip().lower()
+        name = urlparse("//" + host).hostname or ""
+        if self.loopback and name not in LOOPBACK | self.allow_hosts:
+            return (f"WHAT: a request for host {host!r}. WHY: this server listens on a loopback address and answers "
+                    "its own host names only. FIX: open http://localhost:PORT, or start it with --allow-host NAME "
+                    "for a proxy that keeps its own host name.")
+        origin = self.headers.get("Origin")
+        if origin is not None and (origin == "null" or (urlparse(origin).netloc or "").lower() != host):
+            return (f"WHAT: a request from another site ({origin}). WHY: only this server's own page may use its "
+                    "API. FIX: use the page this server serves.")
+        if method == "POST":
+            ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if ctype != "application/json" and not (path == "/api/upload" and self.headers.get("X-Filename") is not None):
+                return "WHAT: a request the page does not send. FIX: use the page this server serves."
+        return None
 
     def log_message(self, fmt, *args):             # the page loads only; the polling would be noise
         if self.path.split("?")[0] in ("/", "/index.html"):
@@ -370,6 +454,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, f.read_bytes(), kind)
             if not parts or parts[0] != "api":
                 return self._json({"error": "not found"}, 404)
+            why = self._refused(method, url.path)
+            if why:
+                return self._json({"error": why}, 403)
             what, arg = (parts[1] if len(parts) > 1 else ""), (parts[2] if len(parts) > 2 else "")
             if method == "GET" and what == "config":
                 return self._json(app.config())
@@ -378,14 +465,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(T.schema())
             if method == "POST" and what == "preview":            # Petrophys on this well with these settings
                 return self._json(A.preview(self._payload(), app.store.cache))
+            if method == "GET" and what == "samples":             # Petrophys's sample wells, for a one-click start
+                return self._json(list(A.samples()))
             if method == "GET" and what == "las":
                 return self._json(A.las_info(q.get("path")))
             if method == "GET" and what == "tops":
                 return self._json(A.tops_info(q.get("path"), q.get("las") or None, q.get("unit") or None))
             if method == "POST" and what == "upload":
                 kind = q.get("kind", "las")
-                if kind not in ("las", "tops", "notes"):
-                    raise A.InputError("WHAT: upload kind. FIX: kind=las, kind=tops or kind=notes.")
+                if kind not in ("las", "tops", "notes", "zones"):
+                    raise A.InputError("WHAT: upload kind. FIX: kind=las, kind=tops, kind=zones or kind=notes.")
                 path = app.store.upload(kind, self.headers.get("X-Filename") or "", self._body(MAX_UPLOAD))
                 if kind == "las":
                     try:
@@ -398,6 +487,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"path": str(path), "name": path.name})
             if method == "GET" and what == "notes":
                 return self._json(A.notes_info(q.get("path")))
+            if method == "GET" and what == "zones":                # the user's zones, and what is wrong in them
+                return self._json(A.zones_info(q.get("path"), q.get("las") or None))
             if method == "POST" and what == "ask":
                 return self._json({"id": app.submit(self._payload()).id})
             if method == "GET" and what == "job":
@@ -428,8 +519,9 @@ class Handler(BaseHTTPRequestHandler):
                     app.jobs[arg].rating = rating
                 return self._json(rating)
             return self._json({"error": "not found"}, 404)
-        except KeyError as exc:
-            return self._json({"error": str(exc).strip("'\"")}, 404)
+        except KeyError as exc:                     # its message as raised (str() of a KeyError is its repr)
+            said = exc.args[0] if exc.args and isinstance(exc.args[0], str) else "not found"
+            return self._json({"error": said}, 404)
         except (ValueError, LookupError, OSError) as exc:
             return self._json({"error": str(exc)}, 400)
         except Exception as exc:  # noqa: BLE001  (an unexpected failure is answered as a 500, the server goes on)
@@ -446,10 +538,12 @@ class _Server6(_Server):
     address_family = socket.AF_INET6
 
 
-def make_servers(app: App, host: str = "127.0.0.1", port: int = 7860) -> list:
+def make_servers(app: App, host: str = "127.0.0.1", port: int = 7860, allow_hosts=()) -> list:
     """The HTTP servers for the app: one on `host`; for "localhost", one on 127.0.0.1 and one on ::1 (where the
-    machine has IPv6), since clients that resolve localhost to ::1 first would otherwise find nothing."""
-    handler = type("BoundHandler", (Handler,), {"app": app})
+    machine has IPv6), since clients that resolve localhost to ::1 first would otherwise find nothing. `allow_hosts`:
+    further host names a loopback server answers (a proxy that keeps its own host name)."""
+    handler = type("BoundHandler", (Handler,), {"app": app, "loopback": host in LOOPBACK,
+                                                "allow_hosts": frozenset(h.strip().lower() for h in allow_hosts if h.strip())})
     if host != "localhost":
         return [(_Server6 if ":" in host else _Server)((host, port), handler)]
     first = _Server(("127.0.0.1", port), handler)
@@ -472,6 +566,9 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--host", default="127.0.0.1", help="the address to listen on (default 127.0.0.1; localhost: "
                                                         "127.0.0.1 and ::1; 0.0.0.0: every interface)")
     ap.add_argument("--port", type=int, default=7860, help="the port (default 7860)")
+    ap.add_argument("--allow-host", action="append", default=[], metavar="NAME",
+                    help="a further host name a server on a loopback address answers (a proxy that keeps its own "
+                         "host name); repeatable")
     ap.add_argument("--runs", type=Path, default=Path("petroharness-ui-runs"),
                     help="the folder for saved runs and uploads (default ./petroharness-ui-runs)")
     ap.add_argument("--workers", type=int, default=4, help="questions answered at once (default 4); more wait")
@@ -491,13 +588,16 @@ def main(argv: list | None = None) -> int:
         print(f"petroharness ui: {exc}", file=sys.stderr)
         return 2
     try:
-        servers = make_servers(app, args.host, args.port)
+        servers = make_servers(app, args.host, args.port, args.allow_host)
     except OSError as exc:
         print(f"petroharness ui: cannot listen on {args.host}:{args.port} ({exc}). FIX: choose another --port.",
               file=sys.stderr)
         return 2
     where = ", ".join(_url(s.server_address) for s in servers)
     print(f"PetroHarness UI on {where}", file=sys.stderr)
+    if args.host not in LOOPBACK:
+        print(f"  listening on {args.host}: anyone who can reach this port can ask questions and read the files this "
+              "server can read; listen on 127.0.0.1 and forward the port where you can", file=sys.stderr)
     print(f"  runs: {app.store.root}; workers: {app.workers}; model: {app.label} ({app.endpoints.model}); endpoints: "
           f"{', '.join(app.endpoints.urls) or 'none (set PETROHARNESS_MODEL_URL or --model-url)'}", file=sys.stderr,
           flush=True)

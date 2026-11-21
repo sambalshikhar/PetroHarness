@@ -13,7 +13,7 @@ import numpy as np
 
 from petroharness.agent import engine as E
 from petroharness.agent.engine import Formation, Out, Result, ToolError
-from petroharness.agent.library import register
+from petroharness.agent.library import register, scratch_well
 from petroharness.record.catalog import flag_runs
 
 OBJECTS = {
@@ -43,10 +43,8 @@ def check(f: Formation, what: str, curves=None, zones=None, threshold: float | N
 # --- shared ---------------------------------------------------------------------------------------------------------
 
 def _well(f: Formation):
-    well = getattr(getattr(f.view, "prep", None), "well", None)
-    if well is None:
-        raise ToolError("no prepared well to check")
-    return well
+    """A copy of the prepared well (library.scratch_well): a check never changes the record."""
+    return scratch_well(f)
 
 
 def _las_depth(f: Formation) -> np.ndarray:
@@ -247,7 +245,7 @@ def depth_shift(f: Formation, curves, zones, threshold) -> Result:
                                       run_gap=gap)
         except ValueError as e:
             raise ToolError(f"Petrophys find_core_depth_shift: {str(e)[:300]}") from None
-        caught = [str(w.message)[:200] for w in ws if isinstance(w.message, UserWarning)]
+        caught = [w.message for w in ws if isinstance(w.message, UserWarning)]   # whole, with the inputs it asks for
     out = Out(f)
     row = out.child()
     u = f.inv.depth_unit
@@ -269,6 +267,6 @@ def depth_shift(f: Formation, curves, zones, threshold) -> Result:
     if any(E.calibrated_twin(f, c) == log for c in f.inv.curves if c != log):
         out.add(f"  {log} is calibrated to core: a tie against the same core is not independent; match the log it was "
                 f"calibrated from (Petrophys find_core_depth_shift's own caution)")
-    for msg in caught[:3]:
+    for msg in E.said_whole(caught):
         out.add(f"  Petrophys notes: {msg}")
     return out.result()

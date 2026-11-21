@@ -117,3 +117,15 @@ def test_engine_qc_record_reaches_the_prepared_well():
     assert prep.value_qc["rules"]["PERM"]["low"] == 1e-4
     assert prep.value_qc["changed"]["PERM"].shape == prep.depth.shape
     assert np.isnan(prep.curve("PERM")[prep.value_qc["changed"]["PERM"]]).all()
+
+
+def test_a_curve_s_twins_are_each_named_once():
+    """RHOB and RHOB_RAW each recorded as a copy of the other: each names the other once ('RHOB holds the same
+    values', not 'RHOB, RHOB hold'); a one-way copy and a self-reference too."""
+    from types import SimpleNamespace as NS
+    from petroharness.agent.engine import same_as
+    curves = {"RHOB": NS(copy_of="RHOB_RAW"), "RHOB_RAW": NS(copy_of="RHOB"), "GR": NS(copy_of="GR"),
+              "GR_N": NS(copy_of="GR"), "NPHI": NS(copy_of=None)}
+    f = NS(inv=NS(curves=curves))
+    assert same_as(f, "RHOB_RAW") == ["RHOB"] and same_as(f, "RHOB") == ["RHOB_RAW"]
+    assert same_as(f, "GR") == ["GR_N"] and same_as(f, "GR_N") == ["GR"] and same_as(f, "NPHI") == []

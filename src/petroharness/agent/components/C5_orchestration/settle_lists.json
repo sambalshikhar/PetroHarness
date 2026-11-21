@@ -2,5 +2,6 @@
  "head": "BOOKKEEPING (lists to act on as you see fit; nothing here holds the answer back):",
  "named": "- named in your reading, and in no claim or result a claim cites: {items}",
  "unused": "- opened, cited by no claim (does each bear on what the question asks?): {items}",
- "hypotheses": "- still graded hypothesis: {items} (support, grade or drop each)"
+ "hypotheses": "- still graded hypothesis: {items} (support, grade or drop each)",
+ "written_before": "- written before results that their point's claims now cite were opened (does each text still hold against them? rewrite it from them, or keep it): {items}"
 }

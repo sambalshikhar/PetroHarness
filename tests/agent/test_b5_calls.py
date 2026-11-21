@@ -52,7 +52,7 @@ from petroharness.agent.schemas import arguments, fit  # noqa: E402
     ("runs", {"condition": "NET_PAY or GAS", "where": "VCL < 0.3"}, {"condition": "NET_PAY or GAS", "where": "VCL < 0.3"}),
     ("runs", {"condition": "NET_PAY", "limit": 0}, {"condition": "NET_PAY"}),
     ("runs", {"condition": "NET_PAY", "limit": 5.0}, {"condition": "NET_PAY", "limit": 5}),
-    ("runs", {"condition": "NET_PAY", "limit": 0.7}, {"condition": "NET_PAY", "limit": 0.7}),      # a threshold: an error says so
+    ("runs", {"condition": "NET_PAY", "limit": 0.7}, {"condition": "NET_PAY", "limit": 0.7}),      # a threshold: runs says so
 ])
 def test_fit_reads_what_the_shape_means(name, raw, want):
     assert fit(name, arguments(raw)) == want
@@ -156,11 +156,11 @@ def test_a_zone_term_selects_the_zone_and_a_window_its_depths():
     assert m.sum() == len(z2.indices) and m[np.asarray(z2.indices)].all()
     m = select(f, "Z1-Z2").mask
     assert m.sum() == len(z1.indices) + len(z2.indices)
-    top, base = z2.top, z2.base
+    top, base = z2.top, z2.base                       # the zone's limits as written, rounded to 4 decimals
     w = select(f, f"{top}-{base} {f.inv.depth_unit}").mask
-    d = f.depth
-    assert w.sum() == int(((d >= top - 1e-6) & (d <= base + 1e-6)).sum())
-    assert (select(f, f"DEPTH >= {top} and DEPTH <= {base}").mask == w).all()
+    assert w.sum() == len(z2.indices) and w[np.asarray(z2.indices)].all()   # a range's limits: the samples they
+    c = select(f, f"DEPTH >= {top} and DEPTH <= {base}").mask                #   round to (selection.parse_range)
+    assert (c == w).all()                              # a comparison with DEPTH reads its numbers the same way
     with pytest.raises(ToolError, match="no zone Z999"):
         select(f, "Z999")
 
@@ -183,7 +183,7 @@ def test_a_side_adds_and_subtracts_curves():
 
 @pytest.mark.data
 @pytest.mark.parametrize("name,raw,says", [
-    ("runs", {"condition": "NET_PAY", "limit": 0.7}, "limit"),
+    ("runs", {"condition": "NET_PAY", "max_thickness": 0}, "max_thickness"),
     ("stats", {"curves": ["SW"], "zones": ["MICRO_PORES"]}, "no zone MICRO_PORES"),
     ("stats", {"curves": ["SW"], "where": "top of Z2"}, "cannot read"),
     ("profile", {"curves": ["SW", "PHIE"]}, "profile takes"),

@@ -1,0 +1,1 @@
+- depth may also be "outside": the request is not about this well's logs or their interpretation (a poem, small talk, a task for another tool). It is answered with what this assistant does, nothing computed.

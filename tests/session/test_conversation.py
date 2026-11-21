@@ -90,10 +90,10 @@ def messages(llm):
 def test_the_first_question_is_the_question_graphs_own_run(formation, tmp_path):
     from petroharness.agent import graph
     alone = Model(first_steps())
-    out = graph.answer(formation, "k200t", 1, 4, "open", "profile", llm_factory=lambda cfg: alone)
+    out = graph.answer(formation, "k2-horizon-7b", 1, 4, "open", "profile", llm_factory=lambda cfg: alone)
     assert not out["trace"].get("error"), out["trace"].get("traceback")
     llm = Model(first_steps())
-    c = Conversation.on_tasks(tmp_path / "s", "k200t", llm_factory=lambda cfg: llm, max_steps=4)
+    c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4)
     turn = c.ask_task(formation)
     assert messages(llm) == messages(alone)                    # the same requests, call by call
     assert turn.answer == out["answer"] and turn.status == out["status"]
@@ -106,7 +106,7 @@ def two_questions(formation, tmp_path, cite=("E2", "E3")):
     """Two questions: the first opens the first look (E1) and PHIE (E2), the second VCL (E3; its first look is E1
     again, the same call)."""
     llm = Model(first_steps() + later_steps(cite))
-    c = Conversation.on_tasks(tmp_path / "s", "k200t", llm_factory=lambda cfg: llm, max_steps=4)
+    c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4)
     c.ask_task(formation)
     n1 = len(llm.sent)
     second = c.ask_task(formation.model_copy(update={"task_id": "second", "question": Q2}))
@@ -152,7 +152,7 @@ def test_a_later_question_is_answered_briefly_when_the_model_says_so_and_never_t
     first, later = first_steps(), later_steps()
     first[0]["reply"] = later[0]["reply"] = "brief"            # the model asks for a short reply in both step 1s
     llm = Model(first + later)
-    c = Conversation.on_tasks(tmp_path / "s", "k200t", llm_factory=lambda cfg: llm, max_steps=4, direct=False)
+    c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4, direct=False)
     one = c.ask_task(formation)
     n1 = len(llm.sent)
     two = c.ask_task(formation.model_copy(update={"task_id": "second", "question": Q2}))
@@ -160,15 +160,15 @@ def test_a_later_question_is_answered_briefly_when_the_model_says_so_and_never_t
     assert step1.endswith(C.text("C5", "step1_later") + C.text("C5", "step1_reply"))
     w1 = next(x for x in llm.sent[:n1] if x["stage"] == "writer")["messages"]
     w2 = next(x for x in llm.sent[n1:] if x["stage"] == "writer")["messages"]
-    assert w1[0]["content"].startswith(C.text("C9", "write")) and "session" not in one.trace   # the first: the full form
-    assert w2[0]["content"] == C.text("C9", "reply_brief") + "\n" + C.text("C9", "brief_later")
+    assert w1[0]["content"].startswith(C.prompt("C9", "write")) and "session" not in one.trace   # the first: the full form
+    assert w2[0]["content"] == C.prompt("C9", "reply_brief") + "\n" + C.text("C9", "brief_later")
     assert two.trace["session"]["reply"] == "brief"
     assert "THE ZONE TABLE" not in w2[-1]["content"] and "THE QUESTION'S POINTS" in w2[-1]["content"]
     assert E.block(c.turns[:1]) in w2[-1]["content"] and f"[E3] " in w2[-1]["content"]   # the earlier question, its result
     # with no word on the length (or any other word), a later question keeps the full form with the later rule
     c2, llm2, m1, second = two_questions(formation, tmp_path / "t")
     w = next(x for x in llm2.sent[m1:] if x["stage"] == "writer")["messages"]
-    assert w[0]["content"].startswith(C.text("C9", "write")) and second.trace["session"]["reply"] == "full"
+    assert w[0]["content"].startswith(C.prompt("C9", "write")) and second.trace["session"]["reply"] == "full"
     assert C.text("C5", "step1_reply").rstrip().endswith('"full" where it needs an analysis in parts.')
 
 
@@ -225,6 +225,8 @@ def test_the_opening_is_the_first_prose_paragraph():
     long = "A sentence about the zone. " * 60
     assert len(E.opening(long)) <= E.OPENING_CHARS + 4 and E.opening(long).endswith(". ...")
     assert E.opening("") == ""
+    bold = "**Bottom line:** The upper sand holds the pay, and **12 ft** of it is net.\n\nMore."
+    assert E.opening(bold) == "Bottom line: The upper sand holds the pay, and 12 ft of it is net."
 
 
 def test_a_result_that_read_a_curve_computed_again_is_marked_and_not_served_from_the_cache():

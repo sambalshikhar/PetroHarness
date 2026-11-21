@@ -1,0 +1,1 @@
+Your reply has no points. Reply with only the points your edits refer to, as JSON: {"points": ["..."], "intent": "..."} - {n} questions the answer must settle, numbered as your edits number them.

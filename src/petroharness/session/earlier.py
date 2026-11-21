@@ -5,6 +5,7 @@ builds the same prompts. The results themselves stay in the ledger: the block na
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from petroharness.agent import components as C
 
@@ -22,7 +23,7 @@ def opening(answer: str, limit: int = OPENING_CHARS) -> str:
     """The answer's first paragraph of prose (headings, tables and rules skipped), cut at a sentence end."""
     for para in re.split(r"\n\s*\n", str(answer or "")):
         lines = [ln for ln in para.splitlines() if ln.strip() and not re.match(r"\s*(#|\||-{3,}|\*{3,}|_{3,})", ln)]
-        text = _line(" ".join(lines)).strip("*_ ")
+        text = _line(" ".join(lines)).replace("**", "").strip("*_ ")      # bold anywhere ("**Bottom line:** The")
         if len(text) < 40:                             # a title line or a label
             continue
         if len(text) <= limit:
@@ -55,7 +56,25 @@ def changed(change: dict, turns: list) -> str:
     took effect at: what changed, who asked, and the results that rest on the earlier settings."""
     from petroharness.well.settings import describe
     n = change["turn"]
+    who = change.get("by") or "user"
+    if change.get("kind") == "scope":                  # the user's scope (agent.loop.apply_scope)
+        return (f"Scope set before question {n} (by the {who}): "
+                + (f"{', '.join(change['scope'])}, every lookup's default stretch until the {who} changes it; a "
+                   "question that names other stretches is computed on those." if change["scope"]
+                   else f"none: every lookup computes on the interval the session opened on"
+                   + (f", {change['interval']}" if change.get("interval") else "") + ", whatever an earlier question's "
+                   "scope was."))
+    if change.get("kind") == "frame":
+        return (f"Frame set before question {n} (by the {who}): "
+                + ("every lookup reports by the lithology zones (L1..)." if change["frame"] == "lithology"
+                   else "every lookup reports by the zones in force."))
     ids = [x for r in turns if r["turn"] < n for x in r.get("opened") or []]
+    if change.get("kind") == "zones":                  # the user's zones file: the view made again, no new interpretation
+        rest = (f" Results {ids[0]} to {ids[-1]} were read under the earlier zones; read again, a result says so."
+                if len(ids) > 1 else f" Result {ids[0]} was read under the earlier zones." if ids else "")
+        said = (f"your zones from {Path(change['zones']).name} frame the interval (Z ids); the lithology zones keep L ids"
+                if change.get("zones") else "your zones taken away; the lithology zones frame the interval again")
+        return f"Zones changed before question {n} (by the {who}): {said}.{rest}"
     rest = (f" Results {ids[0]} to {ids[-1]} and the answers before rest on the earlier settings; read again, a result "
             "says so." if len(ids) > 1 else f" Result {ids[0]} rests on the earlier settings." if ids else "")
     return (f"Settings changed before question {n} (by the {change.get('by') or 'user'}): {describe(change['changes'])}. "

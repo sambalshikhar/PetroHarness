@@ -5,9 +5,9 @@ markdown.
 
 How to report, each rule with its reason:
 1. Open with the answer in the form the question asks: where or which -> the intervals (depths, zones), each with its
-   grade; how much -> the value with its basis; how one property relates to another -> the direction, the strength,
-   and where it holds and where it breaks; what kind -> each unit with its class; why -> the reading and the evidence
-   it rests on. (The reader asked that question.)
+   grade; how much -> the value with its basis ({basis}); how one property relates to another -> the direction, the
+   strength, and where it holds and where it breaks; what kind -> each unit with its class; why -> the reading and the evidence
+   it rests on. {premise}. (The reader asked that question.)
 2. Then the evidence the answer rests on: the intervals, values and classes the results give, each with what limits
    it. (The reader checks the answer against its evidence.)
 3. A class or flag is a threshold screen of the logs. When you use one, say its criterion in plain words and where it

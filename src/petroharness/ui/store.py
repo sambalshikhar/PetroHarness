@@ -66,7 +66,7 @@ class Store:
         path = self.folder(run_id) / "run.json"
         if not path.is_file():
             raise KeyError(f"no run {run_id!r}")
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
 
     def file(self, run_id: str, name: str) -> Path:
         if name not in ("answer.md", "trace.json"):
@@ -90,10 +90,27 @@ class Store:
         out = []
         for path in sorted(self.root.glob("*/run.json"), reverse=True)[:limit]:
             try:
-                r = json.loads(path.read_text())
+                r = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
             out.append(brief(r))
+        return out
+
+    def conversation(self, root: str) -> list:
+        """The saved runs of one conversation (its first question `root` and every follow-up), as the run list shows
+        them, however many runs the folder holds. A follow-up is made after the question it follows and a run's id
+        starts with its time, so only the runs from the root's second on are read."""
+        since = str(root)[:16]                       # YYYYmmdd-HHMMSS-
+        out = []
+        for path in sorted(self.root.glob("*/run.json")):
+            if path.parent.name < since:
+                continue
+            try:
+                r = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if brief(r)["root"] == root:
+                out.append(brief(r))
         return out
 
     def rate(self, run_id: str, verdict: str, note: str) -> dict:
@@ -112,7 +129,7 @@ class Store:
         n = 0
         for path in self.root.glob("*/run.json"):
             try:
-                rec = json.loads(path.read_text())
+                rec = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
             if rec.get("status") in ("queued", "running"):
@@ -127,7 +144,7 @@ class Store:
         suffixes = {"las": LAS_SUFFIXES, "notes": NOTES_SUFFIXES}.get(kind, TOPS_SUFFIXES)
         stem, suffix = Path(str(name or "")).stem, Path(str(name or "")).suffix.lower()
         if suffix not in suffixes:
-            raise ValueError(f"WHAT: {name!r} is not a {dict(las='LAS', notes='field notes').get(kind, 'tops')} file. FIX: upload a file "
+            raise ValueError(f"WHAT: {name!r} is not a {dict(las='LAS', notes='field notes', zones='zones').get(kind, 'tops')} file. FIX: upload a file "
                              f"ending in {', '.join(suffixes)}.")
         if not body:
             raise ValueError(f"WHAT: {name!r} is empty. FIX: upload the file again.")
@@ -143,14 +160,15 @@ class Store:
     @staticmethod
     def _write(path: Path, record: dict) -> None:
         tmp = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
-        tmp.write_text(json.dumps(record, indent=1, default=str))
+        tmp.write_text(json.dumps(record, indent=1, default=str), encoding="utf-8")
         os.replace(tmp, path)
 
 
 def brief(r: dict) -> dict:
     """A run as the run list shows it."""
     i = r.get("inputs") or {}
-    return {"id": r.get("id"), "status": r.get("status"), "question": i.get("question", ""),
+    res = r.get("result") if isinstance(r.get("result"), dict) else {}
+    return {"id": r.get("id"), "status": r.get("status"), "outcome": res.get("status"), "question": i.get("question", ""),
             "las": Path(str(i.get("las") or "")).name, "las_path": i.get("las"), "label": r.get("label", ""),
             "created": r.get("created"), "elapsed": r.get("elapsed"),
             "verdict": (r.get("rating") or {}).get("verdict", ""),

@@ -42,19 +42,24 @@ VIEWER, HISTOGRAM, CROSSPLOT = "log_viewer", "histogram", "crossplot"
 OVERVIEW = "overview.png"  # the interval's log display, drawn once per conversation
 # the Petrophys function behind each plot of a result
 FUNCTIONS = {VIEWER: "create_log_viewer", HISTOGRAM: "create_histogram_comparison", CROSSPLOT: "create_crossplot"}
-# The standard displays offered: the Petrophys function -> the curves it reads beyond those its signature names (one of
-# each group must hold values in the interval). A display added to Petrophys is offered by adding its line here.
+# The standard displays offered: the Petrophys function -> the curves it draws, each as (its parameter, or None where
+# the display reads the curve from the well itself; the curves that can serve, in the display's own lookup order). One
+# of each entry must hold values in the interval. A display added to Petrophys is offered by adding its line here.
 DISPLAYS = {
-    "create_nd_crossplot": (("NPHI", "PHIN"), ("RHOB",)),
-    "create_mn_plot": (("NPHI", "PHIN"), ("RHOB",), ("DTC", "DT")),
-    "create_mid_plot": (("NPHI", "PHIN"), ("RHOB",), ("DTC", "DT")),
-    "create_pickett_plot": (),
-    "create_hingle_plot": (),
-    "create_buckles_plot": (),
-    "create_flow_unit_plot": (),
-    "create_triple_combo": (("GR",), ("RDEP", "RT", "RMED"), ("RHOB",), ("NPHI", "PHIN")),
-    "create_net_pay_summary_plot": (("NET_RES", "NET_PAY", "NET_ROCK"),),
+    "create_nd_crossplot": ((None, ("NPHI", "PHIN")), (None, ("RHOB",))),
+    "create_mn_plot": ((None, ("NPHI", "PHIN")), (None, ("RHOB",)), (None, ("DTC", "DT"))),
+    "create_mid_plot": ((None, ("NPHI", "PHIN")), (None, ("RHOB",)), (None, ("DTC", "DT"))),
+    "create_pickett_plot": (("phie_curve", ("PHIE",)), ("rt_curve", ("RT", "RDEP"))),
+    "create_hingle_plot": (("phie_curve", ("PHIE",)), ("rt_curve", ("RDEP", "RT"))),
+    "create_buckles_plot": (("phie_curve", ("PHIE",)), ("sw_curve", ("SW",))),
+    "create_flow_unit_plot": (("phi_e", ("PHIE",)), ("perm", ("PERM",))),
+    "create_triple_combo": ((None, ("GR",)), (None, ("RDEP", "RT", "RMED")), (None, ("RHOB",)),
+                            (None, ("NPHI", "PHIN"))),
+    "create_net_pay_summary_plot": ((None, ("NET_RES", "NET_PAY", "NET_ROCK")),),
 }
+# a display's number the record holds as a curve: the interval's median of it (the one water line it draws); said
+# with the figure, as every number a display is given
+DISPLAY_MEDIANS = {"create_pickett_plot": {"rw": "RW"}, "create_hingle_plot": {"rw": "RW"}}
 # parameters of a display that are not the interval's to give (the well is; the rest stay Petrophys' defaults)
 _LEFT = ("well", "result", "depth_range", "figsize", "title", "cmap", "color_curve", "kwargs")
 _NAME = re.compile(r"\b[A-Z][A-Z0-9_]+\b")
@@ -170,53 +175,45 @@ def _held(f, names) -> str | None:
 
 
 def bind(f, function: str) -> tuple | None:
-    """A standard display's arguments from the interval, as its signature asks -> (kwargs without the well, the
-    curves it reads, the source of each number); None when the interval lacks a curve it needs.
-      - a curve-name parameter (phie_curve="PHIE") takes its default where the interval holds it, else the curve its
-        name stands for (library_api.ROLES); the colour curve stays Petrophys' choice;
-      - an array parameter (phi_e, perm) takes the curve its name stands for;
-      - a number takes the median over the interval of the curve its name stands for (rw: RW), else the record's
-        parameter of that name, else Petrophys' default."""
+    """A standard display's arguments from the interval -> (kwargs without the well, the curves it draws, the source of
+    each number); None when the interval holds none of the curves one of its entries can use, or lacks a number it
+    requires.
+      - curves: its DISPLAYS entry, the first curve of each that holds values here (to its parameter, a name or the
+        values as Petrophys declares the parameter; or read by the display from the well);
+      - numbers (Petrophys declares the parameter a value): DISPLAY_MEDIANS' line the display draws, else the
+        record's parameter of that name, else Petrophys' default."""
+    from petrophys import function_schema
     from petroharness.agent import library_api as A
     fn = _function(function)
+    decl = function_schema.declaration(fn)
+    kinds = dict(decl.parameters) if decl else {}
     kw, curves, said = {}, [], []
-    for group in DISPLAYS.get(function, ()):
-        c = _held(f, group)
+    for param, names in DISPLAYS.get(function, ()):
+        c = _held(f, names)
         if c is None:
             return None
         curves.append(c)
+        if param is not None:
+            d = kinds.get(param)
+            kw[param] = np.asarray(f.view.values(c), dtype=float) if d is not None and d.kind == "curve" else c
     record = A._record_params(f)
+    medians = DISPLAY_MEDIANS.get(function, {})
     for p, par in inspect.signature(fn).parameters.items():
-        if p in _LEFT or par.kind in (par.VAR_KEYWORD, par.VAR_POSITIONAL):
+        d = kinds.get(p)
+        if p in _LEFT or p in kw or d is None or d.kind != "value":
             continue
-        ann = str(par.annotation)
-        default = None if par.default is inspect.Parameter.empty else par.default
-        number = "float" in ann or (isinstance(default, (int, float)) and not isinstance(default, bool))
-        if p.endswith("_curve"):
-            c = _held(f, ([default] if isinstance(default, str) else []) + A._role(p))
-            if c is None:
-                return None
-            kw[p] = c
-            curves.append(c)
-        elif number:
-            c = _held(f, A._role(p))
-            if c is not None:
-                kw[p] = float(np.nanmedian(np.asarray(f.view.values(c), dtype=float)))
-                said.append(f"{p} {kw[p]:.4g} (median of {c} over the interval)")
-            elif p in record:
-                kw[p] = record[p][0]
-                said.append(f"{p} {record[p][0]:g} (record, {record[p][1]})")
-            elif par.default is inspect.Parameter.empty:
-                return None
-            else:
-                said.append(f"{p} {default:g} (Petrophys' default)")
-        elif A._role(p):
-            c = _held(f, A._role(p))
-            if c is None:
-                return None
-            kw[p] = np.asarray(f.view.values(c), dtype=float)
-            curves.append(c)
-    return kw, list(dict.fromkeys(curves)), said
+        c = medians.get(p)
+        if c is not None and _held(f, [c]):
+            kw[p] = float(np.nanmedian(np.asarray(f.view.values(c), dtype=float)))
+            said.append(f"{p} {kw[p]:.4g} (median of {c} over the interval)")
+        elif p in record:
+            kw[p] = record[p][0]
+            said.append(f"{p} {record[p][0]:g} (record, {record[p][1]})")
+        elif par.default is inspect.Parameter.empty:
+            return None
+        elif isinstance(par.default, (int, float)) and not isinstance(par.default, bool):
+            said.append(f"{p} {par.default:g} (Petrophys' default)")
+    return kw, curves, said
 
 
 def behind(s, cited: list) -> set:

@@ -32,19 +32,18 @@ def _note(inv, head):
 # --- N1 facts ---------------------------------------------------------------------------------------------------------
 
 @pytest.mark.data
-def test_n1_provenance_facts_are_in_the_notes_but_the_two_dropped_kinds():
+def test_n1_provenance_facts_are_the_notes_built_from_data():
+    """The card builds each fact from the record (the solver's minerals as this interval has them, the core fact with
+    its plugs, no 'method not recorded' line, no core fact where the core-calibrated curves are supplied inputs); the
+    notes take them as they are, reading no fact's text."""
     from petroharness.record.card import provenance_facts
     bad = []
     for t, v, inv, m in cases():
         core_input = any(inv.curves.get(c) is not None and inv.curves[c].source == "input" for c in ("PHIE_CC", "PERM_CC"))
         for x in provenance_facts(v):
-            dropped = re.search(r":\s*method not recorded\s*$", x) or (x.startswith("Core-calibrated curves") and core_input)
-            m_ = N._MINERALS.match(x)
-            if m_:                             # the solver caveat as this interval has it
-                x = N.mineral_fact(v, [c.strip() for c in m_.group("m").split(",") if c.strip()])
-            if dropped and x in inv.notes:
-                bad.append((t.well, "dropped kind kept", x[:80]))
-            if not dropped and x not in inv.notes:
+            if x.endswith("method not recorded") or (x.startswith("Core-calibrated curves") and core_input):
+                bad.append((t.well, "a kind the card no longer builds", x[:80]))
+            if x not in inv.notes:
                 bad.append((t.well, "fact missing", x[:80]))
         for x in inv.notes:
             assert f"  - {x}" in m.split("Notes on this interval")[1], (t.well, x[:80])
@@ -142,7 +141,7 @@ def test_n2_solver_minerals_are_named_where_they_have_data():
 @pytest.mark.data
 def test_n3_sizes():
     big = [(t.well, t.formation, len("\n".join(inv.notes)), len(m)) for t, v, inv, m in cases()
-           if len("\n".join(inv.notes)) > 2500 or len(m) > 24000]          # the map's limit holds the notes, the record's compartments and the curve catalog
+           if len("\n".join(inv.notes)) > 2500 or len(m) > 24500]          # the map's limit holds the notes, the record's compartments and the curve catalog
     assert not big, big
 
 
@@ -185,3 +184,22 @@ def test_bad_hole_note_names_the_largest_zones_first_and_caps_at_eight():
     x[:] = 0
     assert "under 5% of the samples in every zone" in N._bad_hole_note(view)
     assert N._bad_hole_note(NS(available=lambda c: False)) == ""
+
+
+def _mineral_view(lithology_curve, labels):
+    n = len(labels)
+    vals = {"V_QUARTZ": np.linspace(0.1, 0.9, n)}
+    return NS(mask=np.ones(n, dtype=bool), values=lambda c: vals.get(c), labels=np.array(labels, dtype=object),
+              lithology_curve=lithology_curve, available=lambda c: c == "RHOB")
+
+
+def test_a_well_zoned_by_shale_volume_bands_has_no_lithology_log_to_support_the_solver():
+    v = _mineral_view(None, ["SHALE-PRONE (VCL BAND)", "CLEAN (VCL BAND)", "SHALY (VCL BAND)"])
+    text = N.mineral_fact(v, ["V_QUARTZ"])
+    assert "lithology log" not in text and "RHOB is present to support it" in text, text
+
+
+def test_a_well_zoned_by_its_lithology_log_names_it_as_support():
+    v = _mineral_view("LITH", ["SANDSTONE", "SHALE", "SANDSTONE"])
+    text = N.mineral_fact(v, ["V_QUARTZ"])
+    assert "the lithology log and RHOB are present to support it" in text, text

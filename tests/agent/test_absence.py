@@ -69,11 +69,23 @@ def test_a_named_curve_with_data_gives_none():
 
 def test_a_named_property_maps_through_the_synonyms():
     s = _session("What is the irreducible water saturation of the sands?", have={"SW", "BVW"})
-    assert vocabulary.note(s) == HEAD + "irreducible water saturation (SWIRR_APP)"
+    from petroharness.agent.library_api import computes
+    fns = computes("irreducible water saturation")      # a derived quantity: the Petrophys functions that may compute it
+    assert fns and vocabulary.note(s) == HEAD + f"irreducible water saturation (SWIRR_APP; Petrophys may compute it: {', '.join(fns)})"
     s = _session("Where does the density correction exceed 0.05 g/cc?", have={"RHOB"})
     assert vocabulary.note(s) == HEAD + "density correction (DRHO)"
     s = _session("Is the Vp/Vs ratio low in the sands?", have={"DTC"}, named=["Vp/Vs ratio", "DTS"])
     assert vocabulary.note(s) == HEAD + "Vp/Vs ratio (VP_VS_RATIO); DTS (DTS)"
+
+
+def test_the_notes_as_data_hold_what_the_note_says():
+    """The answer's reader gets the notes as data (vocabulary.facts; the web UI words them), item for item as the
+    model is told them."""
+    s = _session("Is the Vp/Vs ratio low in the sands?", have={"DTC"}, named=["Vp/Vs ratio", "DTS"])
+    assert vocabulary.facts(s) == [{"kind": "absent", "name": "Vp/Vs ratio", "curves": ["VP_VS_RATIO"], "computes": []},
+                                   {"kind": "absent", "name": "DTS", "curves": ["DTS"], "computes": []}]
+    s = _session("What is the mean DTS and water saturation?", have={"DTS", "SW"}, named=["DTS", "SW"])
+    assert vocabulary.facts(s) == []
 
 
 def test_one_item_per_set_of_curves():
@@ -90,7 +102,7 @@ def test_there_is_no_stand_in_text():
     assert C.text("C10", "absent_note") == HEAD + "{items}"
     assert "absent_form_rule" not in C.meta("C9")["texts"] and "asked_absent" not in C.meta("C10")["texts"]
     assert "absent_rule" not in C.meta("C9")["texts"]          # the writer reads the note itself, under the question
-    assert not STAND_IN.search(C.text("C9", "write"))
+    assert not STAND_IN.search(C.prompt("C9", "write"))
     brief = C.text("C1", "brief")
     assert "e.g. without SWIRR" not in brief and "ND separation is not a density correction" not in brief
     assert "asked_quantities" not in REG and not any("instead" in str(v) for v in REG.get("named_measurements", {}).values())
@@ -110,7 +122,7 @@ def test_the_note_reaches_step_1_the_settle_step_and_the_writer(monkeypatch):
     s = built(t, f)
     monkeypatch.setattr(Session, "build", classmethod(lambda cls, task, cfg: s))
     llm = Stub([{"topics": ["porosity"], "named": [gone]}])
-    out = graph.answer(t, "k200t", 1, 2, "open", "profile", llm_factory=lambda cfg: llm)
+    out = graph.answer(t, "k2-horizon-7b", 1, 2, "open", "profile", llm_factory=lambda cfg: llm)
     tr = out["trace"]
     assert not tr.get("error"), tr.get("traceback")
     note = HEAD + f"{gone} ({gone})"
@@ -133,5 +145,5 @@ def test_no_note_when_everything_named_is_here(monkeypatch):
     s = built(t, f)
     monkeypatch.setattr(Session, "build", classmethod(lambda cls, task, cfg: s))
     llm = Stub([{"topics": ["porosity"], "named": ["PHIE", "water saturation"]}])
-    out = graph.answer(t, "k200t", 1, 2, "open", "profile", llm_factory=lambda cfg: llm)
+    out = graph.answer(t, "k2-horizon-7b", 1, 2, "open", "profile", llm_factory=lambda cfg: llm)
     assert out["trace"]["absent"] == [] and HEAD not in json.dumps([c["messages"] for c in llm.sent])

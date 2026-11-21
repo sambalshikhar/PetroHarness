@@ -14,7 +14,7 @@ from petroharness.config import RESOURCES
 @lru_cache(maxsize=16)
 def _yaml(path: str) -> dict:
     p = Path(path)
-    return (yaml.safe_load(p.read_text()) or {}) if p.exists() else {}
+    return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
 
 
 def profile(policy: dict | None) -> dict:

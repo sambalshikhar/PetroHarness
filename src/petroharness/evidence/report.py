@@ -20,7 +20,7 @@ from petroharness.evidence.graph import EvidenceGraph
 
 
 def _events(folder: Path) -> list:
-    return [json.loads(line) for line in (folder / "log.jsonl").read_text().splitlines() if line.strip()]
+    return [json.loads(line) for line in (folder / "log.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def _interval(used) -> str:
@@ -35,7 +35,7 @@ def _answer(folder: Path, n: int) -> str:
     path = folder / "turns" / f"{n:02d}" / "answer.md"
     if not path.is_file():
         return "(no answer file)"
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     if "\n---\n" in text:
         text = text.split("\n---\n", 1)[1]
     text = re.sub(r"\]\((figures/[^)]+)\)", lambda m: f"](turns/{n:02d}/{m.group(1)})", text)
@@ -90,6 +90,6 @@ def main(argv=None) -> int:
               file=sys.stderr)
         return 2
     out = Path(args.out) if args.out else folder / "report.md"
-    out.write_text(markdown(folder))
+    out.write_text(markdown(folder), encoding="utf-8")
     print(out)
     return 0

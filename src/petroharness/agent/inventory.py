@@ -12,6 +12,7 @@ import numpy as np
 
 from petroharness.record.card import curve_origin
 from petroharness.well.view import FormationView
+from petroharness.well import summary as S
 
 
 try:                                            # petrophys's own curve vocabulary (it supplies, the harness reads)
@@ -32,6 +33,7 @@ class Curve:
                                        # | registry family | step | unknown
     source: str                        # one of SOURCES
     step: Optional[str] = None         # the step that wrote it (computed)
+    by: str = ""                       # the analysis inside that step that wrote it, where the record says (written_by)
     inputs: Optional[list] = None      # the curves that step read, where the record lists them
     copy_of: Optional[str] = None
     step_from: Optional[str] = None    # "record" | "petrophys curve map" (computed)
@@ -40,13 +42,27 @@ class Curve:
     zone_coverage: dict = field(default_factory=dict)   # zone id -> share of its samples with data
     percent: bool = False              # a fraction stored in percent (its values say so)
     flat: bool = False                 # one value over the interval
-    measured_log: bool = False         # an input the registry lists as a measured log
+    measured_log: bool = False         # a measured log: an input the registry lists as one, a vendor name of one the
+                                       #   workflow carries, or one the workflow carried under its name or standardized
+    carried: str = ""                  # a measured log a workflow step wrote from the input itself: how (measurements)
+    same_as: list = field(default_factory=list)   # the input curves that hold the same values (the LAS carrying one
+                                       #   log under two names: CALI and DCAL); neither is a copy of the other
     codes: dict = field(default_factory=dict)   # code -> label, where the record maps the curve's class codes (the
                                        #   lithology log, by the data's code table): the codes it holds over the well
-    well_value: Optional[float] = None  # a computed curve that holds one value over the whole well: that value (a
-                                        #   parameter of its step, not a curve that varies with depth)
+    well_value: Optional[float] = None  # a computed curve that holds one value over the whole well: that value (not a
+                                        #   curve that varies with depth)
     catalog: str = ""                   # the curve catalog's line (rules/curves.yaml meanings: what it is; its kind and
                                         #   inputs), empty when the catalog has none; `meaning` is its first part
+    run_said: str = ""                  # an analyzer's curve: how its run says it made it, where that says how (a source
+                                        #   in brackets, or what from): S_V "from the datum (...)", KH "(PERM_CC -> ...)"
+
+    @property
+    def writer(self) -> str:
+        """Who wrote a computed curve, as every reader names it: the analysis inside its step where the record says
+        (written_by: "the hydrocarbon analysis, in the net_pay step"), else the step ("the net_pay step")."""
+        if self.by:
+            return f"the {self.by}" + (f", in the {self.step} step" if self.step else "")
+        return f"the {self.step} step" if self.step else ""
 
 
 @dataclass
@@ -105,8 +121,12 @@ class Method:
     decisions: list                    # the other decision lines, verbatim
     scope: str = "well"                # the record describes the whole well
     equations_here: list = field(default_factory=list)   # the equations scoped to this interval (evidence.scoped_decision)
-    decisions_here: list = field(default_factory=list)   # the decisions scoped to this interval; well counts dropped
+    routes_here: list = field(default_factory=list)      # this interval's routes, read from its curves (agent.routes)
+    facts_here: list = field(default_factory=list)       # what the step's output curves hold here (interval_facts)
+    decisions_here: list = field(default_factory=list)   # the run's lines as written (the whole well's record)
     stage: str = "workflow"            # preparation / workflow / after (a context profile's QC and recomputation)
+    said: dict = field(default_factory=dict)   # what a recorded value is, where its name alone misleads (the step
+                                               #   record's parameter notes: rwa_median_over_rw, a check of the Rw)
 
 
 @dataclass
@@ -133,6 +153,13 @@ class Inventory:
     absent_meanings: dict = field(default_factory=dict)      # measured log -> what it is (it is not in the input)
     notes: list = field(default_factory=list)                 # facts about this interval's record (src/petroharness/agent/notes.py)
     logs_empty: list = field(default_factory=list)            # measured logs in the input with no values in this interval
+    logs_screened: dict = field(default_factory=dict)         # of those, what the preparation's range screening removed
+    reach: str = "focus"                                      # what a tool's zones may name (data.reach)
+    well_span: tuple = ()                                     # the well's first and last sample depths (reach "well")
+    well_samples: int = 0                                     # the well's samples (the log's whole length)
+    units: list = field(default_factory=list)                 # the tops file's units in reach: (name, top, base)
+    zones_source: Optional[str] = None                        # the zones file of the user's zones (they are `zones`)
+    lithology_zones: list = field(default_factory=list)       # under the user's zones: (id, lithology, top, base)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -140,9 +167,43 @@ class Inventory:
 
 # --- curves ----------------------------------------------------------------------------------------------------
 
-def _measured_logs(reg) -> set:
+def _twins(view: FormationView, curves: dict) -> None:
+    """Input curves that hold the same values name each other (Curve.same_as): a LAS that carries one log under two
+    names (a vendor's and the standard one). The inventory found copies only among computed curves, so two supplied
+    curves with one log's values read as two logs."""
+    from petroharness.record.card import _same_values
+    inputs = [c for c, cv in curves.items() if cv.source == "input"]
+    data = {c: view.prep.curve(c) for c in inputs}
+    for i, a in enumerate(inputs):
+        for b in inputs[i + 1:]:
+            if curves[a].n == curves[b].n and _same_values(data[a], data[b]):
+                curves[a].same_as.append(b)
+                curves[b].same_as.append(a)
+
+
+def measured_logs(reg) -> set:
+    """The registry's measured logs (its raw list and log families): names that are measurements, whatever wrote
+    them. The one list of them (the inventory reads it; a curve's status reads the inventory)."""
     fam = [c for members in (reg.curves.get("families") or {}).values() for c in members]
     return {c.upper() for c in list(reg.raw_order) + fam}
+
+
+def _carried(curves: dict, measured: set) -> None:
+    """A measured log a workflow step wrote from the input itself is a measurement, not a model output: the input
+    under the workflow's name (a copy of a measured input: RDEP holding ILD's values) or the input as the step
+    standardized it (the step reads and writes the same measured log: units, nulls, ranges); and the input a measured
+    workflow curve copies (a vendor name: DENS for the workflow's RHOB) is a measured log too."""
+    for c, cv in curves.items():
+        if cv.source != "computed" or not cv.step:
+            continue
+        inputs = [str(i) for i in (cv.inputs or [])]
+        if cv.copy_of and cv.copy_of in inputs and (c.upper() in measured or cv.copy_of.upper() in measured):
+            cv.carried, cv.measured_log = f"measurement: the input {cv.copy_of} under the workflow's name (the {cv.step} step)", True
+        elif c.upper() in measured and c in inputs:
+            cv.carried, cv.measured_log = f"measurement, as the {cv.step} step standardized it", True
+    for c, cv in curves.items():
+        if cv.source == "input" and any(x.copy_of == c and x.name.upper() in measured for x in curves.values()):
+            cv.measured_log = True
 
 
 def _registry_meaning(reg, curve: str) -> Optional[str]:
@@ -172,14 +233,17 @@ def _source(view: FormationView, curve: str, measured: set, analyzer: set, liste
     """The curve's source, from the record and the LAS (card.curve_origin), then the analyzers and petrophys's map."""
     origin = curve_origin(view, curve)
     if origin and origin[0] == "step":
-        return {"source": "computed", "step": origin[1], "inputs": list(origin[2] or []) or None, "step_from": "record"}
+        by = ((view.prep.steps or {}).get(origin[1]) or {}).get("written_by") or {}
+        return {"source": "computed", "step": origin[1], "inputs": list(origin[2] or []) or None, "step_from": "record",
+                **({"by": str(by[curve])} if curve in by else {})}
     if origin and origin[0] == "supplied":
         return {"source": "input", "measured_log": curve.upper() in measured}
     if origin and origin[0] == "copy":
         return {"source": "copy", "copy_of": origin[1]}
     if curve in analyzer:
         return {"source": "analyzer"}
-    if curve in _PP_STEPS:            # not in the LAS, not a copy, no recorded step wrote it: petrophys's curve-to-step map
+    if curve in _PP_STEPS and not listed:   # a record that lists no step's outputs: petrophys's curve-to-step map (a
+                                            #   record that lists them names every curve's writer itself)
         recorded = _PP_STEPS[curve] in (view.prep.steps or {})
         return {"source": "computed", "step": _PP_STEPS[curve],
                 "step_from": "petrophys curve map" + ("" if recorded or not listed else " (step not in the record)")}
@@ -247,13 +311,47 @@ def _well_value(view: FormationView, c: str, src: dict) -> Optional[float]:
     """The one value a curve a workflow step wrote holds over the whole well (a step parameter written as a curve, e.g.
     SWIRR_APP), or None: a curve with more than one value, an input, a flag or a class (registry flags; meanings that
     say a flag or a class)."""
-    if src.get("source") != "computed" or src.get("copy_of") or c in view.reg.flags:
+    if src.get("source") != "computed" or src.get("copy_of") or view.is_flag(c):
         return None
     if re.search(r";\s*an?\s+(?:flag|class)\b", (view.reg.curves.get("meanings") or {}).get(c) or ""):
         return None
     whole = view.prep.curve(c)
     fin = whole[np.isfinite(whole)] if whole is not None else np.array([])
     return float(fin[0]) if fin.size > 1 and float(np.min(fin)) == float(np.max(fin)) else None
+
+
+def _run_said(view: FormationView, c: str, src: dict) -> str:
+    """An analyzer's curve this run made its own way: its run's description (recorded where Petrophys gives the run's
+    basis, DerivedCurve.basis), which the catalog's general line cannot know; else ""."""
+    if src.get("source") != "analyzer":
+        return ""
+    return str((getattr(view, "analyzer_described", None) or {}).get(c) or "")
+
+
+def _same_as_workflow(view: FormationView, curves: dict) -> None:
+    """An analyzer's curve that holds a workflow curve's values wherever it has values (RXO_RDEP_RATIO and
+    SEPARATION_RATIO: the workflow's INVASION_RATIO) is marked a copy of it, so the map says "same values as"; one
+    value throughout matches too easily and is left alone."""
+    work = [n for n, cv in curves.items() if cv.source == "computed" and not cv.copy_of]
+    for c, cv in curves.items():
+        if cv.source != "analyzer" or cv.copy_of:
+            continue
+        a = view.well_values(c)
+        if a is None:
+            continue
+        a = np.asarray(a, dtype=float)
+        fa = np.isfinite(a)
+        if fa.sum() < 2 or float(np.nanmin(a)) == float(np.nanmax(a)):
+            continue
+        for w in work:
+            b = view.prep.curve(w)
+            if b is None or np.shape(b) != a.shape:
+                continue
+            b = np.asarray(b, dtype=float)
+            both = fa & np.isfinite(b)
+            if both.sum() >= 0.95 * fa.sum() and np.allclose(a[both], b[both], rtol=1e-9, atol=0):
+                cv.copy_of = w
+                break
 
 
 # --- properties ----------------------------------------------------------------------------------------------------
@@ -274,7 +372,7 @@ def _properties(view: FormationView, curves: dict) -> dict:
             if c not in curves:
                 continue
             cv = curves[c]
-            where = "input" if cv.source == "input" else f"computed: {cv.step}" if cv.source == "computed" else cv.source
+            where = "input" if cv.source == "input" else f"computed by {cv.writer}" if cv.source == "computed" else cv.source
             if cv.copy_of:                             # a copy, or a step that passed its input through
                 ranks.append(SourceRank(c, 2 if cv.copy_of in corrected else 3, f"copy of {cv.copy_of}"))
             elif c in corrected:
@@ -304,32 +402,6 @@ def calibrated_twins(inv: "Inventory") -> dict:
 _EQUATION = re.compile(r"^[A-Za-z][A-Za-z0-9_()]*(?:\s*[,/]\s*[A-Za-z][A-Za-z0-9_]*)?\s*=\s*\S")
 
 
-_WELL_FLAGGED = re.compile(r";?\s*\bQC flagged \d+(?![\d.%])")       # a well count with no unit to scope
-_SAMPLE_SHARE = re.compile(r"\b\d+\s*(?:/|of)\s*\d+\s+samples\b")
-
-
-def _here(view: FormationView, lines: list, outputs: list = None) -> list:
-    """Record lines scoped to this interval: flag counts recomputed here, a flag with no data here dropped, per-route
-    counts reduced to the route names (petroharness.record.catalog.scoped_decision); a well count that cannot be
-    scoped ("QC flagged 18501") is dropped too, and a stripped "solved N/M samples" says where the step's own curves
-    have values in this interval."""
-    from petroharness.record.catalog import scoped_decision
-    out = []
-    for d in lines:
-        text, _ = scoped_decision(view, d)
-        if text:
-            text = _WELL_FLAGGED.sub("", text).strip()
-            have = [c for c in (outputs or []) if view.available(c)]
-            if _SAMPLE_SHARE.search(d) and "in this interval" not in text and have:
-                ok = np.zeros(int(view.mask.sum()), dtype=bool)
-                for c in have:
-                    ok |= np.isfinite(np.asarray(view.values(c), dtype=float))
-                text += f" (in this interval {', '.join(have)} have values in {int(ok.sum())} of {ok.size} samples)"
-        if text:
-            out.append(text)
-    return out
-
-
 def _methods(view: FormationView) -> list:
     out = []
     routes = {}
@@ -342,13 +414,14 @@ def _methods(view: FormationView) -> list:
         lines = [d for d in rec.get("decisions") or [] if isinstance(d, str)]
         eq = [d for d in lines if _EQUATION.match(d)]
         rest = [d for d in lines if d not in eq]
-        here = _here(view, rest, list(rec.get("outputs") or []))
-        from petroharness.agent.routes import well_wide
-        here = routes.get(step, []) + [well_wide(d) for d in here]   # this interval's route first (answers read the
-                                                                     #   well's fallback text, listed first, as the interval's)
+        from petroharness.record.catalog import interval_facts
+        facts, _ = interval_facts(view, list(rec.get("outputs") or []))
+        here = routes.get(step, [])                                  # this interval's route (data), the lines as written
+        said = {k: v for k, v in (rec.get("notes") or {}).items() if k in params}    # Petrophys's notes on them
         out.append(Method(step=step, method=str(rec.get("method") or ""), inputs=rec.get("inputs"),
                           outputs=rec.get("outputs"), parameters=params, equations=eq, decisions=rest,
-                          equations_here=_here(view, eq), decisions_here=here, stage=str(rec.get("stage") or "workflow")))
+                          equations_here=eq, decisions_here=rest, routes_here=here, facts_here=facts,
+                          stage=str(rec.get("stage") or "workflow"), said=said))
     return out
 
 
@@ -493,7 +566,7 @@ def from_view(view: FormationView, store=None) -> Inventory:
     reg = view.reg
     steps = view.prep.steps or {}
     listed = any("outputs" in (rec or {}) for rec in steps.values())
-    measured = _measured_logs(reg)
+    measured = measured_logs(reg)
     analyzer = set(getattr(view, "analyzer_curves", {}) or {})
     curves = {}
     for c in _curve_names(view, store):
@@ -514,10 +587,14 @@ def from_view(view: FormationView, store=None) -> Inventory:
             zx = view.zone_values(z, c)
             zc[z.zone_id] = float(np.isfinite(zx).mean()) if zx is not None and zx.size else 0.0
         fin = x[np.isfinite(x)] if x is not None else np.array([])
+        one = _well_value(view, c, src)
         curves[c] = Curve(name=c, unit=view.unit(c) or "", meaning=meaning, meaning_from=frm, n=n,
                           coverage=float(n / x.size) if x is not None and x.size else 0.0, zone_coverage=zc,
                           percent=bool(view.in_percent(c)), flat=bool(fin.size > 1 and np.nanmin(fin) == np.nanmax(fin)),
-                          codes=_codes(view, c), well_value=_well_value(view, c, src), catalog=catalog, **src)
+                          codes=_codes(view, c), well_value=one, catalog=catalog, run_said=_run_said(view, c, src), **src)
+    _same_as_workflow(view, curves)
+    _carried(curves, measured)
+    _twins(view, curves)
     zones = [Zone(z.zone_id, z.lithology, float(z.top), float(z.base), float(z.thickness), int(z.n_samples),
                   str(getattr(z, "name", "") or ""), _log_shares(view, z), str(getattr(z, "stated", "") or ""))
              for z in view.zones]
@@ -538,7 +615,24 @@ def from_view(view: FormationView, store=None) -> Inventory:
                      value_qc=_value_qc(view), sections=sections, logs_present=present,
                      logs_absent=absent, record_lists_outputs=listed,
                      absent_meanings={c: _absent_meaning(reg, c) for c in absent},
-                     notes=_notes(view, curves, sections), logs_empty=empty)
+                     notes=_notes(view, curves, sections), logs_empty=empty,
+                     logs_screened={c: S.screened(view, c) for c in empty if S.screened(view, c)}, **_reach(view))
+
+
+def _reach(view) -> dict:
+    """What a tool's zones may name beyond the interval's zones (reach "well"): the well's span and the tops file's
+    units, in the reporting unit; nothing under reach "focus"."""
+    out = {}
+    if getattr(view, "zones_source", None):                  # the user's zones frame it; the lithology zones: L1..
+        out = {"zones_source": view.zones_source,
+               "lithology_zones": [(z.zone_id, z.lithology, float(z.top), float(z.base))
+                                   for z in getattr(view, "lithology_zones", [])]}
+    if getattr(view, "reach", "focus") != "well":
+        return out
+    d = np.asarray(view.prep.depth, dtype=float) * view.depth_scale
+    return {**out, "reach": "well", "well_span": (float(np.nanmin(d)), float(np.nanmax(d))),
+            "well_samples": int(np.isfinite(d).sum()),
+            "units": [(u.name, float(u.top), float(u.base)) for u in getattr(view, "units", [])]}
 
 
 def _notes(view, curves, sections) -> list:

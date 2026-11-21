@@ -110,11 +110,11 @@ def test_zone_table_adds_the_geometric_mean_by_the_shape_of_the_values_only():
 
 @pytest.mark.data
 def test_the_brief_carries_the_level_and_ranking_lines(real):
-    from petroharness.agent.loop import V10_BRIEF, brief
+    from petroharness.agent.loop import BRIEF_LEVELS, brief
     from petroharness.agent.writer import prompt
     system, _, _, _ = prompt(real, "default")
     assert "zone-mean permeability" not in system
-    assert V10_BRIEF in brief() and "log-normal" not in V10_BRIEF
+    assert BRIEF_LEVELS in brief() and "log-normal" not in BRIEF_LEVELS
 
 
 @pytest.fixture(scope="module")

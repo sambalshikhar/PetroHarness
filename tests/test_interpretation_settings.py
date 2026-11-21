@@ -24,7 +24,8 @@ def test_every_petrophys_setting_is_offered_once_or_left_out_on_purpose():
     library = {f.name for f in dataclasses.fields(C) if not f.name.startswith("_")}
     offered = [f["key"] for f in _fields() if f["petrophys"]]
     assert len(offered) == len(set(offered))
-    assert set(offered) | T.HIDDEN >= library, sorted(library - set(offered) - T.HIDDEN)
+    tables = {f.name for f in dataclasses.fields(C) if T._takes_a_table(f.type)}     # set in a settings file
+    assert set(offered) | T.HIDDEN | tables >= library, sorted(library - set(offered) - T.HIDDEN - tables)
     assert not set(offered) & T.HIDDEN
     assert set(offered) <= library
 
@@ -115,3 +116,92 @@ def test_the_policy_follows_the_users_cutoffs():
     got = user_cutoffs(pol, {"sw_cutoff": 0.6, "phie_cutoff": 0.1})["cutoffs"]
     assert got == {"vcl_max": 0.35, "sw_max": 0.6, "phie_min_clastic": 0.1, "phie_min_carbonate": 0.1}
     assert pol["cutoffs"]["sw_max"] == 0.7                                   # the policy itself is untouched
+
+
+# --- the panel says what Petrophys means and used --------------------------------------------------------------------
+
+def _by_key():
+    from petroharness.well import settings as S
+    return {x["key"]: x for g in S.schema()["groups"] for x in g["fields"]}
+
+
+def test_the_sp_lines_are_named_as_petrophys_defines_them():
+    f = _by_key()
+    assert "shale" in f["sp_min"]["label"].lower() and "clean" in f["sp_max"]["label"].lower()
+
+
+def test_a_unit_is_the_one_the_help_states_for_a_number():
+    f = _by_key()
+    assert f["rmf_chlorides_mg_l"]["unit"] == "mg/l" and f["cec"]["unit"] == "meq/100 g"
+    assert f["allow_default_rw"]["unit"] == "" and f["carbonate_calibration"]["unit"] == ""
+
+
+def test_the_porosity_cutoff_shows_the_policys_default():
+    assert _by_key()["phie_cutoff"]["default"] == 0.08
+
+
+def test_the_help_keeps_its_first_sentence_whole():
+    from petroharness.well.settings import _first
+    assert _first("A flag, i.e. the reservoir flag built first. More here.") == "A flag, i.e. the reservoir flag built first."
+    assert _first("Lines for an SP (e.g. a drift-corrected SP). Then more.") == "Lines for an SP (e.g. a drift-corrected SP)."
+
+
+def test_a_first_sentence_that_ends_on_a_unit_or_a_letter_ends_there():
+    """A unit (v/v, ohm.m) or a one-letter symbol before the period ends the sentence: the help is that sentence alone,
+    not the defaults and profile notes that follow it."""
+    from petroharness.well.settings import _first, schema
+    assert _first("Maximum water saturation for net pay, v/v. Unset: 0.60 clastic.") == \
+        "Maximum water saturation for net pay, v/v."
+    assert _first("Shale resistivity, ohm.m. Defaults to the computed clay resistivity.") == "Shale resistivity, ohm.m."
+    assert _first("Tortuosity factor a. One value for every sample.") == "Tortuosity factor a."
+    by = {f["key"]: f for g in schema()["groups"] for f in g["fields"]}
+    for key in ("vcl_cutoff", "sw_cutoff", "phie_cutoff", "rtsh", "a"):
+        assert by[key]["help"].count(". ") == 0 and by[key]["help"].endswith("."), (key, by[key]["help"])
+
+
+def test_used_reports_the_value_petrophys_applied():
+    from types import SimpleNamespace
+    from petroharness.well.settings import used
+    prep = SimpleNamespace(steps={"vclay": {"parameters": {"gr_min": 40.84, "gr_min_used": 20.0, "gr_max": 120.0}}})
+    got = used(prep)
+    assert got["gr_min"]["value"] == 20.0 and got["gr_max"]["value"] == 120.0
+
+
+def test_a_used_value_carries_the_unit_its_step_records():
+    """Petrophys records td_unit beside td_ft: the log's depth unit when the total depth came from the log (metres on
+    tuhua-7), ft when the value was given. The panel shows that unit, not the setting name's."""
+    from types import SimpleNamespace
+    from petroharness.well.settings import used
+    taken = used(SimpleNamespace(steps={"temperature": {"parameters": {"td_ft": 1350.2, "td_unit": "m", "bht_f": 210}}}))
+    assert taken["td_ft"] == {"value": 1350.2, "step": "temperature", "unit": "m"} and "unit" not in taken["bht_f"]
+    given = used(SimpleNamespace(steps={"temperature": {"parameters": {"td_ft": 8500, "td_unit": "ft"}}}))
+    assert given["td_ft"]["unit"] == "ft"
+    from pathlib import Path
+    page = (Path(__file__).resolve().parents[1] / "src" / "petroharness" / "ui" / "static" / "index.html").read_text(
+        encoding="utf-8")
+    assert "ishow(used.unit ? {...f, unit: used.unit} : f, used.value)" in page
+
+
+def _takes_a_table(t) -> bool:
+    import typing
+    args = [a for a in typing.get_args(t) if a is not type(None)] if typing.get_origin(t) is typing.Union else [t]
+    return bool(args) and all(typing.get_origin(a) in (dict, list, tuple) for a in args)
+
+
+def test_a_setting_that_takes_a_table_is_not_offered_as_a_value():
+    """A Petrophys setting whose type takes a table, a list or a pair (mineral_endpoints, bad_hole, ...) is not a field
+    of the page (a number field cannot hold it); a settings file gives it under data.interpret."""
+    import dataclasses
+    from petrophys.workflow import DynamicWorkflowConfig as C
+    from petroharness.well.settings import schema
+    offered = {f["key"] for g in schema()["groups"] for f in g["fields"]}
+    tables = {f.name for f in dataclasses.fields(C) if not f.name.startswith("_") and _takes_a_table(f.type)}
+    assert not tables & offered, sorted(tables & offered)
+
+
+def test_the_hydrocarbon_and_gradient_settings_sit_in_their_groups():
+    from petroharness.well.settings import schema
+    where = {f["key"]: (g["key"], f["label"]) for g in schema()["groups"] for f in g["fields"]}
+    for key, group in (("rho_hc", "porosity"), ("hc_hydrogen_index", "porosity"), ("gradient_f_per_100ft", "temperature")):
+        if key in where:                                   # a Petrophys that has the setting
+            assert where[key][0] == group and where[key][1] != key.replace("_", " "), (key, where[key])

@@ -7,6 +7,7 @@ is present, on wells whose LAS carries core plugs or a measured shear sonic.
 import hashlib
 import math
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -65,7 +66,8 @@ def test_poro_perm_on_the_log_says_so(topeka):
 @pytest.mark.data
 def test_shear_then_elastic_on_the_predicted_shear(topeka):
     s = K.calibrate(topeka, "shear")
-    assert "vs_from_vp_greenberg_castagna for sandstone (the record's porosity matrix" in s.text
+    assert re.search(r"vs_from_vp_greenberg_castagna, lithology (each lithology of these samples \(|\w+ \(the record's "
+                     r"lithology|\S+ \(Petrophys's default)", s.text), s.text[:300]     # the binder's one rule (D3)
     assert "no measured DTS here" in s.text and "DTS_GC" in topeka.inv.curves
     e = K.calibrate(topeka, "elastic")
     assert "and DTS_GC (predicted in this question)" in e.text

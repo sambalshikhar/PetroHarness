@@ -6,6 +6,9 @@
     PYTHONPATH=src:tests/agent PETROHARNESS_MODEL_URL=... python tests/agent/record_golden.py live [--workers N] DATASET ...
         records new tapes and results from the live model for the dataset's selected questions (a change of
         behaviour made on purpose), N questions at a time (default 12)
+    ... record_golden.py live --only TASK_ID[,TASK_ID ...] DATASET ...
+        records only those questions (a change that reaches only their requests); each notes the commit its tape is
+        from ("tape_commit"), the others keep theirs
 
 The data configs are read from $WELLLOGBENCH/<dataset>.yaml (WELLLOGBENCH is required). Record from a clean checkout
 of the commit the tapes are for: the selection records it.
@@ -62,7 +65,11 @@ def one(mode: str, ds: str, task, model: str) -> str:
 
 def main():
     args = sys.argv[1:]
-    workers = 12
+    workers, only = 12, None
+    if "--only" in args:
+        i = args.index("--only")
+        only = {x.strip() for x in args[i + 1].split(",") if x.strip()}
+        del args[i:i + 2]
     if "--workers" in args:
         i = args.index("--workers")
         workers = int(args[i + 1])
@@ -80,12 +87,21 @@ def main():
         tasks = {t.task_id: t for t in load_tasks(cfg.eval.questions, cfg.data.las_dir)[0]}
         sel_path = GOLDEN / ds / "selection.json"
         sel = json.loads(sel_path.read_text())
-        todo = [tasks[q["task_id"]] for q in sel["questions"]]
+        todo = [tasks[q["task_id"]] for q in sel["questions"] if only is None or q["task_id"] in only]
+        if not todo:
+            continue
         if mode == "live":
             with ThreadPoolExecutor(workers) as ex:
                 for line in ex.map(lambda t, ds=ds, model=sel["model"]: one(mode, ds, t, model), todo):
                     print(line, flush=True)
-            sel["tapes_from"] = {"code": "petroharness", "commit": commit}
+            if only is None:
+                sel["tapes_from"] = {"code": "petroharness", "commit": commit}
+                for q in sel["questions"]:
+                    q.pop("tape_commit", None)
+            else:
+                for q in sel["questions"]:
+                    if q["task_id"] in only:
+                        q["tape_commit"] = commit
         else:
             for t in todo:
                 print(one(mode, ds, t, sel["model"]), flush=True)

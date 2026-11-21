@@ -295,6 +295,9 @@ def test_a_follow_up_is_the_next_question_of_the_runs_conversation(env, tmp_path
         # the figures the model chose are drawn into the run and served
         figs = view1["result"]["figures"]
         assert len(figs) == 1 and figs[0]["file"].startswith("figure_1_") and figs[0]["caption"].startswith("Figure 1. ")
+        trace = json.loads((app.store.folder(first["id"]) / "trace.json").read_text(encoding="utf-8"))
+        calls = [x for x in trace["calls"] if x["stage"].startswith("figures")]   # the figures call is attributed too
+        assert len(calls) == 1 and {sg[0] for m in calls[0]["messages"] for sg in m["segments"]} >= {"C9"}
         status, kind, body = c.get(f"/api/run/{first['id']}/figures/{figs[0]['file']}")
         assert status == 200 and kind == "image/png" and body.startswith(b"\x89PNG")
         assert c.json(f"/api/run/{first['id']}/figures/..%2Frun.json")[0] == 404        # only a figure's own name
@@ -358,3 +361,29 @@ def test_a_follow_up_is_the_next_question_of_the_runs_conversation(env, tmp_path
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+def test_a_question_back_and_the_users_choice(ui):
+    """A question that names a unit the tops file lists twice is asked back (status ask_user) with a choice per
+    listing; the choice, sent as a follow-up with its stretch, is answered on that stretch, marked as the user's choice
+    (READ's own reading of the question does not replace it); the run list and the conversation say which run asked."""
+    _, c = ui
+    status, got = c.json("/api/ask", {"las": str(LAS), "question": "What is the mean gamma ray of the Manganui?",
+                                       "interval": {"mode": "tops", "tops": str(TOPS), "formation": "McKee"}})
+    assert status == 200, got
+    _, view = wait(c, got["id"])
+    assert view["status"] == "done" and view["result"]["status"] == "ask_user", view.get("error")   # the run finished: it asks
+    ask = view["result"]["ask"]
+    assert "Manganui" in ask["text"] and len(ask["choices"]) == 3 and not ask["outside"]
+    first, every = ask["choices"][0], ask["choices"][-1]
+    assert len(first["scope"]) == 1 and len(every["scope"]) == 2
+    status, nxt = c.json("/api/ask", {"follow": got["id"], "question": first["question"], "scope": first["scope"]})
+    assert status == 200, nxt
+    _, view2 = wait(c, nxt["id"])
+    assert view2["status"] == "done", view2.get("error")
+    scope = view2["result"]["scope"]
+    assert scope["by"] == "your choice" and scope["used"] == [f"Manganui ({first['scope'][0]})"]   # named as the file names it
+    listed = {r["id"]: r for r in c.json("/api/runs")[1]}
+    assert listed[got["id"]]["outcome"] == "ask_user" and listed[nxt["id"]]["outcome"] == "ok"
+    turns = c.json(f"/api/run/{nxt['id']}/conversation")[1]["turns"]
+    assert [(t["turn"], t["outcome"]) for t in turns] == [(1, "ask_user"), (2, "ok")], turns

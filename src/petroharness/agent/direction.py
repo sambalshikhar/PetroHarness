@@ -31,7 +31,7 @@ LIBRARY_KEYS = ("name", "description", "common")
 @lru_cache(maxsize=1)
 def areas() -> dict:
     """The topic areas (topics.yaml), in its order: {name: {when, families, overview}}."""
-    return dict(yaml.safe_load(TOPICS.read_text())["areas"])
+    return dict(yaml.safe_load(TOPICS.read_text(encoding="utf-8"))["areas"])
 
 
 def families(topics) -> list:

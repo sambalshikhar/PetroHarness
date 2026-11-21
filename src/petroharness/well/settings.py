@@ -18,14 +18,16 @@ import re
 from typing import Any
 
 # The page's groups, in order, and the Petrophys settings each holds; a Petrophys setting no group names is shown
-# under "More from Petrophys", so a setting added to the library appears without a change here. HIDDEN: settings that
-# take a table, a list of wells or a file rather than a value, and the library's internal flags.
+# under "More from Petrophys", so a setting added to the library appears without a change here. A setting whose type
+# takes a table, a list or a pair rather than one value is not a field (_takes_a_table): a settings file gives it under
+# data.interpret. HIDDEN: those that take a file or name the data, and the library's internal flags.
 GROUPS = [
     ("zones", "Zones", "How the interval is split into zones: the unit every answer reports on.", []),
     ("clay", "Clay volume", "How shale volume (VCL) is computed from the gamma ray, SP and density-neutron.",
      ["gr_method", "gr_min", "gr_max", "sp_min", "sp_max", "rho_cl"]),
     ("porosity", "Porosity and matrix", "The matrix and fluid properties the porosity equations use.",
-     ["matrix_type", "rho_ma", "nphi_ma", "dt_ma", "rho_fl", "dt_fl", "phi_cl", "apply_hc_correction", "hc_type"]),
+     ["matrix_type", "rho_ma", "nphi_ma", "dt_ma", "rho_fl", "dt_fl", "phi_cl", "apply_hc_correction", "hc_type",
+      "rho_hc", "hc_hydrogen_index"]),
     ("water", "Formation water", "Rw: given, from salinity, or estimated from the data.",
      ["rw", "rw_meas_temp_f", "salinity_ppm", "allow_default_rw"]),
     ("saturation", "Water saturation", "The saturation model and its parameters.",
@@ -36,7 +38,7 @@ GROUPS = [
     ("pay", "Net reservoir and pay", "The cutoffs that flag net reservoir and net pay.",
      ["vcl_cutoff", "phie_cutoff", "sw_cutoff", "reuse_input_resflag"]),
     ("temperature", "Temperature", "The temperature profile Rw and Rmf are corrected along.",
-     ["surface_temp_f", "bht_f", "td_ft"]),
+     ["surface_temp_f", "bht_f", "td_ft", "gradient_f_per_100ft"]),
     ("mud", "Mud", "Mud type and filtrate properties (Rmf, Rm).",
      ["mud_type", "mud_water", "mud_has_clay_or_kcl", "rmf_at_meas_temp", "rmf_meas_temp_f", "rmf_salinity_ppm",
       "rmf_chlorides_mg_l", "rm", "rm_meas_temp_f"]),
@@ -53,7 +55,7 @@ COMMON = {"zone_min_thickness_m", "zone_vcl_bands", "zone_layout", "gr_method", 
           "sw_cutoff", "bht_f", "mud_type", "lithology_domain"}
 LABELS = {
     "gr_method": "GR to shale volume", "gr_min": "GR clean (gr_min)", "gr_max": "GR shale (gr_max)",
-    "sp_min": "SP clean", "sp_max": "SP shale", "rho_cl": "Clay density", "matrix_type": "Matrix",
+    "sp_min": "SP shale (sp_min)", "sp_max": "SP clean (sp_max)", "rho_cl": "Clay density", "matrix_type": "Matrix",
     "rho_ma": "Matrix density (ρma)", "nphi_ma": "Matrix neutron porosity", "dt_ma": "Matrix sonic (Δtma)",
     "rho_fl": "Fluid density (ρfl)", "dt_fl": "Fluid sonic (Δtfl)", "phi_cl": "Clay porosity",
     "apply_hc_correction": "Hydrocarbon correction", "hc_type": "Hydrocarbon type", "rw": "Rw",
@@ -72,14 +74,17 @@ LABELS = {
     "carbonate_calibration": "Carbonate calibration", "mineral_solver_version": "Mineral solver version",
     "standardize_input": "Standardize curves and units", "rename_input_curves": "Rename vendor mnemonics",
     "calculation_profile": "Calculation profile",
+    "rho_hc": "Hydrocarbon density (ρhc)", "hc_hydrogen_index": "Hydrocarbon hydrogen index",
+    "gradient_f_per_100ft": "Geothermal gradient",
 }
 UNITS = (("degF", "°F"), ("ohm.m", "ohm.m"), ("g/cm3", "g/cm³"), ("us/ft", "µs/ft"), ("ppm", "ppm"), ("mg/l", "mg/l"),
-         ("v/v", "v/v"), ("in feet", "ft"), ("API", "API"), ("mV", "mV"), ("meq/100g", "meq/100 g"))
+         ("v/v", "v/v"), ("in feet", "ft"), ("API", "API"), ("mV", "mV"), ("meq/100g", "meq/100 g"),
+         ("meq/100 g", "meq/100 g"))
 # the harness's own: the zone rule (policy zones), set per run through the data settings
 ZONE_FIELDS = [
     {"key": "zone_min_thickness_m", "label": "Minimum zone thickness", "kind": "number", "unit": "m", "length": True,
-     "help": "A run of one lithology (or one shale-volume band) thinner than this is not a zone; its samples stay in the "
-             "whole-interval statistics as samples outside the zones.",
+     "help": "A run of one lithology (or one shale-volume band) no thicker than this is not a zone; its samples stay "
+             "in the whole-interval statistics as samples outside the zones.",
      "more": "Thin-bedded intervals (a few feet per bed) keep few zones at the default; a smaller value keeps more, and "
              "each zone then rests on fewer samples."},
     {"key": "zone_vcl_bands", "label": "Shale-volume bands", "kind": "bands", "unit": "v/v",
@@ -122,18 +127,27 @@ def _choices(cls, name: str) -> list:
     return []
 
 
-def _unit(doc: str) -> str:
-    for token, shown in UNITS:
-        if re.search(rf"(?<![\w/]){re.escape(token)}(?![\w/])", doc):
-            return shown
+def _unit(doc: str, kind: str = "number") -> str:
+    """A number's unit, as its help states it: the first unit named in the first sentence (Petrophys writes it after
+    the name: 'Mud-filtrate chlorides (Cl-), mg/l, ...'), else the first in the rest. Switches and choices have none
+    (a unit in their help belongs to a value they set)."""
+    if kind not in ("number", "integer"):
+        return ""
+    for text in (_first(doc), doc):
+        found = [(m.start(), shown) for token, shown in UNITS
+                 for m in [re.search(rf"(?<![\w/]){re.escape(token)}(?![\w/])", text)] if m]
+        if found:
+            return min(found)[1]
     return ""
 
 
 def _first(doc: str) -> str:
     """A doc's first sentence, plain (the rest goes in the panel's 'more')."""
     plain = re.sub(r"``([^`]+)``", r"\1", re.sub(r":(?:func|class|meth|attr):`~?([^`]+)`", r"\1", doc))
-    m = re.match(r"(.+?[.!?])(\s|$)", plain)
-    return (m.group(1) if m else plain).strip()
+    for m in re.finditer(r"[.!?](?=\s|$)", plain):          # a sentence end, not an abbreviation's period
+        if not re.search(r"\b(?:i\.e|e\.g|etc|vs|cf|approx)$", plain[:m.start()]):
+            return plain[:m.end()].strip()
+    return plain.strip()
 
 
 def _plain(doc: str) -> str:
@@ -154,7 +168,7 @@ def schema() -> dict:
     docs = _doc_fields(C)
     by_name = {f.name: f for f in dataclasses.fields(C) if not f.name.startswith("_")}
     cut = policy.get("cutoffs") or {}
-    policy_default = {"vcl_cutoff": cut.get("vcl_max"), "sw_cutoff": cut.get("sw_max"), "phie_cutoff": cut.get("phie_min")}
+    policy_default = {"vcl_cutoff": cut.get("vcl_max"), "sw_cutoff": cut.get("sw_max"), "phie_cutoff": cut.get("phie_min_clastic")}
 
     def field(name: str) -> dict:
         f, (heading, doc) = by_name[name], docs.get(name, ("", ""))
@@ -166,7 +180,7 @@ def schema() -> dict:
         kind = ("switch" if "bool" in typ else "choice" if choices else
                 "integer" if typ in ("<class 'int'>", "int") else "number" if any(t in typ for t in ("float", "Any", "int"))
                 else "text")
-        return {"key": name, "label": LABELS.get(name, name.replace("_", " ")), "kind": kind, "unit": _unit(doc),
+        return {"key": name, "label": LABELS.get(name, name.replace("_", " ")), "kind": kind, "unit": _unit(doc, kind),
                 "choices": choices, "default": default, "help": _first(doc), "more": _plain(doc),
                 "common": name in COMMON, "petrophys": True, "heading": heading}
 
@@ -178,11 +192,18 @@ def schema() -> dict:
         placed.update(names)
         groups.append({"key": key, "title": title, "about": about,
                        "fields": sorted(fields, key=lambda x: not x["common"])})
-    rest = [field(n) for n in by_name if n not in placed and n not in HIDDEN]
+    rest = [field(n) for n in by_name if n not in placed and n not in HIDDEN and not _takes_a_table(by_name[n].type)]
     if rest:
         groups.append({"key": "more", "title": "More from Petrophys", "about": "Other settings of the Petrophys workflow.",
                        "fields": rest})
     return {"groups": groups, "petrophys": _library()}
+
+
+def _takes_a_table(t) -> bool:
+    """A setting's type takes a table, a list or a pair (Dict, List, Tuple; with or without None), not one value."""
+    import typing
+    args = [a for a in typing.get_args(t) if a is not type(None)] if typing.get_origin(t) is typing.Union else [t]
+    return bool(args) and all(typing.get_origin(a) in (dict, list, tuple) for a in args)
 
 
 def _zone_default(policy: dict, key: str):
@@ -261,7 +282,9 @@ def split(settings: dict) -> tuple[dict, dict]:
 
 def used(prep) -> dict:
     """{setting: the value Petrophys used} on a prepared well, read from its step record: the parameters of its steps
-    whose names are settings (the first step that records one), with the step that used it."""
+    whose names are settings (the first step that records one), with the step that used it, and the unit the step
+    records beside it where it records one (td_unit beside td_ft: a total depth taken from the log is in the log's
+    unit, whatever the setting's name says)."""
     known = _fields()
     out: dict[str, Any] = {}
     steps = getattr(prep, "steps", None) or {}
@@ -270,7 +293,12 @@ def used(prep) -> dict:
             if k in known and k not in out and isinstance(v, (int, float, str, bool)):
                 if step != "net_pay" and k in ("vcl_cutoff", "phie_cutoff", "sw_cutoff") and "net_pay" in steps:
                     continue
-                out[k] = {"value": v, "step": step}
+                params = (rec or {}).get("parameters") or {}
+                applied = params.get(f"{k}_used")                                # the value Petrophys applied
+                out[k] = {"value": applied if isinstance(applied, (int, float, str, bool)) else v, "step": step}
+                unit = params.get(f"{k}_unit", params.get(f"{k.rsplit('_', 1)[0]}_unit"))   # td_ft: td_unit
+                if isinstance(unit, str) and unit.strip():
+                    out[k]["unit"] = unit.strip()
     return out
 
 

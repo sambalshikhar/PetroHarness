@@ -41,15 +41,25 @@ class Interval:
     closed: bool = False           # base included: a formation's stated base depth, not the next top
 
     def contains(self, depth: np.ndarray) -> np.ndarray:
-        mask = depth >= self.top
+        """The samples in the interval. A depth within a unit conversion's last digits of a limit counts as on it (a
+        top given in feet on a log in metres lands a float error off the sample it names once it is converted)."""
+        near = lambda x: 1e-9 * max(1.0, abs(x))
+        mask = depth >= self.top - near(self.top)
         if self.base is not None:
-            mask &= (depth <= self.base) if self.closed else (depth < self.base)
+            tol = near(self.base)
+            mask &= (depth <= self.base + tol) if self.closed else (depth < self.base - tol)
         return mask
 
 
 @lru_cache(maxsize=4)
 def _tops_table(tops_csv: str, columns: tuple, name_pattern: Optional[str] = None) -> pd.DataFrame:
-    df = pd.read_csv(tops_csv)
+    try:
+        df = pd.read_csv(tops_csv)
+    except (pd.errors.ParserError, pd.errors.EmptyDataError, UnicodeDecodeError) as exc:
+        said = " ".join(str(exc).split()).replace("Error tokenizing data. C error: ", "")
+        raise ValueError(f"WHAT: the settings' tops table {Path(tops_csv).name} cannot be read as a table ({said}). "
+                         "FIX: give every row the same columns, with a header line naming them (data.tops_columns "
+                         "says which are the well, the name and the top).") from exc
     df = df.rename(columns={src: dst for dst, src in columns})
     df["well"] = df["well"].map(normalize_well)
     df["name"] = df["name"].map(normalize_top_name)

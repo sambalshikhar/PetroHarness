@@ -18,6 +18,7 @@ from petroharness.record.catalog import CATALOG, EvidenceError, fmt  # noqa: E40
 from petroharness.agent.compute import _plain_line  # noqa: E402
 from petroharness.agent.engine import Result, ToolError, max_chars  # noqa: E402
 from petroharness.agent.ledger import DIGEST_CHARS, Ledger  # noqa: E402
+from ledger_numbers import verify  # noqa: E402
 from petroharness.agent.schemas import arguments, call, fit  # noqa: E402
 
 NUM = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?(?![A-Za-z0-9_])")
@@ -231,7 +232,9 @@ def test_p3_threshold_shares_per_zone():
             xi = x[z.indices]
             ok = np.isfinite(xi)
             want = 100 * np.mean(xi[ok] > 0.5) if ok.any() else np.nan
-            assert close(rows[z.zone_id][3], want), (t.well, z.zone_id, rows[z.zone_id], want)
+            if ok.any():                                     # the count beside the share (suite B05, Y02, Y11)
+                assert rows[z.zone_id][3] == f"{int(np.sum(xi[ok] > 0.5))} of {int(ok.sum())}", (t.well, z.zone_id)
+            assert close(rows[z.zone_id][4], want), (t.well, z.zone_id, rows[z.zone_id], want)
             n += 1
     assert n
 
@@ -353,6 +356,62 @@ def test_p3_vertical_sequence_steps_are_differences_of_zone_means():
 
 
 @pytest.mark.data
+def test_p3_vertical_sequence_reads_every_curve_named():
+    """Two curves named, several zones: each curve's zone means and steps (the description: 'the change of each
+    curve'); min_change, in one curve's units, is refused with several."""
+    n = 0
+    for t, f in FS():
+        pair = [c for c in ("GR", "RHOB", "VCL", "PHIE") if c in f.inv.curves][:2]
+        if len(pair) < 2 or len(f.view.zones) < 2:
+            continue
+        try:
+            r = call(f, "vertical_sequence", {"curves": pair})
+        except ToolError:
+            continue
+        rows = table(r)
+        for k, c in enumerate(pair):                                  # zone, lithology, depth, then per curve:
+            for z in f.view.zones:                                    # mean, change from the zone below, step
+                if z.zone_id in rows:
+                    want = np.nanmean(np.asarray(f.view.zone_values(z, c), dtype=float))
+                    assert close(rows[z.zone_id][3 + 3 * k], want), (t.well, c, z.zone_id)
+        assert all(f"a step counts when {c} changes" in r.text for c in pair), t.well
+        with pytest.raises(ToolError, match="min_change with 2 curves"):
+            call(f, "vertical_sequence", {"curves": pair, "min_change": 5})
+        n += 1
+        if n >= 3:
+            break
+    assert n
+
+
+@pytest.mark.data
+def test_p3_zones_narrow_the_computation_not_only_its_rows():
+    """zones on a computed table: the zones asked about are what is computed and pooled ("these zones pooled"); the
+    whole interval, and the samples outside every zone, stay the formation's; a lithology's row lists only the zones
+    asked about."""
+    n = 0
+    for t, f in FS():
+        if len(f.view.zones) < 3 or "GR" not in f.inv.curves:
+            continue
+        z = f.view.zones[0]
+        try:
+            full = call(f, "threshold_exceedance", {"curve": "GR", "threshold": 75})
+            one = call(f, "threshold_exceedance", {"curve": "GR", "threshold": 75, "zones": [z.zone_id]})
+            lith = call(f, "lithology_stats", {"curves": ["GR"], "zones": [z.zone_id]})
+        except ToolError:
+            continue
+        assert "these zones pooled" in one.text and "these zones pooled" not in full.text, t.well
+        whole = lambda r: [ln for ln in r.text.split("\n") if "whole interval" in ln]
+        assert whole(one) and whole(one) == whole(full), t.well
+        listed = [ln.split("| zones: ", 1)[1].split(" | ")[0] for ln in lith.text.split("\n") if "| zones: " in ln]
+        assert listed and all(x in (z.zone_id, "-") for x in listed), (t.well, listed)
+        assert f.view.all_zones is None and len(f.view.zones) >= 3          # the formation's own view is unchanged
+        n += 1
+        if n >= 3:
+            break
+    assert n
+
+
+@pytest.mark.data
 def test_p3_curve_order_by_zone_means():
     n = 0
     for t, f in FS():
@@ -394,7 +453,7 @@ def test_p4_items_digest_fetch_verify_and_dedupe():
                 assert z in got, (t.well, name)
             for x in item.numbers[:6]:
                 if np.isfinite(x):
-                    assert led.verify(fmt(float(x)), [item.id]), (t.well, name, x)
+                    assert verify(led, fmt(float(x)), [item.id]), (t.well, name, x)
             again, new2 = led.open(name, {k: (([str(c).lower() for c in v] if isinstance(v, list) else str(v).lower())
                                               if k in ("curves", "curve") else v) for k, v in args.items()})
             assert again is item and not new2, (t.well, name)

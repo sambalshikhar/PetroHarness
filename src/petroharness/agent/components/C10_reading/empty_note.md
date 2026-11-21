@@ -1,0 +1,1 @@
+Named, in this well's record but with no values in this interval: {items}

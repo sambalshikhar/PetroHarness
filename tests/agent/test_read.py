@@ -78,7 +78,7 @@ def _run(monkeypatch, reads, pred=lambda f: "PHIE" in f.inv.curves and "RDEP" in
     s = _session(t, f)
     monkeypatch.setattr(Session, "build", classmethod(lambda cls, task, cfg: s))
     llm = Stub(reads)
-    out = graph.answer(t, "k200t", 1, 2, "open", "profile", llm_factory=lambda cfg: llm, depth=depth)
+    out = graph.answer(t, "k2-horizon-7b", 1, 2, "open", "profile", llm_factory=lambda cfg: llm, depth=depth)
     assert not out["trace"].get("error"), out["trace"].get("traceback")
     return s, llm, out
 
@@ -304,3 +304,30 @@ def test_no_prompt_carries_readings_and_step_1_shows_the_topics(monkeypatch, dep
             assert '"readings"' not in text and "YOUR READING" not in text and "readings (1)" not in text, call["stage"]
             assert "probe reading" not in text and "Probe asks" not in text, call["stage"]
     assert s.points[0] == STEP1["asks"]                       # point 1 is step 1's asks
+
+
+@pytest.mark.data
+def test_a_step_records_its_own_prompt_tokens_not_a_fix_calls(monkeypatch):
+    """Step 1's reply cannot be read and a fix call reformats it: the step's prompt_tokens are the step call's."""
+    class Broken(Stub):
+        def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
+            if stage == "step_1":
+                self.sent.append({"stage": stage, "messages": messages, "schema": json_schema})
+                usage.log.append({"stage": stage, "prompt_tokens": 18309})
+                return "{points: [How does porosity vary by zone?], edits: none"          # not JSON, not salvageable
+            if stage == "step_1_fix":
+                self.sent.append({"stage": stage, "messages": messages, "schema": json_schema})
+                usage.log.append({"stage": stage, "prompt_tokens": 400})
+                return json.dumps(STEP1)
+            return super().chat(stage, messages, usage, max_tokens, json_schema, temperature, retry)
+
+    from petroharness.agent import graph
+    from petroharness.agent.loop import Session
+    t, f = _formation(lambda f: "PHIE" in f.inv.curves and "RDEP" in f.inv.curves)
+    s = _session(t, f)
+    monkeypatch.setattr(Session, "build", classmethod(lambda cls, task, cfg: s))
+    llm = Broken([VALID])
+    out = graph.answer(t, "k2-horizon-7b", 1, 2, "open", "profile", llm_factory=lambda cfg: llm, depth=False)
+    step = out["trace"]["steps"][0]
+    assert [c["stage"] for c in llm.sent][:3] == ["read", "step_1", "step_1_fix"]
+    assert step["repaired"]["by"] == "fix" and step["prompt_tokens"] == 18309

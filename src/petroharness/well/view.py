@@ -62,12 +62,23 @@ def reporting_unit(wanted: Optional[str], prep: PreparedWell) -> tuple[str, floa
 
 @functools.lru_cache(maxsize=256)
 def las_curve_descriptions(las_path: str) -> dict:
-    """{mnemonic: description} the LAS header states for its curves (the provider's own words; read without the data,
-    once per file)."""
+    """{mnemonic: description} the LAS header states for its curves (the provider's own words: the description, or a
+    name written in the value field where the description is empty; a format in braces left out; read without the
+    data, once per file)."""
     import lasio
 
+    from petrophys.io.las_reader import curve_description              # one reading of a LAS description
     las = lasio.read(str(las_path), ignore_data=True)
-    return {str(c.mnemonic).upper(): str(c.descr or "").strip() for c in las.curves if str(c.descr or "").strip()}
+    said = {str(c.mnemonic).upper(): curve_description(c) for c in las.curves}
+    return {k: v for k, v in said.items() if v}
+
+
+@functools.lru_cache(maxsize=64)
+def las_mnemonics(las_path: str) -> frozenset:
+    """Every curve mnemonic the LAS header lists (described or not), read without the data, once per file."""
+    import lasio
+
+    return frozenset(str(c.mnemonic).upper() for c in lasio.read(str(las_path), ignore_data=True).curves)
 
 
 def las_depth_unit(las_path: Path) -> str:
@@ -183,6 +194,92 @@ def user_cutoffs(policy: dict, interpret: Optional[dict]) -> dict:
     changed = {k: v for k, v in over.items() if cut.get(k) != v}
     return {**policy, "cutoffs": {**cut, **changed}} if changed else policy
 
+
+def _labels(prep: PreparedWell, mask: np.ndarray, curve: Optional[str], bands, table: dict) -> np.ndarray:
+    """The samples' labels under `mask`: shale-volume bands where the view uses them (no lithology log), else the
+    lithology log decoded by the code table (MISSING_LITHOLOGY without one)."""
+    if bands is not None:
+        return vcl_band_labels(prep.curve("VCL")[mask], bands)
+    return decode_lithology(None if curve is None else prep.curve(curve)[mask], int(mask.sum()), names=table)
+
+
+def _zones_over(depth: np.ndarray, labels: np.ndarray, layout: str, min_thickness: float,
+                stated: Optional[str]) -> list[Zone]:
+    """The zones of some samples (`depth` in the reporting unit, one label each): one zone of them all with the
+    formation layout, else the label runs strictly thicker than `min_thickness` (reporting unit)."""
+    if layout == "formation":
+        return formation_zone(depth, labels, stated)
+    return segment_zones(depth, labels, min_thickness)
+
+
+def _in_rep(rows: list, depth: np.ndarray, scale: float, rep_m: float) -> list:
+    """Rows {name, top, base, closed, unit, line} (a tops file's or a zones file's, in the file's unit; None: the LAS's
+    own) in the reporting unit, as (name, top, base, closed, line); a base None ends at the well's last sample."""
+    last = float(np.nanmax(depth)) if depth.size else 0.0
+    out = []
+    for u in rows or []:
+        factor = scale if u.get("unit") is None else metres_per(u["unit"], f"the depths of {u['name']!r}") / rep_m
+        base = u.get("base")
+        out.append((str(u["name"]), float(u["top"]) * factor, last if base is None else float(base) * factor,
+                    bool(u.get("closed", True)) or base is None, int(u.get("line") or 0)))
+    return out
+
+
+def _zones_left(rows: list, zones: list, depth: np.ndarray, here: np.ndarray, unit: str) -> list:
+    """The user's zones that hold no sample of the interval, each with why: no sample of the log at all (the log's
+    range said), or outside the interval the question is on (its range said). Left out silently, a zone the user gave
+    was denied in the answer ("the record holds only one zone", question suite Z2)."""
+    kept = {z.name for z in zones}
+    lo, hi = (float(np.nanmin(depth)), float(np.nanmax(depth))) if depth.size else (0.0, 0.0)
+    ilo, ihi = (float(np.nanmin(here)), float(np.nanmax(here))) if here.size else (0.0, 0.0)
+    out = []
+    for name, top, base, *_ in rows:
+        if name in kept:
+            continue
+        if base < lo or top > hi:
+            why = f"no sample of the log, which runs {lo:g}-{hi:g} {unit}"
+        else:
+            why = f"outside the interval asked about, {ilo:g}-{ihi:g} {unit}"
+        out.append((name, top, base, why))
+    return out
+
+
+def _user_zones(rows: list, depth: np.ndarray) -> list[Zone]:
+    """The user's zones over some samples (`rows`: (name, top, base, ...) in the reporting unit; `depth` the samples'):
+    each sample labelled by Petrophys (label_depths: top <= depth < bottom; overlapping rows refused), each run of one
+    name a zone Z1.. in depth order, named as the user names it, with no minimum thickness."""
+    import pandas as pd
+    from petrophys.model.formation_tops import label_depths
+    table = pd.DataFrame([{"name": n, "top": t, "bottom": b} for n, t, b, *_ in rows])
+    try:
+        names = np.asarray(label_depths(depth, table, label="name", top="top", bottom="bottom", overlap="error",
+                                        default=""), dtype=object)
+    except ValueError as e:
+        raise ValueError(f"WHAT: zones of the zones file overlap ({e}). WHY: each sample belongs to one zone. FIX: give "
+                         "zones that do not overlap; nested units belong in the tops file.") from None
+    zones, i = [], 0
+    while i < names.size:
+        if not names[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < names.size and names[j + 1] == names[i]:
+            j += 1
+        zones.append(Zone(zone_id=f"Z{len(zones) + 1}", name=str(names[i]), lithology=str(names[i]),
+                          top=round(float(depth[i]), 4), base=round(float(depth[j]), 4), n_samples=int(j - i + 1),
+                          indices=np.arange(i, j + 1)))
+        i = j + 1
+    return zones
+
+
+def _units_in_reach(units: list, depth: np.ndarray, scale: float, rep_m: float) -> list:
+    """The tops file's units (data.units, each in the file's unit; None: the LAS's own) in the reporting unit
+    (agent.selection.Unit); a unit to the end of the log ends at the well's last sample."""
+    from petroharness.agent.selection import Unit
+    return [Unit(name=n, top=t, base=b, line=line, closed=closed) for n, t, b, closed, line in
+            _in_rep(units, depth, scale, rep_m)]
+
+
 @dataclass
 class FormationView:
     """One formation in one well. Depths (`depth`, `interval`, zones) are in the reporting unit (`report_unit`, metres by default);
@@ -212,14 +309,31 @@ class FormationView:
     # petroharness.well.derived), name -> values over the well's samples: values() reads them only where the workflow's
     # curve has no value
     analyzer_fills: dict = field(default_factory=dict)
+    # name -> how the analyzer's run says it made the curve (petroharness.well.derived DerivedCurves.described)
+    analyzer_described: dict = field(default_factory=dict)
+    zone_layout: str = "lithology_runs"     # the zone rule's layout (data.zone_layout): "lithology_runs" or "formation"
+    requested: Optional[tuple] = None       # a stretch reaching past the well: the (top, base) asked for (stretch)
+    reach: str = "focus"                    # what a tool's zones may name (data.reach): "focus", or "well" (anywhere)
+    units: list = field(default_factory=list)   # the tops file's units of this well (agent.selection.Unit), reach well
+    units_left_out: list = field(default_factory=list)   # its rows left out (a base not below the top), reach well
+    selection: Optional[str] = None         # a view of what a call selected (agent.selection): its name as asked
+    user_zones: list = field(default_factory=list)       # the user's zones in the reporting unit (well.user_zones)
+    user_zones_left: list = field(default_factory=list)  # the user's zones with no sample here: (name, top, base, why)
+    lithology_zones: list = field(default_factory=list)  # under the user's zones, the lithology zones (L1..)
+    zones_source: Optional[str] = None      # the zones file the user's zones come from
     # curves Petrophys calculated during the question on the model's request (agent/library.py: calculate), name ->
     # values over the well's samples; read like the workflow's own curves
     calculated: dict = field(default_factory=dict)
+    calc_flags: set = field(default_factory=set)     # flag curves a verb wrote in this question (unit "flag")
+    # every zone of the formation, on a view narrowed to some of them (of_zones; None: `zones` are all of them)
+    all_zones: Optional[list] = None
 
     @classmethod
     def build(cls, task: Task, cfg: Optional[HarnessConfig] = None) -> "FormationView":
         cfg = cfg or HarnessConfig()
         policy = user_cutoffs(load_policy(cfg.resources.policy_file), cfg.data.interpret)
+        if cfg.data.analyzer_class_tables:                 # the data's own class tables (a context package's set)
+            policy = {**policy, "analyzers": {**(policy.get("analyzers") or {}), "class_tables": cfg.data.analyzer_class_tables}}
         prep, interval, scale, unit, rep_m = _prepare_in_metres(task, policy, cfg)
         depth = prep.depth * scale if scale != 1.0 else prep.depth
         mask = interval.contains(depth)
@@ -233,7 +347,7 @@ class FormationView:
             table = lithology_table(cfg.data)
         else:                                     # a YAML file mapping code -> label
             import yaml
-            table = {int(k): str(v).upper() for k, v in yaml.safe_load(Path(scheme).read_text()).items()}
+            table = {int(k): str(v).upper() for k, v in yaml.safe_load(Path(scheme).read_text(encoding="utf-8")).items()}
         if "curve" in (policy.get("lithology") or {}):
             raise ValueError("WHAT: the policy names a lithology curve (lithology.curve). WHY: which LAS curve is the "
                              "lithology log belongs to the data, not to the interpretation policy. FIX: remove it from "
@@ -248,17 +362,62 @@ class FormationView:
         if curve is None and prep.curve("VCL") is not None:
             # No lithology log in this LAS: zones from shale-volume bands (policy zones.fallback_vcl_bands).
             bands = tuple(float(b) for b in policy["zones"].get("fallback_vcl_bands", (0.3, 0.6)))
-            labels = vcl_band_labels(prep.curve("VCL")[mask], bands)
-        else:
-            labels = decode_lithology(None if curve is None else prep.curve(curve)[mask], int(mask.sum()), names=table)
-        if cfg.data.zone_layout == "formation":           # the data's context: one group per formation
-            zones = formation_zone(depth[mask], labels, getattr(task, "formation_lithology", None))
-        else:
-            zones = segment_zones(depth[mask], labels, policy["zones"]["min_thickness_m"] / rep_m)
+        labels = _labels(prep, mask, curve, bands, table)
+        zones = _zones_over(depth[mask], labels, cfg.data.zone_layout, policy["zones"]["min_thickness_m"] / rep_m,
+                            getattr(task, "formation_lithology", None))
+        user = _in_rep(cfg.data.zones, depth, scale, rep_m) if cfg.data.zones else []
+        lithology_zones = []
+        left = []
+        if user:                                  # the user's zones frame the question; the lithology zones: L1..
+            lithology_zones = [replace(z, zone_id=f"L{k}") for k, z in enumerate(zones, start=1)]
+            zones = _user_zones(user, depth[mask])
+            left = _zones_left(user, zones, depth, depth[mask], unit)
+        reach = cfg.data.reach
+        units = _units_in_reach(list(cfg.data.units) + list(cfg.data.zones), depth, scale, rep_m) if reach == "well" else []
         return cls(task=task, prep=prep, interval=interval, mask=mask, zones=zones, policy=policy, labels=labels,
                    reg=load_registry(cfg.resources.rules_dir), lithology_curve=curve, vcl_bands=bands,
                    code_table=table, depth_scale=scale, report_unit=unit, m_per_unit=rep_m, basis=cfg.data.basis,
-                   conventions=list(cfg.data.conventions))
+                   conventions=list(cfg.data.conventions), zone_layout=cfg.data.zone_layout, reach=reach,
+                   units=units, units_left_out=list(cfg.data.units_left_out) if reach == "well" else [],
+                   user_zones=user, user_zones_left=left, lithology_zones=lithology_zones,
+                   zones_source=cfg.data.zones_source if user else None)
+
+    def stretch(self, top: float, base: float, name: Optional[str] = None, closed: bool = True) -> "FormationView":
+        """The view of another stretch of the same prepared well: its samples with top <= depth <= base (the reporting
+        unit, both limits included), its zones by this view's rule over its own samples (lithology-log runs, shale-
+        volume bands, or the formation layout), everything else this view's (the well, the policy, the units, the
+        analyzers' and the question's curves). Limits past the well are clipped to its first and last samples, and
+        `requested` keeps what was asked. `closed` False leaves out a sample on the base (a unit that ends at the next
+        unit's top). A stretch with no sample is refused with the well's depth range
+        (docs/designs/zones-and-intervals.md, 4.1)."""
+        unit = self.report_unit
+        top, base = float(top), float(base)
+        if top > base:
+            raise ValueError(f"WHAT: the stretch's top {top:g} {unit} is below its base {base:g} {unit}. WHY: a "
+                             "stretch runs from its top down to its base. FIX: give the shallower depth first.")
+        depth = self.prep.depth * self.depth_scale if self.depth_scale != 1.0 else self.prep.depth
+        held = depth[np.isfinite(depth)]
+        lo, hi = float(held.min()), float(held.max())
+        interval = Interval(formation=name or f"{top:g}-{base:g} {unit}", top=max(top, lo), base=min(base, hi),
+                            closed=closed or base > hi)
+        mask = interval.contains(depth)
+        if not mask.any():
+            raise ValueError(f"WHAT: no sample of the well lies between {top:g} and {base:g} {unit}. WHY: the well's "
+                             f"samples run from {lo:g} to {hi:g} {unit}, every {self._well_step(depth):g} {unit}. "
+                             "FIX: give limits inside that range that hold at least one sample.")
+        labels = _labels(self.prep, mask, self.lithology_curve, self.vcl_bands, self.code_table)
+        if self.user_zones:                       # the user's zones frame any stretch too (cut to it)
+            zones = _user_zones(self.user_zones, depth[mask])
+        else:
+            zones = _zones_over(depth[mask], labels, self.zone_layout,
+                                self.policy["zones"]["min_thickness_m"] / self.m_per_unit, None)
+        return replace(self, interval=interval, mask=mask, labels=labels, zones=zones, all_zones=None,
+                       requested=(top, base) if (top < lo or base > hi) else None)
+
+    @staticmethod
+    def _well_step(depth: np.ndarray) -> float:
+        held = depth[np.isfinite(depth)]
+        return round(float(np.median(np.abs(np.diff(held)))), 4) if held.size > 1 else 0.0
 
     @property
     def depth_unit(self) -> str:
@@ -272,7 +431,7 @@ class FormationView:
     # -- sample access -------------------------------------------------------------------------
     @property
     def depth(self) -> np.ndarray:
-        """Interval sample depths in metres."""
+        """Interval sample depths in the reporting unit (`report_unit`)."""
         d = self.prep.depth[self.mask]
         return d * self.depth_scale if self.depth_scale != 1.0 else d
 
@@ -360,6 +519,17 @@ class FormationView:
         """The measured-log family of a mnemonic (rules/curves.yaml families), None when it is in none."""
         return next((f for f, members in (self.reg.curves.get("families", {}) or {}).items() if curve in members), None)
 
+    def of_zones(self, zones: list) -> "FormationView":
+        """The view a computation asked about some zones runs on: those zones (each per-zone line, the zones pooled,
+        the zoned thickness), the interval and its samples unchanged (the whole-interval lines still read the whole
+        interval, and samples next to each other stay so); `all_zones` keeps the formation's zones, so the samples
+        outside any zone and the pooled label ("these zones pooled") count them. The view itself when `zones` are all
+        of them."""
+        every = list(self.all_zones or self.zones)
+        if {z.zone_id for z in zones} == {z.zone_id for z in every}:
+            return self
+        return replace(self, zones=list(zones), all_zones=every)
+
     @property
     def zoned(self) -> np.ndarray:
         """Interval samples inside the lithology zones. The others are thin runs and transitions between zones,
@@ -377,6 +547,10 @@ class FormationView:
             return np.ones(int(self.mask.sum()), dtype=bool)
         return np.isfinite(bh) & (bh <= 0.5)
 
+    def is_flag(self, curve: str) -> bool:
+        """A flag curve (0/1, read as flag > 0.5): one the registry lists, or one a verb wrote in this question."""
+        return curve in self.reg.flags or curve in self.calc_flags
+
     def at_bound(self, curve: str, min_count: int = 3, min_fraction: float = 0.005) -> np.ndarray:
         """Interval samples held at a model or tool limit: the curve's interval minimum or maximum when several samples
         share that exact value (a clip piles samples up at the bound: SW at 1, PHIE or VCL at 0, PERM at its clip),
@@ -384,7 +558,7 @@ class FormationView:
         correlation over them measures the clip, not the rock. Flag curves have no bounds in this sense."""
         x = self.values(curve)
         out = np.zeros(int(self.mask.sum()), dtype=bool)
-        if x is None or curve in self.reg.flags:
+        if x is None or self.is_flag(curve):
             return out
         fin = np.isfinite(x)
         if not fin.any():
@@ -429,7 +603,8 @@ class FormationView:
 
     def zone_well(self, zone: Zone):
         """The petrophys Well restricted to exactly the zone's samples (index-based, no depth rounding), with its
-        depths in metres like the rest of the view (the analyzers report depth ranges that reach the evidence). A context
+        depths in the view's unit (the reporting unit) like the rest of the view (the analyzers report depth ranges that
+        reach the evidence). A context
         profile's interpretation (PreparedWell.workflow_well): the zone as the profile's package builds each group, the
         workflow's samples with the interpretation's QC and recomputation (calculations.as_context_group)."""
         rows = np.flatnonzero(self.mask)[zone.indices]
@@ -441,12 +616,12 @@ class FormationView:
         return sub
 
     def interval_well(self):
-        """The petrophys Well restricted to exactly the interval's samples, depths in metres (as zone_well)."""
+        """The petrophys Well restricted to exactly the interval's samples, depths in the view's unit (as zone_well)."""
         return self._sub_well(np.flatnonzero(self.mask))
 
     def _sub_well(self, rows: np.ndarray, full=None):
         """The workflow's well (or `full`, a well on the same samples) restricted to the given samples (petrophys
-        Well.select), depths in metres."""
+        Well.select), depths in the view's unit."""
         full = self.prep.well if full is None else full
         mask = np.zeros(full.n_samples, dtype=bool)
         mask[rows] = True

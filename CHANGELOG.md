@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.5.0 (2026-11-21)
+
+- **The harness asks back instead of guessing.** A question that names a unit the tops file lists more than once, a
+  unit whose row the tops reader cannot use, a name close to several units, or a bare name several units share is
+  answered with a question back and the choices; nothing is computed until you choose (status `ask_user`). A request
+  outside the well's logs is answered with what the harness does and example questions (status `outside`).
+- **Your own zones.** `--zones FILE` (CSV, TSV or Excel: zone, top, bottom) frames the answer in place of the
+  lithology zones; a zone with no sample of the log is said under every question. In `petroharness chat`, `/zones`
+  changes them.
+- **A question can reach any stretch of the well.** The stretches a question is about (units of the tops file, your
+  zones, depth ranges, the whole well) are read from its words; `/scope` and `/frame` set them in a conversation. A
+  tool's `zones` can name any of these, and the result says what it computed on.
+- **Unit names in any spelling.** A unit is found however a question writes it (Fm., Formation, Gp., plurals,
+  abbreviations); a unit the tops file does not have is said under the question.
+- **Notes before the answer.** A measurement the record does not hold, or holds with no value in the interval, and a
+  unit the tops file lacks are said before the numbers.
+- **Counts beside shares, richer conditions.** A share of samples is written with its count ("12 of 768 samples
+  (1.6%)"). Conditions take a curve's own percentile (`GR < p25`), `|` and `&`, chains and comparison words; a limit
+  that is no count of intervals is said instead of refused; totals cover the whole interval where samples lie outside
+  the zones.
+- **What-ifs state their changes.** Each changed curve gives its change beside every zone's baseline and changed
+  value, the zones' range on each side and of the change, and how many of the interval's samples changed.
+- **A new tool, `values_at`:** the values of curves at given depths.
+- **Inputs checked before a question runs.** A LAS whose depth goes back (spliced logging runs, a repeated section)
+  or repeats is refused with the file line and the fix. A tops file is checked as it loads: rows to fix, names listed
+  more than once, formations beyond the log, a file in feet labelled metres. A name the tops file lists twice is
+  chosen by its top (`--tops FILE --formation NAME --top D`).
+- **Labels read from the record as data.** Class codes, the clay-volume rule, net-pay exclusions and parameter notes
+  come from Petrophys's record of the run, one rule each.
+- **The model names each input of a Petrophys function** by the kind Petrophys declares (a curve, a number, a choice,
+  a condition, the depth window); a required input left out is asked for, with this well's curves of that kind, the
+  record's value and the default.
+- **The number checker reads numbers as answers write them** (thousands separators, numbers in words, a band edge
+  after a minus), and its repair request says where each number stands.
+- **Web UI.** One-click sample wells from Petrophys, drag and drop of a LAS, tops, zones or field-notes file, the
+  formations as buttons and questions to start with; the question back as a card with clickable choices; notes before
+  the answer; tops and zones files checked as they load; a line under the progress bar saying what the run is doing
+  and the time such questions usually take on this server.
+- **Petrophys 7aa9968.** The pin moves to Petrophys's latest dev: 308 functions reachable through the verbs, more
+  curve aliases, and warnings on invalid scientific inputs.
+- **Documentation** checked against the code, with the zones, scope and chat commands, the new statuses and the web
+  UI's start page.
+
 ## 1.0.0 (2026-11-17)
 
 Questions that need an investigation are answered as 0.2.1 answers them; a direct question now takes a short route
@@ -28,11 +71,7 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
   look steps and a short answer with its basis: three model calls instead of eight or more. Where the lookups do not
   state what is asked, the question still gets an investigation (the look step or the writer hands it over). This is the default
   everywhere (the command, chat, the web UI, benchmark mode); `--investigate` gives every question the full
-  investigation, the 0.2.1 route. Measured on all 347 benchmark questions, two runs per model, GPT-5 judge, against the two 0.2.1
-  runs: K2-Horizon-7B W 67.03 against 66.67, Qwen3.5-27B GRPO 66.57 against 66.23 (both within the run-to-run
-  interval); the questions read as direct (12-13% and 6%) score higher, at about a quarter of their tokens. Thinking is not
-  reduced on the route: in the look steps that cost about 7 points of reference alignment and saved no time.
-  `docs/GRAPH.md`.
+  investigation, the 0.2.1 route. `docs/GRAPH.md`.
 - **The setup record.** `petroharness setup` prints what answers a question, with one hash; every conversation logs
   it and every trace names it. `docs/SETUP.md`.
 - **The web UI** is laid out as a chat: one question box docked at the bottom, with the conversation's well, interval,
@@ -87,18 +126,6 @@ proven on its 1,388 saved runs. The rest is new around the question: conversatio
   shows them first. Once every point is settled, the step asks for the brief's "Before you finish" checks.
 - **An order over a few zones is said to be untestable.** An exact rank test cannot test an order over fewer than five
   zones. The tool now says so, without direction words.
-- **Measured** on the 347 single-formation questions of WellLogBench (GPT-5 judge, two full runs of each model):
-
-  | Answering model | Version | RA | W |
-  |---|---|---|---|
-  | K2-Horizon-7B | 0.2.0 | 66.76 | 66.36 |
-  | K2-Horizon-7B | 0.2.1 | 67.46 | 66.67 |
-  | Qwen3.5-27B GRPO | 0.2.0 | 62.41 | 64.05 |
-  | Qwen3.5-27B GRPO | 0.2.1 | 65.73 | 66.22 |
-
-  The changes were made for answering models other than the default. They do not cost the default model anything:
-  K2-Horizon-7B is +0.69 RA [-0.78, +2.12] against 0.2.0. A question costs more tokens than in 0.2.0 (K2-Horizon-7B
-  281k to 307k, Qwen3.5-27B GRPO 225k to 268k).
 - **No switches.** The six changes were measured as switches and are now the code. The 17 switches that were measured
   and not adopted are removed with their code and texts; `agent/options.py` defines none.
 - **Tests.** `tests/agent/test_measured_build.py` asserts each of the six changes. The tests build their formations on

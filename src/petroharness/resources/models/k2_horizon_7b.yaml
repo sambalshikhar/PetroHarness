@@ -1,0 +1,21 @@
+# Model profile: K2-Horizon-7B, served under the name in `model` below;
+# reasoning_effort=high (model card: temperature 1.0, top_p 0.95, >= 32,768 output tokens). Serve the released
+# checkpoint natively (vLLM >= 0.30 with --chat-template-content-format string, or SGLang) under that name; where the
+# checkpoint lives (a local path or a hub id) is your serving setup's. A run's endpoint is one of PETROHARNESS_MODEL_URL
+# (src/petroharness/models.py, or --model-url); base_url is the endpoint when this profile is loaded on its own (an
+# overlay file overrides it). The fields: docs/MODELS.md.
+model:
+  base_url: http://localhost:8000/v1
+  model: k2-horizon-7b-grpo200
+  label: K2-Horizon-7B
+  reasoning: true
+  chat_template_kwargs: {reasoning_effort: high}
+  retry_template_kwargs: {reasoning_effort: low}    # after an empty reply (reasoning used every token)
+  light_template_kwargs: {reasoning_effort: low}    # a call that needs little reasoning (choosing an answer's figures)
+  reasoning_end: "</ifm|think>"                     # at low effort the server leaves the reasoning before this marker
+  temperature: 1.0
+  top_p: 0.95
+  max_tokens_spec: 32768
+  max_tokens_writer: 32768
+  timeout_s: 3600
+  max_retries: 1

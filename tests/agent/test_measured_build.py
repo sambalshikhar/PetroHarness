@@ -1,6 +1,5 @@
-"""The measured build's six behaviours. Each was a switch while it was measured (zone_order, see_first, stop_check,
-writer_points, writer_fresh, fresh_doubts); the measured build made them the code and left no switch
-(agent/options.py), so each test asserts the behaviour as the code has it:
+"""Six behaviours of the question graph (zone_order, see_first, stop_check, writer_points, writer_fresh,
+fresh_doubts), each asserted as the code has it:
 
 - an order over fewer than five zones is said untestable, with its number and without direction words or legend;
 - a done set while opened results are still withheld waits: they are shown first, then the model decides again;
@@ -220,10 +219,10 @@ def test_the_writer_gives_each_point_its_own_part():
     rule = C.text("C9", "points_rule")
     assert rule.startswith("10. Give each of your points its own part, in the order of the points: its finding, the "
                            "numbers and intervals it rests on, and what limits it.")
-    assert table and system == C.text("C9", "write") + f"\n9. {W.TABLE_RULE}" + "\n" + rule          # rules 1-8, 9, 10
+    assert table and system == C.prompt("C9", "write") + f"\n9. {W.TABLE_RULE}" + "\n" + rule          # rules 1-8, 9, 10
     s.intent = "value"                                         # a shape without a zone table: no rule 9, rule 10 stays
     system, _, table, _ = W.prompt(s, "default")
-    assert not table and system == C.text("C9", "write") + "\n" + rule
+    assert not table and system == C.prompt("C9", "write") + "\n" + rule
 
 
 @pytest.mark.data
@@ -278,3 +277,23 @@ def test_fix_call_reformats_with_the_retry_settings():
               '{"op": "add", "point": 2, "text": "cut off')       # the second edit is lost: salvage is incomplete
     out = L.parse(Fake(), 3, broken, Usage(), 16384, {})
     assert calls == [("step_3_fix", True)] and out == {"edits": [], "next": [], "done": True}
+
+
+def test_the_settle_reply_is_salvaged_or_fixed_under_its_own_stage():
+    """The settle step's reply: one salvaged whole is taken as a later step's is (the points are step 1's to set); one
+    that cannot be is reformatted by a fix call staged 'settle_fix'."""
+    calls = []
+
+    class Fake:
+        def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
+            calls.append(stage)
+            return '{"edits": [], "next": [], "done": true}'
+    whole = '{"edits": [{"op": "revise", "id": "C1", "grade": "moderate", "ev": ["E2"]}] "next": [], "done": true}'
+    # a comma missing between the keys: not JSON, and every edit salvageable
+    out = L.parse(Fake(), 0, whole, Usage(), 16384, rec := {}, stage="settle")
+    assert calls == [] and rec["repaired"]["by"] == "salvage" and out["edits"][0]["id"] == "C1"
+    cut = '{"edits": [{"op": "revise", "id": "C1", "grade": "moderate"}, {"op": "revise", "id": "C2", "text": "cut'
+    L.parse(Fake(), 0, cut, Usage(), 16384, {}, stage="settle")
+    assert calls == ["settle_fix"]
+    from petroharness.agent import components as C
+    assert C.owners("settle_fix", 1) == ["C2"]

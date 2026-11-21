@@ -100,8 +100,8 @@ class EvidenceGraph:
     def from_log(cls, folder) -> EvidenceGraph:
         """The graph of the conversation in `folder`, from its log and blobs alone."""
         folder = Path(folder)
-        events = [json.loads(line) for line in (folder / "log.jsonl").read_text().splitlines() if line.strip()]
-        blob = lambda sha: (folder / "blobs" / sha).read_text()
+        events = [json.loads(line) for line in (folder / "log.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+        blob = lambda sha: (folder / "blobs" / sha).read_text(encoding="utf-8")
         g, figures = cls(), {}
         changed = sorted(e["turn"] for e in events if e["type"] == "settings")
         gen = lambda n: 1 + sum(1 for t in changed if t <= n)     # the well's generation at question n

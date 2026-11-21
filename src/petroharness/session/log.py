@@ -22,14 +22,14 @@ class SessionLog:
         self.seq += 1
         event = {"seq": self.seq, "time": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
                  "turn": turn, "type": kind, **data}
-        with self.path.open("a") as f:
+        with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, default=str) + "\n")
         return event
 
     def events(self, kind: str | None = None) -> list:
         if not self.path.exists():
             return []
-        out = [json.loads(line) for line in self.path.read_text().splitlines() if line.strip()]
+        out = [json.loads(line) for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip()]
         return out if kind is None else [e for e in out if e["type"] == kind]
 
     def blob(self, text: str) -> str:
@@ -37,8 +37,8 @@ class SessionLog:
         sha = hashlib.sha256(text.encode()).hexdigest()
         path = self.folder / "blobs" / sha
         if not path.exists():
-            path.write_text(text)
+            path.write_text(text, encoding="utf-8")
         return sha
 
     def read(self, sha: str) -> str:
-        return (self.folder / "blobs" / sha).read_text()
+        return (self.folder / "blobs" / sha).read_text(encoding="utf-8")

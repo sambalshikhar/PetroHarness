@@ -7,7 +7,8 @@ import numpy as np
 
 from petroharness.agent import engine as E
 from petroharness.agent.engine import Formation, Out, Result, ToolError
-from petroharness.agent.library import _label, _num, defaults, register
+from petroharness.agent.library import _label, _num, defaults, joined_name, register
+from petroharness.well import summary as S
 
 OBJECTS = {
     "pay": "net rock, reservoir and pay thickness, net-to-gross, pay-averaged PHIE and SW, and hydrocarbon pore "
@@ -72,13 +73,15 @@ def summarize(f: Formation, what: str = "pay", zones=None, vcl_cutoff: float | N
         return text, row
 
     picked = E.zones(f, zones)
-    if len(picked) > 1:                             # pooled and whole first: the zone rows fit in what is left
-        pooled = np.unique(np.concatenate([np.asarray(z.indices) for z in picked]))
-        text, row = line(pay(pooled), label="zones pooled" if len(picked) == len(f.view.zones) else
-                         f"zones pooled ({', '.join(z.zone_id for z in picked)})")
+    if not zones:                                   # the whole selection first, then its breakdown (engine.scopes)
+        row = out.child()
+        text, row = line(whole, label=S.whole_label_of(f.view, row.i))
         out.add(text, row)
-    if not zones:
-        text, row = line(whole, label=f"whole interval ({depth.size} samples)")
+    if len(picked) > 1:                             # the zones pooled: the zone rows fit in what is left
+        pooled = np.unique(np.concatenate([np.asarray(z.indices) for z in picked]))
+        kind = S.pooled_word(f.view)
+        text, row = line(pay(pooled), label=f"{kind} pooled" if len(picked) == len(f.view.zones) else
+                         f"{kind} pooled ({', '.join(z.zone_id for z in picked)})")
         out.add(text, row)
     rows = []
     for z in picked:
@@ -94,7 +97,7 @@ def summarize(f: Formation, what: str = "pay", zones=None, vcl_cutoff: float | N
             vals = np.asarray(values, dtype=float)
             vals[~(np.isfinite(vcl) & np.isfinite(phie) & np.isfinite(sw))] = np.nan
             full[f.view.mask] = vals
-            register(f, f"{flag}_{lab}", full, f"{flag} recomputed by Petrophys summarize_pay with the cutoffs "
+            register(f, joined_name(flag, lab), full, f"{flag} recomputed by Petrophys summarize_pay with the cutoffs "
                                                f"{shown}", "flag", "summarize pay (on request)")
-        out.add(f"  written: NET_RES_{lab}, NET_PAY_{lab} (flags of this question: runs, stats and conditions read them)")
+        out.add(f"  written: {joined_name('NET_RES', lab)}, {joined_name('NET_PAY', lab)} (flags of this question: runs, stats and conditions read them)")
     return out.result()

@@ -1,5 +1,5 @@
-"""The switch framework (petroharness.agent.options): no switches; a name that is not a switch raises (the six switches
-of the measured build are the code, and the others it ran without are removed)."""
+"""The switch framework (petroharness.agent.options): no switch is under test, and a name that is not a switch
+raises."""
 import pytest
 
 from petroharness.agent import options

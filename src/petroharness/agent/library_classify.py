@@ -8,7 +8,7 @@ import numpy as np
 
 from petroharness.agent import engine as E
 from petroharness.agent.engine import Formation, Out, Result, ToolError
-from petroharness.agent.library import _method, register
+from petroharness.agent.library import _method, register, scratch_well
 
 OBJECTS = {
     "gas": "gas effect: density porosity above neutron porosity by more than 0.05 (Petrophys detect_gas_effect), "
@@ -33,7 +33,7 @@ def _curve(f: Formation, *names) -> tuple:
             v = f.view.values(n)
             if v is not None and np.isfinite(v).any():
                 return n, np.asarray(v, dtype=float)
-    raise ToolError(f"needs {' or '.join(names)}; {'it has' if len(names) == 1 else 'none has'} no data here")
+    raise ToolError(f"needs {' or '.join(names)}; {'it has no data' if len(names) == 1 else 'none of them has data'} here")
 
 
 def _full(f: Formation, values: np.ndarray) -> np.ndarray:
@@ -222,14 +222,15 @@ def _flow_units(f: Formation, method: str | None, k: int | None, picked, idx) ->
 
 
 def _electrofacies(f: Formation, k: int | None, curves, picked, idx) -> Result:
-    # Petrophys's k-means electrofacies is private (NumericalStatisticalAnalysis._electrofacies): no public function
-    # takes the curves or the class count
+    # Petrophys's k-means electrofacies, through its public numerical analysis (NumericalStatisticalAnalysis.analyze:
+    # its ELECTROFACIES curve; the well is not changed). No public function takes the curves or the class count.
     from petrophys.evaluation.diagnostics.numerical_statistical_analysis import (
         NumericalStatisticalAnalysis as N,
     )
-    well = f.view.prep.well
+    well = scratch_well(f)
     n = np.asarray(f.view.prep.depth).size
-    full = np.asarray(N._electrofacies(well, n), dtype=float)
+    got = N().analyze(well, add_curves=False).derived_curves.get("ELECTROFACIES")
+    full = np.asarray(got.data, dtype=float) if got is not None else np.full(n, np.nan)
     vals = full[f.view.mask]
     if not np.isfinite(vals[idx]).any():
         raise ToolError("electrofacies needs at least two of RHOB, NPHI, GR and RDEP with data here")

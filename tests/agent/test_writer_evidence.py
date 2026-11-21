@@ -71,7 +71,7 @@ def _run(monkeypatch, conventions=()):
              lambda messages: {"edits": [{"op": "revise", "id": "C1", "text": CLAIM, "ev": ["E1"], "grade": "moderate",
                                           "means": "the zones share one porosity level"}], "next": [], "done": True}]
     llm = Stub(steps)
-    out = graph.answer(t, "k200t", 1, 4, "open", "profile", llm_factory=lambda cfg: llm)
+    out = graph.answer(t, "k2-horizon-7b", 1, 4, "open", "profile", llm_factory=lambda cfg: llm)
     assert not out["trace"].get("error"), out["trace"].get("traceback")
     return s, llm, out
 
@@ -83,7 +83,7 @@ def test_the_writer_reads_the_points_every_opened_result_and_the_card(monkeypatc
     s, llm, out = _run(monkeypatch)
     w = llm.calls("writer")[0]["messages"]
     system, user = w[0]["content"], w[-1]["content"]
-    assert system.startswith(C.text("C9", "write")) and system.endswith("\n" + C.text("C9", "points_rule"))
+    assert system.startswith(C.prompt("C9", "write")) and system.endswith("\n" + C.text("C9", "points_rule"))
     assert (W.TABLE_RULE in system) == bool(out["trace"].get("zone_table"))       # the zone table once
     assert user.startswith(f"QUESTION:\n{QUESTION}\n\nTHE QUESTION'S POINTS (the answer covers each):\nPoint 1: {QUESTION}\n\n")
     assert CLAIM not in user and "YOUR CLAIMS" not in user           # the results, not the investigation's readings
@@ -118,7 +118,7 @@ def test_the_results_are_cut_at_the_budget():
 
 
 def test_the_writer_text_names_no_benchmark_and_states_no_conclusion():
-    text = C.text("C9", "write").lower()
+    text = C.prompt("C9", "write").lower()
     for word in ("benchmark", "judge", "reference answer", "ground truth"):
         assert word not in text
     assert "never as none" in text and "candidate until" in text and "limitations" in text

@@ -30,14 +30,14 @@ class _Claims:
         self.points, self.claims = points, {c.id: c for c in claims}
 
 
-def _claim(cid, point, text, grade="moderate", flags=(), ev=("E1",), weak=""):
-    return Claim(cid, point, text, MEANS, list(ev), grade, weak, list(flags), [])
+def _claim(cid, point, text, grade="moderate", flags=(), ev=("E1",), weak="", unshown=None):
+    return Claim(cid, point, text, MEANS, list(ev), grade, weak, list(flags), [], unshown=dict(unshown or {}))
 
 
 def test_claims_block_shows_settled_claims_marks_unverified_and_hides_hypotheses():
     c = _Claims(["Where is pay?", "How thick?", "Which fluid?"], [
         _claim("C1", 1, "Pay is in Z2", "high"),
-        _claim("C2", 2, "Net pay is 12.5 m", flags=["K3 12.5 (no result shows it)"]),
+        _claim("C2", 2, "Net pay is 12.5 m", flags=["K3 12.5 in no opened item (cite ...)"], unshown={"12.5": []}),
         _claim("C3", 3, "Gas is likely", "hypothesis")])
     plain, conf = claims_block(c), claims_block(c, confidence=True)
     assert "[C1] Pay is in Z2 | grade: high |" in plain and "grade: high confidence" in conf
@@ -45,23 +45,20 @@ def test_claims_block_shows_settled_claims_marks_unverified_and_hides_hypotheses
     assert "Gas is likely" not in plain and "Point 3: Which fluid?\n  (not settled by the investigation)" in plain
 
 
-K3_REAL = ("K3 0.796 is in E7; 0.810 is in E7, E8; 0.797 in no opened item (cite the item a number comes from and write "
-           "it as shown; a value no item shows is computed or recalled: compute it with calc and cite the result, or drop it)")
-
-
-@pytest.mark.parametrize("flag, held, none", [
-    (K3_REAL, {"0.796": ["E7"], "0.810": ["E7", "E8"]}, ["0.797"]),
-    ("K3 24, 190 in no opened item (cite the item ...)", {}, ["24", "190"]),
-    ("K3 58.51% is in E14 (cite the item ...)", {"58.51%": ["E14"]}, []),
-    ("K3 12.5 (no result shows it)", {}, ["12.5"]),                        # unread wording stays unverified
-    ("K4 high confidence needs two lines of evidence", {}, []),
+@pytest.mark.parametrize("flags, unshown, held, none", [
+    (["K3 ..."], {"0.796": ["E7"], "0.810": ["E7", "E8"], "0.797": []}, {"0.796": ["E7"], "0.810": ["E7", "E8"]},
+     ["0.797"]),
+    (["K3 ..."], {"4,000": [], "190": []}, {}, ["4,000", "190"]),           # numbers as data: "4,000" stays one
+    (["K3 ..."], {"58.51%": ["E14"]}, {"58.51%": ["E14"]}, []),
+    (["K4 high confidence needs two lines of evidence"], {"12.5": []}, {}, []),   # no K3 flag now: nothing unshown
 ])
-def test_k3_split(flag, held, none):
-    assert writer.k3_split(_claim("C1", 1, "x", flags=[flag])) == (held, none)
+def test_k3_split_reads_the_claims_data_not_its_flag_text(flags, unshown, held, none):
+    assert writer.k3_split(_claim("C1", 1, "x", flags=flags, unshown=unshown)) == (held, none)
 
 
 def test_claims_block_states_held_numbers_with_their_item_and_withholds_the_rest():
-    c = _Claims(["How much BVW?"], [_claim("C1", 1, "BVW 0.796 in Z1, 0.810 in Z2, ratio 0.797", flags=[K3_REAL])])
+    c = _Claims(["How much BVW?"], [_claim("C1", 1, "BVW 0.796 in Z1, 0.810 in Z2, ratio 0.797", flags=["K3 ..."],
+                                                   unshown={"0.796": ["E7"], "0.810": ["E7", "E8"], "0.797": []})])
     on = claims_block(c)
     assert "results: E1; E7 (holds 0.796); E7, E8 (holds 0.810) | unverified, do not state: 0.797" in on
 
@@ -70,7 +67,7 @@ def test_cited_lines_bring_the_lines_that_hold_the_numbers():
     from types import SimpleNamespace as NS
     e7 = NS(id="E7", rows=[("SW [v/v]", []), ("  Z1 SAND: mean 0.7961", [0.7961]), ("  Z2 SAND: mean 0.5", [0.5])],
             call_text=lambda: "stats SW")
-    c = _claim("C1", 1, "SW 0.796 in Z1", flags=["K3 0.796 is in E7 (cite the item ...)"], ev=())
+    c = _claim("C1", 1, "SW 0.796 in Z1", flags=["K3 0.796 is in E7 (cite the item ...)"], ev=(), unshown={"0.796": ["E7"]})
     claims = NS(claims={"C1": c}, items={"E7": e7})
     text = writer.cited_lines(claims)
     assert "[E7] stats SW (for C1: holds 0.796)" in text and "Z1 SAND: mean 0.7961" in text and "Z2 SAND" not in text
@@ -183,7 +180,7 @@ def test_the_prompt_holds_every_point_the_limits_found_every_result_and_the_card
     for e in real.ledger.items:                                     # every opened result, whole
         assert f"[{e.id}] {e.text}" in user
     assert "WHAT THE CURVES ARE" in user and real.card and real.card in user
-    assert system.startswith(C.text("C9", "write")) and (writer.TABLE_RULE in system) == bool(table)
+    assert system.startswith(C.prompt("C9", "write")) and (writer.TABLE_RULE in system) == bool(table)
     assert system.endswith("\n" + C.text("C9", "points_rule"))      # each point its own part
     assert shape == "list" and table.startswith("| Zone |")
 
@@ -258,7 +255,8 @@ def test_process_words_are_repaired_with_the_numbers(real):
     trace = {}
     text, status = writer.write(llm, real, _cfg(), Usage(), trace, variant="open")
     assert "opened record" in llm.sent[1][1][-1]["content"] and trace["verify_rounds"][-1]["process"] == []
-    assert "opened" not in text and "[C1]" not in text and "## Conclusions\nok.\n" in text      # the zone table follows
+    assert "opened" not in text and "[C1]" not in text and text.endswith("## Conclusions\nok.")
+    assert text.index("| Depth") < text.index("## Conclusions")          # the zone table after the first section
 
 
 @pytest.mark.data
@@ -371,7 +369,7 @@ def test_the_zone_table_gives_curves_with_the_same_values_one_row():
     if len(f.view.zones) < 2:
         pytest.skip("one zone: the zone table is by curve")
     table = zone_table(s, s.claims)
-    rows = [ln for ln in table.splitlines()[2:]]
+    rows = [ln for ln in table.splitlines()[2:] if re.search(rf"\b({c}|{twins[0]})\b", ln)]   # other named curves aside
     assert len(rows) == len(f.view.zones) and all(f"{c} = {twins[0]}" in r for r in rows), table[:600]
 
 

@@ -11,7 +11,8 @@ data:
   # The lithology log: its LAS mnemonic (or a list; the first a well has is used). Null: each LAS's own curve whose
   # mnemonic or description names a lithology or facies log; wells without one are zoned by shale-volume bands.
   lithology_curve: null
-  # interpret: {}                  # petrophys.interpret options; e.g. {context_profile: costa} for a context package's wells
+  # interpret: {}                  # petrophys.interpret options; e.g. {context_profile: NAME} for a context package's
+  #                                  wells (petrophys.list_context_profiles() names them)
   engines_dir: null                # the pinned interpretation engines, when the policy names one (docs/DEVELOPMENT.md)
 
 # Evaluation only (tests, diagnostics, scoring); a task never sees these.

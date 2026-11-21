@@ -1,251 +1,342 @@
 # Conversations
 
-A conversation is any number of questions about one interval of one well. Ask, read the answer, ask again: each
-question is answered with what the earlier ones found in view. The first question is answered exactly as
-`petroharness --las ... --question ...` answers it.
+A conversation keeps one interval of one well open for as many questions as you have. Each question starts from what
+the earlier ones found, each answer is checked and illustrated like a first answer, and the whole conversation is kept
+in one folder: resume it later, audit any answer back to the LAS file, or write it up as one report.
 
-- [Start one](#start-one)
-- [What a later question can do](#what-a-later-question-can-do)
-- [Figures](#figures)
-- [Methods and parameters](#methods-and-parameters)
-- [The session folder](#the-session-folder)
-- [Resume](#resume)
-- [In Python](#in-python)
-- [How it works](#how-it-works)
-- [Limits today](#limits-today)
+```mermaid
+flowchart TB
+    W["GeoLink 30/6-5, Brent Group<br/>Petrophys interprets the interval once"]:::petrophys
+    W --> Q1["Question 1: porosity, SW, permeability, any hydrocarbons?<br/>opens results E1–E10"]:::model
+    Q1 --> Q2["Question 2: the best zone, and log permeability against core?<br/>cites E1, E7 and E10 from question 1, opens E11–E18"]:::model
+    Q2 --> Q3["Question 3 …"]:::model
+    Q1 -.-> S[("Session folder<br/>log, answers, figures")]:::record
+    Q2 -.-> S
+    S --> X["resume · audit · report"]:::output
+
+    classDef input fill:#ffffff,stroke:#011e3f,color:#011e3f
+    classDef petrophys fill:#e3f2ee,stroke:#197e6f,color:#0f4f45
+    classDef record fill:#f0eeea,stroke:#9aa0aa,color:#1c2433
+    classDef model fill:#e6ecf4,stroke:#011e3f,color:#011e3f
+    classDef output fill:#fdeee4,stroke:#ef6719,color:#7a3410
+```
+
+The examples on this page come from one real conversation: two questions about the Brent Group of GeoLink well
+30/6-5, a well that ships with Petrophys.
 
 ## Start one
 
 ```bash
-petroharness chat --las WELL.las --formation "FORMATION NAME" --tops tops.csv
+LAS=$(python -c "import petrophys; print(petrophys.sample('30/6-5'))")
+TOPS=$(python -c "import petrophys; print(petrophys.sample('formations_30_6-5.csv'))")
+
+petroharness chat --las $LAS --tops $TOPS --formation "BRENT GP."
 ```
 
-The interval, lithology, model, settings and skills options are the ones `petroharness` takes
-([docs/USAGE.md](USAGE.md)). Then type a question and press Enter. An empty line or Ctrl-D ends the conversation.
-
-Questions can also be given up front, and are asked in order before the prompt appears:
+Type a question at `question>` and press Enter; an empty line or Ctrl-D ends the conversation. The interval, model,
+settings and skills options are those of `petroharness` ([Evaluate a formation](USAGE.md)). Questions can also be given
+up front, with `--question` (repeatable) or `--questions-file` (one per line):
 
 ```bash
-petroharness chat --las WELL.las --top 2450 --base 2510 --depth-unit m \
-    --question "What is the porosity distribution in this interval?" \
-    --question "What if I use the density porosity instead?" \
-    --question "Now relate water saturation to porosity."
+petroharness chat --las $LAS --tops $TOPS --formation "BRENT GP." --session brent \
+  --question "What are the porosity, water saturation and permeability of the Brent Group, and is any of it hydrocarbon-bearing?" \
+  --question "Which zone has the best reservoir quality, and how does the log permeability compare with the core?"
 ```
 
-Answers go to standard output. What was run (the status, the number of investigation steps, the time, the folder of the
-question) goes to standard error.
+Answers go to standard output, and what was run to standard error:
+
+```text
+conversation in …/brent
+30_6-5.las: 2841-2958 m (768 samples; tops file formations_30_6-5.csv, base: stated base)
+the interval's log display (Petrophys): …/brent/overview.png
+
+--- question 1 (ok; 8 investigation steps, 903.5 s; …/brent/turns/01) ---
+```
 
 ## What a later question can do
 
-Anything the first question can, and it starts from what is already known. There is no list of follow-up kinds: the
-model reads the question with the conversation in view and decides what it needs. For example:
+Anything a first question can, starting from what is already known. The model reads the question with the conversation
+in view and decides what it needs:
 
-- **Ask about an earlier answer.** "What formation water resistivity did the saturation use?" The results opened
-  earlier are still there; the model reads them again instead of computing them again.
-- **Try another method or parameter.** "What if I use the density porosity instead?" Petrophys computes the
-  alternative and the answer compares it with what the earlier answer used.
-- **Go further.** "Now relate water saturation to porosity." A new investigation on the same interval.
-- **Narrow down.** "And only in the lower sand?"
+| Ask | For example |
+|---|---|
+| About an earlier answer | "What formation water resistivity did the saturation use?" (read again, not recomputed) |
+| For another method or parameter | "What if I use the density porosity instead?" (computed, and compared) |
+| To go further | "Which zone has the best reservoir quality, and how does the log permeability compare with the core?" |
+| To narrow down | "And only in the cross-bedded sands?" |
 
-Every answer is checked the same way as a first answer: each number in it must come from a result.
+Question 2 of the Brent conversation went further. It cited three results question 1 had opened (E1, E7 and E10),
+opened eight of its own (E11 to E18), and began:
+
+> **Z19** (Sand, 2951.66–2955.01 m) has the strongest permeability […] but it is water-bearing (SW = 1.0 in all 23
+> samples, PRIME_OIL_TARGET 0), so it is the best rock unit, not a hydrocarbon candidate. **Z7** (Sand,
+> 2877.60–2890.85 m) has the best combined rock quality: cleanest mean clay (VCL 0.0268), […] core-calibrated PERM_CC
+> 416.0 mD, and the largest flow capacity (k·h = 5516 mD·m; […]).
+
+A later answer is checked as a first answer is: every number in it must come from a result.
 
 ## Figures
 
-An answer can carry figures where a plot says it better than text. Petrophys draws them
-(`petrophys.visualization`): the harness has no drawing code of its own. Not every answer gets one.
+An answer carries up to three figures where a plot says it better than text. After the answer is written, one more
+model call sees the question, the answer and the plots that can be drawn from what the answer rests on, and picks
+which to show, or none. Petrophys draws them (`petrophys.visualization`); the harness has no drawing code, and the
+answer's text never goes back through the model.
 
-Two kinds of plot are offered for an answer:
+![Log permeability against core-calibrated permeability](images/geolink-30_6-5-brent-perm-crossplot.png "Question 2, figure 1: Petrophys's crossplot of result E17, core-calibrated PERM_CC against the log's PERM in the 12 zones that hold both, 343 samples coloured by depth, with the 1:1 line. Data: GeoLink, CC BY-SA 4.0.") ![Porosity, permeability and rock quality beside the zones](images/geolink-30_6-5-brent-perm-logs.png "Question 2, figure 3: Petrophys's log viewer of result E11, porosity, permeability and rock quality (RQI, FZI) beside the zones' lithology. Data: GeoLink, CC BY-SA 4.0.")
 
-- **The plot of one of its results.** A statistics result gives a histogram of each curve by zone and the log viewer
-  of its curves beside the zones' lithology; a crossplot or a comparison gives the crossplot with its line.
-- **A standard display of the interval**, where the interval holds the curves and the answer's results rest on them:
-  the density-neutron, M-N and MID lithology crossplots, the Pickett, Hingle and Buckles plots, the flow-unit plot,
-  the triple combo and the net pay summary.
+Figures are files in `turns/NN/figures/`, linked at the end of `answer.md`, each captioned with the Petrophys function
+and the result or curves it drew. When a conversation starts, Petrophys's log viewer also draws the whole interval once
+(`overview.png`). `--no-figures` turns figures off; a benchmark run draws none.
 
-After an answer is written, one more model call is shown the question, the answer and these candidates. It chooses
-which to show, or none. Petrophys then draws each on the interval's well. The answer's text is never passed back
-through the model, so figures cannot change it.
+<details>
+<summary>The plots an answer can get</summary>
 
-What the harness adds around a Petrophys plot is only what the plot needs from the question:
+- **The plot of a result the answer's claims cite:** a histogram of each curve by zone and the log viewer of its
+  curves (a statistics result), the crossplot with its line (a crossplot or a comparison), the log viewer (a profile).
+- **A standard display of the interval**, where the interval holds its curves and the answer's results rest on them:
+  density-neutron, M-N and MID crossplots, Pickett, Hingle and Buckles plots, the flow-unit plot, the triple combo and
+  the net pay summary.
 
-- **The well.** The interval's samples, with the curves as the results read them (a curve computed on request is
-  included; a result's condition is applied).
-- **The zones**, as the log viewer's lithology track.
-- **The numbers a plot takes**, each said in the caption with its source. A Pickett plot's Rw is the median of the
-  interval's Rw curve; its exponents come from the well's record, or are Petrophys' defaults.
-- **The caption**, which names the Petrophys function and the result or curves it drew.
-
-A plot that is missing belongs in Petrophys. Once it is there, one line in `petroharness/figures.py` (`DISPLAYS`)
-offers it.
-
-When a conversation starts, Petrophys' log viewer also draws the whole interval once (`overview.png` in the session
-folder, and the Well logs tab of the web UI): the standard tracks for the curves the well holds, beside the zones'
-lithology.
-
-Figures are files in the question's folder (`turns/NN/figures/`), linked at the end of `answer.md`. Turn them off with
-`--no-figures`. A benchmark run never draws any.
+The harness gives Petrophys only what a plot needs from the question: the interval's samples as the results read
+them, the zones as the lithology track, and each number the plot takes, stated in the caption with its source (a
+Pickett plot's Rw is the median of the interval's Rw curve). A missing plot belongs in Petrophys; one line in
+`petroharness/figures.py` (`DISPLAYS`) then offers it. More: [Petrophys integration](reference/PETROPHYS_INTEGRATION.md).
+</details>
 
 ## Methods and parameters
 
-Every answer file ends with the methods and parameters the answer rests on: the workflow steps that computed the
-curves the answer names (for example the porosity step with its matrix and fluid values, the saturation step with its
-exponents), and the steps those read from (the clay volume behind the porosity). Each step is shown with its method,
-the curves it computed, what it read, and its parameters.
+Every answer file ends with the Petrophys steps behind the curves the answer names, with their parameters. Code reads
+them from the well's record after the answer is final; the model neither writes nor sees them. Two of the steps under
+question 2's answer:
 
-Code reads this from the well's record after the answer is final. The model does not write it and never sees it, so it
-cannot be wrong about what was used and it cannot change an answer. A curve computed on request during the
-conversation (a what-if) is listed under the label it was computed with. The same list is in `trace.json` (`basis`) and
-in `Turn.basis`.
+> - **saturation**: archie+simandoux. computed SW, SXO. read RDEP, PHIE_CC, VCL. parameters sw_model =
+>   archie+simandoux; […] m = 2; n = 2; […] rw_min = 0.0624088; rw_max = 0.196732; rcl = 2.906; […]
+> - **net_pay**: cutoff_flags. computed PRIME_OIL_TARGET, NET_PAY. read VCL, PHIE_CC, SW. parameters vcl_cutoff =
+>   0.3; phie_cutoff = lithology_dependent; sw_cutoff = 0.7; lithology = per-depth; seal_vcl_cutoff = 0.8.
+
+The list also holds the steps those read from, and a curve computed on request (a what-if) under its label. The same
+list is in `trace.json` (`basis`) and in `Turn.basis`.
+
+## Changing a setting
+
+The interpretation settings (Petrophys's, such as `m`, `rw` and the cutoffs, and the zone rule; the web UI's settings
+panel lists them) can change in the middle of a conversation, from the next question on. On the resumed Brent
+conversation:
+
+```text
+question> /set sw_cutoff=0.6
+from question 3: sw_cutoff the default (0.7) -> 0.6 (the well was interpreted again)
+question> /settings
+settings in force: sw_cutoff=0.6
+changed before question 3: sw_cutoff the default (0.7) -> 0.6
+```
+
+`/set` takes several `name=value` pairs; `name=default` restores a default. In Python: `c.adopt({"sw_cutoff": 0.6})`
+(None for the default). The next question's prompts say what changed:
+
+> Settings changed before question 3 (by the user): sw_cutoff the default (0.7) -> 0.6. The well was interpreted
+> again with them. Results E1 to E18 and the answers before rest on the earlier settings; read again, a result says so.
+
+<details>
+<summary>What a settings change does</summary>
+
+- **The well is interpreted again** under the settings in force, and every later question reads it.
+- **The ledger goes on**, its ids continuing. An earlier result says, when read again, that it rests on the earlier
+  settings; the same call asked again is computed anew.
+- **The change is recorded:** in the answer's header, in its methods and parameters, as a `settings` event in the log
+  (replayed in its place on resume), and in the audit trail ([Evidence and audit](EVIDENCE.md)).
+- **Only you change settings.** A question such as "what if m were 1.8?" is answered as a comparison and changes
+  nothing; with no change, no request differs.
+- **A setting that cannot be used is refused**, and nothing changes:
+  `not changed: WHAT: interpretation settings that cannot be used: q: not a setting this panel knows. FIX: correct or reset them.`
+- **A context profile fixes its own settings:** with `--profile`, only the zone rule can change.
+- **A zone rule change re-zones the interval.** Taranaki cheal-1 has no lithology log, so its Moki Formation
+  (2336–2848 m) is zoned by shale-volume bands: 50 zones at the default edges. Narrower bands give 45:
+
+  ```text
+  question> /set zone_vcl_bands=0.25,0.5
+  from question 1: zone_vcl_bands the default (0.3 / 0.6) -> 0.25 / 0.5 (the well was interpreted again)
+  ```
+
+  The `settings` event records the 45 zones the well was interpreted into. Data: Taranaki Basin Curated Well Logs
+  Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.
+</details>
+
+## Changing the scope, the frame or the zones
+
+A conversation's stretches of the well can change from one question to the next, as its questions do.
+
+```text
+question> /scope Dunlin GP., 2900-3000
+from question 4: scope Dunlin GP., 2900-3000
+question> /frame lithology
+from question 4: by the lithology zones
+question> /zones ness_etive.csv
+from question 4: your zones from ness_etive.csv
+```
+
+- **Each question's own scope.** The model reads which stretches a question is about (a unit, a depth range, your
+  zones, the whole well) and every lookup of that question computes on them (a call's `"zones": ["ALL"]` is every
+  row of the scope; a call that names other zones computes on those). The next question reads its own: one that
+  names none is about the interval.
+- **`/scope ITEMS`** (comma-separated) sets a default for the questions from the next one on, until you change it. A
+  question that names other stretches is computed on those, for that question only. `/scope` alone returns to the
+  interval. A scope that names nothing in the well is refused when you give it.
+- **`/frame lithology`** reports every lookup by the lithology zones (where your zones frame the interval); `/frame
+  zones` takes it back.
+- **`/zones FILE`** gives your zones from the next question on (the well is not interpreted again; earlier results say
+  they were read under the earlier zones). `/zones none` takes them away. A file that cannot be used changes nothing.
+
+In Python: `c.set_scope(["Dunlin GP."])`, `c.set_frame("lithology")`, `c.adopt_zones("ness_etive.csv")`. Each change
+is logged with the question it takes effect at, the next questions' prompts name it, and a resumed conversation
+replays it in place. Under `reach: focus` (a benchmark's settings) `/scope` is refused: those questions stay on their
+interval.
+
+## Field notes
+
+A field notes file holds a team's standing choices for a field or study: settings in force from the start, and notes
+in words that go with every question.
+
+```yaml
+name: Brent Group study
+settings:              # in force from the start (the settings panel's names)
+  m: 1.8
+  sw_cutoff: 0.6
+notes:                 # standing choices in words, read with every question
+  - Report water saturation from the Indonesia model.
+  - Call the sands below 2865 m the Etive sands.
+```
+
+Give it with `--field-notes FILE` (`petroharness` and `petroharness chat`), `field_notes=` in Python, or in the web
+UI's Options. The model reads the notes as your statement:
+
+> (The user's field notes for this field, Brent Group study: Report water saturation from the Indonesia model. Call
+> the sands below 2865 m the Etive sands.)
+
+<details>
+<summary>How field notes apply</summary>
+
+- Settings you give at the start take precedence over the notes' settings, and a later change is yours.
+- The answer's header names the notes. The log keeps what the file held, with its SHA-256, so a resume does not read
+  the file again.
+- A file that cannot be used is refused with what is wrong and the fix: an entry other than `name`, `settings` and
+  `notes`, a setting that cannot be used, or more than 20 notes or a note over 300 characters.
+- A benchmark run never reads field notes.
+</details>
 
 ## The session folder
 
-A conversation lives in one folder (`--session DIR`; by default `./petroharness-sessions/<LAS name>-<time>`):
+A conversation lives in one folder: `--session DIR`, by default `./petroharness-sessions/<LAS name>-<time>`.
 
 ```text
-log.jsonl              the events, in order: session_start, display, question, result, figure, turn_end, settings,
-                       session_resume
-overview.png           the interval's log display by Petrophys, drawn when the conversation starts
-blobs/                 the texts the events name (each result as shown, each answer), kept once, by SHA-256
-turns/01/answer.md     question 1's answer with its header, figures, methods and parameters
-turns/01/trace.json    its full trace
-turns/01/tape.jsonl    every model request and reply of the question
-turns/01/figures/      its figures
-.cache/                the interpreted well
+brent/
+  log.jsonl              the events, in order: what a resume, an audit and a report read
+  overview.png           the interval's log display by Petrophys
+  blobs/                 results, answers and the well's record, once each, by SHA-256
+  turns/01/answer.md     question 1's answer with its header, figures, methods and parameters
+  turns/01/trace.json    its full trace
+  turns/01/tape.jsonl    every model request and reply of the question
+  turns/01/figures/      its figures
+  turns/02/…
+  .cache/                the interpreted well
 ```
 
-`log.jsonl` is the record the conversation is resumed and audited from. One line per event:
-
-| Event | What it records |
-|---|---|
-| `session_start` | The LAS file and its SHA-256, the inputs, the interval and zones used, the model, the Petrophys build, the harness commit |
-| `display` | The interval's log display drawn when the conversation starts: its file and the Petrophys function |
-| `question` | The question and its task |
-| `result` | One result the question opened: its id (E1, E2, ...), the tool, the arguments, the SHA-256 of its text |
-| `figure` | One figure drawn: its kind, the result it draws, its caption, its file |
-| `turn_end` | The question's summary: status, how the answer opens, the settled claims with the results they cite, the results opened, steps, model calls, tokens, seconds (and the settings changed for it, when they were) |
-| `settings` | A settings change: the question it takes effect at, what changed (from, to), who asked, the settings now in force, and the zones the well was interpreted into |
-| `session_resume` | A resume: the questions and results rebuilt, and any difference found |
+The Brent conversation's `log.jsonl` holds 32 events: `session_start`, `display`, `setup`, two `question`, 18
+`result`, one `record`, six `figure` and two `turn_end`. A settings change adds `settings`, a resume
+`session_resume`. Every field of every event: [Records](reference/RECORDS.md).
 
 ## Resume
 
 ```bash
-petroharness chat --resume DIR
+petroharness chat --resume brent
 ```
-
-The well is prepared again from the cache, and every recorded result is opened again in order. Each must come back
-with the same id and the same text. A difference (for example after a Petrophys upgrade) is written to the
-`session_resume` event and the conversation goes on. A settings change is replayed where it was made, so the results
-opened after it are opened again on the well as it was interpreted then.
-
-## Changing a setting
-
-The interpretation settings (the ones the web UI's settings panel lists: Petrophys's, such as `m`, `rw` and the
-cutoffs, and the zone rule) can change in the middle of a conversation. A change holds from the next question on:
 
 ```text
-question> What is the mean water saturation of zone Z3?
-question> /set m=1.8
-from question 2: m the default -> 1.8 (the well was interpreted again)
-question> And now?
-question> /settings
-settings in force: m=1.8
-changed before question 2: m the default -> 1.8
+resumed …/brent: 2 questions so far
 ```
 
-`/set name=value` takes several pairs at once; `name=default` takes a setting back to its default. In Python it is
-`c.adopt({"m": 1.8})` (None for the default), which returns what changed.
+The well is prepared again from the cache and every recorded result is opened again, in order. Each must come back
+with the same id and text; the Brent conversation's 18 did (`"differences": []` in its `session_resume` event). A
+difference, after a Petrophys upgrade for example, is written to that event and the conversation goes on. A settings
+change is replayed where it was made.
 
-What happens:
+## Audit and report
 
-- **The well is interpreted again** under the settings now in force: a new generation of its curves. Every later
-  question reads it.
-- **The ledger goes on.** Its ids continue. A result opened before the change says, whenever it is read again, that it
-  rests on the earlier settings, and the same call asked again is computed anew on the new well.
-- **The change is said.** The next questions' prompts carry it in EARLIER IN THIS SESSION ("Settings changed before
-  question 2 (by the user): m the default -> 1.8. The well was interpreted again with them. Results E1 to E9 and
-  the answers before rest on the earlier settings"). The answer's header names the change, and its methods and
-  parameters show the values used.
-- **It is in the log** as a `settings` event (what changed, from, to, who asked, which question), replayed in its place
-  on resume, and in the audit trail ([EVIDENCE.md](EVIDENCE.md)): each answer's trail shows the parameters it was
-  made with.
-- **Nothing changes without it.** A conversation with no change sends the requests it sent before; a question about a
-  method ("what if m were 1.8?") is answered as a comparison and changes nothing.
-
-## Field notes
-
-A field notes file holds a team's standing choices for a field or project:
-
-```yaml
-name: North field, 2026 study
-settings:              # interpretation settings in force from the start (the settings panel's names)
-  m: 1.8
-  rw: 0.04
-  sw_cutoff: 0.6
-notes:                 # standing choices in words, read with every question
-  - Report water saturation from the Indonesia model.
-  - Call the upper sand the A sand.
+```bash
+petroharness audit brent --question 2     # one answer's trail; all answers without --question
+petroharness report brent                 # the conversation as one document: brent/report.md
 ```
 
-Give it with `--field-notes FILE` (`petroharness` and `petroharness chat`), `field_notes=` in Python, or in the web
-UI's Options. Its settings are in force from the start, each marked as coming from the field notes; settings you give
-at the start take precedence, and a later change is yours. Its notes reach the model with every question as your
-statement, as `--formation-lithology` does. The answer's header names the notes. The log keeps what the file held
-(and its SHA-256), so a conversation resumed later does not read the file again. What is wrong in the file is said
-entry by entry, with the fix. A benchmark run never reads field notes.
+Both read the session folder alone: no well, no Petrophys run, no model. The audit trail follows each number from
+the answer back to the LAS file. One number of question 2:
 
-## In Python
+```mermaid
+flowchart TB
+    N["Answer 2: Z19 has PERM_CC 1627.6 mD"]:::output
+    N --> R["Result E11, statistics of nine curves<br/>the number also shows in E1, E9, E10 and E17"]:::record
+    R --> K["Curve PERM_CC<br/>computed by the step permeability"]:::record
+    K --> S["Step permeability: same_well_core+coates<br/>read PHIE, SW, RDEP, RESFLAG"]:::petrophys
+    S --> L["30_6-5.las, SHA-256 5ecf2c53…"]:::input
+
+    classDef input fill:#ffffff,stroke:#011e3f,color:#011e3f
+    classDef petrophys fill:#e3f2ee,stroke:#197e6f,color:#0f4f45
+    classDef record fill:#f0eeea,stroke:#9aa0aa,color:#1c2433
+    classDef model fill:#e6ecf4,stroke:#011e3f,color:#011e3f
+    classDef output fill:#fdeee4,stroke:#ef6719,color:#7a3410
+```
+
+The report holds the interval, the model and the Petrophys build, the interval's display, each question with its
+answer, figures, methods and parameters, then each answer's audit trail. What the trail lists:
+[Evidence and audit](EVIDENCE.md).
+
+## More
+
+<details>
+<summary>From Python</summary>
 
 ```python
+import petrophys
 from petroharness.session import Conversation
 
-c = Conversation.start("WELL.las", "my-session", formation="FORMATION NAME", tops="tops.csv",
-                       model_url="http://HOST:PORT/v1")
-first = c.ask("What is the porosity distribution in this interval?")
-print(first.answer)
-second = c.ask("What if I use the density porosity instead?")
+c = Conversation.start(petrophys.sample("30/6-5"), "brent-py", formation="BRENT GP.",
+                       tops=petrophys.sample("formations_30_6-5.csv"), model_url="http://localhost:8000/v1")
+first = c.ask("What are the porosity, water saturation and permeability of the Brent Group?")
+second = c.ask("Which zone has the best reservoir quality?")
 for figure in second.figures:
     print(figure["caption"], second.folder / figure["file"])
 
-later = Conversation.resume("my-session", model_url="http://HOST:PORT/v1")
-later.ask("Now relate water saturation to porosity.")
-later.adopt({"m": 1.8})                      # from the next question on (None: back to the default)
-later.ask("And the water saturation now?")
+later = Conversation.resume("brent-py", model_url="http://localhost:8000/v1")
+later.adopt({"sw_cutoff": 0.6})              # from the next question on (None: back to the default)
+later.ask("How much net pay is there now?")
 print(later.settings, later.sources(), later.changes())
 ```
 
-`Conversation.start(..., field_notes="north.yaml")` starts under a field notes file.
+`field_notes="brent-study.yaml"` starts under a field notes file. A `Turn` has `number`, `question`, `answer`,
+`status`, `trace`, `folder`, `figures` and `basis`. Every method: [Python API](reference/PYTHON_API.md).
+</details>
 
-`Turn` has `number`, `question`, `answer`, `status`, `trace`, `folder`, `figures` and `basis`.
+<details>
+<summary>How a later question is answered</summary>
 
-## How it works
+- **One well, one ledger.** The well is prepared once. Result ids go on across questions (E1 to E10, then E11 to
+  E18), and a later question can read any earlier result with `get` or `find` and cite it.
+- **The same question graph, one extra block.** A later question starts at the READ call. Its prompts carry EARLIER IN
+  THIS SESSION: each earlier question, how its answer opened, and its settled claims with their result ids, built by
+  code from the log (newest in full, older in short, the oldest as a count; 6,000 characters at most).
+- **Stale results are marked.** When a later question computes a curve again under the same name, earlier results that
+  read the old values say so when read again.
+- **The first question is unchanged.** With no earlier question the block is empty, and every request is the one a
+  single `petroharness` run sends; the request gate checks this on recorded runs.
 
-- **The well is prepared once.** Petrophys interprets the LAS when the conversation starts. Later questions start
-  without that wait.
-- **One ledger for the whole conversation.** Every result has an id, and the ids go on across questions (E1 to E22 in
-  the first question, E23 onward in the second). A later question lists the earlier results, reads any of them with
-  `get` or `find`, and may cite them.
-- **Each question is the same question graph.** A later question skips preparing the well and starts at the READ call.
-  Its prompts carry one extra block, EARLIER IN THIS SESSION: each earlier question, how its answer opened, and its
-  settled claims with the ids of their results. Code builds that block from the log; no model writes it. The newest
-  questions are shown in full, older ones in short, the oldest as a count.
-- **The writer of a later question** reads that question's own results and the earlier results its claims cite.
-- **A result that went stale is marked.** When a later question computes a curve again under the same name, earlier
-  results that read the old values say so when read again, and the same call is computed anew.
-- **The first question is unchanged.** With no earlier question the extra block is empty, and every model request is
-  the one a single `petroharness` run sends. The request gate checks this on recorded runs.
+The graph a later question runs: [Session graph](SESSION_GRAPH.md).
+</details>
 
-## Simple questions
-
-The model first says whether a question is direct (a value, a setting, a count, a depth or a yes or no that one or two
-lookups will state) or needs an investigation. A direct question skips the investigation: one or two look steps
-open what is needed, and a short answer is written from those results, with its basis and the limit that matters.
-"What is the average effective porosity?" then takes three model calls instead of eight or more. To give every
-question a full investigation, start with `--investigate` ([GRAPH.md](GRAPH.md), "The direct route").
-
-## Limits today
+<details>
+<summary>Limits</summary>
 
 - One interval per conversation. Another interval of the same well is another conversation.
 - A what-if is a comparison. It does not change the settings later questions use; `/set` (or the web UI's settings,
   or `adopt`) does.
-- A settings change is the user's action. The model does not change settings itself when asked in words.
+- The model does not change settings when asked in words.
 - A later question costs about as many model calls as a first question when it needs new results.
+</details>

@@ -2,9 +2,12 @@ id: C10
 name: reading
 purpose: 'how evidence is read and graded: caveats, levels and rankings, negatives, absence'
 texts:
-  v9_brief: v9_brief.md
-  v10_brief: v10_brief.md
-  settle_v9: settle_v9.md
+  zones_left_note: zones_left_note.md   # the user's zones that hold no sample of the interval
+  absent_unit_note: absent_unit_note.md   # a unit the question names that the tops file does not have
+  brief_weaknesses: brief_weaknesses.md
+  brief_levels: brief_levels.md
+  settle_weaknesses: settle_weaknesses.md
   absent_note: absent_note.md
+  empty_note: empty_note.md      # a named curve the record holds, with no value in this interval
 frames:
 - agent/vocabulary.py

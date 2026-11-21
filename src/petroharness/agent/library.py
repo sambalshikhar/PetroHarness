@@ -9,15 +9,20 @@ carries into come from each step's requires and produces. A calculated curve bec
 """
 from __future__ import annotations
 
+import copy
+import json
 import re
+import warnings
 import threading
 from functools import lru_cache
 from typing import Optional
 
 import numpy as np
 
-from petroharness.agent.engine import Formation, Out, Result, ToolError, num
+from petroharness.agent import engine as E
+from petroharness.agent.engine import Formation, Out, Result, ToolError, limits, num, said_whole
 from petroharness.agent.inventory import Curve
+from petroharness.well import summary as S
 
 # what users call a property -> the library's workflow step
 PROPERTIES = {"clay_volume": "clay_volume", "porosity": "porosity", "water_resistivity": "formation_water",
@@ -30,14 +35,7 @@ ALIASES = {"vcl": "clay_volume", "shale_volume": "clay_volume", "vsh": "clay_vol
            "water_saturation": "saturation", "perm": "permeability", "pay": "net_pay", "net_reservoir": "net_pay",
            "cutoffs": "net_pay", "fzi": "rock_quality", "rqi": "rock_quality", "bulk_volume_water": "bvw",
            "temp": "temperature"}
-RECORD_STEP = {"clay_volume": "vclay", "formation_water": "rw"}          # the record's name of a step, where it differs
 CURVE_ARGS = {"gr_curve", "vcl_curve", "phie_curve", "phit_curve", "perm_curve", "sw_curve", "sxo_curve", "name"}
-# the record's names of a library parameter (a range counts when its two ends agree)
-RECORD_NAMES = {"gr_clean": ["gr_min_used", "gr_min"], "gr_shale": ["gr_max_used", "gr_max"], "sp_clean": ["sp_min"],
-                "sp_shale": ["sp_max"], "matrix_density": ["rho_ma"], "matrix_neutron": ["nphi_ma"],
-                "matrix_slowness": ["dt_ma"], "fluid_density": ["rho_fl"], "fluid_slowness": ["dt_fl"],
-                "clay_porosity": ["phi_cl"], "rw": ["rw", "rw_at_measured_temp"],
-                "rw_temp_f": ["reference_temp_f", "measured_temp_f"], "vcl_cutoff": ["vcl_cutoff_for_routing", "vcl_cutoff"]}
 IMPLICIT = {"TEMP": ["formation_water", "mud_filtrate"]}                 # read without being listed in requires
 TARGETS = {"clay_volume": "VCL", "porosity": "PHIE", "formation_water": "SW", "saturation": "SW",
            "permeability": "PERM", "net_pay": "NET_PAY", "bvw": "BVW", "mhi": "MHI", "rock_quality": "FZI",
@@ -124,6 +122,7 @@ def downstream(kind: str, made: list) -> list:
 # --- the record's parameters ----------------------------------------------------------------------------------------
 
 def _method(f: Formation, kind: str):
+    from petrophys.workflow.steps import RECORD_STEP          # the record's name of a step (Petrophys's)
     step = RECORD_STEP.get(kind, kind)
     return next((m for m in f.inv.methods if m.step == step), None)
 
@@ -132,30 +131,21 @@ def _num(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and bool(np.isfinite(float(v)))
 
 
-def defaults(f: Formation, kind: str) -> dict:
-    """The step's parameters as the record states them (only those it states)."""
+def unlisted_method(f: Formation, kind: str) -> str:
+    """The record's method of the step when it is none of the library step's choices (the record's clay volume
+    min(GR, ND), the library's gr, sp, nd, ...): its words, "" when it is one of them or the record states none."""
     m = _method(f, kind)
-    if m is None:
-        return {}
-    rec = {str(k): v for k, v in (m.parameters or {}).items()}
-    out = {}
-    for p in parameters(kind):
-        for name in [p] + RECORD_NAMES.get(p, []):
-            if name in rec and _num(rec[name]):
-                out[p] = float(rec[name])
-                break
-            lo, hi = rec.get(f"{name}_min"), rec.get(f"{name}_max")
-            if _num(lo) and _num(hi) and float(lo) == float(hi):
-                out[p] = float(lo)
-                break
-    method = str(m.method or "").lower()
-    for p, opts in choices(kind).items():
-        names = [n for n, _ in opts]
-        if p in ("model", "method") and names:
-            out[p] = method if method in names else ("auto" if "auto" in names else out.get(p, names[0]))
-    if kind == "formation_water" and "rw" in out and "rw_temp_f" not in out:
-        out.pop("rw")                                    # an Rw without its temperature is not a stated Rw
-    return out
+    method = str(getattr(m, "method", "") or "").strip()
+    names = {n for p, opts in choices(kind).items() if p in ("model", "method") for n, _ in opts}
+    return method if method and names and method.lower() not in names else ""
+
+
+def defaults(f: Formation, kind: str) -> dict:
+    """The step's parameters as the record states them (only those it states), read by Petrophys
+    (steps.recorded_arguments: the record's names of each argument, a word only where it is one of the argument's
+    choices): a step run again starts from the record's run."""
+    from petrophys.workflow.steps import recorded_arguments
+    return recorded_arguments(kind, getattr(f.view.prep, "steps", None) or {})
 
 
 _UNUSED = re.compile(r"-\s*(\w+) is not used by")
@@ -217,8 +207,11 @@ def _changes(kind: str, method, params) -> dict:
             listed = "; ".join(f"{p}: {', '.join(n for n, _ in opts)}" for p, opts in choices(kind).items())
             routed = (f" A record method joining models with '+' ({method}) is the routing 'auto' runs."
                       if "+" in m and any("auto" in [n for n, _ in o] for o in choices(kind).values()) else "")
+            alone = (f" To change {', '.join(str(k) for k in ch)} and keep the rest, give the parameters without a method: "
+                     f"the step runs its default method with them, read against a baseline run of the same method."
+                     if ch else "")
             raise ToolError(f"{kind} has no method {method!r}; methods: {listed or 'none (it takes parameters only)'}."
-                            + routed)
+                            + routed + alone)
         ch[hit[0]] = m
     known = parameters(kind)
     bad = [k for k in ch if k not in known]
@@ -266,13 +259,25 @@ def run(f: Formation, kind: str, changes: dict, with_downstream: bool = True) ->
     for st in rest:
         made += [c for c in st.produces if c not in made]
     return {"base": base, "alt": alt, "chain": chain, "base_p": base_p, "alt_p": alt_p, "made": made,
-            "rebuilt": base_first is not None, "dropped": dropped}
+            "first": list(alt_first.produces), "rebuilt": base_first is not None, "dropped": dropped}
+
+
+def _ran(r: dict, f: Formation) -> bool:
+    """Whether the asked step ran in the changed run: it wrote one of its own curves. When it did not, the steps after
+    it ran on the record's inputs, so what they wrote is not an effect of the change."""
+    return any(_values(r["alt"], f, c) is not None for c in r.get("first") or [])
 
 
 def _values(res, f: Formation, c: str) -> Optional[np.ndarray]:
-    """The curve over the well's samples from a run, None when the run left it out."""
+    """The curve over the well's samples as a run wrote it, None when the run did not write it (a step that did not
+    run leaves the copied well's own curve, which is the record's, not a computation)."""
     if res is None:
         return None
+    try:
+        if c not in set(res.output_curves):
+            return None
+    except Exception:  # noqa: BLE001  (a run without its record of outputs: read the curve as before)
+        pass
     try:
         cv = res.well.get(c)
     except Exception:  # noqa: BLE001  (no such curve in this run)
@@ -289,9 +294,20 @@ def _flag(x: np.ndarray) -> bool:
     return ok.size > 0 and bool(np.all((ok == 0) | (ok == 1)))
 
 
+def scratch_well(f: Formation):
+    """A copy of the prepared well, for a Petrophys call: some library functions change the well they are given
+    (apply_value_range_qc clips the curves in place), and the record every later step reads is that well."""
+    well = getattr(getattr(f.view, "prep", None), "well", None)
+    if well is None:
+        raise ToolError("no prepared well to run Petrophys on")
+    return copy.deepcopy(well)
+
+
 def register(f: Formation, name: str, full: np.ndarray, meaning: str, unit: str, step: str) -> None:
     """A curve of the question: over the well's samples, read by every lookup and condition."""
     f.view.calculated[name] = full
+    if unit == "flag":                                  # read as a flag by runs, stats and conditions
+        f.view.calc_flags.add(name)
     vals = full[f.view.mask]
     ok = np.isfinite(vals)
     f.inv.curves[name] = Curve(name=name, unit=unit or "", meaning=meaning, meaning_from="step", source="computed",
@@ -340,6 +356,13 @@ def _stat(x: np.ndarray, flag: bool) -> float:
     return 100.0 * float(np.mean(x > 0.5)) if flag else float(np.mean(x))
 
 
+def _whole(f: Formation, row: Out) -> str:
+    """The whole interval's (or selection's) label, as the summary layer writes it: the headline of a change, with
+    the zones as its breakdown (question suite T04: what_if gave zones pooled only, and every net-reservoir sample lay
+    outside the rows)."""
+    return S.whole_label_of(f.view, row.i)
+
+
 def _pooled(f: Formation) -> np.ndarray:
     zs = list(f.view.zones)
     return np.unique(np.concatenate([np.asarray(z.indices) for z in zs])) if zs else np.arange(int(f.view.mask.sum()))
@@ -353,22 +376,39 @@ def _effect(out: Out, f: Formation, c: str, a: np.ndarray, b: Optional[np.ndarra
     idx = _pooled(f)
     row = out.child()
     if b is None:
-        out.add(f"  {c}: {what} {row.v(_stat(a[idx], flag))} zones pooled (nothing to set it against: neither a "
-                f"baseline nor a record curve)", row)
+        out.add(f"  {c}: {what}: {E.over_bases(f, a, row, lambda x: _stat(x, flag))} (nothing to set it against: "
+                f"neither a baseline nor a record curve)", row)
         return
     b0, a0 = _stat(b[idx], flag), _stat(a[idx], flag)
-    changed = int(np.sum(np.isfinite(a[idx]) & np.isfinite(b[idx]) & (np.abs(a[idx] - b[idx]) > 1e-9)))
-    out.add(f"  {c}: {what} {row.v(b0)} -> {row.v(a0)} ({'+' if a0 - b0 >= 0 else ''}{row.v(a0 - b0)}) zones pooled"
+    bw, aw = _stat(b, flag), _stat(a, flag)
+    changed = int(np.sum(np.isfinite(a) & np.isfinite(b) & (np.abs(a - b) > 1e-9)))
+    # every change stated beside its pair, and the count of changed samples with its total: an answer restates a
+    # change in a table or a summary, away from the pair it was read from (question suite P5: "0.6621 (-0.0294)")
+    out.add(f"  {c}: {what} {row.v(bw)} -> {row.v(aw)} ({_signed(row, aw - bw)}) {_whole(f, row)}"
             f"{'' if basis == 'baseline' else ' (against the record' + chr(39) + 's ' + c + ')'}; "
-            f"{row.i(changed)} samples changed", row)
-    parts, z_out = [], out.child()
+            f"{row.v(b0)} -> {row.v(a0)} ({_signed(row, a0 - b0)}) {S.pooled_word(f.view)} pooled; "
+            f"{row.i(changed)} of {row.i(len(a))} samples changed", row)
+    parts, rows, z_out = [], [], out.child()
     for z in f.view.zones:
         zi = np.asarray(z.indices)
         bz, az = _stat(b[zi], flag), _stat(a[zi], flag)
         if np.isfinite(bz) and np.isfinite(az):
-            parts.append(f"{z.zone_id} {z_out.v(bz)} -> {z_out.v(az)}")
+            parts.append(f"{z.zone_id} {z_out.v(bz)} -> {z_out.v(az)} ({_signed(z_out, az - bz)})")
+            rows.append((z.zone_id, bz, az, az - bz))
     if 1 < len(parts) <= 40:
         out.add(f"    each zone ({what}, {basis} -> changed): " + "; ".join(parts), z_out)
+    if len(rows) > 1:                  # the zones' range on each side and of the change, each end with its zone: read
+        r_out = out.child()            #   off the pairs, a range took one side's end and the other's (question suite P5)
+
+        def span(k: int) -> str:
+            lo, hi = min(rows, key=lambda r: r[k]), max(rows, key=lambda r: r[k])
+            return f"{r_out.v(lo[k])} ({lo[0]}) to {r_out.v(hi[k])} ({hi[0]})"
+        out.add(f"    the zones' range ({what}): {basis} {span(1)}; changed {span(2)}; change {span(3)}", r_out)
+
+
+def _signed(out: Out, x: float) -> str:
+    """A change with its sign: +0.01, -0.0294, 0."""
+    return ("+" if x > 0 else "") + out.v(x)
 
 
 def _reproduction(out: Out, f: Formation, c: str, b: Optional[np.ndarray]) -> None:
@@ -380,14 +420,15 @@ def _reproduction(out: Out, f: Formation, c: str, b: Optional[np.ndarray]) -> No
     if not ok.any():
         return
     d = np.abs(b[ok] - rec[ok])
-    close = float(np.mean(d <= np.maximum(1e-3, 0.01 * np.abs(rec[ok]))) * 100)
+    near = d <= np.maximum(1e-3, 0.01 * np.abs(rec[ok]))
     row = out.child()
-    if close >= 95:
-        out.add(f"    the baseline reproduces the record's {c} ({row.pct(close)} of samples within 1%)", row)
-    else:
-        out.add(f"    the baseline differs from the record's {c} ({row.pct(close)} of samples within 1%): the record "
-                f"was made with settings the library step does not take; read the change as its effect "
-                f"(baseline -> changed), not as a new value of the record's {c}", row)
+    if near.all():
+        out.add(f"    the baseline reproduces the record's {c} (every sample within 1%)", row)
+    else:          # a flag that differs at a few samples moves a small zone's share: never "reproduces"
+        out.add(f"    the baseline differs from the record's {c} at {row.i(int((~near).sum()))} of {row.i(int(near.size))} "
+                f"samples ({row.pct(100 * float(near.mean()))} within 1%): the record was made with settings the library "
+                f"step does not take; read the change as its effect (baseline -> changed), not as a new value of the "
+                f"record's {c}", row)
 
 
 # --- the verbs ------------------------------------------------------------------------------------------------------
@@ -404,10 +445,37 @@ def menu(f: Formation, kind: str) -> Result:
         val = rec.get(p, d.get("default") if isinstance(d, dict) else None)
         shown = row.v(val) if _num(val) else str(val)
         src = "record" if p in rec else "library default"
+        if p in ("model", "method") and unlisted_method(f, kind):     # the record's method is not a choice
+            src = f"library default; the record's {unlisted_method(f, kind)} is not one of the choices"
         opts = f"; choices: {', '.join(n + (' (' + ', '.join(o) + ')' if o else '') for n, o in ch[p])}" if p in ch else ""
         desc = d.get("description", "") if isinstance(d, dict) else ""
         out.add(f"  {p} = {shown} ({src}){': ' + desc if desc else ''}{opts}", row)
     return out.result()
+
+
+def advice_calls(names, takes=(), kind: Optional[str] = None) -> str:
+    """The inputs Petrophys's advice asks for (its Advice inputs: "add steps.mud_filtrate(rmf=..., rmf_temp_f=...)"
+    asks for rmf and rmf_temp_f), as the calls of this harness that take each - the tool's own argument first (`takes`),
+    then the calculate property whose parameters hold it (`kind`'s own first) - and the names no tool here takes; ""
+    with none."""
+    names = list(dict.fromkeys(str(n) for n in names or ()))
+    if not names:
+        return ""
+    here = [n for n in names if n in set(takes or ())]
+    owners = {}
+    for prop in [p for p in PROPERTIES if kind and kind_of(p) == kind] + [p for p in PROPERTIES if not (kind and kind_of(p) == kind)]:
+        for n in names:
+            if n not in here and n not in owners and n in parameters(kind_of(prop)):
+                owners[n] = prop
+    parts = [f"{', '.join(here)}: {'arguments' if len(here) > 1 else 'an argument'} of this call"] if here else []
+    for prop in dict.fromkeys(owners.values()):
+        mine = {n: "..." for n, p in owners.items() if p == prop}
+        parts.append(json.dumps({"calculate": {"property": prop, "parameters": mine}}).replace('"..."', "..."))
+    none = [n for n in names if n not in here and n not in owners]
+    out = ("as tool calls: " + "; ".join(parts)) if parts else ""
+    if none:
+        out += ("; " if out else "") + f"{', '.join(none)}: no tool here takes {'it' if len(none) == 1 else 'them'}"
+    return out
 
 
 def calculate(f: Formation, property: str, method: Optional[str] = None, parameters: Optional[dict] = None,
@@ -429,7 +497,7 @@ def calculate(f: Formation, property: str, method: Optional[str] = None, paramet
     if r["dropped"]:
         out.add(f"  not used: {', '.join(r['dropped'])} (the {kind} method chosen does not take them)")
     alt = r["alt"]
-    trouble = [str(e)[:160] for e in (alt.errors or [])] + [f"{k}: {v}"[:160] for k, v in (alt.steps_skipped or {}).items()]
+    trouble = said_whole([*(alt.errors or []), *E.skipped_said(alt.steps_skipped)])
     if trouble:
         out.add("  Petrophys did not run: " + "; ".join(trouble))
     written = []
@@ -437,15 +505,20 @@ def calculate(f: Formation, property: str, method: Optional[str] = None, paramet
         out.add(f"  the record's {kind} parameters do not rebuild the step (method "
                 f"{getattr(_method(f, kind), 'method', 'unknown')}): its own curves are set against the record's, and "
                 f"the steps after it against a run of them on the record's {kind} outputs")
-    for c in r["made"]:
+    computed = [c for c in r["made"] if _values(alt, f, c) is not None] if _ran(r, f) else []
+    if not computed:
+        raise ToolError(f"Petrophys did not compute {kind} with {asked}: " + ("; ".join(trouble) or "no step wrote "
+                        + ", ".join(r["made"])) + f". Inputs: {_sources(kind, r, changes)}")
+    missing = [c for c in r["made"] if c not in computed]
+    if missing:
+        out.add(f"  not computed: {', '.join(missing)} (the step that writes them did not run)")
+    for c in computed:
         a_full = _values(alt, f, c)
-        if a_full is None:
-            continue
         b_full, basis = _values(r["base"], f, c), "baseline"
         if b_full is None and c in f.inv.curves:
             b_full, basis = f.view.well_values(c), "record"
-        name = f"{c}_{lab}"
-        unit = f.inv.curves[c].unit if c in f.inv.curves else ""
+        name = joined_name(c, lab)
+        unit = "flag" if f.view.is_flag(c) else (f.inv.curves[c].unit if c in f.inv.curves else "")
         register(f, name, a_full, f"{c} recomputed by Petrophys ({kind}: {asked})", unit, f"{kind} ({asked}, on request)")
         written.append(name)
         m = f.view.mask
@@ -478,27 +551,35 @@ def what_if(f: Formation, property: str, parameter: str, values, target: Optiona
     m, idx = f.view.mask, _pooled(f)
     out = Out(f)
     base = _values(runs[0][1]["base"], f, tgt)
-    flag = _flag(_values(runs[0][1]["alt"], f, tgt)[m])
+    wrote = [a for a in (_values(r["alt"], f, tgt) for _, r in runs if _ran(r, f)) if a is not None]
+    if not wrote:
+        said = said_whole([*(e for _, r in runs for e in (r["alt"].errors or [])),
+                             *(m for _, r in runs for m in E.skipped_said(r["alt"].steps_skipped))])
+        raise ToolError(f"Petrophys wrote no {tgt} for any {parameter} tried: " + ("; ".join(said) or "skipped"))
+    flag = _flag(wrote[0][m])
     what = "share set (%)" if flag else "mean"
     rec_v = defaults(f, kind).get(parameter, "library default") if parameter not in ("model", "method") else \
         defaults(f, kind).get(next(iter(choices(kind)), "model"), "auto")
     held = ", ".join(f"{k} {_shown(v)}" for k, v in fixed.items())
     out.add(f"{kind}: {parameter} tried at {', '.join(str(v) for v in vals)} (the record's: {rec_v}); {tgt} "
-            f"({what}), zones pooled and each zone; " + (f"held: {held}; " if held else "")
-            + "every other input is the record's")
+            f"({what}), the whole interval, the {S.pooled_word(f.view)} pooled and each {S.pooled_word(f.view)[:-1]}; "
+            + (f"held: {held}; " if held else "") + "every other input is the record's")
     if base is not None:
         row = out.child()
         zs = "; ".join(f"{z.zone_id} {row.v(_stat(base[m][np.asarray(z.indices)], flag))}" for z in f.view.zones)
-        out.add(f"  baseline (record's parameters): {row.v(_stat(base[m][idx], flag))} pooled; {zs}", row)
+        out.add(f"  baseline (record's parameters): {row.v(_stat(base[m], flag))} {_whole(f, row)}; "
+                f"{row.v(_stat(base[m][idx], flag))} pooled; {zs}", row)
+        _reproduction(out, f, tgt, base[m])
     for v, r in runs:
-        a = _values(r["alt"], f, tgt)
+        a = _values(r["alt"], f, tgt) if _ran(r, f) else None
         row = out.child()
         if a is None:
             out.add(f"  {parameter} {v}: {tgt} not written (Petrophys: "
-                    f"{'; '.join(str(e)[:120] for e in (r['alt'].errors or [])) or 'skipped'})")
+                    f"{'; '.join(said_whole(r['alt'].errors or [])) or 'skipped'})")
             continue
         zs = "; ".join(f"{z.zone_id} {row.v(_stat(a[m][np.asarray(z.indices)], flag))}" for z in f.view.zones)
-        out.add(f"  {parameter} {v}: {row.v(_stat(a[m][idx], flag))} pooled; {zs}", row)
+        out.add(f"  {parameter} {v}: {row.v(_stat(a[m], flag))} {_whole(f, row)}; {row.v(_stat(a[m][idx], flag))} "
+                f"pooled; {zs}", row)
     return out.result()
 
 
@@ -517,9 +598,70 @@ def _curve(f: Formation, *names) -> tuple:
     raise ToolError(f"needs one of {', '.join(names)}; none has data here")
 
 
+def sample_lithology(f: Formation, options) -> tuple:
+    """Each interval sample's option for a lithology parameter (`options`: the choices Petrophys declares for it, role
+    "lithology"). The sample's rock is the lithology the interpretation used (Petrophys interpreted_lithology_labels:
+    the code curve it read, as its groups, else the lithology it computed), then the lithology log the zones are read
+    from (the data's code table) where that names none; Petrophys takes each rock to an option (lithology_choice).
+    (option per sample, None where no option names the rock or no lithology is recorded; {option: samples}; {rock no
+    option names: samples}, with "no lithology recorded" for samples without one; what it rests on)."""
+    from petrophys.interpretation.lithology.labels import lithology_choice
+    from petrophys.interpretation.lithology.matrix_inference import interpreted_lithology_labels
+    from petroharness.well.summary import code_labels
+    mask = np.asarray(f.view.mask, dtype=bool)
+    n = int(mask.sum())
+    rock = np.full(n, None, dtype=object)
+    sources = []
+    try:
+        got, curve = interpreted_lithology_labels(f.view.prep.well)
+    except Exception:  # noqa: BLE001  (a well Petrophys reads no lithology from)
+        got, curve = None, None
+    if got is not None:
+        sources.append((curve, np.asarray(got, dtype=object)[mask]))
+    c = getattr(f.view, "lithology_curve", None)
+    if c and c != curve and c in f.inv.curves and f.view.available(c):  # the data's own lithology log
+        labels = code_labels(f.view, c)
+        x = np.asarray(f.view.values(c), dtype=float)
+        sources.append((c, np.array([labels.get(float(v)) if np.isfinite(v) else None for v in x], dtype=object)))
+    used = []
+    for name, per in sources:
+        on = np.array([r is None and lab not in (None, "") for r, lab in zip(rock, per)], dtype=bool)
+        if on.any():
+            rock[on] = per[on]
+            used.append(name)
+    taken = {r: lithology_choice(r, options) for r in set(rock.tolist()) if r is not None}
+    choice = np.array([taken.get(r) if r is not None else None for r in rock], dtype=object)
+    counts, gaps = {}, {}
+    for r, ch in zip(rock.tolist(), choice.tolist()):
+        if ch is not None:
+            counts[ch] = counts.get(ch, 0) + 1
+        else:
+            key = "no lithology recorded" if r is None else str(r)
+            gaps[key] = gaps.get(key, 0) + 1
+    basis = (f"{' then '.join(used)}, each rock taken to an option by Petrophys (lithology_choice)" if used
+             else "no lithology recorded for these samples")
+    return choice, counts, gaps, basis
+
+
+def joined_name(head: str, label: str) -> str:
+    """A curve name made of a name and a label, the name once: a label that already names it, at its start or its end,
+    is the name (question suite T03: the label SW_ARCHIE_A1 on SW was written SW_SW_ARCHIE_A1)."""
+    h, lab = str(head).upper(), str(label).upper()
+    if not lab or h == lab or h.startswith(f"{lab}_") or h.endswith(f"_{lab}"):
+        return h or lab                                   # the head already names the label
+    if not h or lab.startswith(f"{h}_") or lab.endswith(f"_{h}"):
+        return lab                                        # the label already names the head
+    return f"{h}_{lab}"
+
+
 def _zone_mask(f: Formation, zones) -> np.ndarray:
-    keep = np.zeros(int(f.view.mask.sum()), bool)
-    from petroharness.agent import engine as E
+    """The samples an estimate or calibration computes on: the whole selection when the call names no zones (its
+    lines then give the whole, the zones pooled and each zone: engine.scopes), else the zones it names. The union of
+    the zones alone left out the samples between them, also where every sample with a value lay there."""
+    n = int(f.view.mask.sum())
+    if not zones:
+        return np.ones(n, bool)
+    keep = np.zeros(n, bool)
     for z in E.zones(f, zones):
         keep[np.asarray(z.indices)] = True
     return keep
@@ -535,8 +677,7 @@ def estimate(f: Formation, parameter: str, method: Optional[str] = None, zones=N
     if meth not in ESTIMATES[p]:
         raise ToolError(f"{p} is estimated by {', '.join(ESTIMATES[p])}, not {method!r}")
     keep = _zone_mask(f, zones)
-    sat = defaults(f, "saturation")
-    a, mm = float(sat.get("a", 1.0)), float(sat.get("m", 2.0))
+    (a, a_src), (mm, m_src) = _archie_am(f)
     vmax = float(vcl_max) if vcl_max is not None else 0.3
     pmin = float(phie_min) if phie_min is not None else 0.05
     out = Out(f)
@@ -557,7 +698,7 @@ def estimate(f: Formation, parameter: str, method: Optional[str] = None, zones=N
         x = rwa[use]
         row = out.child()
         out.add(f"rw by apparent water resistivity (Petrophys apparent_water_resistivity: RWA = {rn} * {pn}^m / a, "
-                f"a {row.v(a)} and m {row.v(mm)} from the record) over {row.i(x.size)} clean, porous samples (VCL < "
+                f"a {row.v(a)} ({a_src}) and m {row.v(mm)} ({m_src})) over {row.i(x.size)} clean, porous samples (VCL < "
                 f"{row.v(vmax)}, {pn} > {row.v(pmin)}), at formation temperature: min {row.v(x.min())}, p5 "
                 f"{row.v(np.percentile(x, 5))}, p10 {row.v(np.percentile(x, 10))}, median {row.v(np.median(x))} ohm.m. "
                 f"In water-bearing clean rock RWA equals Rw; hydrocarbons raise it, so Rw is read from the low end. "
@@ -570,15 +711,29 @@ def estimate(f: Formation, parameter: str, method: Optional[str] = None, zones=N
         _, vcl = _curve(f, "VCL")
         use = keep & np.isfinite(rt) & np.isfinite(phi) & (phi > 0) & (rt > 0)
         try:
-            params, info = pickett_analysis(rt[use], phi[use], sw_water=1.0, vcl_cutoff=vmax, vcl=vcl[use])
+            with warnings.catch_warnings(record=True) as caught:      # Petrophys's own caution on the fit, shown
+                warnings.simplefilter("always")
+                params, info = pickett_analysis(rt[use], phi[use], sw_water=1.0, vcl_cutoff=vmax, vcl=vcl[use])
         except Exception as e:  # noqa: BLE001
             raise ToolError(f"Petrophys pickett_analysis: {type(e).__name__}: {str(e)[:300]}") from None
+        said = str((info or {}).get("error") or "").strip()
+        if said:      # its a, m and n are then the defaults it started from, not a fit
+            raise ToolError(f"Petrophys pickett_analysis could not fit: {said[:200]} ({int(use.sum())} samples with "
+                            f"{rn} and {pn}, clean below VCL {vmax}); widen vcl_max, or estimate over more zones")
         row = out.child()
         extra = {k: v for k, v in (info or {}).items() if _num(v)}
         out.add(f"Pickett analysis (Petrophys pickett_analysis on {rn} and {pn}, clean samples VCL < {row.v(vmax)}, "
                 f"water line at SW 1): a {row.v(params.a)}, m {row.v(params.m)}, n {row.v(params.n)}"
                 + ("; " + ", ".join(f"{k} {row.v(v)}" for k, v in extra.items()) if extra else "")
-                + f" (the record's: a {row.v(a)}, m {row.v(mm)}; Rw {_rec_rw(f, row)})", row)
+                + f" (for comparison: a {row.v(a)} ({a_src}), m {row.v(mm)} ({m_src}); the record's Rw "
+                  f"{_rec_rw(f, row)})", row)
+        notes = said_whole(w.message for w in caught if isinstance(w.message, UserWarning))
+        if notes:
+            out.add("  Petrophys said: " + "; ".join(notes))
+            sel = str(getattr(f.view, "selection", "") or "")
+            if getattr(f.view, "reach", "focus") == "well" and not sel.startswith("where "):
+                out.add('  the water-bearing samples alone: this call again with "where" (e.g. "SW > 0.95"), the fit '
+                        'then reads only the samples where it holds')
         return out.result()
     if p == "rw" and meth == "sp":
         return _rw_sp(f, keep, rmf, rmf_temp_f)
@@ -595,7 +750,7 @@ def estimate(f: Formation, parameter: str, method: Optional[str] = None, zones=N
         _, vcl = _curve(f, "VCL")
         shale = keep & np.isfinite(vcl) & (vcl > 0.6)
         try:
-            n_sh, r_sh = nd_shale_point(nphi[keep], rhob[keep], shale[keep])
+            r_sh, n_sh = nd_shale_point(nphi[keep], rhob[keep], shale[keep])   # Petrophys returns (den_clay, neu_clay)
         except Exception as e:  # noqa: BLE001
             raise ToolError(f"Petrophys nd_shale_point: {type(e).__name__}: {str(e)[:300]}") from None
         row = out.child()
@@ -606,14 +761,9 @@ def estimate(f: Formation, parameter: str, method: Optional[str] = None, zones=N
 
 
 def _zone_means(f: Formation, x: np.ndarray, keep: np.ndarray, row: Out, stat=np.nanmedian) -> str:
-    """Each asked zone's value of a per-sample curve (median by default), for a result line."""
-    parts = []
-    for z in f.view.zones:
-        zi = np.asarray(z.indices)
-        zi = zi[keep[zi] & np.isfinite(x[zi])]
-        if zi.size:
-            parts.append(f"{z.zone_id} {row.v(stat(x[zi]))} (n {row.i(zi.size)})")
-    return "; ".join(parts)
+    """A per-sample curve's value (median by default) over the bases every tool reports by, the whole selection first
+    (engine.over_bases), each with its count."""
+    return E.over_bases(f, np.where(keep, np.asarray(x, dtype=float), np.nan), row, stat, n=True)
 
 
 def _full(f: Formation, x: np.ndarray) -> np.ndarray:
@@ -672,16 +822,15 @@ def _matrix(f: Formation, keep: np.ndarray) -> Result:
     out = Out(f)
     row = out.child()
     out.add(f"apparent matrix by Petrophys (apparent_total_porosity from RHOB and NPHI on the limestone reference, then "
-            f"apparent_matrix_density): RHOmaa per zone (median) {_zone_means(f, rhomaa, keep, row)}; zones pooled "
-            f"{row.v(np.nanmedian(rhomaa[keep]))} g/cc. Written: RHOMAA.", row)
+            f"apparent_matrix_density): RHOmaa (median, g/cc) {_zone_means(f, rhomaa, keep, row)}. Written: RHOMAA.", row)
     if "PEF" in f.inv.curves and f.view.available("PEF"):
         pef = np.asarray(f.view.values("PEF"), dtype=float)
         umaa = np.asarray(apparent_matrix_volumetric_pe(pef, rhob, phia), dtype=float)
         register(f, "UMAA", _full(f, umaa), "apparent matrix volumetric photoelectric absorption (Petrophys)", "b/cc",
                  "apparent matrix (on request)")
         row = out.child()
-        out.add(f"  Umaa per zone (median, from PEF; apparent_matrix_volumetric_pe) {_zone_means(f, umaa, keep, row)}; "
-                f"zones pooled {row.v(np.nanmedian(umaa[keep]))} b/cc. Written: UMAA.", row)
+        out.add(f"  Umaa (median, b/cc; from PEF, apparent_matrix_volumetric_pe) {_zone_means(f, umaa, keep, row)}. "
+                "Written: UMAA.", row)
     else:
         out.add("  no PEF here: Umaa (the RHOmaa-Umaa lithology plot) needs it")
     row = out.child()
@@ -691,6 +840,22 @@ def _matrix(f: Formation, keep: np.ndarray) -> Result:
     used = f"; the record's porosity used matrix density {row.v(rec['rho_ma'])} g/cc" if _num(rec.get("rho_ma")) else ""
     out.add(f"  minerals (Petrophys mineral table): {minerals}{used}", row)
     return out.result()
+
+
+def _temperature_source(rec: dict, row) -> str:
+    """Where the record's temperature comes from, from its step's parameters: the measured log with the gradient
+    filling its gaps; a gradient anchored to a bottom-hole temperature; or the default gradient, no anchor."""
+    g = f"{row.v(rec['gradient_f_per_100ft'])} degF/100ft" if _num(rec.get("gradient_f_per_100ft")) else ""
+    surf = f" from a surface {row.v(rec['surface_temp_f'])} degF" if _num(rec.get("surface_temp_f")) else ""
+    anchored = _num(rec.get("bht_f"))
+    grad = (f"the gradient {g}{surf} to the bottom-hole {row.v(rec['bht_f'])} degF" if anchored else
+            f"a default gradient {g}{surf} (no bottom-hole temperature anchors it)") if g else ""
+    if _num(rec.get("temp_log_coverage")):
+        gaps = rec.get("temp_log_gap_samples")
+        fill = (f"; where the log has no value, {grad}" + (f", at {row.i(int(gaps))} samples" if _num(gaps) else "")
+                if grad else "")
+        return f": the measured temperature log at {row.pct(100 * float(rec['temp_log_coverage']))} of the well's samples{fill}"
+    return f": {grad}" if grad else ""
 
 
 def _temperature(f: Formation, bht_f: Optional[float], td: Optional[float]) -> Result:
@@ -704,10 +869,9 @@ def _temperature(f: Formation, bht_f: Optional[float], td: Optional[float]) -> R
         temp = np.asarray(f.view.values("TEMP"), dtype=float)
         keep = np.isfinite(temp)
         row = out.child()
-        grad = f", gradient {row.v(rec['gradient_f_per_100ft'])} degF/100ft" if _num(rec.get("gradient_f_per_100ft")) else ""
-        surf = f" from a surface {row.v(rec['surface_temp_f'])} degF" if _num(rec.get("surface_temp_f")) else ""
-        out.add(f"formation temperature (the record's TEMP; temperature step {m.method if m else 'unknown'}{grad}"
-                f"{surf}): per zone (mean) {_zone_means(f, temp, keep, row, np.nanmean)} degF", row)
+        out.add(f"formation temperature (the record's TEMP; temperature step {m.method if m else 'unknown'}"
+                f"{_temperature_source(rec, row)}): mean, degF: {_zone_means(f, temp, keep, row, np.nanmean)}"
+                + "".join(f"; TEMP {x}" for x in limits(f, "TEMP")), row)     # what its values show (engine.limits)
     hdr = getattr(f.view.prep.well, "header", None)
     bht = bht_f if bht_f is not None else (getattr(hdr, "bht", None) if hdr is not None else None)
     bht_unit = "F" if bht_f is not None else str(getattr(hdr, "bht_unit", None) or "F")
@@ -759,6 +923,16 @@ def _rw_sp(f: Formation, keep: np.ndarray, rmf: Optional[float], rmf_temp_f: Opt
             f"{row.v(rm_f)} ohm.m at {row.v(rm_t)} degF ({src}). A small SSP means water about as saline as the "
             f"filtrate: then read it as a consistency check. The record's Rw: {_rec_rw(f, row)}.", row)
     return out.result()
+
+
+def _archie_am(f: Formation) -> list:
+    """Archie's a and m with their source: the record's where it states a number, else the library's (a 1, m 2) with
+    what the record states instead (lithology_dependent: one per lithology, no single number)."""
+    sat, m = defaults(f, "saturation"), _method(f, "saturation")
+    rec = (m.parameters or {}) if m else {}
+    return [(sat[k], "record") if k in sat else
+            (d, "library default" + (f"; the record's is {rec[k]}" if rec.get(k) not in (None, "") else ""))
+            for k, d in (("a", 1.0), ("m", 2.0))]
 
 
 def _rec_rw(f: Formation, row: Out) -> str:

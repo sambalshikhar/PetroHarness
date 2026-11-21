@@ -1,0 +1,1 @@
+The question is about the stretch THE QUESTION'S STRETCH names, which can reach beyond the interval (to the whole well): answer over all of it, as the results computed it, not over the interval alone.

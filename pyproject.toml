@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "petroharness"
-version = "1.0.0"
+version = "1.5.0"
 description = "Answers petrophysics questions about an interval of a well from its raw LAS: Petrophys calculates, the harness investigates and records, a language model interprets"
 requires-python = ">=3.10"
 dependencies = [
-    "petrophys>=3.0",        # pinned at 916ca46 (README: install)
+    "petrophys>=3.0",        # pinned at 7aa9968 (README: install)
     "langgraph>=1.2",
     "lasio",                 # LAS header read (depth unit) without the data section
     "numpy",

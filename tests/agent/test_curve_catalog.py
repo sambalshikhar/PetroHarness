@@ -44,11 +44,13 @@ def test_the_catalog_names_no_dataset():
     assert KIND.search(load().curves["lithology_log"]).group(1) == "class"
 
 
-def test_flags_are_flags_and_one_value_curves_are_parameters():
+def test_flags_are_flags_and_swirr_app_is_a_model_output():
+    """SWIRR_APP is per sample (Buckles) or one value for the whole well: its kind is read from its values, and it is
+    a parameter only where its step lists that value (tests/test_label_fixes.py)."""
     reg = load()
     for c in reg.flags:
         assert "; a flag" in CATALOG[c], c
-    assert "; a parameter, one value for the whole well" in CATALOG["SWIRR_APP"]
+    assert "; a model output of the permeability step" in CATALOG["SWIRR_APP"]
 
 
 # --- fallback lists and parameters in plain words ----------------------------------------------------------------------
@@ -76,7 +78,7 @@ def test_only_the_steps_own_fallbacks_are_rewritten_in_its_lines():
 def test_the_rendered_step_records_read_in_plain_words():
     """On every formation of the configured dataset: no step line of the map shows a fallback input as "X+Y" (or
     "X/Y" in its inputs), each is written "where present, otherwise"; a curve a step wrote that holds one value for the
-    whole well is labelled a parameter of its step, on the map and in the step tool."""
+    whole well is labelled so (one value over the whole well as its step wrote it), on the map and in the step tool."""
     from test_b2_tools import F
     from petroharness.agent.map import render
     from petroharness.agent.toolset import TOOLS
@@ -104,8 +106,7 @@ def test_the_rendered_step_records_read_in_plain_words():
         for c, cv in f.inv.curves.items():
             if cv.well_value is not None and cv.step:
                 from petroharness.agent.map import num
-                want = f"{c} {num(cv.well_value)}: " + ("" if "; a parameter" in cv.catalog else
-                                                       f"one value for the whole well, a parameter of the {cv.step} step (")
+                want = f"{c} {num(cv.well_value)}: one value over the whole well as the {cv.step} step wrote it ("
                 assert want in text, (t.well, c)
                 seen_parameter += 1
                 if any(m.step == cv.step for m in f.inv.methods):
@@ -150,5 +151,7 @@ def test_every_derived_curve_of_each_dataset_has_its_catalog_line(config):
     from petroharness.agent.map import render
     text = render(f.inv)
     for c, cv in f.inv.curves.items():
-        if cv.source == "analyzer" and c in CATALOG:
-            assert f"  {c} = {CATALOG[c]}" in text, (t.well, c)
+        if cv.source == "analyzer" and c in CATALOG:           # whole, a twin beside what it is (map.render's what)
+            head, _, rest = CATALOG[c].partition("; ")
+            line = next((ln for ln in text.splitlines() if ln.startswith(f"  {c} = {head}")), "")
+            assert line and f"; {rest}" in line if rest else line, (t.well, c)

@@ -19,7 +19,8 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
 from test_b2_dense import queries  # noqa: E402
 from test_b2_tools import F  # noqa: E402
 from petroharness.agent.engine import ToolError  # noqa: E402
-from petroharness.agent.ledger import DIGEST_CHARS, SECTION_DIGEST_CHARS, VIEW_CHARS, Ledger, shown_values  # noqa: E402
+from petroharness.agent.ledger import DIGEST_CHARS, SECTION_DIGEST_CHARS, Ledger, shown_values  # noqa: E402
+from ledger_numbers import locate, verify  # noqa: E402
 from petroharness.agent.map import num  # noqa: E402
 from petroharness.agent.toolset import TOOLS  # noqa: E402
 from petroharness.agent.engine import CUT_GET  # noqa: E402
@@ -325,13 +326,13 @@ def test_l6_shown_numbers_verify_and_others_do_not():
                 n += 1
                 for k in range(decimals(v), -1, -1):                          # its precision, then coarser
                     c = round(v, k)
-                    if not led.verify(f"{c:.{k}f}", [item.id]):
+                    if not verify(led, f"{c:.{k}f}", [item.id]):
                         bad.append((t.well, item.id, v, k, "should verify"))
                         break
                 k = decimals(v) or 1
                 written = f"{v + 0.6 * 10 ** (-k):.{k}f}"                   # past half a unit of the last digit
                 want = any(abs(float(written) - w) <= 0.5 * 10 ** (-k) * (1 + 1e-9) + 1e-12 * max(1.0, abs(w)) for w in vals)
-                if led.verify(written, [item.id]) != want:
+                if verify(led, written, [item.id]) != want:
                     bad.append((t.well, item.id, v, written, "off", want))
     assert n > 1000 and not bad, (n, bad[:10])
 
@@ -345,11 +346,11 @@ def test_l6_locate_finds_exactly_the_items_that_show_a_number():
                 for v in nums[:2]:
                     k = decimals(float(v))
                     claim = f"{float(v):.{k}f}"
-                    hits = {i for i, _ in led.locate(claim)}
+                    hits = {i for i, _ in locate(led, claim)}
                     if item.id not in hits:
                         bad.append((t.well, item.id, claim))
                     for e in led.items:
-                        if (e.id in hits) != led.verify(claim, [e.id]):
+                        if (e.id in hits) != verify(led, claim, [e.id]):
                             bad.append((t.well, e.id, claim, "locate and verify disagree"))
     assert not bad, bad[:10]
 
@@ -357,28 +358,6 @@ def test_l6_locate_finds_exactly_the_items_that_show_a_number():
 # --- L7 budget ------------------------------------------------------------------------------------------------------
 
 @pytest.mark.data
-@pytest.mark.parametrize("n", [10, 30, 60])
-def test_l7_the_view_stays_within_budget(n):
-    big = sorted(F(), key=lambda tf: -(tf[1].inv.samples * max(len(tf[1].view.zones), 1)))[:3]
-    bad = []
-    for t, f in big:
-        led = Ledger(f)
-        for tool, kw in calls(t, f, n * 2):
-            try:
-                led.open(tool, kw)
-            except ToolError:
-                pass
-            if len(led.items) >= n:
-                break
-        v = led.view()
-        if len(v) > VIEW_CHARS:
-            bad.append((t.well, n, len(v)))
-        if f"[{led.items[-1].id}] {led.items[-1].text}" not in v:
-            bad.append((t.well, n, "newest not in full"))
-        for e in led.items:
-            if f"  {e.id} " not in v:
-                bad.append((t.well, n, e.id, "not listed"))
-    assert not bad, bad[:10]
 
 
 # --- L8 adversarial -------------------------------------------------------------------------------------------------

@@ -21,6 +21,7 @@ graph TD;
 	verify(verify)
 	repair(repair)
 	finalize(finalize)
+	ask_user(ask_user)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> read;
 	act -.-> ask;
@@ -39,7 +40,8 @@ graph TD;
 	look -.-> ask;
 	look -.-> close;
 	plan --> decide;
-	read --> first_look;
+	read -.-> ask_user;
+	read -.-> first_look;
 	repair -.-> finalize;
 	repair -.-> verify;
 	settle -.-> write;
@@ -51,6 +53,7 @@ graph TD;
 	write --> verify;
 	write_brief -.-> ask;
 	write_brief -.-> verify;
+	ask_user --> __end__;
 	finalize --> __end__;
 	no_answer --> __end__;
 	look -.-> look;

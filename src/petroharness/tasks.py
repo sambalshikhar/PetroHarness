@@ -27,6 +27,11 @@ class Task(BaseModel):
     base_closed: bool = False
     # The formation's lithology as the data states it (its tops), when it gives one; the lithology log is read too.
     formation_lithology: Optional[str] = None
+    # A conversation's scope set by the user for this question on (agent.loop.apply_scope): None keeps the scope in
+    # force, [] is the interval; and its frame ("lithology": every lookup reports by the lithology zones)
+    scope: Optional[list] = None
+    scope_chosen: bool = False     # the scope is the user's answer to a question back: this question computes on it
+    frame: Optional[str] = None
 
 
 def opaque_id(qa_id: str) -> str:
@@ -60,7 +65,7 @@ def load_tasks(
     categories: Optional[Iterable[str]] = None,
 ) -> tuple[list[Task], dict[str, dict]]:
     """Return (tasks, eval_index). eval_index maps task_id -> {qa_id, category} for scoring only."""
-    rows = json.loads(Path(questions_file).read_text())
+    rows = json.loads(Path(questions_file).read_text(encoding="utf-8"))
     wanted = set(categories) if categories else None
     tasks: list[Task] = []
     index: dict[str, dict] = {}

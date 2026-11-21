@@ -8,6 +8,11 @@ data settings; where the hashes differ, the records say in which part.
     differences(a, b)       # the parts in which two records differ
 
     petroharness setup [--model-card CARD | --model NAME] [--settings FILE] [--skills DIR] [--json]
+    petroharness setup --las WELL.las [--formation NAME --tops TOPS.csv | --top T --base B] [...] [--json]
+
+With --las (and the interval, as for a question) the data settings are built from the well as a question builds them,
+and the hash is the one a conversation about that interval logs. Without --las the data part covers the settings file
+alone (--settings, else PETROHARNESS_DATA, else none).
 
 Nothing here is read by a prompt. The endpoint, the API key and the timeouts are not part of a setup: they say where a
 model is reached, not what answers.
@@ -17,7 +22,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -46,11 +53,26 @@ def harness_commit() -> str:
         return ""
 
 
+def stable_repr(v) -> str:
+    """A default value written the same way in every process: sets and dict keys sorted (their order follows the
+    process's hash seed), object addresses (" at 0x...") dropped."""
+    import re
+    if isinstance(v, (set, frozenset)):
+        return f"{type(v).__name__}({sorted(stable_repr(x) for x in v)})"
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"{stable_repr(k)}: {stable_repr(x)}" for k, x in sorted(v.items(), key=lambda kv: stable_repr(kv[0]))) + "}"
+    if isinstance(v, (list, tuple)):
+        inner = ", ".join(stable_repr(x) for x in v)
+        return f"[{inner}]" if isinstance(v, list) else f"({inner})"
+    return re.sub(r" at 0x[0-9a-fA-F]+", "", repr(v))
+
+
 def functions_hash() -> str:
     """The Petrophys functions the tools offer, as one hash: each function's name, verb and parameters. The list is
-    part of the investigation's brief, so a Petrophys release that adds a function changes it."""
+    part of the investigation's brief, so a Petrophys release that adds a function changes it. The same in every
+    process (stable_repr)."""
     from petroharness.agent import library_api as A
-    return _sha([[fn.qualified, fn.verb, [[p, str(a), repr(d)] for p, (a, d, _) in fn.params.items()]]
+    return _sha([[fn.qualified, fn.verb, [[p, str(a), stable_repr(d)] for p, (a, d, _) in fn.params.items()]]
                  for fn in A.registry()])
 
 
@@ -100,16 +122,23 @@ def of(cfg, *, writer: str = "open", fmt: str = "profile", max_steps: int | None
 
 def config_for(model: str | None = None, model_card: str | None = None, settings=None, skills: str | None = None):
     """The configuration a question would run under, with no well in hand: the model card (the default one, a card,
-    or the generic card for a served model's name), a data settings file (or none) and the skill library."""
+    or the generic card for a served model's name), a data settings file (`settings`, else PETROHARNESS_DATA, else
+    none) and the skill library."""
     import yaml
 
-    from petroharness.config import RESOURCES, HarnessConfig, given_settings
+    from petroharness.ask import library_given
+    from petroharness.config import DATA_FILE_ENV, RESOURCES, HarnessConfig, given_settings
     from petroharness.models import MODELS, register
     cfg_file, _, *named = MODELS[register(["http://setup/v1"], model_card, model)]
-    given = (yaml.safe_load(Path(settings).read_text()) or {}) if settings else {}
+    settings = settings or os.environ.get(DATA_FILE_ENV) or None
+    if settings is not None and not Path(settings).is_file():
+        raise FileNotFoundError(f"WHAT: no data settings file at {settings}. FIX: give an existing YAML file "
+                                f"(configs/data.example.yaml shows the keys), or unset {DATA_FILE_ENV}.")
+    given = (yaml.safe_load(Path(settings).read_text(encoding="utf-8")) or {}) if settings else {}
     given.setdefault("data", {}).setdefault("las_dir", ".")
-    if skills:
-        given["skills"] = skills
+    library = library_given(skills)
+    if library:
+        given["skills"] = library
     with given_settings(given):
         cfg = HarnessConfig.load(RESOURCES / cfg_file)
         if named:
@@ -143,22 +172,68 @@ def text(s: Setup) -> str:
     return "\n".join(lines)
 
 
+# the options that describe a well's interval: they need --las
+_INTERVAL = ("formation", "tops", "top", "base", "depth_unit", "lithology_curve", "formation_lithology", "field_notes",
+             "profile")
+
+
+def for_well(args) -> Setup:
+    """The setup a question about the interval of `args.las` answers under: the data settings built from the LAS as
+    ask() and a conversation build them (petroharness.ask.prepare), the configuration as each question's
+    (agent.graph.task_config)."""
+    import tempfile
+
+    from petroharness import ask as A
+    from petroharness.agent.graph import task_config
+    from petroharness.config import given_settings
+    from petroharness.models import register
+    las = Path(args.las).expanduser().resolve()
+    if not las.is_file():
+        raise FileNotFoundError(f"WHAT: no LAS file at {las}. FIX: give the path of the well's LAS file.")
+    key = register(["http://setup/v1"], args.model_card, args.model)
+    notes = interpretation = None
+    if args.field_notes:
+        from petroharness.well.notes import load
+        notes = load(args.field_notes)
+        interpretation = dict(notes["settings"])
+    with tempfile.TemporaryDirectory(prefix="petroharness-setup-") as tmp:
+        p = A.prepare(las, key, formation=args.formation, tops=args.tops, top=args.top, base=args.base,
+                      depth_unit=args.depth_unit, lithology_curve=args.lithology_curve,
+                      formation_lithology=args.formation_lithology, profile=args.profile, settings=args.settings,
+                      skills=args.skills, interpretation=interpretation, field_notes=notes, cache=Path(tmp))
+        task, _ = A.task_for(p, "(the setup)")
+        with given_settings(p.given):
+            return of(task_config(task, key, 1), max_steps=args.max_steps, mode="interactive",
+                      depth=not args.investigate)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="petroharness setup", description=(
         "Print the setup questions are answered under: the harness, its prompt components, the Petrophys build and "
         "function list, the skill library, the model's request settings and the data settings, with one hash over "
-        "them. Two runs with the same hash were made of the same parts."))
-    from petroharness.ask import run_options
-    run_options(ap)
+        "them. Two runs with the same hash were made of the same parts. With --las (and the interval, as for a "
+        "question) the data settings are built from that well as a question builds them, so the hash is the one a "
+        "conversation about it logs; without --las the data part covers the settings file alone."))
+    from petroharness.ask import interval_options, run_options
+    ap.add_argument("--las", type=Path, help="a well's LAS file: print the setup of a question about it")
+    interval_options(ap)
+    run_options(ap, endpoint=False)
     ap.add_argument("--json", action="store_true", help="the record as JSON")
     args = ap.parse_args(argv)
     from petroharness.config import given_settings
     try:
-        cfg, given = config_for(args.model, args.model_card, args.settings, args.skills)
-        with given_settings(given):
-            s = of(cfg, max_steps=args.max_steps, mode="interactive", depth=not args.investigate)
+        if args.las is not None:
+            s = for_well(args)
+        else:
+            stray = [o for o in _INTERVAL if getattr(args, o) is not None]
+            if stray:
+                raise ValueError(f"WHAT: --{stray[0].replace('_', '-')} describes a well's interval, and no well was "
+                                 "given. FIX: add --las WELL.las, or leave the interval options out.")
+            cfg, given = config_for(args.model, args.model_card, args.settings, args.skills)
+            with given_settings(given):
+                s = of(cfg, max_steps=args.max_steps, mode="interactive", depth=not args.investigate)
     except (ValueError, LookupError, OSError) as exc:
-        print(f"petroharness setup: {exc}")
+        print(f"petroharness setup: {exc}", file=sys.stderr)
         return 2
     print(json.dumps({"hash": s.hash(), **s.to_dict()}, indent=1) if args.json else text(s))
     return 0

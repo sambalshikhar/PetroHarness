@@ -38,3 +38,10 @@ def statistics(x, names) -> dict[str, float]:
 def statistic(x, name: str) -> float:
     """One statistic of the finite samples of x (NaN without a finite sample)."""
     return statistics(x, [name]).get(name, float("nan"))
+
+
+def percentile(x, q: float) -> float:
+    """The q-th percentile of the finite samples of x, as Petrophys computes every percentile the tools show (NaN
+    without a finite sample)."""
+    s = _library_statistics(np.asarray(x, dtype=float), percentiles=[q])
+    return float(s[percentile_key(q)]) if s is not None else float("nan")

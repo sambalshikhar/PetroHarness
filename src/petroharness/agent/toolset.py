@@ -35,16 +35,14 @@ CALIBRATE = "CALIBRATE: against core, elastic properties"
 # --- the texts and the arguments several tools share -------------------------------------------------------------------
 
 _TEXTS = C.text("C4", "tool_descriptions")      # each tool's description
-_NEWER = C.text("C4", "v9_descriptions")        # the lookups whose output changed since (signed compare shares, the
-#                                                 per-zone spike screen): their description as it stands
 CONDITION = C.text("C4", "condition")
 
 
 def _text(name: str) -> str:
-    return _NEWER.get(name, _TEXTS[name])
+    return _TEXTS[name]
 
 
-ZONES = {"type": "array", "items": {"type": "string"}, "description": C.text("C4", "v9_zones")}
+ZONES = {"type": "array", "items": {"type": "string"}, "description": C.text("C4", "zones_argument")}
 WHERE = {"type": "string", "description": "only the samples where " + CONDITION}
 STATS = {"type": "array", "items": {"type": "string"},
          "description": f"which statistics: {', '.join(STATISTICS)}, or any percentile p1-p99; left out: n, mean, "
@@ -110,6 +108,12 @@ TOOLSET.add(
           "min_thickness": {"type": "number", "description": "only runs at least this thick"},
           "max_thickness": {"type": "number", "description": "only runs at most this thick (thin beds)"}},
          ("condition",), main="condition", lead="condition"),
+    Tool("values_at", T.values_at, DESCRIBE, _text("values_at"),
+         {"curves": CURVES,
+          "depths": {"type": "array", "items": {"type": ["number", "string"]},
+                     "description": "depths, e.g. [2900] or [\"9500 ft\"] (each nearest sample), or a range "
+                                    "[\"2895-2905\"] (every sample in it)"}},
+         ("curves", "depths"), lead="curves"),
     Tool("section", T.section, DESCRIBE, _text("section"),
          {"key": {"type": "string", "description": "the section key exactly as the description lists it (family.section)"}},
          ("key",), main="key", lead="key"),
@@ -127,7 +131,7 @@ TOOLSET.add(
           "zones": ZONES,
           "tolerance": {"type": "number", "description": "report the share of samples where |a - b| exceeds it"},
           "where": WHERE},
-         ("a", "b"), lead="a"),
+         ("a", "b"), main="a", lead="a"),
     # a least-squares line of one curve on another or on depth (relations, matrix lines, depth trends)
     Tool("crossplot", T.crossplot, COMPARE, _text("crossplot"),
          {"y": {"type": "string", "description": "the curve on the vertical axis, e.g. RHOB"},
@@ -140,7 +144,7 @@ TOOLSET.add(
           "b": {"type": "string", "description": "condition B, in the same grammar"},
           "zones": ZONES,
           "limit": {"type": "integer", "description": "how many runs of each set to list before cutting to the thickest (12)"}},
-         ("a", "b")),
+         ("a", "b"), main="a"),
     Tool("lithology_stats", K.lithology_stats, COMPARE, _text("lithology_stats"),
          {"curves": CURVES, "statistics": {"type": "array", "items": {"type": "string"}}, "zones": ZONES},
          ("curves",), lead="curves", table=True),
@@ -179,7 +183,7 @@ TOOLSET.add(
          ("curve",), main="curve", lead="curve", table=True),
     Tool("data_record", K.data_record, CHECK, _text("data_record"),
          {"zones": ZONES},
-         (), table=True),
+         (), main="zones", table=True),
     # depth matching between logs by cross-correlation
     Tool("lag_correlation", K.lag_correlation, CHECK, _text("lag_correlation"),
          {"curves": CURVES,
@@ -202,7 +206,8 @@ TOOLSET.add(
                               "description": "the values to try (6 at most)"},
                    "target": {"type": "string", "description": "the curve to report, e.g. NET_PAY"},
                    "parameters": {"type": "object",
-                                  "description": "inputs held fixed for every value, e.g. {\"rw_temp_f\": 105}"}}),
+                                  "description": "inputs held fixed for every value, e.g. {\"rw_temp_f\": 105}"}},
+          main="property"),
     _verb("estimate", P.estimate, CALCULATE,
           lambda: _TEXTS["estimate"] + "\n" + "\n".join(f"    {k}: {' | '.join(v)}" for k, v in P.ESTIMATES.items()),
           lambda: {"parameter": {"type": "string", "enum": list(P.ESTIMATES)},
@@ -228,7 +233,7 @@ TOOLSET.add(
          ("topic",), main="topic", lead="topic", table=True),
     Tool("unit_roles", K.unit_roles, CLASSIFY, _text("unit_roles"),
          {"zones": ZONES},
-         (), table=True),
+         (), main="zones", table=True),
 
     # SUMMARIZE
     _verb("summarize", library_summarize.summarize, SUMMARIZE, _with_objects("summarize", library_summarize),
@@ -245,7 +250,7 @@ TOOLSET.add(
           main="what"),
     Tool("core_vs_log", K.core_vs_log, CALIBRATE, _text("core_vs_log"),
          {"zones": ZONES},
-         (), table=True),
+         (), main="zones", table=True),
 )
 
 TOOLS = TOOLSET.functions()          # name -> the function that runs it

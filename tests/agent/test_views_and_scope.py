@@ -91,10 +91,10 @@ def test_thresholds_kept_and_read():
 # --- routes in this interval -------------------------------------------------------------------------------------------
 
 def _pairs_numpy(view):
-    ratio, deep = view.values("INVASION_RATIO"), view.values("RDEP")
+    ratio, deep = view.values("INVASION_RATIO"), view.values(routes.invasion_pair(view)[0])
     ok = np.isfinite(ratio)
     out, taken = {}, np.zeros(ratio.size, dtype=bool)
-    for c in routes.SHALLOW:
+    for c in routes.invasion_pair(view)[1]:              # the shallow-side curves the invasion step's record names
         if not view.available(c):
             continue
         s = np.asarray(view.values(c), dtype=float)
@@ -113,21 +113,18 @@ def test_invasion_routes_match_numpy_and_reach_the_map():
     for t, fi in FI():
         v = fi.view
         c = routes.invasion_counts(v)
-        if not (v.available("INVASION_RATIO") and v.available("RDEP")) or c is None:
+        if not (v.available("INVASION_RATIO") and v.available(routes.invasion_pair(v)[0])) or c is None:
             assert c is None or c["n"] == 0
             continue
         seen += 1
         want, n = _pairs_numpy(v)
-        assert c["n"] == n and sum(c.get(k, 0) for k in routes.SHALLOW) + c["other"] == n, (t.well, c)
-        assert {k: c[k] for k in routes.SHALLOW if c.get(k)} == want, (t.well, c, want)
+        assert c["n"] == n and sum(c.get(k, 0) for k in c["side"]) + c["other"] == n, (t.well, c)
+        assert {k: c[k] for k in c["side"] if c.get(k)} == want, (t.well, c, want)
         mi = render(fi.inv)
         assert "in this interval INVASION_RATIO = " in mi, t.well
         inv_step = next(m for m in fi.inv.methods if m.step == "invasion")
-        assert any(d.startswith("in this interval INVASION_RATIO") for d in inv_step.decisions_here)
-        for m in fi.inv.methods:                             # a well-wide route line is labelled as such
-            for d in m.decisions_here:
-                if routes.WELL_WIDE.search(d) and not d.startswith("in this interval"):
-                    assert d.startswith("well-wide record: "), (t.well, m.step, d)
+        assert any(d.startswith("in this interval INVASION_RATIO") for d in inv_step.routes_here)
+        assert inv_step.decisions_here == inv_step.decisions               # the run's lines as written (O3)
     assert seen or pytest.skip("no INVASION_RATIO in this dataset")
 
 
@@ -469,8 +466,8 @@ def test_guides_state_no_conclusion_as_a_rule():
 
 
 def test_the_brief_carries_the_readings_and_weaknesses_lines():
-    from petroharness.agent.loop import V9_BRIEF, brief
-    assert V9_BRIEF in brief()
+    from petroharness.agent.loop import BRIEF_WEAKNESSES, brief
+    assert BRIEF_WEAKNESSES in brief()
 
 
 def test_tool_descriptions_say_signs_zone_values_and_the_zone_selector():
@@ -481,12 +478,6 @@ def test_tool_descriptions_say_signs_zone_values_and_the_zone_selector():
 
 
 # --- the "not recorded" note -----------------------------------------------------------------------------------------
-
-def test_well_wide_route_lines_drop_the_not_recorded_note():
-    line = "Depth routing counts: archie, indonesia (routes used in the well; counts for this interval not recorded)"
-    assert routes.well_wide(line) == "well-wide record: Depth routing counts: archie, indonesia (routes used in the well)"
-    assert routes.well_wide("Perm range in this interval: 1 to 2 mD") == "Perm range in this interval: 1 to 2 mD"
-
 
 # --- the record's basis first ------------------------------------------------------------------------------------------
 

@@ -14,8 +14,9 @@ from petroharness.well import summary as S
 
 
 def _where_line(out: Out, sel, condition=None) -> None:
-    if sel is not None:                                            # with a flag it names that is not computed somewhere
-        out.add(f"Samples where {sel.read}" + E.uncomputed_said(out.f, condition))
+    if sel is not None:                                            # with a flag it names that is not computed somewhere,
+        none = E.where_none(out.f, sel)                            # and a where that keeps no sample said so
+        out.add(f"Samples where {sel.read}" + E.uncomputed_said(out.f, condition) + (f": {none}" if none else ""))
 
 
 def stats(f: Formation, curves, zones=None, statistics=None, where=None) -> Result:
@@ -73,7 +74,8 @@ def _blocks(f: Formation, out: Out, cs: list, zs: list, asked, sel, suffix: str 
         names, log = E.curve_statistics(f, c, asked)
         name = E.tagged(f, c)
         with np.errstate(invalid="ignore"):
-            on = {code: np.isfinite(x) & (x == code) for code in k.codes} if k.kind in ("flag", "classes") else {}
+            on = ({key: np.isfinite(x) & S.in_class(x, key) for key in S.class_groups(k.codes, labels)}
+                  if k.kind in ("flag", "classes") else {})
         block = out.child()
         note = S.kind_note(k, labels) if k.kind != "values" else S.shape_note(np.asarray(f.view.values(c), dtype=float))
         lab = E.label(f, c)
@@ -83,31 +85,35 @@ def _blocks(f: Formation, out: Out, cs: list, zs: list, asked, sel, suffix: str 
         block.add(lab + (f"; {note}" if note else "") + (f"; {gone}" if gone else "") + suffix)
         only_out = {code for code in on if on[code][away].any() and not on[code][~away].any()}
         rows, tail = [], []
-        for b in E.bases(f, zs):
-            if b.kind == "whole" and not S.differs(f.view, x):
-                continue                                         # the whole interval is the zones pooled here
+        # the whole interval is the zones pooled when no sample outside them has a value: not shown then
+        shown = [b for b in E.bases(f, zs) if not (b.kind == "whole" and not S.differs(f.view, x))]
+        widest = next((kind for kind in ("whole", "pooled", "zone") if any(b.kind == kind for b in shown)), None)
+        for b in shown:
             row = out.child()
-            text = _basis_values(f, c, row, x, k, labels, names, log, b.idx, b, zs, on, empty, only_out)
+            text = _basis_values(f, c, row, x, k, labels, names, log, b.idx, b, zs, on, empty, only_out,
+                                 span=b.kind == widest)
             if b.zone is not None:
                 rows.append((b.zone.zone_id, f"  {row.zone(b.zone)}, {name}: " + text, row))
             else:
-                head = f"  {_basis_label(row, b)}, {name}: "
-                tail.append((head + text, row, (head, b.idx)))
+                head = f"  {_basis_label(row, b, sel)}, {name}: "
+                tail.append((head + text, row, (head, b.idx, b.kind == widest)))
             if b.kind == "whole":                                # what the samples outside the zones hold
                 row = out.child()
                 idx = np.flatnonzero(away)
                 few = [n for n in names if n in S.OUTSIDE_STATISTICS]
                 text = _basis_values(f, c, row, x, k, labels, few if len(few) > 1 else names, log, idx, None, zs, on,
                                      empty, set())
-                head = f"  {S.outside_label(f.view, short=True)}, {name}: "
-                tail.append((head + text, row, (head, idx)))
+                head = f"  {S.outside_label(f.view, short=True, keep=None if sel is None else sel.mask)}, {name}: "
+                tail.append((head + text, row, (head, idx, False)))
         blocks.append((c, x, k, names, log, block, rows, tail))
     return blocks
 
 
-def _basis_values(f: Formation, c: str, row: Out, x, k, labels, names, log, idx, b, zs, on, empty, only_out) -> str:
+def _basis_values(f: Formation, c: str, row: Out, x, k, labels, names, log, idx, b, zs, on, empty, only_out,
+                  span: bool = False) -> str:
     """One basis's values of curve c (b: the basis, None for the samples outside the zones). A flag computed from
-    inputs with no value here reads "not computed", never 0."""
+    inputs with no value here reads "not computed", never 0. `span`: the widest line shown (the whole selection, else
+    the zones pooled), where a curve with values at part of its samples says its first and last (engine.values)."""
     idx = np.asarray(idx, dtype=int)
     away = b is None
     if not np.isfinite(x[idx]).any() and E.not_computed(f, c, idx):
@@ -120,11 +126,12 @@ def _basis_values(f: Formation, c: str, row: Out, x, k, labels, names, log, idx,
         return E.flag_values(row, x[idx], thick(on[1.0]))
     if k.kind != "values":
         text = E.class_values(row, x[idx], k, labels, lambda code: thick(on[code]))
-        for code in sorted(only_out):                           # a class the zones never hold: said in its cell
+        for code in [g for g in S.class_groups(k.codes, labels) if g in only_out]:   # a class the zones never hold:
+                                                                                 #   said in its cell
             cell = f"class {S.code_text(code, labels)} "
             text = re.sub(rf"({re.escape(cell)}[\d.]+% \(\d+ samples, [^)]*)\)", r"\1; only outside the zones)", text)
         return text
-    return E.values(row, x[idx], f.depth[idx], names, log, zone=not away)
+    return E.values(row, x[idx], f.depth[idx], names, log, zone=not away, span=span)
 
 
 def _render(f: Formation, out: Out, zs: list, blocks: list, after: list) -> None:
@@ -175,7 +182,8 @@ def _render(f: Formation, out: Out, zs: list, blocks: list, after: list) -> None
         if tails[c] is not full[c]:                               # the full tail lines, held in the result
             for ln, row in full[c]:
                 if (ln, row) not in tails[c]:
-                    rid = next((w for w in ("these zones pooled", "zones pooled", "whole interval", "outside any zone")
+                    rid = next((w for w in ("these zones pooled", "zones pooled", "these rows pooled", "rows pooled",
+                                            "whole interval", "outside any zone", "outside any row")
                                 if ln.strip().startswith(w)), "pooled")
                     block.hold(ln, row, (c, rid, "the full lines of {ids}"))
         out.extend(block)
@@ -184,18 +192,18 @@ def _render(f: Formation, out: Out, zs: list, blocks: list, after: list) -> None
 
 
 def _short_tail(f: Formation, b, stats_: list, out: Out) -> list:
-    """A curve's pooled, whole-interval and outside lines with the shorter rows' statistics, no depths (values only;
-    a flag's or class codes' lines are short already)."""
+    """A curve's pooled, whole-interval and outside lines with the shorter rows' statistics, no depths of its min and
+    max (the whole line keeps where a partial curve has values); a flag's or class codes' lines are short already."""
     c, x, kind, names, log = b[0], b[1], b[2], b[3], b[4]
     if kind.kind != "values":
         return [(ln, row) for ln, row, _ in b[7]]
     pick = [s for s in stats_ if s in names] or names[:2]
     rows = []
-    for ln, row, (head, idx) in b[7]:
+    for ln, row, (head, idx, whole) in b[7]:
         r = out.child()
         few = [s for s in pick if s in S.OUTSIDE_STATISTICS] if head.startswith("  outside any zone") else pick
         rows.append((head + E.values(r, x[np.asarray(idx)], f.depth[np.asarray(idx)], few if len(few) > 1 else pick,
-                                      log, at=False), r))
+                                      log, at=False, span=whole), r))
     return rows
 
 
@@ -212,7 +220,7 @@ def _across_row(f: Formation, blocks: list, z, out: Out) -> tuple:
         elif kind.kind == "flag":
             parts.append(f"{c} set {row.pct(100 * float((xz[ok] > 0.5).mean()))}")
         elif kind.kind != "values":
-            n, counts = S.class_counts(xz, kind.codes)
+            n, counts = S.class_counts(xz, kind.codes, E.codes(f, c))
             parts.append(f"{c} " + ", ".join(f"class {S.code_text(code, E.codes(f, c))} {row.pct(100 * m / n)}"
                                              for code, m in counts))
         else:
@@ -240,8 +248,8 @@ def _short_row(f: Formation, b, z, stats_: list, out: Out) -> tuple:
         ok = np.isfinite(xz)
         text = f"n {row.i(ok.sum())}, set {row.pct(100 * float((xz[ok] > 0.5).mean()) if ok.any() else 0.0)}"
     elif kind.kind != "values":
-        n, counts = S.class_counts(xz, kind.codes)
         labels = E.codes(f, c)
+        n, counts = S.class_counts(xz, kind.codes, labels)
         text = f"n {row.i(n)}" + ((f", every value {S.code_text(kind.codes[0], labels)}" if n else "")
                                   if kind.kind == "one value" else
                                   "".join(f", class {S.code_text(code, labels)} {row.pct(100 * m / n)}" for code, m in counts))
@@ -251,11 +259,13 @@ def _short_row(f: Formation, b, z, stats_: list, out: Out) -> tuple:
     return z.zone_id, f"  {z.zone_id}, {E.tagged(f, c)}: {text}", row
 
 
-def _basis_label(out: Out, b) -> str:
+def _basis_label(out: Out, b, sel=None) -> str:
     """A pooled basis by its name; the whole interval with the count of samples outside any zone (its extremes can sit
-    there)."""
+    there); under a where, the samples it covers: every sample where the condition holds, how many, and how many of
+    them lie outside any zone (question suite B01: 'whole interval (201 samples outside any zone)' over the 158 samples
+    of the condition was read as the whole interval, and its mean as unavailable)."""
     if b.kind == "whole":
-        return f"whole interval ({out.i(S.outside(out.f.view))} samples outside any zone)"
+        return S.whole_label_of(out.f.view, out.i, None if sel is None else sel.mask, "" if sel is None else sel.read)
     return b.label
 
 
@@ -279,8 +289,9 @@ def zone_mean_verdict(f: Formation, condition: str, zs: list) -> Optional[tuple]
     total = sum(z.thickness for z in zs) or 1.0
     names = S.zone_ids([z.zone_id for z in hit]) if hit else "none"
     on = ", ".join(sorted({t.upper() for t in re.findall(r"[A-Za-z][A-Za-z0-9_]*", cond)} & set(f.inv.curves)))
-    text = (f"  zones whose means meet it (on {on}; each zone by its mean values): {names} ({row.i(len(hit))} of "
-            f"{row.i(len(zs))} zones, {row.pct(100 * sum(z.thickness for z in hit) / total)} of their thickness)")
+    w = "rows" if getattr(f.view, "selection", None) else "zones"            # a selection's rows (agent.selection)
+    text = (f"  {w} whose means meet it (on {on}; each {w[:-1]} by its mean values): {names} ({row.i(len(hit))} of "
+            f"{row.i(len(zs))} {w}, {row.pct(100 * sum(z.thickness for z in hit) / total)} of their thickness)")
     return text, row
 
 
@@ -306,7 +317,31 @@ class _ZoneMeanView:
         return getattr(self._f.view, name)
 
 
-def runs(f: Formation, condition: str, zones=None, limit: int = 20, min_thickness: Optional[float] = None,
+RUNS_LISTED = 20           # the runs a list shows when the call gives no limit (reach focus)
+INTERVALS_LISTED = 200     # reach well: every interval, up to this many, unless the call gives a limit
+
+
+def _runs_defaults(f: Formation) -> dict:
+    """runs' limit as the view decides it: every interval under reach well, the 20 longest runs under focus."""
+    return {"limit": INTERVALS_LISTED if getattr(f.view, "reach", "focus") == "well" else RUNS_LISTED}
+
+
+def _count_limit(limit, default: int) -> tuple:
+    """A list's limit as a count of intervals: (the count, a note). A limit that is no count (a fraction, 0 or below, a
+    word) is left out and said, the default listed: models wrote the condition's threshold there ("SW < 0.9" with
+    limit 0.9, benchmark N6: 10 calls refused, each a lost action), whose meaning for the list is plain."""
+    if isinstance(limit, float) and limit.is_integer():
+        limit = int(limit)
+    if isinstance(limit, int) and not isinstance(limit, bool) and limit >= 1:
+        return limit, ""
+    return default, f"(limit {limit!r} is no count of intervals, left out: {default} listed; a threshold is the condition's)"
+
+
+def _said_first(r: Result, note: str) -> Result:
+    return Result(note + "\n" + r.text, list(r.numbers), [(note, [])] + list(r.rows)) if note else r
+
+
+def runs(f: Formation, condition: str, zones=None, limit: Optional[int] = None, min_thickness: Optional[float] = None,
          max_thickness: Optional[float] = None) -> Result:
     for name, v in (("min_thickness", min_thickness), ("max_thickness", max_thickness)):
         if v is not None and not (isinstance(v, (int, float)) and not isinstance(v, bool) and np.isfinite(v) and v >= 0):
@@ -314,10 +349,15 @@ def runs(f: Formation, condition: str, zones=None, limit: int = 20, min_thicknes
     if max_thickness is not None and max_thickness <= 0:          # every run is thicker than 0: it would find none
         raise ToolError(f"max_thickness {max_thickness!r} keeps no run (every run is at least one sample thick); leave it "
                         "out for all runs, or give the largest thickness of the thin beds you want")
-    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
-        raise ToolError(f"limit must be a whole number of at least 1, not {limit!r}")
+    limit, said = _count_limit(_runs_defaults(f)["limit"] if limit is None else limit, _runs_defaults(f)["limit"])
+    return _said_first(_runs(f, condition, zones, limit, min_thickness, max_thickness), said)
+
+
+def _runs(f: Formation, condition: str, zones, limit: int, min_thickness, max_thickness) -> Result:
     sel = E.select(f, condition)
     zs, u = E.zones(f, zones), f.inv.depth_unit
+    if getattr(f.view, "reach", "focus") == "well":            # intervals anywhere: listed first, uncut by zones
+        return _runs_intervals(f, sel, zs, zones, condition, limit, min_thickness, max_thickness)
     found = E.extent(f, sel.mask, zs)
     read = sel.read
     if min_thickness is not None or max_thickness is not None:      # thin beds, or only the thick ones
@@ -350,7 +390,7 @@ def runs(f: Formation, condition: str, zones=None, limit: int = 20, min_thicknes
         if min_thickness is not None or max_thickness is not None:
             whole_runs = [r for r in whole_runs if lo <= E.thickness(every, r[2]) <= hi]
         n_sel = sum(r[2] for r in whole_runs)
-        out.add(f"  whole interval ({out.i(S.outside(f.view))} samples outside any zone): "
+        out.add(f"  {S.whole_label_of(f.view, out.i)}: "
                 f"{out.v(f.inv.gross * n_sel / max(n_all, 1))} {u} ({out.pct(100 * n_sel / max(n_all, 1))} of the gross)")
         _outside_runs(f, out, sel.mask & away)
     if found:
@@ -378,6 +418,103 @@ def runs(f: Formation, condition: str, zones=None, limit: int = 20, min_thicknes
 
 
 EVERY_RUN = "other runs"
+OTHER_INTERVALS = "other intervals"
+
+
+runs.defaults_for = _runs_defaults          # the ledger keys a call by the limit it is computed with
+
+def _runs_intervals(f: Formation, sel, zs: list, zones, condition: str, limit: int, min_thickness, max_thickness) -> Result:
+    """runs under reach "well" (docs/designs/zones-and-intervals.md, 2b): the intervals where the condition holds over
+    the whole interval (or the selection, or the zones asked), consecutive samples uncut by zone boundaries, each with
+    its thickness (the whole interval's convention: its gross x the share of its samples) and the zones it touches;
+    the thickest `limit` when there are more (the others kept for get); then each zone's thickness of them (the zones'
+    convention) and the zones whose means meet the condition."""
+    d, n_all, u = f.depth, f.depth.size, f.inv.depth_unit
+    mask = np.asarray(sel.mask, dtype=bool).copy()
+    asked = ""
+    if zones:                                                       # the zones asked: the intervals inside them
+        inside = np.zeros(n_all, dtype=bool)
+        for z in zs:
+            inside[np.asarray(z.indices)] = True
+        mask &= inside
+        asked = " in " + ", ".join(z.zone_id for z in zs)
+    zone_of = np.full(n_all, -1)
+    for k, z in enumerate(f.view.zones):
+        zone_of[np.asarray(z.indices)] = k
+    word = "row" if getattr(f.view, "selection", None) else "zone"
+    lo, hi = (min_thickness or 0.0), (np.inf if max_thickness is None else max_thickness)
+    items = []
+    idx = np.flatnonzero(mask)
+    if idx.size:
+        br = np.flatnonzero(np.diff(idx) > 1)
+        for a, b in zip(np.r_[idx[0], idx[br + 1]], np.r_[idx[br], idx[-1]]):
+            n = int(b - a + 1)
+            t = f.inv.gross * n / max(n_all, 1)
+            if not lo <= t <= hi:
+                continue
+            ks = [k for k in dict.fromkeys(zone_of[a:b + 1].tolist()) if k >= 0]
+            names = ", ".join(f.view.zones[k].zone_id for k in ks)
+            out_of = bool((zone_of[a:b + 1] < 0).any())
+            where = (names + (f" and outside any {word}" if out_of else "")) if names else f"outside any {word}"
+            items.append((float(d[a]), float(d[b]), n, t, where, int(a), int(b)))
+    read = sel.read + "".join([f", intervals at least {num(float(min_thickness))} {u} thick" if min_thickness is not None
+                               else "", f", intervals at most {num(float(max_thickness))} {u} thick"
+                               if max_thickness is not None else ""])
+    out = Out(f)
+    if not items:
+        out.add(f"No interval where {read}{asked}" + E.uncomputed_said(f, condition))
+        return out.result()
+    total = sum(r[3] for r in items)
+    out.add(f"Intervals where {read}{asked} ({out.i(len(items))} interval{'' if len(items) == 1 else 's'}, "
+            f"{out.v(total)} {u}, {out.pct(100 * total / f.inv.gross if f.inv.gross else 0.0)} of the gross)"
+            + E.uncomputed_said(f, condition))
+    every = np.asarray(sel.mask, dtype=bool)
+    if zones and (every & ~mask).any():                 # the zones asked leave samples out: the interval's own line
+        groups = np.split(np.flatnonzero(every), np.flatnonzero(np.diff(np.flatnonzero(every)) > 1) + 1)
+        whole = [f.inv.gross * g.size / max(n_all, 1) for g in groups if g.size]
+        whole = [t for t in whole if lo <= t <= hi]      # (suite X15: all 20 zones listed gave 57.08 m of 69.17 m)
+        row = out.child()
+        out.add(f"  {S.whole_label(f.view)}: {row.i(len(whole))} interval{'' if len(whole) == 1 else 's'}, "
+                f"{row.v(sum(whole))} {u}, {row.pct(100 * sum(whole) / f.inv.gross if f.inv.gross else 0.0)} of the "
+                f"gross; the zones asked leave out {row.v(max(sum(whole) - total, 0.0))} {u} outside them", row)
+    cut = len(items) > limit
+    listed = sorted(sorted(items, key=lambda r: -r[3])[:limit], key=lambda r: r[0]) if cut else items
+    kept = []
+    if cut:
+        rest = [(r[4], r[0], r[1], r[3]) for r in items if r not in listed]
+        kept, said = _keep_rest(f, OTHER_INTERVALS, rest, lambda r: r[3],
+                                lambda r: (f"at {num(r[1])}" if r[1] == r[2] else f"{num(r[1])}-{num(r[2])}")
+                                + f" ({num(r[3])})")
+        said = said.replace("other runs", "other intervals")
+        out.add(f"  thickest intervals, top to base (top-base, thickness, zones; {said}), {limit} of {len(items)}:")
+    else:
+        out.add(f"  every interval, top to base (top-base, thickness, zones), {len(items)} of {len(items)}:")
+    rows = []
+    for top, base, n, t, where, a, b in listed:
+        row = out.child()
+        span = f"at {row.depth(top)} (one sample)" if n == 1 else row.span(top, base)
+        rows.append((f"{num(top)}-{num(base)}", f"    {span}, {row.v(t)} {u}, {where}", row))
+    out.fit(rows, what="intervals")
+    for ln, nums in kept:
+        out.keep(ln, nums)
+    on = np.zeros(n_all, dtype=bool)                               # each zone's thickness of the intervals
+    for r in items:
+        on[r[5]:r[6] + 1] = True
+    row = out.child()
+    parts, empty = [], []
+    for z in zs:
+        k = int(on[np.asarray(z.indices)].sum())
+        if k:
+            parts.append(f"{z.zone_id} {row.v(E.thickness(z, k))} {u} ({row.pct(100 * k / max(z.n_samples, 1))} of the "
+                         f"{word})")
+        else:
+            empty.append(z.zone_id)
+    if parts or empty:
+        out.add(f"  by {word}: " + "; ".join(parts) + (f"; none in {', '.join(empty)}" if empty else ""), row)
+    verdict = zone_mean_verdict(f, condition, zs)
+    if verdict:
+        out.add(*verdict)
+    return out.result()
 
 
 def _outside_runs(f: Formation, out: Out, mask) -> None:
@@ -437,10 +574,11 @@ def compare(f: Formation, a: str, b: str, zones=None, tolerance: Optional[float]
         if bs.zone is not None:
             rows.append((bs.zone.zone_id, f"  {row.zone(bs.zone)}: " + text, row))
         else:
-            tail.append((f"  {_basis_label(row, bs)}: " + text, row))
+            tail.append((f"  {_basis_label(row, bs, sel)}: " + text, row))
         if bs.kind == "whole":
             row = out.child()
-            tail.append((f"  {S.outside_label(f.view, short=True)}: " + E.pair(row, xa[away], xb[away], a, b, same,
+            tail.append((f"  {S.outside_label(f.view, short=True, keep=None if sel is None else sel.mask)}: "
+                         + E.pair(row, xa[away], xb[away], a, b, same,
                                                                               tolerance), row))
     out.fit(rows, E.max_chars() - sum(len(ln) + 1 for ln, _ in tail), label=f"{a} vs {b}")
     for ln, row in tail:
@@ -536,6 +674,91 @@ def profile(f: Formation, curve: str, zones=None, statistics=None, where=None) -
     return out.result()
 
 
+VALUES_AT_MAX = 40                                  # the samples a depth range lists (a longer one: stats or profile)
+
+
+def values_at(f: Formation, curves, depths) -> Result:
+    """Curves read at depths (question suite X13: no tool read a curve at a depth, and the answer called a stretch's
+    extremes its nearest samples). At each depth asked, the well's nearest sample: its depth and how far it lies from
+    the depth asked, where it is (a zone, between zones, or outside the interval in a unit of the tops file), and each
+    curve's value there, or that it has none with its nearest reading. A depth range TOP-BASE lists each of its
+    samples, at most VALUES_AT_MAX. A
+    depth is read as a range's limit is (selection.parse_range: m or ft, else the reporting unit)."""
+    from petroharness.agent.selection import _rounded_limits, parse_range
+    cs = E.curves(f, curves)
+    v = f.view
+    d = np.asarray(v.prep.depth, dtype=float) * v.depth_scale       # the well's samples, in the reporting unit
+    vals = {c: np.asarray(v.well_values(c), dtype=float) for c in cs}
+    asked = [depths] if isinstance(depths, (str, int, float)) else list(depths or [])
+    if not asked:
+        raise ToolError('name the depths: depths [2900] (each nearest sample), or ["2895-2905"] (every sample in it)')
+    inside = np.zeros(d.size, dtype=bool)
+    inside[np.flatnonzero(np.asarray(v.mask, dtype=bool))] = True
+    out = Out(f)
+    out.add(f"{', '.join(cs)} read at the depths asked (the well's own samples, every {num(float(np.median(np.diff(d))))} "
+            f"{f.inv.depth_unit}):")
+
+    def where(i: int) -> str:
+        if inside[i]:
+            return E.zone_at(f, float(d[i]))
+        unit = next((u.name for u in getattr(v, "units", None) or []
+                     if u.top <= d[i] and (d[i] <= u.base if u.closed else d[i] < u.base)), None)
+        return "outside the interval" + (f", in {unit}" if unit else "")
+
+    def nearest(c: str, i: int, row) -> str:
+        """A curve with no value at the sample read: its nearest sample with one (question suite X23: the log read at
+        a unit's base had a gap there, and the answer gave a filled value with no reading near it)."""
+        ok = np.flatnonzero(np.isfinite(vals[c]))
+        if not ok.size:
+            return f"{c} no value (none in the well)"
+        j = int(ok[np.argmin(np.abs(d[ok] - d[i]))])
+        return (f"{c} no value (its nearest reading {row.v(vals[c][j])} at {row.depth(d[j])}, "
+                f"{row.v(abs(float(d[j] - d[i])))} {f.inv.depth_unit} away)")
+
+    def line(i: int, row, head: str = "", near: bool = False) -> None:
+        at = row.depth(d[i])
+        cells = "; ".join(f"{c} {row.v(vals[c][i])}" if np.isfinite(vals[c][i]) else
+                          nearest(c, i, row) if near else f"{c} no value" for c in cs)
+        out.add(f"  {head}{at} ({where(i)}): {cells}", row)
+
+    for a in asked:
+        text = str(a).strip()
+        try:
+            span = parse_range(text, v) if isinstance(a, str) else None
+            single = re.match(r"^(-?\d+(?:\.\d+)?)\s*([A-Za-z]*)$", text)       # one depth, its unit if written
+            one = None if span is not None or not single else \
+                parse_range(f"{single.group(1)}-{single.group(1)} {single.group(2)}".strip(), v)
+        except ValueError as e:
+            raise ToolError(str(e)) from None
+        if span is None and one is None:
+            raise ToolError(f"{text!r} is not a depth: give a number ({f.inv.depth_unit}, or with m or ft) or TOP-BASE")
+        if span is not None:
+            top, base = _rounded_limits(text, v, *span)   # limits with decimals are the samples they round to
+            idx = np.flatnonzero((d >= top - 1e-9 * max(1.0, abs(top))) & (d <= base + 1e-9 * max(1.0, abs(base))))
+            if not idx.size:
+                raise ToolError(f"{text}: no sample of the well lies in it; the log spans {num(float(d[0]))}-"
+                                f"{num(float(d[-1]))} {f.inv.depth_unit}")
+            row = out.child()
+            out.add(f"  {text}: {row.i(idx.size)} samples" + (f", the first {VALUES_AT_MAX} listed (a longer stretch "
+                                                               "is a stats or profile call)" if idx.size > VALUES_AT_MAX
+                                                               else ""), row)
+            for i in idx[:VALUES_AT_MAX]:
+                line(int(i), out.child())
+            continue
+        x = one[0]
+        if x < d[0] - 1e-9 or x > d[-1] + 1e-9:
+            row = out.child()
+            out.add(f"  at {row.depth(x)}: beyond the log, which spans {row.span(float(d[0]), float(d[-1]))}", row)
+            continue
+        i = int(np.argmin(np.abs(d - x)))
+        gap = abs(float(d[i]) - x)
+        row = out.child()
+        head = f"at {row.depth(x)}: " + ("the sample at " if gap <= 1e-6 * max(1.0, abs(x)) else
+                                         f"the nearest sample ({row.v(gap)} {f.inv.depth_unit} away) at ")
+        line(i, row, head, near=True)
+    return out.result()
+
+
 def _thirds(f: Formation, out, z, x, c: str) -> None:
     """a single zone's upper, middle and lower thirds (by sample order): depths, median and mean of curve c."""
     idx = np.asarray(z.indices)
@@ -627,10 +850,11 @@ def crossplot(f: Formation, y: str, x: str, zones=None, log_y=False, log_x=False
         if bs.zone is not None:
             rows.append((bs.zone.zone_id, f"  {row.zone(bs.zone)}, {yn} on {xn}: " + text, row))
         else:
-            tail.append((f"  {_basis_label(row, bs)}, {yn} on {xn}: " + text, row))
+            tail.append((f"  {_basis_label(row, bs, sel)}, {yn} on {xn}: " + text, row))
         if bs.kind == "whole":
             row = out.child()
-            tail.append((f"  {S.outside_label(f.view, short=True)}, {yn} on {xn}: " + fit(row, np.flatnonzero(away)),
+            tail.append((f"  {S.outside_label(f.view, short=True, keep=None if sel is None else sel.mask)}, {yn} on {xn}: "
+                         + fit(row, np.flatnonzero(away)),
                          row))
     out.fit(rows, E.max_chars() - sum(len(ln) + 1 for ln, _ in tail), label=f"{yn} on {xn}")
     for ln, row in tail:
@@ -644,8 +868,11 @@ def overlap(f: Formation, a: str, b: str, zones=None, limit: int = 12) -> Result
     where they hold together and apart; the samples outside the zones apart, labelled; then the runs of A and B, of A
     without B and of B without A, top to base by zone (every run up to limit, else the thickest with the get of every
     one). A and B: conditions in the runs grammar (a flag, a class section:CLASS, CURVE OP VALUE, joined by and/or)."""
-    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
-        raise ToolError(f"limit must be a whole number of at least 1, not {limit!r}")
+    limit, said = _count_limit(limit, 12)
+    return _said_first(_overlap(f, a, b, zones, limit), said)
+
+
+def _overlap(f: Formation, a: str, b: str, zones, limit: int) -> Result:
     if not str(a or "").strip() or not str(b or "").strip():
         raise ToolError(f"overlap needs two conditions, a and b; {E.GRAMMAR}")
     sa, sb = E.select(f, a), E.select(f, b)
@@ -676,11 +903,16 @@ def overlap(f: Formation, a: str, b: str, zones=None, limit: int = 12) -> Result
                                      for name, ids in where.items())
             + (f"; neither in {S.zone_ids(none)}" if none else ""))
     away = S.outside_mask(f.view)
+    n_all = max(f.depth.size, 1)
     if ((A | B) & away).any():                                   # outside the zones: a labelled gap, not a zone
         row = out.child()
-        n_all = max(f.depth.size, 1)
         out.add(f"  {S.outside_label(f.view)}: " + ", ".join(
             f"{name} {row.v(f.inv.gross * float((m & away).sum()) / n_all)}" for name, m in cols), row)
+    if away.any():                                               # the interval's own line, every sample (suite Y01:
+        row = out.child()                                        #   the share asked of the interval was not shown)
+        out.add(f"  {S.whole_label(f.view)}: " + ", ".join(
+            f"{name} {row.v(f.inv.gross * float(m.sum()) / n_all)} ({row.pct(100 * float(m.sum()) / n_all)})"
+            for name, m in cols), row)
     kept = []
     for name, m in sets:                                         # where, located: top to base, zone by zone
         found = [(z.zone_id, top, base) for top, base, k, z in E.extent(f, m, zs)]
@@ -710,6 +942,13 @@ def section(f: Formation, key: str) -> Result:
     said so, with the runs call of every run), and its thickness and share last, on the line after; with few runs in
     the whole section, every run of every class top to base in one line; then the zones' value lines and the classes
     both ways."""
+    named = re.fullmatch(r"\s*(?:step\s+(\w+)|(\w+)\s+step)\s*", str(key), re.I)
+    if named and any(m.step == (named.group(1) or named.group(2)).lower() for m in f.inv.methods):
+        return step(f, (named.group(1) or named.group(2)).lower())        # "step porosity": the step's record
+    from petroharness.agent.toolset import TOOLS
+    if str(key).strip() in TOOLS and str(key).strip() not in ("section", "step"):
+        from petroharness.agent.schemas import call                       # a tool's name ("core_vs_log"): that tool
+        return call(f, str(key).strip(), {})
     k = re.sub(r"[:/\s]+", ".", str(key).strip())                   # hydrocarbon:x, hydrocarbon/x -> hydrocarbon.x
     match = [s for s in f.inv.sections if s.key == k] or [s for s in f.inv.sections if s.key.split(".", 1)[-1] == k] \
         or [s for s in f.inv.sections if s.key.split(".")[-1] == k.split(".")[-1]]     # its name under another family
@@ -719,7 +958,13 @@ def section(f: Formation, key: str) -> Result:
                  and ("." not in k or family not in {s.family for s in f.inv.sections})]
         if steps:                                                  # a step named as a section: its record (the call's
             return step(f, steps[0])                               #   meaning is plain; a refusal costs an action)
-        hint = f"; {steps[0]} is a workflow step: call step" if steps else ""
+        if k in {s.family for s in f.inv.sections}:                # a family alone: its sections
+            raise ToolError(f"{key!r} is a family of sections: "
+                            f"{', '.join(s.key for s in f.inv.sections if s.family == k)}; name one")
+        words = set(re.findall(r"[a-z]+", k.lower())) - {"and", "of", "the"}      # the key sharing most of its words
+        near = sorted(((len(words & set(re.findall(r"[a-z]+", s.key))), s.key) for s in f.inv.sections), reverse=True)
+        hint = (f"; did you mean {near[0][1]}?" if near and near[0][0] >= 2 and (len(near) == 1 or near[1][0] < near[0][0])
+                else "")
         raise ToolError(f"no section {key!r}{hint}; sections: {', '.join(s.key for s in f.inv.sections)}")
     if len(match) > 1:
         raise ToolError(f"{key!r} names {len(match)} sections: {', '.join(s.key for s in match)}; give the full key")
@@ -942,8 +1187,7 @@ def _class_views(f: Formation, s) -> list:
 
 
 # where a value came from, requested against used, sample tallies: the record's bookkeeping, counted for the whole well
-_BOOKKEEPING = ("_source", "_requested", "_count", "_counts", "_samples", "_reason", "_basis", "_metadata", "_sources",
-                "_attempted_methods", "_rejected_models", "_used")
+from petroharness.record.params import BOOKKEEPING as _BOOKKEEPING  # noqa: E402  (one list: record/params.py)
 _TALLY = {"samples", "count", "counts", "n_samples", "sample_count"}
 
 
@@ -967,10 +1211,12 @@ def step(f: Formation, name: str) -> Result:
     if m.inputs:                                   # a fallback input in plain words: "A where present, otherwise B"
         out.add(f"  inputs: {', '.join(input_text(i) for i in m.inputs)}")
     wrote = [c for c, cv in f.inv.curves.items() if cv.source == "computed" and cv.step == m.step]
-    if wrote:                                      # a curve with one value for the whole well: a parameter
+    if wrote:                                      # a curve with one value for the whole well: a parameter or a constant
         cv = f.inv.curves
         par = [c for c in wrote if getattr(cv[c], "well_value", None) is not None]
-        out.add("  curves: " + ("; " if par else ", ").join(parameter(cv[c], m.step) if c in par else c for c in wrote))
+        out.add("  curves: " + ("; " if par else ", ").join(
+            (parameter(cv[c], m.step) if c in par else c) + (f" (written by {cv[c].writer})" if cv[c].by else "")
+            for c in wrote))
     for e in m.equations_here:
         out.add(f"  equation: {plain_inputs(e, m.inputs)}")
     for k, v in m.parameters.items():
@@ -978,11 +1224,17 @@ def step(f: Formation, name: str) -> Result:
             continue
         v = _plain(v)
         if isinstance(v, (int, float)) and not isinstance(v, bool):
-            out.add(f"  {k}: {out.v(v)}")
+            said = (getattr(m, "said", None) or {}).get(k)      # what it is, where its name alone misleads
+            out.add(f"  {k}: {out.v(v)}" + (f" ({said})" if said else ""))
         elif isinstance(v, str):
             out.add(f"  {k}: {v}")
         elif isinstance(v, (list, dict)) and v:
             out.add(f"  {k}: {v}")
+    for d in getattr(m, "routes_here", None) or []:
+        out.add(f"  {d}")
+    if getattr(m, "facts_here", None):
+        out.add("  in this interval: " + "; ".join(m.facts_here))
+    from petroharness.record.catalog import RECORD_LABEL
     for d in m.decisions_here:
-        out.add(f"  record: {plain_inputs(d, m.inputs)}")
+        out.add(f"  {RECORD_LABEL}: {plain_inputs(d, m.inputs)}")
     return out.result()

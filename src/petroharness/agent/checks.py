@@ -14,7 +14,8 @@ from petroharness.record.catalog import Evidence
 from petroharness.well.view import FormationView
 from petroharness.agent.compose import strip_citations
 
-_NUM = re.compile(r"(?<![A-Za-z_\d.])(-?\d+(?:\.\d+)?)(\s*%|\s+percent\b)?", re.I)
+from petroharness.agent import numbers as N
+from petroharness.agent.numbers import NUM as _NUM, number, shown_values   # noqa: F401  (the one grammar)
 _MINUS = str.maketrans({"\u2212": "-", "\ufe63": "-", "\uff0d": "-"})   # typographic minus signs: a model writes -0.42 as \u22120.42
 
 
@@ -30,14 +31,12 @@ def _allowed_numbers(card: str, evidence: list[Evidence], question: str = "") ->
     vals: list[float] = []
     for e in evidence:
         vals.extend(float(v) for v in e.values if v is not None and np.isfinite(v))
-        for m in _NUM.finditer(ascii_minus(e.render())):
-            vals.append(float(m.group(1)))
-    for m in _NUM.finditer(card):
-        vals.append(float(m.group(1)))
+        vals += shown_values(ascii_minus(e.render()))
+    vals += shown_values(card)
     for m in _NUM.finditer(question):
-        vals.append(float(m.group(1)))
+        vals.append(number(m.group(1)))
         if m.group(2):
-            vals.append(float(m.group(1)) / 100)
+            vals.append(number(m.group(1)) / 100)
     return np.unique(np.asarray(vals, dtype=float))
 
 
@@ -54,17 +53,29 @@ def _supported(x: float, decimals: int, allowed: np.ndarray, percent: bool) -> b
                 or np.any(np.abs(100 * (1 - frac) - x) <= tol) or np.any(np.abs(100 - pct - x) <= tol))
 
 
-def _derived(x: float, decimals: int, stated: list[float]) -> bool:
-    """x is a difference, sum, ratio or percentage difference of two supported numbers stated in the same sentence
-    (the answer shows its inputs, so the arithmetic is checkable)."""
+def _derived(x: float, decimals: int, stated: list[float], percent: bool = True, counts: list = None) -> bool:
+    """x is a difference (with its sign or without), sum, product or ratio of two supported numbers stated in the same sentence
+    (a percentage difference or share of them only where x is written as a percentage: "50 samples" is no
+    100 x (12 - 8) / 8), or the total of a run of
+    them as the sentence lists them ("51 samples (DTC 9, RDEP 11, GR 11, PERM 12, NPHI 8)"); a count's run is read
+    over the sentence's counts, the shares written beside them left out ("3474 split as 662 (18.1%), 2799 (76.4%), 12
+    (0.3%) and 1 (0.0%)"): the answer shows its inputs, so the arithmetic is checkable."""
     tol = 0.5 * 10 ** (-decimals) + 1e-9
+    run = counts if counts is not None and not percent else stated
+    for i in range(len(run)):                          # a total beside its breakdown, or the mean of the values listed
+        total = run[i]                                 #   ("roughly 1.63 (1.6911, 1.541, 1.6435)")
+        for j in range(i + 1, len(run)):
+            total += run[j]
+            if (j - i >= 2 and abs(total - x) <= tol) or abs(total / (j - i + 1) - x) <= tol:
+                return True
     for i, a in enumerate(stated):
         for b in stated[i + 1:]:
-            cands = [abs(a - b), a + b]
+            cands = [abs(a - b), a - b, b - a, a + b, a * b]   # a change written with its sign ("78.375 to 74.625
+            #   (-3.75)"); a product ("0.875 x 27.5 ft = 24.0625": a share of a thickness)
             for num, den in ((a, b), (b, a)):
                 if den:
-                    cands += [num / den, 100 * abs(num - den) / abs(den)]
-            if any(abs(c - x) <= tol for c in cands):
+                    cands += [num / den] + ([100 * abs(num - den) / abs(den), 100 * num / den] if percent else [])
+            if any(abs(c - x) <= tol for c in cands):      # a percentage: a change, or a share ("30 of 185 (16.2%)")
                 return True
     return False
 
@@ -86,39 +97,177 @@ def well_name_pattern(well: str) -> Optional[re.Pattern]:
     return re.compile(rf"(?<![A-Za-z0-9]){body}(?![A-Za-z0-9])")
 
 
+# the unit a worked-out number's inputs must stand in: a sentence (clauses joined by ";" are one: "PHIE mean 0.1258;
+# PHIT mean 0.1260 (diff 0.0002)" in a table cell), ended by . ! ? or a line
+SENTENCE = re.compile(r"(?<=[.!?])\s+|\n")
+
+
+def _prepared(text: str, card: str, evidence, rules: dict, wells, question: str) -> tuple:
+    """(the text as the checker reads it: citations, the well's name and the ignore patterns out; the card; the
+    numbers allowed), the one reading of number_provenance and derivations."""
+    text, card, question = ascii_minus(text), ascii_minus(card), ascii_minus(question)
+    for pattern in filter(None, map(well_name_pattern, wells)):
+        question = pattern.sub(" ", question)
+    allowed = _allowed_numbers(card, evidence, question if rules.get("question", True) else "")
+    clean = N.spelled_as_digits(strip_citations(text))   # numbers written in words, read as the digits they write
+    for pattern in filter(None, map(well_name_pattern, wells)):
+        clean = pattern.sub(" ", clean)
+    for pat in rules.get("ignore", []):
+        clean = re.sub(pat, " ", clean)
+    return _regrouped(clean, allowed), card, allowed
+
+
+# thousands grouped by spaces ("3 114.1112", "(10 000)", "5 192 samples"), the SI way: the digits of one number
+_GROUPED = re.compile(r"(?<![A-Za-z_\d.,])\d{1,3}(?: \d{3})+(?:\.\d+)?(?!\d)")
+
+
+def _regrouped(text: str, allowed: np.ndarray) -> str:
+    """Thousands written with spaces read as one number where that number is one the record shows (benchmark N2: a
+    permeability answer wrote "3 114.1112 mD" and "Z6 (6 376)", and 20 of its numbers were read as pairs of others);
+    digits that stand apart otherwise ("2 300" for 2 and 300) stay as written."""
+    def one(m):
+        joined = m.group(0).replace(" ", "")
+        return joined if _supported(number(joined), N.decimals(joined), allowed, False) else m.group(0)
+    return _GROUPED.sub(one, text)
+
+
+def derivations(text: str, card: str, evidence: list, flagged, checks: dict | None = None, wells=(),
+                question: str = "") -> dict:
+    """For a flagged number that is a difference (with its sign or without), sum, ratio or share of two numbers the
+    answer states elsewhere, each shown by a result: {the flagged number: "A - B"}. The repair names that arithmetic
+    so the writer keeps the number and writes its inputs beside it (question suite X18: "higher by 18.87 API" was
+    flagged because the two means stood in the next sentence, and the repair's 'or remove it' removed the answer). The
+    check itself stays the sentence's: this only says how to pass it."""
+    rules = (checks or {}).get("numbers", {})
+    clean, _, allowed = _prepared(text, card, evidence, rules, wells, question)
+    stated = []
+    for m in _NUM.finditer(clean):
+        raw, pct = m.group(1), bool(m.group(2))
+        x = number(raw)
+        if (raw, x) not in stated and _supported(x, N.decimals(raw), allowed, pct) and abs(x) >= 1e-12:
+            stated.append((raw, x))
+    out = {}
+    for item in flagged:
+        raw = str(item).rstrip("%")
+        pct = str(item).endswith("%")
+        try:
+            x, tol = number(raw), N.half_unit(raw) + 1e-9
+        except ValueError:
+            continue
+        said = _written(clean, raw, pct)
+        if said is not None:                           # the arithmetic written out beside it: its value, computed
+            expr, value = said
+            if abs(value - x) > tol:
+                out[item] = ("wrong", expr, f"{value:.{max(N.decimals(raw), 0)}f}")
+                continue
+        for i, (ra, a) in enumerate(stated):
+            for rb, b in stated[i + 1:]:
+                cands = [(f"{ra} - {rb}", a - b), (f"{rb} - {ra}", b - a), (f"{ra} + {rb}", a + b)]
+                cands += [(f"{ra} / {rb}", a / b), (f"{rb} / {ra}", b / a)] if a and b else []
+                if pct and a and b:
+                    cands += [(f"100 x {ra} / {rb}", 100 * a / b), (f"100 x {rb} / {ra}", 100 * b / a)]
+                hit = next((e for e, v in cands if abs(abs(v) - abs(x)) <= tol and (v < 0) == (x < 0)), None)
+                if hit:
+                    out[item] = ("elsewhere", hit)
+                    break
+            if item in out:
+                break
+    return out
+
+
+_OP = {"-": lambda a, b: a - b, "+": lambda a, b: a + b, "x": lambda a, b: a * b, "*": lambda a, b: a * b,
+       "/": lambda a, b: a / b if b else float("nan")}
+_NUMBER = r"-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
+_WRITTEN = re.compile(rf"(\(\s*)?({_NUMBER})\s*([-+x*/])\s*({_NUMBER})(\s*\))?(?:\s*([-+x*/])\s*({_NUMBER}))?"
+                      rf"\s*(?:=|≈|~|is about|is)\s*~?\s*\+?({_NUMBER})\s*(%)?")
+
+
+def _written(text: str, raw: str, pct: bool):
+    """The arithmetic the answer writes out right before a number ("0.1417 / 0.2688 ≈ 0.5277", "(86.2486 - 56.0933) /
+    56.0933 ≈ 53.7%"): (the expression as written, its value, x 100 where the number is a percentage), else None. Read
+    with the answer's own number grammar; the writer's arithmetic slips (golden and benchmark answers: 4.375 / 5.1063
+    written 0.8569) are named with their value so the repair corrects them."""
+    t = text.replace("\u00d7", "x").replace("\u00f7", "/").replace("\u2212", "-")
+    for m in _WRITTEN.finditer(t):
+        if m.group(8) != raw or bool(m.group(9)) != pct:
+            continue
+        a, op, b = number(m.group(2)), m.group(3), number(m.group(4))
+        value = _OP[op](a, b)
+        expr = f"{m.group(1) or ''}{m.group(2)} {op} {m.group(4)}{m.group(5) or ''}"
+        if m.group(6):
+            value = _OP[m.group(6)](value, number(m.group(7)))
+            expr += f" {m.group(6)} {m.group(7)}"
+        return expr, (100 * value if pct else value)
+    return None
+
+
 def number_provenance(text: str, card: str, evidence: list[Evidence], checks: dict | None = None,
                       wells: Iterable[str] = (), question: str = "") -> tuple[list[str], int]:
     """(unsupported numbers, numbers checked). The names in `wells` (the task's well) and the checks' `ignore`
     patterns are removed first: they contain digits but are not numbers. Numbers the question states are supported
     (checks numbers.question), and so count as inputs of a derived number in the same sentence."""
     rules = (checks or {}).get("numbers", {})
-    text, card, question = ascii_minus(text), ascii_minus(card), ascii_minus(question)
-    for pattern in filter(None, map(well_name_pattern, wells)):
-        question = pattern.sub(" ", question)
-    allowed = _allowed_numbers(card, evidence, question if rules.get("question", True) else "")
-    clean = strip_citations(text)
-    for pattern in filter(None, map(well_name_pattern, wells)):
-        clean = pattern.sub(" ", clean)
-    for pat in rules.get("ignore", []):
-        clean = re.sub(pat, " ", clean)
+    clean, card, allowed = _prepared(text, card, evidence, rules, wells, question)
     unsupported, total = [], 0
-    for sentence in re.split(r"(?<=[.;!?])\s+|\n", clean):
+    lines = None                                       # each shown line's values, read once a pair needs them
+
+    def paired(k: str, n: str) -> bool:                # one shown line holds k with N, or N - k with N
+        nonlocal lines
+        if lines is None:                              # every line of what is shown: the card's, and each result's
+            texts = card.splitlines() + [ln for e in evidence for ln in _lines_of(e)]     # rows, as its values are
+            lines = [np.asarray(shown_values(ascii_minus(ln)), dtype=float) for ln in texts if ln.strip()]
+        dk, dn = N.decimals(k), N.decimals(n)
+        xk, xn = number(k), number(n)
+        return any(_supported(xn, dn, ln, False) and (_supported(xk, dk, ln, False) or _supported(xn - xk, dk, ln, False))
+                   for ln in lines if ln.size >= 2)
+
+    for sentence in SENTENCE.split(clean):
         found = []
         for m in _NUM.finditer(sentence):
             raw, pct = m.group(1), bool(m.group(2))
-            decimals = len(raw.split(".")[1]) if "." in raw else 0
-            found.append((raw, pct, decimals, float(raw)))
+            found.append((raw, pct, N.decimals(raw), number(raw)))
         stated = [x for _, pct, d, x in found if _supported(x, d, allowed, pct)]
+        counts = [x for _, pct, d, x in found if not pct and _supported(x, d, allowed, pct)]
+        in_pairs = set()                                # "k of N": judged as a pair, not number by number
+        for m in _PAIR.finditer(sentence):
+            k, n = m.group(1), m.group(2)
+            if min(number(k), number(n)) < rules.get("skip_integers_below", 20) or N.decimals(k) or N.decimals(n):
+                continue                               # a count is a whole number: "40.08/50.51" lists two values
+            in_pairs |= {k, n}
+            total += 1
+            if paired(k, n):
+                continue
+            xk = number(k)
+            others = lambda xs: (lambda i: xs[:i] + xs[i + 1:])(xs.index(xk)) if xk in xs else xs   # not k itself
+            if (_supported(number(n), N.decimals(n), allowed, False)        # k a total written with its arithmetic
+                    and _derived(xk, N.decimals(k), others(stated), False, others(counts))):  # ("32 + 17 + 75 = 124 of 229")
+                continue
+            unsupported.append(m.group(0))
         for raw, pct, decimals, x in found:
             if decimals == 0 and not pct and abs(x) < rules.get("skip_integers_below", 20):
                 continue          # small counts and ordinals
+            if raw in in_pairs and not pct:
+                continue          # read with its pair
             total += 1
             if _supported(x, decimals, allowed, pct):
                 continue
-            if rules.get("derived", True) and _derived(x, decimals, stated):
+            if rules.get("derived", True) and _derived(x, decimals, stated, pct, counts):
                 continue
             unsupported.append(raw + ("%" if pct else ""))
     return unsupported, total
+
+
+def _lines_of(e) -> list:
+    """A result's lines as the checker reads its values: every row of a ledger item (a direct question's writer reads
+    results whole, beyond the text a step was shown; the item's values are all its rows' numbers), else its text."""
+    rows = getattr(getattr(e, "item", None), "rows", None)
+    return [ln for ln, _ in rows] if rows else e.render().splitlines()
+
+
+# "k of N", "k out of N", "k/N": a count stated with its population (question suite F18: "658 of 848" where no result
+# shows 658 with 848)
+_PAIR = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(?:of|out of|/)\s*(?:the\s+|all\s+)?"
+                   r"(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)(?![\d.]*\d)", re.I)
 
 
 def availability_issues(text: str, view: FormationView, reg) -> list[str]:

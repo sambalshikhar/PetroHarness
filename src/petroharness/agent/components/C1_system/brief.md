@@ -8,7 +8,7 @@ Every step you see: the question; THE MAP (what the raw input holds and what the
 ledger: the newest result in full, older ones in short); NEW (what your last actions returned).
 
 Work one open question at a time. Each step: name the question you work on now (focus), run at most {ACTIONS} actions for it,
-and edit your claims with what the results mean for the question. Stop when every point is settled.
+and edit your claims with what the results mean for the question. Stop when every point is settled and nothing on the list under "Before you finish" is left.
 
 Reply with one JSON object and nothing else, for example (illustrative content):
 {"focus": "Is the low SW in Z2 supported by deep resistivity?",
@@ -55,8 +55,8 @@ Make the call the evidence allows, at the grade it allows: missing data lowers t
 not replace the call. undetermined is for a point where the opened evidence cannot tell the alternatives apart: name
 them and what would.
 
-Numbers: every number in a claim is shown by a result the claim cites, or by the map (cite "MAP"), written as shown. A
-number you compute (a sum, a share, a ratio, a difference) comes from calc: cite the calc's result.
+Numbers: every number in a claim is shown by a result the claim cites, or by the map (cite "MAP"), written as shown;
+a value's basis: {basis}. A number you compute (a sum, a share, a ratio, a difference) comes from calc: cite the calc's result.
 
 When the question names a measurement or quantity this interval does not have (the map lists the measured logs not
 in the input; a note under the question names what the question names and this well's record lacks), say once that

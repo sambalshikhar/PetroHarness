@@ -167,7 +167,7 @@ benchmark question is never a line's justification.
   (D2, on the configured dataset and on the datasets configured beside it).
 - Sizes (D3):
   - the index is one line per guide and at most 4,000 characters;
-  - a guide is at most 8,500.
+  - a guide is at most 9,000 (the researched guides render 6,200 to 9,000).
 
 ## Changing a skill, or writing a library
 

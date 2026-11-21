@@ -33,7 +33,7 @@ def data_file() -> Path:
 
 @lru_cache(maxsize=8)
 def _read_settings(path: str, mtime: float) -> dict:
-    data = yaml.safe_load(Path(path).read_text()) or {}
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     unknown = sorted(set(data) - {"data", "eval"})
     if unknown:
         raise ValueError(f"WHAT: {path} has sections {unknown}. FIX: give 'data' (and optionally 'eval') only.")
@@ -87,8 +87,9 @@ class DataPaths(_Strict):
     # petrophys process_las_directory_with_workflow: (input_dir, output_dir, well_names=...) -> one BatchLasResult per
     # well). Null: the policy's engine, or the installed library with the policy's corrections.
     interpreter: Optional[str] = None
-    # Options for petrophys.interpret, which then interprets each LAS: e.g. {context_profile: costa} for a well of a
-    # petrophys context package (interpreted as that package's context does), or {} for the library's defaults. Null:
+    # Options for petrophys.interpret, which then interprets each LAS: e.g. {context_profile: NAME} (a name
+    # petrophys.reporting.context_profiles.list_context_profiles() gives) for a well of a petrophys context package
+    # (interpreted as that package's context does), or {} for the library's defaults. Null:
     # data.interpreter, else the policy's engine, else the installed library with the policy's corrections.
     interpret: Optional[dict[str, Any]] = None
     # The unit depths, thicknesses and zone limits are shown in: m, ft, or "las" for each LAS's own depth unit. Null: the
@@ -114,10 +115,28 @@ class DataPaths(_Strict):
     # samples outside the zones hold) or "zones" (each zone and the zones pooled only: data whose references report on
     # the lithology zones, a benchmark's convention, set in its data file).
     basis: Literal["all", "zones"] = "all"
+    # The class-table set the Petrophys analyzers classify with (a set a Petrophys context package ships, for data that
+    # package's context interprets). Null: the policy's (analyzers.class_tables: the library's current tables).
+    analyzer_class_tables: Optional[str] = None
     # Reporting conventions of this data (each a sentence), shown to the investigation and the writer as the data's
     # conventions: how its own reports name or group what the record holds (a benchmark's convention, set in its data
     # file). Empty: none, and no prompt changes.
     conventions: list[str] = Field(default_factory=list)
+    # What a tool's zones may name (docs/designs/zones-and-intervals.md): "well", anywhere in the well (a unit of the
+    # tops file, a depth range, besides the zones of the interval asked about), or "focus", the interval's zones only
+    # (a benchmark's convention, set in its data file: its questions are about the interval).
+    reach: Literal["focus", "well"] = "well"
+    # The tops file's units of this well (set by a question from its tops file, petroharness.ask): each {name, top,
+    # base, closed, unit, line}, in the file's unit (None: the LAS's own). Read under reach "well".
+    units: list[dict] = Field(default_factory=list)
+    # The tops file's rows left out of the units (a row whose base is not below its top), each {name, line, top, base,
+    # unit, why}: a question naming one is asked back, the row to fix (agent.loop.ask_back), not told the unit is absent.
+    units_left_out: list[dict] = Field(default_factory=list)
+    # The user's zones (set by a question from its zones file, petroharness.ask: well.user_zones.read_zones), each
+    # {name, top, base, closed, unit, line} in the file's unit: they frame the question in place of the lithology
+    # zones, which stay available (ids L1..); empty: the lithology zones frame it.
+    zones: list[dict] = Field(default_factory=list)
+    zones_source: Optional[str] = None      # the zones file's name, as the map names it
     cache_dir: Path = REPO_ROOT / ".cache" / "wells"
     # Pinned interpretation engines (a policy's workflow of record), one directory per engine name.
     engines_dir: Optional[Path] = None
@@ -143,7 +162,7 @@ class EvalPaths(_Strict):
 
 class ModelConfig(_Strict):
     base_url: str = "http://localhost:8000/v1"     # an OpenAI-compatible server (vLLM's default port)
-    model: str = "qwen/qwen3.6-27b"
+    model: str = ""                                # the served model's name: the card's, or --model ("" names none)
     label: Optional[str] = None                    # the model's name as people read it (the UI); default: model
     api_key_env: str = "PETROHARNESS_API_KEY"  # local vLLM accepts any key
     temperature: float = 0.0
@@ -197,14 +216,12 @@ class HarnessConfig(_Strict):
 
     @classmethod
     def load(cls, *paths: Optional[Path]) -> "HarnessConfig":
-        """Defaults, overlaid by each YAML file in order (later files win, key by key). The environment variable
-        PETROHARNESS_BASE_URL overrides the model endpoint (one profile, several servers)."""
+        """Defaults, overlaid by each YAML file in order (later files win, key by key). The endpoints a run uses are
+        PETROHARNESS_MODEL_URL's (or --model-url), set per question (src/petroharness/models.py)."""
         payload: dict = {"data": user_settings("data"), "eval": user_settings("eval")}
         for path in paths:
             if path is not None:
-                _merge(payload, yaml.safe_load(Path(path).read_text()) or {})
-        if os.environ.get("PETROHARNESS_BASE_URL"):
-            payload.setdefault("model", {})["base_url"] = os.environ["PETROHARNESS_BASE_URL"]
+                _merge(payload, yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {})
         return cls.model_validate(payload)
 
     def for_tasks(self) -> "HarnessConfig":

@@ -8,11 +8,11 @@ Every text the harness sends to the model belongs to exactly one component. A co
 | C2 | C2_guardrails | the claim checks' messages (flags.json), done issues, the syntax fix, the writer checker's repair requests (with the working notes left in an answer) |
 | C3 | C3_memory | the claims, the ledger, opened results (rendered by code it frames) |
 | C4 | C4_tools | tool descriptions, argument vocabularies, the condition grammar, the zone selector |
-| C5 | C5_orchestration | each stage's instructions (step 1, step k, points, settle with its bookkeeping lists), the contract heads, the section owners |
+| C5 | C5_orchestration | each stage's instructions (the reading, step 1, step k, the points request, settle with its bookkeeping lists), the section owners |
 | C6 | C6_skills | the direction index over the topic areas (resources/topics.yaml) and the plugged skill library's guides (a library is data in its own folder, resources/skills/README.md; its lines are found in the prompts, and its version is the trace's `skills`); the GUIDES block of a step's prompt, a guide whole at the step after it is read and short after that |
 | C7 | C7_scripts | tool outputs and the map (rendered by code it frames; the label of a step parameter written as a curve) |
 | C8 | C8_middleware | the hooks' notes: actions left out, results withheld for NEW's budget (shown first at the next step), edits not applied, nothing new |
-| C9 | C9_answer | the writer: its prompt (the claims, every opened result, the provenance card) and write text, the table rule, the one guideline for bases and conventions (also in the settle step), the zone-table frame |
+| C9 | C9_answer | the writer: its write texts (the full answer's rules, the short answer's, the table rule) and the parts of its prompt it frames (the provenance card, the zone table, the data's conventions; the prompt holds the question's points and limits, not the claims); the one guideline for bases and conventions (given to the settle step only, not the writer); the figure choice |
 | C10 | C10_reading | how evidence is read and graded: caveats, levels and rankings, negatives, absence |
 
 Files:

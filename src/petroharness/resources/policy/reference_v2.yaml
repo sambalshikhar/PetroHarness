@@ -36,11 +36,11 @@ reporting:
 lithology:
   codes: library
 
-# Class tables of the petrophys analyzers: the set the reference contexts classified with - the eval packages' frozen
-# tables and rule texts; "current" (the library's default) uses its canonical tables. Libraries without the choice
-# ignore it.
+# Class tables of the petrophys analyzers: "current" is the library's canonical set. Data interpreted by a Petrophys
+# context package may name that package's own set in its data settings (data.analyzer_class_tables). Libraries
+# without the choice ignore it.
 analyzers:
-  class_tables: geolink
+  class_tables: current
 
 zones:
   min_thickness_m: 2.0

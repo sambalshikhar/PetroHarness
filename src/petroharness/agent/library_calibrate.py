@@ -8,13 +8,14 @@ gives the dynamic elastic properties.
 """
 from __future__ import annotations
 
-import copy
 import warnings
 
 import numpy as np
 
+from petroharness.agent import engine as E
 from petroharness.agent.engine import Formation, Out, Result, ToolError
-from petroharness.agent.library import _curve, _full, _method, _zone_mask, register
+from petroharness.agent.library import _curve, _full, _method, _zone_mask, register, scratch_well
+from petroharness.well import summary as S
 
 OBJECTS = {
     "porosity": "the fit of a log porosity (PHIE, or the curve named) to core porosity (PHIC, CPOR): R2, bias, RMSE "
@@ -72,34 +73,27 @@ def _core(f: Formation, idx: np.ndarray):
     try:
         with warnings.catch_warnings():                  # unit conversions are in the core's metadata, and said
             warnings.simplefilter("ignore")
-            return core_data_from_well(f.view.prep.well, top=top, bottom=bottom)
+            return core_data_from_well(scratch_well(f), top=top, bottom=bottom)
     except ValueError:                                   # no core curve with data in these depths
         return None
 
 
 def _well_with(f: Formation, c: str):
     """The prepared well, with a curve this question calculated added to a copy (the record's curves are on it)."""
-    well = f.view.prep.well
-    if well.get(c) is not None:
-        return well
+    w2 = scratch_well(f)
+    if w2.get(c) is not None:
+        return w2
     if c not in f.view.calculated:
         raise ToolError(f"{c!r} is not a curve of this well or of this question")
-    w2 = copy.deepcopy(well)
     unit = f.inv.curves[c].unit if c in f.inv.curves else ""
     w2.add_curve(c, np.asarray(f.view.calculated[c], dtype=float), unit, f"{c} (calculated in this question)")
     return w2
 
 
-def _scopes(f: Formation, keep: np.ndarray) -> list:
-    """(label, interval sample indices): the zones asked pooled, then each of them (one zone: that zone alone)."""
-    each = []
-    for z in f.view.zones:
-        zi = np.asarray(z.indices)
-        zi = zi[keep[zi]]
-        if zi.size:
-            each.append((f"{z.zone_id}", zi))
-    pooled = np.flatnonzero(keep)
-    return each if len(each) == 1 else ([("zones pooled", pooled)] if pooled.size else []) + each
+def _scopes(f: Formation, keep: np.ndarray, i=str) -> list:
+    """(label, interval sample indices) of the bases every tool reports by, the whole selection first
+    (engine.scopes)."""
+    return E.scopes(f, keep, i)
 
 
 def _core_fit(f: Formation, w: str, curve: str | None, keep: np.ndarray) -> Result:
@@ -186,30 +180,29 @@ def _slowness(f: Formation, name: str) -> tuple:
     return n, (v * 0.3048 if unit in ("us/m", "usec/m") else v)
 
 
-def _matrix_lithology(f: Formation) -> str:
-    m = _method(f, "porosity")
-    rec = (m.parameters or {}) if m else {}
-    name = str(rec.get("matrix_type") or rec.get("matrix") or "sandstone").lower()
-    return name if name in ("sandstone", "limestone", "dolomite") else "sandstone"
-
-
 def _shear(f: Formation, keep: np.ndarray) -> Result:
     from petrophys.interpretation.saturation.sonic.rock_physics import (
         slowness_to_velocity,
         vs_from_vp_greenberg_castagna,
     )
     dn, dtc = _slowness(f, "DTC")
-    lith = _matrix_lithology(f)
-    vs = np.asarray(vs_from_vp_greenberg_castagna(slowness_to_velocity(dtc), lith), dtype=float)
+    from petroharness.agent import library_api as A
+    fn = A.lookup("vs_from_vp_greenberg_castagna")
+    vp = slowness_to_velocity(dtc)
+    lith, said = A._record_lithology(f, fn, "lithology")             # the binder's fill (one rule)
+    kw = {"vp_ms": vp} | ({} if lith is A._UNSET else {"lithology": lith})
+    vs = (A._by_lithology(fn, vs_from_vp_greenberg_castagna, kw)[0] if isinstance(lith, A._ByLithology)
+          else vs_from_vp_greenberg_castagna(**kw))
+    vs = np.asarray(vs, dtype=float)
     with np.errstate(divide="ignore", invalid="ignore"):
         dts_gc = np.where(vs > 0, 304800.0 / vs, np.nan)
-    register(f, "DTS_GC", _full(f, dts_gc), f"shear slowness predicted from {dn} (Greenberg-Castagna, {lith})",
+    register(f, "DTS_GC", _full(f, dts_gc), f"shear slowness predicted from {dn} (Greenberg-Castagna; lithology {said})",
              "us/ft", "shear prediction (on request)")
     out = Out(f)
     row = out.child()
-    out.add(f"shear slowness predicted from {dn} by Petrophys vs_from_vp_greenberg_castagna for {lith} (the record's "
-            f"porosity matrix; brine-saturated rock assumed). Written: DTS_GC (us/ft); zones pooled median "
-            f"{row.v(np.nanmedian(dts_gc[keep]))} us/ft.", row)
+    out.add(f"shear slowness predicted from {dn} by Petrophys vs_from_vp_greenberg_castagna, lithology {said} "
+            f"(brine-saturated rock assumed). Written: DTS_GC (us/ft); median, us/ft: "
+            f"{E.over_bases(f, np.where(keep, dts_gc, np.nan), row)}.", row)
     if "DTS" in f.inv.curves and f.view.available("DTS"):
         _, dts = _slowness(f, "DTS")
         parts, r = [], out.child()
@@ -249,7 +242,7 @@ def _elastic(f: Formation, keep: np.ndarray) -> Result:
     out = Out(f)
     out.add(f"dynamic elastic properties by Petrophys calculate_elastic_properties from RHOB, {dn}"
             + (f" and {shear}" if dts is not None else " (no shear slowness: Vs, Poisson's ratio and the moduli need "
-               "DTS; calibrate shear predicts one)") + "; per zone (median) and zones pooled:")
+               "DTS; calibrate shear predicts one)") + "; medians over the whole selection, the zones pooled and each zone:")
     written = []
     for base, attr, unit, meaning in fields:
         x = np.asarray(getattr(p, attr), dtype=float)

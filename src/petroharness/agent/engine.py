@@ -4,6 +4,7 @@ petroharness.well.summary), the shared output with its size limit (C4 describes 
 from __future__ import annotations
 
 import re
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -17,6 +18,52 @@ from petroharness.well import summary as S
 STATISTICS = S.STATISTICS          # every statistic the summary layer computes (and any percentile pNN)
 WIDE_CHARS = 9000                  # room for every zone row (6,000 cut zone rows, even in the first
                                    #   look; the model spent steps re-fetching them and wrote "truncated" limitations)
+
+
+MESSAGES_SHOWN = 8
+
+# the inputs Petrophys's messages ask for during one tool call (petrophys Advice), for the call door's advice; one list
+# per call (schemas.call sets it), safe across the questions run side by side
+ADVISED: ContextVar = ContextVar("petrophys_advised", default=None)
+
+
+def advised(message) -> None:
+    """Note the inputs a Petrophys message asks for, as data (petrophys._internal.advice: a message, an exception or a
+    warning carrying an Advice), for the call that is running."""
+    got = ADVISED.get()
+    if got is None:
+        return
+    try:
+        from petrophys._internal.advice import inputs_of
+    except ImportError:                          # an older petrophys: its messages carry no inputs
+        return
+    seen, m = set(), message
+    while m is not None and id(m) not in seen:  # an exception's chain too (a refusal raised from Petrophys's error)
+        seen.add(id(m))
+        got.extend(i for i in inputs_of(m) if i not in got)
+        m = getattr(m, "__context__", None) or getattr(m, "__cause__", None)
+
+
+def skipped_said(skipped: dict) -> list:
+    """A Petrophys run's skipped steps as messages ("step: reason"), each keeping the inputs its reason asks for."""
+    try:
+        from petrophys._internal.advice import restated
+    except ImportError:                          # an older petrophys: plain messages
+        restated = lambda text, *originals: text  # noqa: E731
+    return [restated(f"{k}: {v}", v) for k, v in (skipped or {}).items()]
+
+
+def said_whole(messages, limit: int = MESSAGES_SHOWN) -> list:
+    """What Petrophys said (its warnings, errors and skipped steps) as a result shows it: each message whole (a fix it
+    names is never cut off), once, in the order said; past `limit` messages, how many more there were. The inputs a
+    message asks for are noted for the call (advised)."""
+    out = []
+    for m in messages:
+        advised(m)
+        t = re.sub(r"\s+", " ", str(m)).strip()
+        if t and t not in out:
+            out.append(t)
+    return out[:limit] + ([f"and {len(out) - limit} more"] if len(out) > limit else [])
 
 
 def max_chars() -> int:
@@ -102,9 +149,10 @@ def zones(f: Formation, asked) -> list:
     if any(w in ("ALL", "*", "ALL ZONES", "POOLED", "ZONES POOLED") for w in want):
         return list(f.view.zones)
     out = []
-    for w in want:
+    for w in want:                                   # a zone named twice (by its id and its lithology) is one row
         if w in known:
-            out.append(known[w])
+            if known[w].zone_id not in {o.zone_id for o in out}:
+                out.append(known[w])
             continue
         lith = [z for z in f.view.zones if _lith_match(z, w)]
         if not lith:
@@ -144,7 +192,8 @@ def same_as(f: Formation, c: str) -> list:
     """The curves holding the same values as c, either way round (a copy, or a step that passed its input through)."""
     cv = f.inv.curves.get(c)
     out = [cv.copy_of] if cv is not None and cv.copy_of in f.inv.curves else []
-    return out + [n for n, x in f.inv.curves.items() if x.copy_of == c and n != c]
+    out += [n for n, x in f.inv.curves.items() if x.copy_of == c]
+    return [n for n in dict.fromkeys(out) if n != c]          # each once (two curves each a copy of the other), not c
 
 
 def label(f: Formation, c: str) -> str:
@@ -168,6 +217,8 @@ def _kind_word(cv) -> str:
     """What a curve is: the catalog line's kind (a measurement, a model output, a flag, a class, a parameter); without
     a catalog line, a measured log of the input is a measurement and a curve a step or analyzer wrote a model output."""
     m = _KIND.search(getattr(cv, "catalog", "") or "")
+    if m and m.group(1) == "parameter" and getattr(cv, "well_value", None) is None and cv.source == "computed":
+        return "model output"                      # the catalog's word, but its values vary with depth here
     if m:
         return m.group(1)
     if cv.source == "input":
@@ -296,7 +347,7 @@ def cautions(f: Formation, c: str) -> list:
     cv = f.inv.curves[c]
     out = []
     if getattr(cv, "well_value", None) is not None:
-        out.append(("parameter", f"parameter: one value for the whole well ({num(float(cv.well_value))})"))
+        out.append(("one value", f"one value over the whole well ({num(float(cv.well_value))})"))
     twin = calibrated_twin(f, c)
     if twin and twin not in same_as(f, c):                      # a twin holding the same values calibrates nothing
         out.append(("uncalibrated", f"uncalibrated: the core-calibrated {twin} is in this interval"))
@@ -320,17 +371,22 @@ def cautions(f: Formation, c: str) -> list:
             out.append(("not computed here", f"not computed here: {', '.join(lacking)} "
                                              f"{'has' if len(lacking) == 1 else 'have'} no value in this interval, and "
                                              f"the flag is never set"))
+    said = S.screened(f.view, c) if f.view is not None else ""
+    if said:                                                    # readings the preparation removed (Petrophys's record)
+        out.append(("screened", said))
     cache[c] = out
     return out
 
 
 LIMIT_SHARE = 0.05          # a curve at its own maximum or minimum on at least this share of the zoned samples
+HELD_SHARE = 0.5            # one value (not a bound) on at least this share of them: a held or padded reading
 
 
 def limits(f: Formation, c: str) -> list:
     """What the zoned values of a value curve show about how they were made: constant (one value in every zoned sample),
-    or held at its maximum or minimum on at least LIMIT_SHARE of the zoned samples (a model's limit or a default). From
-    the values alone; [] for a flag or class codes, or a curve without values in the zones."""
+    held at its maximum or minimum on at least LIMIT_SHARE of the zoned samples (a model's limit or a default), or one
+    value inside its range on at least HELD_SHARE of them (a held or padded reading). From the values alone; [] for a
+    flag or class codes, or a curve without values in the zones."""
     if f.view is None or not f.view.zones or c not in f.inv.curves or _kind_word(f.inv.curves[c]) in ("flag", "class"):
         return []
     idx = np.unique(np.concatenate([np.asarray(z.indices) for z in f.view.zones]))
@@ -346,6 +402,11 @@ def limits(f: Formation, c: str) -> list:
         share = float((x == v).mean())
         if share >= LIMIT_SHARE:
             out.append(f"at its {word} {num(v)} in {100 * share:.0f}% of the zoned samples (a limit or a default value)")
+    vals, counts = np.unique(x, return_counts=True)            # one value inside the range, at most of the samples
+    k = int(np.argmax(counts))
+    if counts[k] / x.size >= HELD_SHARE and float(vals[k]) not in (lo, hi):
+        out.append(f"one value, {num(float(vals[k]))}, in {100 * counts[k] / x.size:.1f}% of the zoned samples (a held "
+                   f"or padded reading)")
     return out
 
 
@@ -368,8 +429,10 @@ def status(f: Formation, c: str) -> str:
     kind = _kind_word(cv)
     if cv.source == "copy" and cv.copy_of:
         head = f"copy of {cv.copy_of}"
+    elif cv.carried:                                   # a measured log the workflow carried (the inventory says how)
+        head = cv.carried
     elif cv.source == "computed":
-        head = f"{kind or 'model output'}" + (f" of the {cv.step} step" if cv.step else "")
+        head = f"{kind or 'model output'}" + (f" of {cv.writer}" if cv.writer else "")
     elif cv.source == "analyzer":
         head = f"{kind or 'model output'} of the analyzers"
     elif cv.source == "input":
@@ -409,8 +472,106 @@ _OPERAND = rf"(?:\|\s*[A-Za-z][A-Za-z0-9_]*\s*\||{_NUMBER}|[A-Za-z][A-Za-z0-9_]*
 _SIDE = rf"{_OPERAND}(?:\s*[-+]\s*{_OPERAND})*"
 _TERM = re.compile(rf"^\s*({_SIDE})\s*(<=|>=|==|!=|=|<|>)\s*({_SIDE})\s*$")
 _WINDOW = re.compile(rf"^\s*(?:(?:depth|from)\s+)?({_NUMBER})\s*(?:-|–|to)\s*({_NUMBER})\s*(?:m|ft|feet|meters?|metres?)?\s*$", re.I)
-_ZONE_TERM = re.compile(r"^\s*(Z\d+)(?:\s*(?:-|–|to)\s*Z?(\d+))?\s*$", re.I)
+_ZONE_TERM = re.compile(r"^\s*(?:in\s+)?(Z\d+)(?:\s*(?:-|–|to)\s*Z?(\d+))?\s*$", re.I)
+_ZONE_WRITTEN = re.compile(r"^\s*(?:in\s+)?(Z\d+)\b\s*(.+?)\s*$", re.I)       # a zone with its name or depths
+_DEPTHS_WRITTEN = re.compile(rf"{_NUMBER}\s*(?:-|–|—|to)\s*{_NUMBER}\s*(?:m|ft|feet|meters?|metres?)?", re.I)
+_CHAIN = re.compile(rf"^\s*({_SIDE})\s*(<=|>=|<|>)\s*({_SIDE})\s*(<=|>=|<|>)\s*({_SIDE})\s*$")
+# |X| as the absolute value (bars around a name, not beside another name; or before / after a comparison), so the
+# bars left are 'or': "SW < 1 | SW == 1", "Z1|Z4|Z6", "CLASS_A | CLASS_B"
+_ABS_BARS = re.compile(r"(?<![A-Za-z0-9_.])\|([A-Za-z][A-Za-z0-9_]*)\|(?![A-Za-z0-9_])"
+                       r"|\|\s*([A-Za-z][A-Za-z0-9_]*)\s*\|(?=\s*(?:<=|>=|==|!=|=|<|>))")
 GRAMMAR = C.text("C4", "grammar")
+
+# an op written in words, as its sign (a tool's op argument, a condition's term: one table)
+OP_WORDS = {"gt": ">", "greater": ">", "greater than": ">", "more than": ">", "above": ">", "exceeds": ">",
+            "ge": ">=", "gte": ">=", "at least": ">=", "greater than or equal to": ">=",
+            "lt": "<", "less": "<", "less than": "<", "below": "<",
+            "le": "<=", "lte": "<=", "at most": "<=", "less than or equal to": "<="}
+_OP_WORD_IN = re.compile(r"\s+(?:is\s+)?(" + "|".join(sorted((k.replace(" ", r"[\s_]+") for k in OP_WORDS), key=len,
+                                                             reverse=True)) + r")\s+(?=[-+.\d|A-Za-z])", re.I)
+
+
+def op_sign(word) -> Optional[str]:
+    """An op written in words ("lt", "less_than", "at least") as its sign; None when it names none."""
+    return OP_WORDS.get(re.sub(r"[\s_\-]+", " ", str(word)).strip().lower())
+
+
+def _connectives(cond: str) -> str:
+    """'and' / 'or' written as symbols (& &&, | ||), the bars of an absolute value kept."""
+    held = []
+
+    def keep(m) -> str:
+        held.append(m.group(1) or m.group(2))
+        return f"\x00{len(held) - 1}\x00"
+    s = _ABS_BARS.sub(keep, cond)
+    s = re.sub(r"\s*(?:\|\||\|)\s*", " or ", s)
+    s = re.sub(r"\s*(?:&&|&)\s*", " and ", s)
+    return re.sub("\x00(\\d+)\x00", lambda m: f"|{held[int(m.group(1))]}|", s)
+
+
+def _terms(term: str) -> list:
+    """One term as the grammar reads it: an op in words as its sign ("RXO_RDEP_RATIO below 0.95"); a band written as
+    a chain ("0.2 <= VCL <= 0.5", "0.5 > SW > 0.2") as its two comparisons."""
+    if not re.search(r"[<>=]", term):
+        term = _OP_WORD_IN.sub(lambda m: f" {op_sign(m.group(1))} ", term, count=1)
+    c = _CHAIN.match(term)
+    if c and {c.group(2)[0], c.group(4)[0]} in ({"<"}, {">"}):
+        return [f"{c.group(1)} {c.group(2)} {c.group(3)}", f"{c.group(3)} {c.group(4)} {c.group(5)}"]
+    return [term]
+
+
+_PERCENTILE = re.compile(r"(?<![A-Za-z0-9_.])(?:[pP](\d{1,2})(?![A-Za-z0-9_.])|(?:(?:its|the)\s+)?(\d{1,2})(?:st|nd|rd|th)"
+                         r"\s+percentile(?:\s+of\s+[A-Za-z][A-Za-z0-9_]*)?)", re.I)
+
+
+def _percentile_term(f: Formation, term: str) -> tuple:
+    """A term comparing a curve with one of its own percentiles ("GR < p25", "GR below its 25th percentile"): the
+    percentile over the samples the call reads, as the tools compute it (well.stats.percentile), written in its place.
+    (term, a note naming the value) - the term as written where it names no one curve. Benchmark N6: "GR < p25" had
+    no form, and the model filtered on another number than the p25 it then quoted; N4 wrote "GR < <p25>"."""
+    m = _PERCENTILE.search(term)
+    if not m:
+        return term, ""
+    names = {x.upper() for x in re.findall(r"[A-Za-z][A-Za-z0-9_]*", _PERCENTILE.sub(" ", term))
+             if x.lower() not in ("its", "the", "of", "percentile", "below", "above")}
+    names = {curve(f, x) for x in names if x != "DEPTH"} if names else set()
+    if len(names) != 1:
+        return term, ""
+    c, q = names.pop(), int(m.group(1) or m.group(2))
+    from petroharness.well.stats import percentile
+    v = percentile(np.asarray(f.view.values(c), dtype=float), q)
+    if not np.isfinite(v):
+        raise ToolError(f"{term.strip()!r}: {c} has no values here to take its p{q}")
+    return _PERCENTILE.sub(num(v), term, count=1), f"p{q} of {c} = {num(v)}"
+
+
+def _zone_written(f: Formation, t: str) -> Optional[str]:
+    """A zone as the harness writes it, its id with its own name and / or depths ("Z1 LIMESTONE_GROUP_1",
+    "Z12 (SILT_GROUP_14)", "Z1 LIMESTONE 8182-8350 ft"): the id; None for anything else after the id."""
+    m = _ZONE_WRITTEN.match(t)
+    if not m:
+        return None
+    z = next((z for z in f.view.zones if z.zone_id.upper() == m.group(1).upper()), None)
+    if z is None:
+        return None
+    norm = lambda x: re.sub(r"[\s_]+", " ", x).strip(" ,;:()[]").upper()
+    rest = norm(_DEPTHS_WRITTEN.sub(" ", m.group(2)))
+    return z.zone_id if rest in ("", norm(zone_name(z)), norm(z.lithology)) else None
+
+
+def _depth_limit(f: Formation, hit, x, ux: list, v, uv: list, op: str) -> tuple:
+    """DEPTH compared with a number written with decimals: the number is the sample it rounds to, as a range's limit is
+    (selection.round_limit), so "DEPTH >= TOP and DEPTH <= BASE" (or "TOP <= DEPTH") and the window "TOP-BASE" select
+    the same samples. (x, v) as given otherwise."""
+    from petroharness.agent.selection import round_limit
+    if op not in ("<", "<=", ">", ">="):
+        return x, v
+    left, right = hit.group(1).strip(), hit.group(3).strip()
+    if ux == ["DEPTH"] and not uv and re.fullmatch(_UNSIGNED, right):         # DEPTH >= number: a lower limit
+        return x, round_limit(right, f.view, float(v), "top" if op in (">", ">=") else "base")
+    if uv == ["DEPTH"] and not ux and re.fullmatch(_UNSIGNED, left):          # number <= DEPTH: the same, mirrored
+        return round_limit(left, f.view, float(x), "top" if op in ("<", "<=") else "base"), v
+    return x, v
 
 
 def _side(f: Formation, text: str):
@@ -452,20 +613,27 @@ def select(f: Formation, condition: str) -> Selection:
     cond = str(condition).strip()
     if not cond:
         raise ToolError(f"the condition is empty; {GRAMMAR}")
+    cond = re.sub(r"\s*\(p\d{1,2} of [A-Za-z0-9_]+ = [^()]*\)\s*$", "", cond)       # its own read-back's note
     cond = re.sub(r"\babs\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)", r"|\1|", cond, flags=re.I)          # abs(X) is |X|
-    cond = re.sub(r"\b([A-Za-z][A-Za-z0-9_]*)\s+(?:is\s+)?(?:finite|valid|present|available|defined|not null)\b",
-                  r"\1", cond, flags=re.I)                                                      # "FZI finite": has a value
+    cond = _connectives(cond)
+    cond = re.sub(r"\b([A-Za-z][A-Za-z0-9_]*)\s+(?:is\s+)?(?:finite|valid|present|available|defined|not null"
+                  r"|has\s+(?:a\s+)?values?)(?![A-Za-z0-9_])", r"\1", cond, flags=re.I)           # "FZI finite": has a value
     n = f.depth.size
-    total, reads = np.zeros(n, dtype=bool), []
+    total, reads, notes = np.zeros(n, dtype=bool), [], []
     for part in re.split(r"\s+or\s+", cond, flags=re.I):
         both = np.ones(n, dtype=bool)
-        for term in re.split(r"\s+and\s+", part, flags=re.I):
+        for term in (t for written in re.split(r"\s+and\s+", part, flags=re.I) for t in _terms(written)):
+            term, said = _percentile_term(f, term)
+            if said:
+                notes.append(said)
+            term = _unit_number(f, term)
             hit = _TERM.match(term)
             if hit:
                 (x, ux), op, (v, uv) = _side(f, hit.group(1)), hit.group(2), _side(f, hit.group(3))
                 if not ux + uv:
                     raise ToolError(f"{term.strip()!r} compares no curve; {GRAMMAR}")
                 op = "==" if op == "=" else op
+                x, v = _depth_limit(f, hit, x, ux, v, uv, op)
                 x, v = np.broadcast_to(np.asarray(x, dtype=float), (n,)), np.asarray(v, dtype=float)
                 with np.errstate(invalid="ignore"):
                     m = {"<": x < v, "<=": x <= v, ">": x > v, ">=": x >= v, "==": x == v, "!=": x != v}[op]
@@ -477,17 +645,60 @@ def select(f: Formation, condition: str) -> Selection:
                 reads.append(sel.read)
         total |= both
     single = len(reads) == 1 and reads[0] is not None              # one name alone reads back as what it means
-    return Selection(total, reads[0] if single else cond)
+    return Selection(total, (reads[0] if single else cond) + (f" ({'; '.join(notes)})" if notes else ""))
+
+
+_UNIT_AFTER = re.compile(rf"^(?P<left>.*?(?:<=|>=|==|!=|=|<|>)\s*)(?P<num>-?{_UNSIGNED})\s*(?P<unit>[A-Za-z%][A-Za-z0-9/%.]*)\s*$")
+
+
+def _unit_number(f: Formation, term: str) -> str:
+    """A term whose number is written with a unit ("GR > 100 API", "DTC > 330 us/m", "DEPTH > 9500 ft"): the number in
+    the compared curve's unit (DEPTH: the reporting unit), converted by Petrophys (get_conversion_factor: gAPI and
+    API are one unit); a unit that does not convert to it is refused, naming the curve's unit (question suite X25:
+    "GR > 100 API" was refused as a term the grammar could not read)."""
+    m = _UNIT_AFTER.match(term)
+    if not m or m.group("unit").lower() in ("and", "or", "not"):
+        return term                                   # no unit (a word of the grammar left over is refused as written)
+    names = [x.upper() for x in re.findall(r"[A-Za-z][A-Za-z0-9_]*", m.group("left"))]
+    if len(set(names)) != 1:
+        return term                                   # no one curve to read the unit against: as written
+    c = names[0]
+    if c == "DEPTH":
+        target = f.inv.depth_unit
+    elif c in f.inv.curves:
+        target = f.inv.curves[c].unit or f.view.unit(c) or ""
+    else:
+        return term                                   # the name is refused where it is read
+    from petrophys.preprocessing.standardization.unit_converter import get_conversion_factor
+    factor = get_conversion_factor(m.group("unit"), target) if target else None
+    if factor is None:
+        raise ToolError(f"{term.strip()!r}: {c} is in {target or 'no unit'}; write the number in {target or 'its unit'}, "
+                        "or without a unit")
+    return f"{m.group('left')}{float(m.group('num')) * factor:.10g}"
 
 
 def _named(f: Formation, term: str) -> Selection:
     """A name used as a term: a flag curve (flag > 0.5), an analyzer class (section:CLASS, or CLASS when one section
     has it), or a curve (where it has a value)."""
     t = term.strip()
+    held = re.fullmatch(r"(.+?)\s*\(\s*([A-Za-z_][\w.]*)\s*\)", t)       # a class as results write it: CLASS (section)
+    if held and f.store is not None and any(held.group(2) in (k, k.split(".", 1)[-1]) for k in f.store.sections):
+        t = f"{held.group(2)}:{held.group(1)}"
+    t = _zone_written(f, t) or t                         # a zone with its own name or depths: the zone
     name = t.upper()
     w = _WINDOW.match(t)
-    if w:                                               # a depth window, top-base
-        top, base = sorted((float(w.group(1)), float(w.group(2))))
+    if w:                                               # a depth window, top-base: read as every range is
+        from petroharness.agent.selection import _rounded_limits, parse_range    # (selection: units, the samples)
+        text = re.sub(r"^\s*(?:depth|from)\s+", "", t, flags=re.I)
+        try:
+            span = parse_range(text, f.view)
+        except ValueError as e:
+            raise ToolError(str(e)) from None
+        if span is not None:
+            top, base = _rounded_limits(text, f.view, *span)
+            return Selection((f.depth >= top - 1e-6) & (f.depth <= base + 1e-6),
+                             f"depth {num(span[0])}-{num(span[1])} {f.view.report_unit}")
+        top, base = sorted((float(w.group(1)), float(w.group(2))))    # a window written deeper first
         return Selection((f.depth >= top - 1e-6) & (f.depth <= base + 1e-6), f"depth {num(top)}-{num(base)} {f.inv.depth_unit}")
     zt = _ZONE_TERM.match(t)
     if zt:                                              # a zone, or a range of zones
@@ -497,7 +708,7 @@ def _named(f: Formation, term: str) -> Selection:
         for z in zones(f, [f"Z{i}" for i in range(lo, hi + 1)]):
             m[np.asarray(z.indices)] = True
         return Selection(m, f"in {zt.group(1).upper()}" + (f"-Z{hi}" if hi != lo else ""))
-    if name in f.inv.curves and name in f.view.reg.flags:
+    if name in f.inv.curves and f.view.is_flag(name):
         with np.errstate(invalid="ignore"):
             return Selection(np.asarray(f.view.values(name), dtype=float) > 0.5, f"{name} > 0.5")
     want_key, _, want_label = t.rpartition(":")
@@ -537,7 +748,24 @@ def _class_mask(f: Formation, rs) -> np.ndarray:
 
 
 def where(f: Formation, condition) -> Optional[Selection]:
+    """The samples a tool's where keeps (select)."""
     return select(f, condition) if condition else None
+
+
+def where_none(f: Formation, sel: Optional[Selection]) -> str:
+    """What a result's where line says when the where keeps no sample of the stretch the call computes on: that
+    stretch and its depths (and, reaching the well, how a call computes elsewhere); "" when it keeps samples. A
+    finding, not a refusal: none of a formation's samples may be pay (question suite X18: a depth window outside the
+    scope read as "GR: n 0" on every row, and the answer said GR was not logged there)."""
+    if sel is None or np.asarray(sel.mask, dtype=bool).any():
+        return ""
+    d = np.asarray(f.depth, dtype=float)
+    name = getattr(f.view, "selection", None) or f.inv.formation
+    span = f" ({num(float(d[0]))}-{num(float(d[-1]))} {f.inv.depth_unit})" if d.size else ""
+    said = f"it holds at no sample of {name}{span}, so every count below is 0"
+    if getattr(f.view, "reach", "focus") == "well":
+        said += "; a call computes on another stretch by naming it in zones (a unit, a depth range TOP-BASE)"
+    return said
 
 
 def restricted(f: Formation, c: str, sel: Optional[Selection]) -> np.ndarray:
@@ -566,7 +794,7 @@ def flag_inputs(f: Formation, c: str) -> list:
         known = known_names(f) | set(f.inv.curves)
         m = next((m for m in f.inv.methods if m.step == cv.step), None)
         lines, prev = [], []
-        for ln in (list(m.decisions_here) + list(m.decisions)) if m is not None else []:
+        for ln in dict.fromkeys(list(m.decisions_here) + list(m.decisions)) if m is not None else []:   # each once
             hit = _RECORD_LINE.match(str(ln))
             if not hit:
                 continue
@@ -825,6 +1053,43 @@ def bases(f: Formation, zs: list = None) -> list:
     return [b for b in out if b.kind != "whole"] if getattr(f.view, "basis", "all") == "zones" else out
 
 
+def scopes(f: Formation, keep=None, i=str, sel: Optional["Selection"] = None) -> list:
+    """(label, interval sample indices) of each basis a tool reports a per-sample result by, the headline first: the
+    whole selection (where samples outside the zones hold a value: else it is the zones pooled), the zones pooled,
+    then each zone (one zone: that zone, no pooled line). Built on bases (data.basis "zones" leaves the whole out).
+    keep: the samples with a value; sel: a where, whose samples the bases are cut to and the whole label names; i
+    writes a count into the result (Out.i). Question suite T04: a tool that reported zones only read 0 where every
+    sample with a value lay outside the zones."""
+    n = int(np.asarray(f.depth).size)
+    keep = np.ones(n, dtype=bool) if keep is None else np.asarray(keep, dtype=bool)
+    if sel is not None:
+        keep = keep & np.asarray(sel.mask, dtype=bool)
+    whole, pooled, each = [], [], []
+    for b in bases(f):
+        idx = np.asarray(b.idx, dtype=int)
+        idx = idx[keep[idx]]
+        if not idx.size:
+            continue
+        if b.kind == "whole":
+            if (keep & S.outside_mask(f.view)).any():
+                whole.append((S.whole_label_of(f.view, i, None if sel is None else sel.mask,
+                                                "" if sel is None else sel.read), idx))
+        elif b.kind == "pooled":
+            pooled.append((b.label, idx))
+        else:
+            each.append((b.zone.zone_id, idx))
+    return whole + (pooled if len(each) != 1 else []) + each
+
+
+def over_bases(f: Formation, x, row, stat=np.nanmedian, sel: Optional["Selection"] = None, n: bool = False) -> str:
+    """A per-sample result over scopes(), as one line's text, the whole selection first: "whole interval (12 samples
+    outside any zone) 2.65; zones pooled 2.64; Z1 2.63 (n 40); ..." (stat of each basis's finite values; n: each
+    basis's count beside it)."""
+    x = np.asarray(x, dtype=float)
+    return "; ".join(f"{label} {row.v(stat(x[idx]))}" + (f" (n {row.i(int(idx.size))})" if n else "")
+                     for label, idx in scopes(f, np.isfinite(x), row.i, sel))
+
+
 # --- measured how ---------------------------------------------------------------------------------------------------
 
 def statistic(x: np.ndarray, name: str, log: bool = False) -> float:
@@ -862,13 +1127,14 @@ def no_codes(f: Formation, tool: str, *cs) -> None:
         if c in f.inv.curves and kind(f, c).kind == "classes":
             raise ToolError(f"{c} holds class codes (labels, not quantities): {tool} of codes means nothing; its "
                             f"class shares are in stats {c}, and another curve class by class is stats <curve> where "
-                            f"{c} == <code>")
+                            f"{c} == <code> (a class of several codes, as stats {c} names it: each code, joined "
+                            f"with or)")
 
 
 def class_values(out: Out, x: np.ndarray, k, labels: dict, thick) -> str:
     """Class codes over one group: n of the group's samples, then each class present with its share of those with a
     value, its samples and its thickness (thick(code)); one value over the well: that value."""
-    n, counts = S.class_counts(x, k.codes)
+    n, counts = S.class_counts(x, k.codes, labels if k.kind == "classes" else None)
     head = f"n {out.i(n)} of {out.i(x.size)}"
     if k.kind == "one value":
         return head + (f", every value {S.code_text(k.codes[0], labels)}" if n else "")
@@ -901,9 +1167,12 @@ def set_thickness(f: Formation, on: np.ndarray, kind: str, zs: list) -> float:
     return float(sum(thickness(z, int(on[z.indices].sum())) for z in zs))
 
 
-def values(out: Out, x: np.ndarray, d: np.ndarray, names, log: bool = False, at: bool = True, zone: bool = True) -> str:
+def values(out: Out, x: np.ndarray, d: np.ndarray, names, log: bool = False, at: bool = True, zone: bool = True,
+           span: bool = False) -> str:
     """Values of one curve over one group: n of the group's samples, the statistics, the depths of min and max (at),
-    each with the zone its sample is in (zone; left out where every sample of the group lies outside the zones)."""
+    each with the zone its sample is in (zone; left out where every sample of the group lies outside the zones).
+    `span` (a selection's whole line): a curve with values at part of its samples says its first and last sample
+    with a value (question suite R02: where a log is recorded was read off a row's base)."""
     parts = []
     ok = np.isfinite(x)
     got = S.compute(x, list(names), log)
@@ -911,6 +1180,8 @@ def values(out: Out, x: np.ndarray, d: np.ndarray, names, log: bool = False, at:
         v = got[s]
         if s == "n":
             parts.append(f"n {out.i(v)} of {out.i(x.size)}")
+            if span and 0 < int(ok.sum()) < x.size:
+                parts.append(f"values from {out.depth(float(d[ok][0]))} to {out.depth(float(d[ok][-1]))}")
         elif np.isfinite(v):
             text = f"{s} {out.v(v)}"
             if s in ("min", "max") and at:

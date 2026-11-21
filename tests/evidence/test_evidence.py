@@ -68,7 +68,7 @@ class Stated(Model):
 def conversation(formation, tmp_path):  # noqa: F811
     from petroharness.session import Conversation
     llm = Stated(first_steps() + later_steps())
-    c = Conversation.on_tasks(tmp_path / "s", "k200t", llm_factory=lambda cfg: llm, max_steps=4)
+    c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4)
     c.ask_task(formation)
     first = llm.number
     two = c.ask_task(formation.model_copy(update={"task_id": "second", "question": Q2}))
@@ -118,7 +118,7 @@ def test_the_graph_is_rebuilt_from_the_log_alone_and_twice_the_same(conversation
     # resuming adds an event and changes nothing in the graph
     from petroharness.session import Conversation
     before = g.to_json()
-    Conversation.resume(c.folder, key="k200t", llm_factory=lambda cfg: Model([]))
+    Conversation.resume(c.folder, key="k2-horizon-7b", llm_factory=lambda cfg: Model([]))
     assert EvidenceGraph.from_log(c.folder).to_json() == before
 
 
@@ -148,3 +148,15 @@ def test_the_audit_trail_is_written_from_the_session_folder(conversation, tmp_pa
     assert report.main([str(c.folder)]) == 0 and (c.folder / "report.md").read_text() == doc
     assert capsys.readouterr().out.strip() == str(c.folder / "report.md")
     assert report.main([str(tmp_path / "nowhere")]) == 2
+
+
+def test_the_links_read_numbers_as_the_checker_does():
+    """links.shows leaves out what the checker leaves out: the well's name, the checks' ignore patterns and small
+    counts below the checks' threshold."""
+    from types import SimpleNamespace as NS
+    items = [NS(id="E1", text="PHIE mean 0.2123; 15 samples; run 4500", numbers=["0.2123", "15", "4500"])]
+    assert links.shows("Well 15/9-23 has PHIE 0.2123.", items, wells=("15/9-23",)) == {"0.2123": ["E1"]}
+    assert "15" not in links.shows("Well 15/9-23.", items, wells=("15/9-23",))
+    assert links.shows("It has 15 samples.", items, {"numbers": {"skip_integers_below": 10}}) == {"15": ["E1"]}
+    assert links.shows("It has 15 samples.", items, {"numbers": {"skip_integers_below": 20}}) == {}
+    assert links.shows("Run 4500 of PHIE 0.2123.", items, {"numbers": {"ignore": [r"Run \d+"]}}) == {"0.2123": ["E1"]}

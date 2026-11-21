@@ -22,6 +22,69 @@ def read_depth(path: Path) -> np.ndarray:
     return np.asarray(_read(path).depth, dtype=float)
 
 
+def depth_order(path: Path, depth: Optional[np.ndarray] = None) -> str:
+    """What is wrong with the order of a LAS file's depths, as a WHAT / WHY / FIX message naming where, else "": a depth
+    that goes back against the file's direction (spliced runs, a repeated section: the stretch between is logged twice
+    and would be counted twice in every result), or a depth given twice in a row. Petrophys warns of both ("depth
+    changes direction", "duplicate depth values") without saying where; which samples to keep is the user's to say,
+    so the file is refused, not reordered (question suite L7)."""
+    d = np.asarray(read_depth(path) if depth is None else depth, dtype=float)
+    rows = np.where(np.isfinite(d))[0]
+    if rows.size < 2:
+        return ""
+    step = np.diff(d[rows])
+    moving = step[step != 0]
+    sign = 1.0 if not moving.size or np.median(moving) > 0 else -1.0
+    back, same = np.where(step * sign < 0)[0], np.where(step == 0)[0]
+    if not back.size and not same.size:
+        return ""
+    name, unit, lines = Path(path).name, _depth_unit(path), _data_lines(path, d.size)
+    g = lambda x: f"{round(float(x), 4):.10g}"              # a depth as the file writes it, to 4 decimals
+    at = lambda i: f"line {lines[rows[i]]}" if lines else f"sample {rows[i] + 1}"
+    more = lambda n: f" (and {n} more place{'s' if n != 1 else ''})" if n else ""
+    if back.size:
+        i = back[0]
+        hi, lo = d[rows[i]], d[rows[i + 1]]
+        return (f"WHAT: the depth in {name} goes back at {at(i + 1)}, from {g(hi)} to {g(lo)}{unit}{more(back.size - 1)}: "
+                f"{g(min(hi, lo))}-{g(max(hi, lo))}{unit} is logged twice (spliced runs or a repeated section). WHY: each "
+                "depth is one sample; a stretch logged twice would be counted twice in every result. FIX: keep one run "
+                "over the overlap so the depths run one way down the file, and load it again.")
+    i = same[0]
+    return (f"WHAT: the depth {g(d[rows[i]])}{unit} is given twice in {name}, at {at(i)} and {at(i + 1)}"
+            f"{more(same.size - 1)}. WHY: each depth is one sample; a depth given twice would be counted twice. FIX: "
+            "keep one row per depth, and load the file again.")
+
+
+def _depth_unit(path: Path) -> str:
+    """" m" or " ft" for the LAS's depth unit, else ""."""
+    import lasio
+
+    from petroharness.well.tops import depth_unit_name
+    try:
+        head = lasio.read(str(path), ignore_data=True)
+        unit = depth_unit_name(head.curves[0].unit) if len(head.curves) else None
+    except Exception:  # noqa: BLE001  (no unit read: the depths are said without one)
+        unit = None
+    return f" {unit}" if unit else ""
+
+
+def _data_lines(path: Path, n: int) -> list:
+    """The file line (1 = the first) of each of the n data rows of an unwrapped LAS's ~A section, else [] (a wrapped
+    file, or rows that do not match n: the place is then said by its sample number)."""
+    out, inside = [], False
+    with open(path, "r", encoding="utf-8", errors="replace") as stream:
+        for k, line in enumerate(stream, 1):
+            text = line.strip()
+            if text.startswith("~"):
+                if inside:
+                    break
+                inside = text[1:2].upper() == "A"
+                continue
+            if inside and text and not text.startswith("#"):
+                out.append(k)
+    return out if len(out) == n else []
+
+
 
 # ---------------------------------------------------------------------------
 # Policy-driven interpretation
@@ -44,8 +107,15 @@ import yaml
 from petroharness.well.formation import Interval, find_lithology_curve
 
 
+def lithology_domain(net_pay_parameters: dict) -> str:
+    """The net-pay step's lithology domain (clastic or carbonate). Petrophys records it as `lithology`; an engine may
+    record `lithology_domain`. Neither: clastic, the library's default."""
+    p = net_pay_parameters or {}
+    return str(p.get("lithology_domain") or p.get("lithology") or "clastic")
+
+
 def load_policy(path: Path) -> dict:
-    return yaml.safe_load(Path(path).read_text())
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 
 @dataclass
@@ -143,7 +213,7 @@ def _interpret(well, policy: dict, lithology_curve=None):
 
     # The library picks the PHIE cutoff per lithology domain; the policy sets one per domain.
     np_params = (steps["net_pay"].to_dict().get("parameters") or {}) if "net_pay" in steps else {}
-    domain = np_params.get("lithology_domain", "clastic")
+    domain = lithology_domain(np_params)
     phie_policy = cut.get("phie_min_carbonate" if domain == "carbonate" else "phie_min_clastic")
     if phie_policy is not None and isinstance(np_params.get("phie_cutoff"), (int, float)) \
             and abs(float(np_params["phie_cutoff"]) - float(phie_policy)) > 1e-12:
@@ -220,7 +290,7 @@ def engine_dir(policy: dict, engines_dir: Optional[Path]) -> Optional[Path]:
     if not meta.exists():
         raise FileNotFoundError(f"WHAT: interpretation engine {name!r} not found at {path}. WHY: the policy names it as "
                                 "its workflow of record. FIX: build the pinned engine (docs/DEVELOPMENT.md), or set data.engines_dir.")
-    if json.loads(meta.read_text()).get("name") != name:
+    if json.loads(meta.read_text(encoding="utf-8")).get("name") != name:
         raise ValueError(f"WHAT: {meta} does not describe engine {name!r}. FIX: rebuild the engine directory.")
     return path
 
@@ -247,7 +317,7 @@ def _interpret_with_engine(las_path: Path, engine: Path, value_range_qc: bool):
             raise RuntimeError(f"WHAT: engine {engine.name} failed on {Path(las_path).name}. WHY: {tail} "
                                "FIX: run src/petroharness/well/runner.py on this LAS to reproduce.")
         arrays = np.load(f"{prefix}.npz")
-        meta = json.loads(Path(f"{prefix}.json").read_text())
+        meta = json.loads(Path(f"{prefix}.json").read_text(encoding="utf-8"))
         well = Well(meta["well"])
         well.depth = np.asarray(arrays["__depth__"], dtype=float)
         well.depth_unit = meta["depth_unit"] or "m"
@@ -296,6 +366,22 @@ def _interpret_with_interpreter(las_path: Path, spec: str):
     return result.well, set(item.input_curves), _step_record(result.base_result.steps_executed), result
 
 
+def unknown_interpret_options(options: dict) -> list:
+    """The options petrophys.interpret does not declare: neither its own parameters nor a setting of
+    petrophys.DynamicWorkflowConfig (as Petrophys declares them; [] when it declares none this can read)."""
+    import dataclasses
+    import inspect
+
+    import petrophys
+    config = getattr(petrophys, "DynamicWorkflowConfig", None)
+    if config is None or not dataclasses.is_dataclass(config):
+        return []
+    named = {k for k, v in inspect.signature(petrophys.interpret).parameters.items()
+             if v.kind not in (v.VAR_KEYWORD, v.VAR_POSITIONAL)}
+    known = named | {f.name for f in dataclasses.fields(config) if not f.name.startswith("_")}
+    return sorted(k for k in options if k not in known)
+
+
 def _interpret_with_petrophys(las_path: Path, options: dict):
     """Interpret one LAS with petrophys.interpret(las, **options) (data.interpret), e.g. with a context profile, which
     interprets a well of a petrophys context package as that package's context does and records every calculation in
@@ -305,7 +391,15 @@ def _interpret_with_petrophys(las_path: Path, options: dict):
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        result = petrophys.interpret(las_path, **options)
+        try:
+            result = petrophys.interpret(las_path, **options)
+        except TypeError as exc:                 # Petrophys refuses settings it does not have: the user's to correct
+            unknown = unknown_interpret_options(options)
+            if not unknown:
+                raise
+            raise ValueError(f"WHAT: data.interpret names settings Petrophys does not have: {', '.join(unknown)}. "
+                             "WHY: they are passed to petrophys.interpret as they are. FIX: correct or remove them "
+                             "(the settings are the fields of petrophys.DynamicWorkflowConfig).") from exc
     if result.errors or not result.has_usable_interpretation:       # a step that could not run is recorded, not fatal
         raise RuntimeError(f"WHAT: petrophys.interpret({las_path.name}, {options}) gave no interpretation: "
                            f"{'; '.join(result.errors) or result.status}. FIX: run it on this LAS to see why.")
@@ -368,7 +462,7 @@ def _check_engine_cutoffs(steps: dict, cut: dict, well=None) -> None:
     p = (steps.get("net_pay") or {}).get("parameters") or {}
     if well is not None and not _numeric(p.get("phie_cutoff")):     # none, or per depth ("lithology_dependent")
         _check_porosity_cutoff_on_curves(steps, cut, well)
-    domain = p.get("lithology_domain", "clastic")
+    domain = lithology_domain(p)
     want = {"vcl_cutoff": cut.get("vcl_max"), "sw_cutoff": cut.get("sw_max"),
             "phie_cutoff": cut.get("phie_min_carbonate" if domain == "carbonate" else "phie_min_clastic")}
     bad = {k: (p.get(k), v) for k, v in want.items() if v is not None and _numeric(p.get(k)) and abs(float(p[k]) - float(v)) > 1e-12}
@@ -407,7 +501,7 @@ def _check_cutoffs(result, cut: dict) -> None:
     if st is None:
         return
     p = st.to_dict().get("parameters") or {}
-    domain = p.get("lithology_domain", "clastic")
+    domain = lithology_domain(p)
     want = {"vcl_cutoff": cut.get("vcl_max"), "sw_cutoff": cut.get("sw_max"),
             "phie_cutoff": cut.get("phie_min_carbonate" if domain == "carbonate" else "phie_min_clastic")}
     bad = {k: (p.get(k), v) for k, v in want.items() if v is not None and _numeric(p.get(k)) and abs(float(p[k]) - float(v)) > 1e-12}
@@ -417,11 +511,12 @@ def _check_cutoffs(result, cut: dict) -> None:
 
 
 # Bump when the interpretation code changes what it computes, so cached wells are not reused across versions.
-INTERPRETATION_VERSION = 13                # 13: data.interpret; each step's stage
+INTERPRETATION_VERSION = 17                # 13: data.interpret; each step's stage; 14: the steps' parameter notes; 15: the Rw check both ways, class labels in category_labels; 16: LAS descriptions (curve_description); 17: written_by
 
 
 def step_entry(d: dict) -> dict:
-    """One step of the record: its method, parameters and decisions, and the curves it read, wrote and removed where
+    """One step of the record: its method, parameters and decisions (and its parameter notes, where Petrophys gives
+    them), and the curves it read, wrote and removed where
     the library lists them (inputs/outputs/removed; absent when it does not, so nothing is assumed). The outputs
     include the curves the library lists as also written by the step (also_written). A parameter that holds a whole
     nested step record (e.g. the workflow a preparation ran) is given by its steps' names, and a value-range QC's
@@ -447,6 +542,10 @@ def step_entry(d: dict) -> dict:
             entry[key] = [str(c) for c in d[name]]
     if isinstance(d.get("also_written"), (list, tuple)) and d["also_written"]:
         entry["outputs"] = list(dict.fromkeys([*entry.get("outputs", []), *(str(c) for c in d["also_written"])]))
+    if isinstance(d.get("parameter_notes"), dict) and d["parameter_notes"]:     # what a parameter is, where its name
+        entry["notes"] = {str(k): str(v) for k, v in d["parameter_notes"].items()}   #   alone misleads (Petrophys's)
+    if isinstance(d.get("written_by"), dict) and d["written_by"]:   # the outputs an analysis the step ran wrote: which
+        entry["written_by"] = {str(k): str(v) for k, v in d["written_by"].items()}
     return entry
 INTERPRETATION_KEYS = ("name", "engine", "interpretation_scope", "gr_endpoints", "rw", "cutoffs", "value_range_qc")
 
@@ -510,7 +609,7 @@ def _cache_path(cache_dir: Path, policy: dict, las_path: Path, scope: str, engin
     if lithology_curve is not None:
         relevant["_lithology_curve"] = lithology_curve
     if engine is not None:
-        relevant["_engine"] = (engine / "ENGINE.json").read_text()      # identity of the pinned engine
+        relevant["_engine"] = (engine / "ENGINE.json").read_text(encoding="utf-8")      # identity of the pinned engine
     if interpreter:
         relevant["_interpreter"] = interpreter                          # the data's own workflow of record
         module = interpreter.rpartition(":")[0]

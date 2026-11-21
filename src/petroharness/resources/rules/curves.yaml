@@ -127,7 +127,7 @@ meanings:
   VCALC: calcite volume fraction, v/v; a model output of the mineral solver from RHOB, NPHI, PEF, DTC, VCL and porosity
   VDOLO: dolomite volume fraction, v/v; a model output of the mineral solver from RHOB, NPHI, PEF, DTC, VCL and porosity
   VANHY: anhydrite volume fraction, v/v; a model output of the mineral solver from RHOB, NPHI, PEF, DTC, VCL and porosity
-  LITHO: lithology class (limestone or dolomite); a class from VCALC and VDOLO, the larger of the two
+  LITHO: lithology class code (Petrophys's lithology codes, named where shown); a class from the lithology step's mineral volumes or its log cutoff tree on RHOB, NPHI, GR, DTC and VCL (its record says which)
   GT_LITHOLOGY_GROUP_CODE: lithology group code; a class from the lithology log, its rock-type group as an integer per sample
   LIMESTONE_INDICATOR: limestone indicator (0 or 1); a flag from PEF and RHOB, 1 where PEF > 4.5 and RHOB > 2.7 g/cc
   DOLOMITE_INDICATOR: dolomite indicator (0 or 1); a flag from PEF and RHOB, 1 where PEF is 2.8 to 3.2 and RHOB 2.8 to 2.9 g/cc
@@ -144,17 +144,18 @@ meanings:
   SO: oil (hydrocarbon) saturation, v/v; a model output from SW, 1 - SW
   BVW: bulk volume water, v/v; a model output from porosity and SW, porosity x SW
   MHI: moveable hydrocarbon index; a model output from SW and SXO, SW / SXO (near 1 where invasion moved little hydrocarbon)
-  SWIRR_APP: apparent irreducible water saturation, v/v; a parameter, one value for the whole well (a low percentile of SW in reservoir-flagged, resistive rock) used by the permeability transform
+  SWIRR_APP: apparent irreducible water saturation, v/v; a model output of the permeability step for its transform (per sample from irreducible BVW and porosity, or one value from SW or a default)
   RW: formation water resistivity at formation temperature, ohm.m; a model output of the rw step (its route says from what) corrected to TEMP
   RMF: mud-filtrate resistivity at formation temperature, ohm.m; a model output from the header's mud-filtrate resistivity and TEMP
   TEMP: formation temperature, degF; a model output of the temperature step (a gradient from surface, or the header's temperatures)
-  INVASION_RATIO: shallow-to-deep resistivity ratio (Rxo/Rt); a model output from a shallow or medium resistivity over RDEP (the invasion step says which)
-  RXO_RDEP_RATIO: flushed-to-deep resistivity ratio; a model output from RXO and RDEP, RXO / RDEP
+  INVASION_RATIO: shallow-to-deep resistivity ratio; a model output from a shallow resistivity over the deep one, or a medium resistivity where the well has no shallow log at a sample (the invasion step's record names the pair)
+  RXO_RDEP_RATIO: shallow-to-deep resistivity ratio as the permeability analyzer classifies it; a model output from INVASION_RATIO where the workflow wrote it, else from the shallow resistivity (RXO, RSHA or RESS) over RDEP
+  SEPARATION_RATIO: shallow-to-deep resistivity ratio as the saturation analyzer classifies it; a model output from INVASION_RATIO where the workflow wrote it, else from the shallow resistivity (RXO, RSHA or RESS) over RDEP
   VP_VS_RATIO: compressional to shear velocity ratio; a model output from DTS and DTC, DTS / DTC
   # flags of the workflow
   NET_ROCK: flag, 1 where VCL is below the cutoff; a flag from VCL
-  NET_RES: flag, NET_ROCK and effective porosity above the cutoff; a flag from VCL and porosity
-  NET_PAY: flag, NET_RES and SW below the cutoff; a flag from VCL, porosity and SW
+  NET_RES: flag, NET_ROCK and effective porosity above the cutoff, less the samples the net-pay step's record lists as left out (bad hole, coal); a flag from VCL and porosity
+  NET_PAY: flag, NET_RES and SW below the cutoff (so without the samples left out of NET_RES); a flag from VCL, porosity and SW
   RESFLAG: flag, reservoir-quality rock (NET_ROCK and porosity above the lithology cutoff); a flag from VCL and porosity
   SEALFLAG: flag, VCL at or above the seal cutoff; a flag from VCL
   CROSSOVER_FLAG: flag, neutron-density crossover (PHID - PHIN above the threshold) in clean, porous, good-hole rock; a flag from PHID, PHIN, VCL, porosity and BAD_HOLE
@@ -167,7 +168,7 @@ meanings:
   PERM_CC: core-calibrated permeability, mD; a model output from log porosity through a porosity-permeability fit to core plugs
   RQI: reservoir quality index, micrometre; a model output from permeability and porosity, 0.0314 x sqrt(k / phi)
   FZI: flow zone indicator, micrometre; a model output from RQI and PHI_Z, RQI / PHI_Z
-  KH: 'flow capacity, mD x depth unit; a model output from PERM (PERM_CC where the analyzer reads it) times each sample''s depth step'
+  KH: 'flow capacity (permeability x thickness, not the horizontal permeability KH_CORE holds), mD x depth unit; a model output from PERM (PERM_CC where the analyzer reads it) times each sample''s depth step'
   PERM_QUALITY_INDEX: permeability quality index; a model output from PERM, RQI and FZI, their weighted mean (0.5 PERM, 0.3 x 10 RQI, 0.2 x 5 FZI)
   # numerical analysis: coverage, gradients, consistency, elastic and stress curves
   DATA_COMPLETENESS: data completeness (0-1); a model output from the logs present, the share of the numerical logs with a value at each sample
@@ -181,9 +182,9 @@ meanings:
   POISSON_RATIO: dynamic Poisson's ratio; a model output from DTC and DTS
   YOUNG_MOD: dynamic Young's modulus, GPa; a model output from RHOB, DTC and DTS
   BRITTLENESS_INDEX: brittleness index (0-1); a model output from YOUNG_MOD and POISSON_RATIO, the mean of the two each scaled to 0-1
-  S_V: overburden stress, MPa; a model output from RHOB integrated over depth, an increment from the top of the analysed interval
+  S_V: overburden stress, MPa; a model output from RHOB integrated over depth (from the datum, or from the top of the analysed interval; the run says which)
   PP_HYDROSTATIC: hydrostatic pore pressure, MPa; a model output from depth (a water gradient)
-  SH_MIN: minimum horizontal stress, MPa; a model output from POISSON_RATIO, S_V and PP_HYDROSTATIC (from the S_V increment, not absolute)
+  SH_MIN: minimum horizontal stress, MPa; a model output from POISSON_RATIO, S_V and PP_HYDROSTATIC (absolute or an increment as S_V is; the run says which)
   # LAS curves the record names without a step
   DCAL: differential caliper, in; a measurement (caliper minus bit size where the record defines it so)
   RMIC: micro-resistivity (flushed zone), ohm.m; a measurement

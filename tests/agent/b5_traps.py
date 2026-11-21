@@ -201,7 +201,7 @@ def run_one(k_case, urls):
     k, (name, t, f, ctx) = k_case
     _, _, question, check = TRAPS[name]                     # the trap's subject is not a run input: the model reads it
     task = trap_task(t, question(f, ctx), f"trap_{name}_{k}")
-    cfg = HarnessConfig.load(ROOT / MODELS["k200t"][0])
+    cfg = HarnessConfig.load(ROOT / MODELS["k2-horizon-7b"][0])
     cfg.model.base_url = urls[k % len(urls)] if urls else cfg.model.base_url
     tcfg = cfg.for_tasks()
     s = Session(task, f, render(f.inv), Ledger(f))
@@ -231,7 +231,7 @@ def main():
             print(name, t.well, t.formation, ctx)
         return
     from petroharness.models import env_urls
-    urls = env_urls()                                       # PETROHARNESS_MODEL_URL (or K2H_TOOL_URLS)
+    urls = env_urls()                                       # PETROHARNESS_MODEL_URL
     with ThreadPoolExecutor(min(48, len(cases))) as ex:
         rows = list(ex.map(lambda kc: run_one(kc, urls), enumerate(cases)))
     Path(args.out).write_text(json.dumps(rows, indent=1, default=str))

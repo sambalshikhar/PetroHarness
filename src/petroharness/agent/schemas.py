@@ -8,6 +8,7 @@ import json
 import re
 
 from petroharness.agent import components as C  # the texts: src/petroharness/agent/components
+from petroharness.agent import engine as E
 from petroharness.agent.engine import Formation, Result, ToolError
 from petroharness.agent.toolset import TOOLS, TOOLSET
 from petroharness.well import summary as S
@@ -62,6 +63,9 @@ def arguments(raw) -> dict:
                 continue                                    # "all": the default set
         elif k == "curve" and isinstance(v, list) and v and all(isinstance(x, str) for x in v):
             pass                                            # several curves where one belongs: fit reads it per tool
+        elif k in _TEXTS and isinstance(v, list) and len(v) == 1 and isinstance(v[0], str):
+            v = v[0]                                        # text sent as a list of one: that text (the mirror of a
+            #                                                 list's one name sent as text; question suite B10)
         elif k in _TEXTS and not isinstance(v, str):
             raise ToolError(f"{k} must be text, e.g. {_TEXTS[k]}, not {v!r}")
         elif k in _NUMERIC and (isinstance(v, bool) or not isinstance(v, (int, float))):
@@ -119,8 +123,6 @@ _STAT_PHRASE = re.compile(r"\b(" + "|".join(sorted((k.replace("_", r"\s+") for k
                                                      if "_" in k), key=len, reverse=True)) + r")\b", re.I)
 
 
-_OP_WORDS = {"gt": ">", "greater": ">", "greater than": ">", "above": ">", "ge": ">=", "gte": ">=", "at least": ">=",
-             "lt": "<", "less": "<", "less than": "<", "below": "<", "le": "<=", "lte": "<=", "at most": "<="}
 _DEFAULT_WORDS = ("default", "none", "null", "")
 _NO_COUNT = ("lithology_stats",)                           # the workflow's table has no count statistic (it shows n anyway)
 
@@ -144,8 +146,8 @@ def _plain_args(name: str, a: dict) -> None:
     for k in ("baseline", "scale", "rule"):
         if k in a and (a[k] is None or (isinstance(a[k], str) and a[k].strip().lower() in _DEFAULT_WORDS)):
             a.pop(k)
-    if isinstance(a.get("op"), str) and a["op"].strip().lower() in _OP_WORDS:
-        a["op"] = _OP_WORDS[a["op"].strip().lower()]
+    if isinstance(a.get("op"), str) and E.op_sign(a["op"]):
+        a["op"] = E.op_sign(a["op"])                         # the condition grammar's table (engine.OP_WORDS)
 
 
 def fit(name: str, args: dict) -> dict:
@@ -208,24 +210,138 @@ def fit(name: str, args: dict) -> dict:
     return a
 
 
+from petroharness.agent.selection import WHOLE_WELL as WHOLE_WELL_TOOLS   # zones do not apply (dropped, said)
+
+
+def _verb_run(name: str) -> bool:
+    """A verb over Petrophys (its run reaches every Petrophys function it serves)."""
+    from petroharness.agent.toolset import TOOLSET
+    t = TOOLSET.get(name)
+    return bool(t is not None and t.verb)
+
+
+def _tool_named(name: str, raw):
+    """A verb asked for one of the other tools by name where its object belongs ({"check": {"what":
+    "threshold_exceedance", ...}}: the tool is listed under the verb's own heading): (that tool, the call's other
+    arguments); None otherwise. Benchmark N3/N4 and question suite B05: the count asked was refused as "no check"."""
+    if not (_verb_run(name) and isinstance(raw, dict)):
+        return None
+    from petroharness.agent.library_api import _objects
+    a = arguments(raw)
+    for k in ("what", "property", "parameter", "run"):          # run: {"calibrate": {"run": "core_vs_log"}} (N6: 4)
+        v = a.get(k)
+        if isinstance(v, str) and v.strip() in TOOLS and v.strip() != name and v.strip() not in _objects(name):
+            rest = {x: y for x, y in a.items() if x != k}
+            if k == "run" and isinstance(rest.get("args"), dict):      # a run's arguments are the tool's own
+                rest = {**{x: y for x, y in rest.items() if x != "args"}, **rest["args"]}
+            return v.strip(), rest
+    return None
+
+
 def call(f: Formation, name: str, raw) -> Result:
     """Run one tool call; a ToolError's message is what the model reads back."""
     fn = TOOLS.get(str(name).strip())
     if fn is None:
         raise ToolError(f"no tool {name!r}; tools: {', '.join(TOOLS)}")
+    routed = _tool_named(str(name).strip(), raw)
+    if routed is not None:                                   # the tool it names, its own call (said, so the next is)
+        r = call(f, *routed)
+        note = f"({routed[0]} is a tool of its own: run as {{\"{routed[0]}\": {{...}}}})"
+        return Result(note + "\n" + r.text, list(r.numbers), [(note, [])] + list(r.rows))
+    if getattr(f.view, "reach", "focus") == "well" and isinstance(raw, dict) and raw.get("where") is not None:
+        from petroharness.agent import selection
+        selection.where_names_stretches(f, raw["where"], raw.get("zones"))   # a stretch written as a condition: zones
     args = fit(name, arguments(raw))
+    original = f                                             # the question's formation (what any call writes reaches it)
+    merged = []                                              # the union's notes (selection.resolve)
+    frame = args.pop("by", None)                             # by lithology: the lithology zones under the user's
+    if frame is not None:
+        from petroharness.agent import selection
+        f = selection.by(f, frame)
     params = [p for p in inspect.signature(fn).parameters if p != "f"]
+    if (args.get("zones") and getattr(f.view, "reach", "focus") == "well" and ("zones" not in params or args.get("run"))
+            and name not in WHOLE_WELL_TOOLS):
+        # a tool that does not read zones itself, or a verb's run: it computes on the selection, focus zones included
+        # (a tool that reads the workflow's results for the focus: focus zones as today, elsewhere refused)
+        from petroharness.agent import selection
+        on, _ = selection.resolve(f, args["zones"])
+        if not (on is f and name in selection.FOCUS_ONLY):
+            selection.refuse_focus_only(name, f)
+            on, _ = selection.resolve(f, args["zones"], force=True, notes=merged)
+            f, args = on, {k: v for k, v in args.items() if k != "zones"}
+    curated_where = (not args.get("run") and not args.get("search") and _verb_run(name)
+                     and "where" not in getattr(fn, "curated_params", {"where"}))
+    if (args.get("where") is not None and "where" in params and _verb_run(name)
+            and (args.get("run") or (curated_where and getattr(f.view, "reach", "focus") == "well"))):
+        # a verb's run on the samples where a condition holds (agent.selection.where_view; reach well only)
+        if getattr(f.view, "reach", "focus") != "well":
+            raise ToolError(f"{name} takes no where here; select by zones")
+        from petroharness.agent import selection
+        f, args = selection.where_view(f, str(args["where"])), {k: v for k, v in args.items() if k != "where"}
     unknown = [a for a in args if a not in params]
     args = {k: v for k, v in args.items() if k in params}
+    if args.get("zones"):                                    # a unit or a depth range anywhere in the well: the call
+        from petroharness.agent import selection             # runs on that selection (docs/designs/zones-and-intervals.md)
+        on, zones = selection.resolve(f, args["zones"], notes=merged)
+        if on is not f:
+            selection.refuse_focus_only(name, f)
+            f, args = on, {k: v for k, v in args.items() if k != "zones"}
+        elif zones is None:                                  # the interval's own samples: the interval, its own zones
+            args = {k: v for k, v in args.items() if k != "zones"}
+    held = {n: id(a) for n, a in original.view.calculated.items()} if f is not original else {}
+    asked = E.ADVISED.set([])                                # the inputs Petrophys's messages ask for in this call
     try:
-        r = fn(f, **args)
-    except TypeError:
-        need = [p for p, q in inspect.signature(fn).parameters.items() if p != "f" and q.default is q.empty]
-        raise ToolError(f"{name} needs {', '.join(need)}; it takes {', '.join(params)}") from None
-    if unknown:                                              # run without them, and say so
-        note = f"(ignored {', '.join(unknown)}: {name} takes {', '.join(params) or 'no arguments'})"
-        r = Result(note + "\n" + r.text, list(r.numbers), [(note, [])] + list(r.rows))
+        try:
+            r = fn(f, **args)
+        except ToolError as e:                                   # Petrophys's advice in its refusal: the calls that take it
+            E.advised(e)                                         #   (its own error is the refusal's context)
+            said = advice(E.ADVISED.get(), name, params, args)
+            if said:
+                raise ToolError(f"{e} ({said})") from None
+            raise
+        except TypeError:
+            need = [p for p, q in inspect.signature(fn).parameters.items() if p != "f" and q.default is q.empty]
+            raise ToolError(f"{name} needs {', '.join(need)}; it takes {', '.join(params)}") from None
+        finally:
+            if f is not original:                                # what it wrote, for the question's later calls
+                from petroharness.agent import selection as _sel
+                _sel.carry_back(original, f, [n for n, a in f.view.calculated.items() if held.get(n) != id(a)])
+        if getattr(f.view, "selection", None) or merged:         # what the rows of this result are, and what the zones
+            from petroharness.agent import selection             #   asked became (an item part of another, joined)
+            head = selection.header(f, merged) if getattr(f.view, "selection", None) else selection.merges(f, merged)
+            r = Result(head + "\n" + r.text, list(r.numbers), [(head, [])] + list(r.rows))
+        if unknown:                                              # run without them, and say so
+            note = f"(ignored {', '.join(unknown)}: {name} takes {', '.join(params) or 'no arguments'})"
+            r = Result(note + "\n" + r.text, list(r.numbers), [(note, [])] + list(r.rows))
+        names = E.ADVISED.get() or []
+    finally:                                                 # reset whatever the call raised
+        E.ADVISED.reset(asked)
+    said = advice(names, name, params, args)               # Petrophys's advice in the result: the calls that take it
+    if said:
+        line = f"  {said}"
+        r = Result(r.text + "\n" + line, list(r.numbers), list(r.rows) + [(line, [])])
     return r
+
+
+def advice(names: list, name: str, params: list, args: dict) -> str:
+    """The calls that take the inputs Petrophys's messages in this call asked for (their Advice inputs, collected by
+    engine.advised; library.advice_calls): this tool's own arguments first, then the calculate property (the call's
+    own). No sentence is read for them."""
+    if not names:
+        return ""
+    from petroharness.agent.library import advice_calls, kind_of
+    try:
+        kind = kind_of(args["property"]) if isinstance(args.get("property"), str) else None
+    except Exception:  # noqa: BLE001  (not a property: no preference)
+        kind = None
+    takes = [p for p in params if p not in ("parameters",)]
+    if isinstance(args.get("run"), str):                     # a Petrophys function run by name: its own inputs too
+        try:
+            from petroharness.agent.library_api import lookup
+            takes += [p for p in lookup(args["run"]).params if p not in takes]
+        except Exception:  # noqa: BLE001  (an unknown function: the tool's own arguments)
+            pass
+    return advice_calls(list(names), takes=takes, kind=kind)
 
 
 def known_args(name: str, args: dict) -> dict:

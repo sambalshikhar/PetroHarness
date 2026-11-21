@@ -86,12 +86,11 @@ def test_a_recorded_conversation_replays_request_for_request(name, tmp_path, mon
     from petroharness.evidence import EvidenceGraph, audit
     from petroharness.llm import LLM
     from petroharness.session import Conversation
-    from petroharness.well.prepare import library_identity
-    spec = json.loads((R.MINI / name / "set.json").read_text())
-    here, then = library_identity().split("@")[0], spec["petrophys"].split("@")[0]
-    if here != then:
-        pytest.skip(f"recorded with Petrophys {then}; this is {here}: the curves, and so the prompts, differ")
-    for key in ("PETROHARNESS_DATA", "PETROHARNESS_SKILLS", "PETROHARNESS_MODEL_URL", "PETROHARNESS_BASE_URL"):
+    spec = json.loads((R.MINI / name / "set.json").read_text(encoding="utf-8"))
+    why = R.other_build(spec["petrophys"])                            # another version, or another build of it
+    if why:
+        pytest.skip(why)
+    for key in ("PETROHARNESS_DATA", "PETROHARNESS_SKILLS", "PETROHARNESS_MODEL_URL"):
         monkeypatch.delenv(key, raising=False)                        # a user's defaults: no settings, no endpoint
     las, tops = R.sample_files(spec)
     served = {}

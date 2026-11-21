@@ -20,13 +20,15 @@ SECTION_DIGEST_CHARS = 1600  # a section's digest keeps its classes and their ru
                              #   reading of a class section; 700 kept the header only and answers gave shares)
 GET_CHARS = 6000           # one get is cut here, with how to narrow it (a tool's output is at most this: any line fits)
 FIND_CHARS = 6000          # a ledger-wide find shows items up to here and names the rest
-VIEW_CHARS = 12000         # the context for one call
-NUM = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?![A-Za-z0-9_])")
+from petroharness.agent import numbers as N                                   # the one grammar for written numbers
 # what a digest keeps, by priority: what the item is (its first line, each curve's label), what it adds up to, then
 # how it was made
 _P0 = re.compile(r"^[A-Z][A-Z0-9_]* (against|\[|=)")
-_P1 = re.compile(r"^(  classes \(|  whole interval[: (]|  by zone mean:|  zones whose means meet it|  zones pooled[:,]|  these zones pooled[:,]|"
-                 r"  all zones:|  zones asked:|  shallowest top|  highest zone by|  lowest zone by|  with depth)")
+_P1 = re.compile(r"^(  classes \(|  whole interval[: (]|  every sample where |  by zone mean:|  zones whose means meet it|  zones pooled[:,]|  these zones pooled[:,]|"
+                 r"  all zones:|  zones asked:|  shallowest top|  highest zone by|  lowest zone by|  with depth|"
+                 # a selection's lines (agent.selection) and runs' intervals (reach well)
+                 r"  rows whose means meet it|  rows pooled[:,]|  these rows pooled[:,]|  by zone:|  by row:|"
+                 r"  .+ \(\d+ samples outside any row\))")
 _P2 = re.compile(r"^(Samples where|  method:|  basis:|  equation:|  inputs:|  curves:)")
 
 
@@ -54,7 +56,7 @@ class Item:
             head = f"{head} on {a.pop('x', '')}"
         head = ", ".join(head) if isinstance(head, list) else str(head)
         rest = "; ".join(f"{k} {', '.join(map(str, v)) if isinstance(v, list) else v}" for k, v in a.items())
-        text = f"{self.tool} {head}" + (f" ({rest})" if rest else "")
+        text = f"{self.tool} {head}".rstrip() + (f" ({rest})" if rest else "")      # a tool with no lead: no gap
         return text if len(text) <= 90 else text[:87] + "..."
 
 
@@ -178,8 +180,6 @@ def get_lines(item: Item, find: str, parts: bool = False, zone_at=None) -> list:
 
 
 MISS_NAMES = 15            # names a get that matched nothing lists
-
-
 def read_as(find: str) -> str:
     """How a find was read, for a miss: its zone terms and its words."""
     zs, words = _terms(find)
@@ -199,20 +199,15 @@ def _names(item: Item) -> list:
 
 def shown_values(item: Item) -> list:
     """Every number the item shows: those written into its lines and those in its text (a class's run depths)."""
-    vals = [float(x) for x in item.numbers]
-    clean = re.sub(r"\b[A-Za-z_][A-Za-z_]*\d[A-Za-z0-9_]*\b|Z\d+", " ", item.text)        # names with digits are names
-    vals += [float(x) for x in NUM.findall(clean)]
-    return vals
+    return [float(x) for x in item.numbers] + N.shown_values(item.text)
 
 
 def _claimed(value) -> tuple:
     """A claimed number and the half-unit of its last stated digit: '0.21' -> (0.21, 0.005); '12.3%' -> (12.3, 0.05)."""
-    s = str(value).strip().replace(",", "")
-    m = re.search(r"-?\d+(?:\.(\d+))?", s)
-    if not m:
+    raw = N.first(value)
+    if raw is None:
         raise ValueError(f"no number in {value!r}")
-    k = len(m.group(1) or "")
-    return float(m.group(0)), 0.5 * 10 ** (-k)
+    return N.number(raw), N.half_unit(raw)
 
 
 def matches(claim: float, half: float, v: float) -> bool:
@@ -331,6 +326,22 @@ def normalize(tool: str, args: dict) -> str:
     return tool + json.dumps(out, sort_keys=True)
 
 
+def door_args(f: Formation, name: str, args: dict) -> dict:
+    """The arguments that decide what a call computes: the tool's own, and the ones the call door reads (schemas.call)
+    where they change it: "by" where the user's zones frame the interval (the lithology zones instead), and under
+    reach "well" "zones" and "where" for every tool (a selection; agent.selection). Two calls that differ in them are
+    two results, never one served for the other."""
+    own = known_args(name, args)
+    v = f.view
+    resolved = getattr(TOOLS.get(name), "defaults_for", None)    # a default the view decides (runs' limit)
+    if resolved is not None:
+        own.update({k: d for k, d in resolved(f).items() if own.get(k) is None})
+    door = (("by",) if getattr(v, "lithology_zones", None) else ()) + \
+        (("zones", "where") if getattr(v, "reach", "focus") == "well" else ())
+    own.update({k: args[k] for k in door if k not in own and args.get(k) not in (None, "", [])})
+    return own
+
+
 class Ledger:
     def __init__(self, f: Formation):
         self.f = f
@@ -344,11 +355,13 @@ class Ledger:
         # a conversation's settings change (petroharness.session: Conversation.adopt): the well was interpreted again;
         # the items opened before it -> the change, in words ("the settings change before question 3: m 2 -> 1.8")
         self.before: dict = {}
+        # the lines the last get or find showed, as data: {item id: [line]} (take_fetched; the session keeps them)
+        self._fetched: dict = {}
 
     def has(self, tool: str, args: dict) -> bool:
         """Whether an identical call is already opened."""
         try:
-            return normalize(tool, args) in self._keys
+            return normalize(tool, door_args(self.f, tool, args)) in self._keys
         except (KeyError, ToolError):
             return False
 
@@ -361,7 +374,7 @@ class Ledger:
             if name not in shown:
                 raise ToolError(f"no tool {name!r}; tools: {', '.join(shown)}")
             args = fit(name, arguments(raw))
-            key = normalize(name, known_args(name, args))
+            key = normalize(name, door_args(self.f, name, args))
             if key in self._keys:
                 return self._keys[key], False
             before = {n: id(a) for n, a in self.f.view.calculated.items()} if self.turn_start else {}
@@ -488,7 +501,10 @@ class Ledger:
         text = "\n".join([f"[{item.id}] {item.call_text()} (find: {find}){mark}"] + out)
         cap = max(GET_CHARS, max_chars())                    # a tool's output is at most the result cap: any line fits
         if len(text) > cap:
-            text = text[:cap].rsplit("\n", 1)[0] + f"\n... ({len(text) - cap} more characters: narrow find with a zone or a word)"
+            kept = text[:cap].rsplit("\n", 1)[0]
+            out = out[:max(0, kept.count("\n"))]               # the lines the cut text still shows
+            text = kept + f"\n... ({len(text) - cap} more characters: narrow find with a zone or a word)"
+        self._fetched[item.id] = list(out)                    # what this get showed, as data
         return text
 
     def find(self, find: str) -> str:
@@ -502,6 +518,7 @@ class Ledger:
             g = self.get(eid, find)
             if used + len(g) + 2 > FIND_CHARS:
                 left.append(eid)
+                self._fetched.pop(eid, None)                       # not shown: not fetched
                 continue
             out.append(g)
             used += len(g) + 2
@@ -509,44 +526,15 @@ class Ledger:
             out.append(f"(not shown here: {', '.join(left)}; get one of them)")
         return "\n\n".join(out)
 
+    def take_fetched(self) -> dict:
+        """{item id: [line]} the get or find since the last take showed (the cut lines and items left out not), and
+        clears it: the lines as data, so no reader parses the tool's own text for them."""
+        got, self._fetched = self._fetched, {}
+        return got
+
     def listing(self) -> str:
         return "\n".join(f"  {e.id} {e.call_text()}" for e in self.items)
 
-    def view(self, budget: int = VIEW_CHARS) -> str:
-        """The context for the next call: every item listed, the newest in full, then digests newest first while they
-        fit; the rest by id (get or find reads them)."""
-        if not self.items:
-            return "Opened: nothing yet"
-        listing = self.listing()
-        if len(listing) > budget // 3:                             # many items: the newest by call, the older by id
-            lines, used = [], 0
-            for e in reversed(self.items):
-                ln = f"  {e.id} {e.call_text()}"
-                if used + len(ln) + 1 > budget // 3 - 200:
-                    break
-                lines.insert(0, ln)
-                used += len(ln) + 1
-            older = [e.id for e in self.items[:len(self.items) - len(lines)]]
-            listing = f"  earlier: {', '.join(older)}\n" + "\n".join(lines)
-        head = f"Opened ({len(self.items)}):\n{listing}"
-        newest = self.items[-1]
-        parts = [head, f"Newest, in full:\n[{newest.id}] {newest.text}"]
-        used = sum(len(p) + 2 for p in parts) + 60 + 5 * len(self.items)      # room to name the items not shown
-        shown, rest = [], []
-        for e in reversed(self.items[:-1]):
-            d = self.digest(e)
-            if used + len(d) + 2 <= budget:
-                shown.append(d)
-                used += len(d) + 2
-            else:
-                rest.append(e.id)
-        if shown:
-            parts.append("Earlier, in short:\n" + "\n".join(shown))
-        if rest:
-            parts.append(f"(not shown here: {', '.join(sorted(rest, key=lambda x: int(x[1:])))}; get or find reads them)")
-        return "\n\n".join(parts)
-
-    # arithmetic
     def calc(self, expression: str, shown: str = "") -> tuple:
         """Arithmetic on numbers opened items show (or the map and question in shown) as an item of its own, so a
         computed number can be cited: "78.8 + 58.4 + 11" -> [E9] calc 78.8 + 58.4 + 11 = 148.2. Each input is a
@@ -559,7 +547,7 @@ class Ledger:
             value, inputs = evaluate(expr)
             if not inputs or not any(op in expr for op in "+-*/(,"):
                 raise ToolError(f"calc {expr!r} computes nothing: write an operation on shown numbers")
-            text_nums = [float(x) for x in NUM.findall(re.sub(r"\b[A-Za-z_][A-Za-z_]*\d[A-Za-z0-9_]*\b|Z\d+", " ", shown))]
+            text_nums = N.shown_values(shown)
             where, unshown, any_shown = [], [], False
             for raw in inputs:
                 v, half = _claimed(raw)
@@ -596,20 +584,3 @@ class Ledger:
         self._keys[key] = item
         return item, True
 
-    # numbers
-    def verify(self, value, ids) -> bool:
-        """Whether a claimed number is shown in the cited items, at the precision the claim states."""
-        claim, half = _claimed(value)
-        items = [self.by_id(i) for i in ([ids] if isinstance(ids, str) else ids)]
-        return any(matches(claim, half, v) for e in items if e is not None for v in shown_values(e))
-
-    def locate(self, value) -> list:
-        """(item id, line) for each line that shows the number."""
-        claim, half = _claimed(value)
-        out = []
-        for e in self.items:
-            for ln, nums in e.rows:
-                vals = [float(x) for x in nums] + [float(x) for x in NUM.findall(re.sub(r"\b[A-Za-z_][A-Za-z_]*\d[A-Za-z0-9_]*\b|Z\d+", " ", ln))]
-                if any(matches(claim, half, v) for v in vals):
-                    out.append((e.id, ln))
-        return out

@@ -59,7 +59,7 @@ def test_bad_hole_by_its_parts_as_flags(tuhua):
     assert set(np.unique(flag[np.isfinite(flag)])) <= {0.0, 1.0}
     assert abs(100 * flag.mean() - float(m.group(1))) < 0.06                   # the share shown is the flag's
     runs = schemas.call(tuhua, "runs", {"condition": "WASHOUT == 1"})             # a curve of the question
-    assert "WASHOUT" in runs.text and "run" in runs.text
+    assert runs.text.startswith("Intervals where WASHOUT == 1 (") and "every interval" in runs.text   # reach well
     assert "the record's BAD_HOLE" in r.text and r.numbers and all(np.isfinite(r.numbers))
 
 

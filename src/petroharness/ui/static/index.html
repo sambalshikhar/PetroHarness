@@ -125,6 +125,38 @@ details[open] > summary .caret { transform: rotate(90deg); }
 .wrap { max-width: 1120px; margin: 0 auto; }
 .empty { color: var(--muted); text-align: center; padding: 70px 20px; }
 .empty h2 { color: var(--navy); font-size: 22px; margin: 0 0 8px; letter-spacing: -.01em; }
+.start { padding-top: 48px; }
+.startbox { max-width: 860px; margin: 26px auto 0; text-align: left; }
+.drop { border: 2px dashed var(--line); border-radius: 12px; background: var(--surface); padding: 22px; text-align: center; color: var(--ink-2); }
+.drop b { display: block; color: var(--navy); font-size: 16px; margin-bottom: 4px; }
+.drop .link { font-size: 14px; }
+.samples { margin-top: 22px; }
+.lab2 { font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+.sgroup { display: grid; grid-template-columns: 84px 1fr; gap: 8px; margin-bottom: 10px; align-items: start; }
+.sgroup .wells { display: flex; flex-wrap: wrap; gap: 8px; }
+.sfolder { font-size: 12.5px; color: var(--muted); padding-top: 7px; }
+.sample { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 10px; cursor: pointer; text-align: left; color: var(--ink); font: inherit; font-size: 13px; }
+.sample:hover { border-color: var(--accent); }
+.sample b { font-weight: 650; color: var(--navy); }
+.sample span { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.sample em { font-style: normal; font-size: 11px; color: var(--navy); background: var(--navy-soft); border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
+.sample.more { color: var(--accent-ink); }
+.startmsg { margin-top: 12px; font-size: 13.5px; color: var(--muted); min-height: 18px; }
+.startmsg.bad { color: var(--bad); background: var(--bad-soft); border-radius: 8px; padding: 10px 12px; }
+.wellcard { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 16px 18px; }
+.wellcard h3 { margin: 0 0 2px; font-size: 17px; color: var(--navy); }
+.wellcard .sub2 { color: var(--muted); font-size: 13px; }
+.ivchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ivchip { border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 4px 11px; cursor: pointer; font: inherit; font-size: 12.5px; color: var(--ink-2); }
+.ivchip:hover { border-color: var(--accent); }
+.ivchip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.suggest { margin-top: 16px; display: grid; gap: 8px; }
+.suggest button { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 14px; cursor: pointer; font: inherit; font-size: 14.5px; color: var(--ink); }
+.suggest button:hover { border-color: var(--accent); color: var(--accent-ink); }
+.startlinks { margin-top: 12px; font-size: 13px; color: var(--muted); }
+body.dragging::after { content: "Drop a LAS file, a tops or zones table, or field notes"; position: fixed; inset: 12px; z-index: 50;
+  display: flex; align-items: center; justify-content: center; border: 3px dashed var(--accent); border-radius: 16px;
+  background: rgba(248, 247, 244, .92); color: var(--navy); font-size: 20px; font-weight: 650; pointer-events: none; }
 .steps3 { display: inline-grid; gap: 10px; text-align: left; margin-top: 20px; font-size: 14px; }
 .steps3 div { display: flex; gap: 10px; align-items: center; }
 .tagline { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; margin-top: 22px; font-size: 14px; color: var(--muted); }
@@ -147,6 +179,8 @@ details[open] > summary .caret { transform: rotate(90deg); }
 
 /* progress phases */
 .progress { display: flex; align-items: center; margin-top: 16px; overflow-x: auto; padding-bottom: 2px; }
+.nowline { margin-top: 10px; font-size: 13.5px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.nowline .left { color: var(--muted); }
 .ph { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--faint); white-space: nowrap; }
 .ph .b { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--surface); }
 .ph.done { color: var(--ink-2); } .ph.done .b { background: var(--done); border-color: var(--done); color: #fff; }
@@ -605,6 +639,16 @@ details.ritem > summary .apill { min-width: 0; }
 .hero .lead { font-size: 16.5px; line-height: 1.7; color: var(--ink); }
 .hero .lead p { max-width: 88ch; }
 .heromt { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-2); }
+.hero.ask { border-color: var(--accent); }
+.hero.ask .hl { color: var(--accent-ink); }
+.hero.ask .lead { font-size: 15.5px; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.choice { border: 1px solid var(--accent); background: var(--surface); color: var(--accent-ink); border-radius: 999px; padding: 7px 14px; cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.choice:hover { background: var(--accent-soft); }
+.choice:disabled { opacity: .55; cursor: default; }
+.askhint { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.qnotes { background: var(--accent-soft); border-radius: 8px; padding: 8px 12px; margin: 2px 0 12px; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+.qnotes b { color: var(--accent-ink); }
 .heromt .gbwrap { min-width: 180px; } .heromt .gbwrap .gradebar { margin-top: 0; }
 .chk { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--done); }
 .chk svg { width: 18px; height: 18px; padding: 3px; border-radius: 50%; background: var(--done); color: #fff; }
@@ -863,6 +907,13 @@ body:not(.panel-closed) .scrim { display: block; position: fixed; inset: 52px 0 
           <input type="text" id="ivname" placeholder="name (optional), e.g. lower sand" style="margin-top:8px">
           <div class="hint">Measured depths; both are included. Leave the top empty to start at the top of the log, or the base to run to its end.</div>
         </div>
+        <div id="zonesblock" style="margin-top:16px;border-top:1px solid var(--line-2);padding-top:12px">
+          <label class="lab" for="zonespath" style="margin-top:0">Your zones (optional)</label>
+          <div class="hint" style="margin-top:0">A table of your own zones (zone, top, bottom): they frame the answer in place of the lithology zones, which stay available.</div>
+          <div class="row" style="margin-top:8px"><input type="text" id="zonespath" class="mono" placeholder="path of a zones file (.csv, .xlsx)"><button class="btn fix" id="zonesload">Load</button></div>
+          <div class="row" style="margin-top:6px"><button class="btn fix" id="zonesup">Upload a zones file…</button><input type="file" id="zonesfile" accept=".csv,.tsv,.txt,.xlsx,.xls" hidden><button class="link fix" id="zonesclear" hidden>Remove zones</button><span></span></div>
+          <div class="hint" id="zonesmsg"></div>
+        </div>
         </section>
         <section data-sec="options" hidden>
           <label class="lab" for="lithcurve">Lithology curve</label>
@@ -1047,6 +1098,7 @@ function showLas(info) {
     [...info.curves].sort((a, b) => lith.has(b.mnemonic) - lith.has(a.mnemonic)).map(c => `<option value="${esc(c.mnemonic)}">${esc(c.mnemonic)}${lith.has(c.mnemonic) ? " (looks like a lithology log)" : ""}</option>`).join("");
   if (info.curves.some(c => c.mnemonic === keep)) $("#lithcurve").value = keep;
   if ($("#topspath").value.trim()) loadTops($("#topspath").value.trim());
+  if (S.zones) loadZones(S.zones.path);           // the zones checked again against this well's log
   chipsRender();
 }
 $("#lasload").onclick = () => loadLas($("#laspath").value.trim());
@@ -1102,19 +1154,44 @@ async function loadTops(path) {
 function showTops(info) {
   S.tops = info; $("#topspath").value = info.path;
   const keep = $("#formation").value;
-  $("#formation").innerHTML = `<option value="">Choose a formation (${info.formations.length})</option>` + info.formations.map(f => {
-    if (f.repeated) return `<option value="" disabled>${esc(f.name)} (listed ${f.repeated.length} times: ask by its depths)</option>`;
-    if (f.error) return `<option value="" disabled>${esc(f.name)} (${esc(f.error.slice(0, 60))})</option>`;
+  // each choice by its value: a formation by its name; a name the file lists twice once per listing, by its top
+  S.formOpts = {};
+  const opt = (value, f, label) => {
     const span = `${fmtD(f.top)} – ${f.base == null ? "end of log" : fmtD(f.base)}${f.unit ? " " + f.unit : ""}`;
-    return `<option value="${esc(f.name)}">${esc(f.name)} · ${esc(span)}</option>`;
+    if (f.error) return `<option value="" disabled>${esc(label)} (${esc(rowProblem(f.error))})</option>`;
+    if (f.outside) return `<option value="" disabled>${esc(label)} · ${esc(span)} (beyond the log)</option>`;
+    S.formOpts[value] = f;
+    return `<option value="${esc(value)}">${esc(label)} · ${esc(span)}</option>`;
+  };
+  $("#formation").innerHTML = `<option value="">Choose a formation (${info.formations.length})</option>` + info.formations.map(f => {
+    if (f.repeated) return f.repeated.map((r, i) =>
+      opt(`${f.name} @ ${r.top}`, {...r, name: f.name, row: r.top}, `${f.name} (${i + 1} of ${f.repeated.length}, line ${r.line})`)).join("");
+    return opt(f.name, f, f.name);
   }).join("");
-  if (info.formations.some(f => f.name === keep)) $("#formation").value = keep;
-  $("#topsmsg").textContent = `${info.name}: ${info.formations.length} formations${info.wells.length ? ` for ${info.wells.join(", ")}` : ""}`;
+  if (S.formOpts[keep]) $("#formation").value = keep;
+  // what is wrong in the file, said as it loads: rows to fix, names listed twice, formations beyond the log
+  const probs = [];
+  for (const f of info.formations) {
+    if (f.error) probs.push(`${f.name}: ${rowProblem(f.error)}.`);
+    if (f.repeated) probs.push(`${f.name} is listed ${f.repeated.length} times (${f.repeated.map(r => `line ${r.line}: ${fmtD(r.top)}–${r.base == null ? "end" : fmtD(r.base)}`).join("; ")}): choose the one you mean below, or fix the file.`);
+  }
+  if (info.fits && info.fits.hint) probs.push(info.fits.hint);
+  else if (info.fits && info.fits.outside) probs.push(`${info.fits.outside} of ${info.fits.of} formations fall beyond the log (${info.fits.log}).`);
+  $("#topsmsg").innerHTML = `${esc(info.name)}: ${info.formations.length} formations${info.wells.length ? ` for ${esc(info.wells.join(", "))}` : ""}`
+    + (probs.length ? `<div class="qnotes" style="margin-top:8px"><b>In this file:</b><br>${probs.map(esc).join("<br>")}</div>` : "");
   showFormation();
 }
+function formationChosen() {                    // the formation chosen in the list: {name, top, base, ..., row: its top when listed twice}
+  return (S.tops && S.formOpts && S.formOpts[$("#formation").value]) || null;
+}
+function rowProblem(err) {                       // a tops row the reader refused, in a few words with its line
+  const line = /line (\d+)/.exec(err || ""), base = /base \(([^)]+)\) not below its top \(([^)]+)\)/.exec(err || "");
+  return base ? `line ${line ? line[1] : "?"}: its base ${base[1]} is not below its top ${base[2]}, fix the row`
+    : String(err || "").replace(/^WHAT:\s*/, "").split(" FIX:")[0].slice(0, 120);
+}
 function showFormation() {
-  const f = S.tops && S.tops.formations.find(x => x.name === $("#formation").value);
-  $("#formnote").textContent = f ? `${f.name}: ${fmtD(f.top)} – ${f.base == null ? "the end of the log" : fmtD(f.base)}${f.unit ? " " + f.unit : ""} (base: ${f.base_from}).` :
+  const f = formationChosen();
+  $("#formnote").textContent = f ? `${f.name}${f.row != null ? ` (line ${f.line})` : ""}: ${fmtD(f.top)} – ${f.base == null ? "the end of the log" : fmtD(f.base)}${f.unit ? " " + f.unit : ""} (base: ${f.base_from}).` :
     "The interval runs from the formation's top to its stated base, else to the next deeper top, else to the end of the log.";
   chipsRender();
 }
@@ -1122,6 +1199,27 @@ $("#formation").onchange = showFormation;
 $("#topsunit").onchange = () => { if ($("#topspath").value.trim()) loadTops($("#topspath").value.trim()); };
 $("#topsload").onclick = () => loadTops($("#topspath").value.trim());
 $("#topspath").addEventListener("keydown", e => { if (e.key === "Enter") loadTops($("#topspath").value.trim()); });
+// the user's zones: listed as they load, with what is wrong in them (overlaps, zones beyond the log)
+async function loadZones(path) {
+  $("#zonesmsg").innerHTML = ""; $("#formerr").textContent = "";
+  if (!path) { S.zones = null; $("#zonesclear").hidden = true; chipsRender(); return; }
+  const q = new URLSearchParams({path}); if (S.las) q.set("las", S.las.path);
+  try {
+    const info = await api(`/api/zones?${q}`);
+    S.zones = info; $("#zonespath").value = info.path; $("#zonesclear").hidden = false;
+    $("#zonesmsg").innerHTML = `${esc(info.name)}: ${info.zones.length} zone${info.zones.length === 1 ? "" : "s"} (${info.zones.map(z => esc(z.name)).join(", ")})`
+      + (info.problems.length ? `<div class="qnotes" style="margin-top:8px"><b>In this file:</b><br>${info.problems.map(esc).join("<br>")}</div>` : "");
+  } catch (e) { S.zones = null; $("#zonesmsg").textContent = ""; $("#formerr").textContent = e.message; }
+  chipsRender();
+}
+$("#zonesload").onclick = () => loadZones($("#zonespath").value.trim());
+$("#zonesclear").onclick = () => { $("#zonespath").value = ""; loadZones(""); };
+$("#zonesup").onclick = () => $("#zonesfile").click();
+$("#zonesfile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const j = await upload("zones", f, $("#zonesmsg")); $("#zonespath").value = j.path; await loadZones(j.path); } catch (err) { $("#formerr").textContent = err.message; }
+  e.target.value = "";
+};
 $("#topsup").onclick = () => $("#topsfile").click();
 $("#topsfile").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -1132,7 +1230,11 @@ $("#topsfile").onchange = async e => {
 // ---------- ask ----------
 function formInputs() {
   const inputs = {las: (S.las && S.las.path) || $("#laspath").value.trim(), question: $("#question").value.trim()};
-  if (S.mode === "tops") inputs.interval = {mode: "tops", tops: $("#topspath").value.trim(), formation: $("#formation").value, unit: $("#topsunit").value};
+  if (S.mode === "tops") {
+    const f = formationChosen();
+    inputs.interval = {mode: "tops", tops: $("#topspath").value.trim(), formation: f ? f.name : "", unit: $("#topsunit").value};
+    if (f && f.row != null) inputs.interval.top = f.row;      // which listing, for a name the file lists twice
+  }
   else if (S.mode === "depths") inputs.interval = {mode: "depths", top: $("#top").value, base: $("#base").value, unit: $("#unit").value, name: $("#ivname").value.trim()};
   else inputs.interval = {mode: "whole"};
   if ($("#lithcurve").value) inputs.lithology_curve = $("#lithcurve").value;
@@ -1143,6 +1245,7 @@ function formInputs() {
   if ($("#depth").value) inputs.depth = $("#depth").value;
   if (S.interp && Object.keys(S.interp).length) inputs.interpretation = {...S.interp};
   if (S.notes) inputs.field_notes = S.notes.path;
+  if (S.zones) inputs.zones = S.zones.path;
   return inputs;
 }
 // ---------- interpretation settings: what Petrophys interprets the well with, and the zone rule ----------
@@ -1189,7 +1292,7 @@ function idefault(f) {
 function idHtml(f) {
   const has = f.key in S.interp, used = S.preview && S.preview.used && S.preview.used[f.key];
   const fn = !S.iconv && S.notes && S.notes.settings && f.key in S.notes.settings ? S.notes.settings[f.key] : undefined;
-  return `<span>Default: ${esc(idefault(f))}</span>${fn !== undefined ? `<span class="tw">Field notes: ${esc(ishow(f, fn))}${has ? " <span class=\"subtle\">(your value is used instead)</span>" : ""}</span>` : ""}${used ? `<span class="tw">This well: ${esc(ishow(f, used.value))} <span class="subtle">(${esc(used.step)} step)</span></span>` : ""}${has ? `<button class="link" data-ireset="${esc(f.key)}">Reset to default</button>` : ""}<span class="err" data-ierr="${esc(f.key)}"></span>`;
+  return `<span>Default: ${esc(idefault(f))}</span>${fn !== undefined ? `<span class="tw">Field notes: ${esc(ishow(f, fn))}${has ? " <span class=\"subtle\">(your value is used instead)</span>" : ""}</span>` : ""}${used ? `<span class="tw">This well: ${esc(ishow(used.unit ? {...f, unit: used.unit} : f, used.value))} <span class="subtle">(${esc(used.step)} step)</span></span>` : ""}${has ? `<button class="link" data-ireset="${esc(f.key)}">Reset to default</button>` : ""}<span class="err" data-ierr="${esc(f.key)}"></span>`;
 }
 function irow(f) {
   const v = S.interp[f.key], has = f.key in S.interp, k = esc(f.key);
@@ -1321,12 +1424,17 @@ Object.assign(S, {followId: null});
 function wellName(inp) { const p = String((inp && inp.las) || ""); return p.split("/").pop() || "a well"; }
 function intervalName(inp) {
   const iv = (inp && inp.interval) || {mode: "whole"};
-  if (iv.mode === "tops") return iv.formation || "a formation";
-  if (iv.mode === "depths") return iv.name || `${iv.top ?? "top"}–${iv.base ?? "base"} ${iv.unit || ""}`.trim();
-  return "whole well";
+  const z = inp && inp.zones ? " · your zones" : "";
+  if (iv.mode === "tops") return (iv.formation || "a formation") + (iv.top != null && iv.top !== "" ? ` from ${fmtD(Number(iv.top))}` : "") + z;
+  if (iv.mode === "depths") return (iv.name || `${iv.top ?? "top"}–${iv.base ?? "base"} ${iv.unit || ""}`.trim()) + z;
+  return "whole well" + z;
 }
 function intervalNow() {
-  if (S.mode === "tops") return $("#formation").value || "choose a formation";
+  const z = S.zones ? ` · your ${S.zones.zones.length} zone${S.zones.zones.length === 1 ? "" : "s"}` : "";
+  return intervalBase() + z;
+}
+function intervalBase() {
+  if (S.mode === "tops") { const f = formationChosen(); return f ? (f.row != null ? `${f.name} ${fmtD(f.top)}–${f.base == null ? "end" : fmtD(f.base)}` : f.name) : "choose a formation"; }
   if (S.mode === "depths") { const t = $("#top").value, b = $("#base").value; return (t || b) ? `${t || "top"}–${b || "base"} ${$("#unit").value || (S.las && S.las.depth_unit) || ""}`.trim() : "give the depths"; }
   return "Whole well";
 }
@@ -1364,7 +1472,9 @@ function chipsRender() {
   }
   $("#ask").disabled = !!running;
   $("#question").placeholder = running ? "Answering… ask the next question when this one finishes" : S.followId ? "Ask a follow-up" : "Ask about this well";
+  if (typeof startRender === "function" && $("#startwell") && !startBusy) startRender();     // the empty page follows the setup
 }
+let startBusy = false;
 function sheet(sec) {                       // the sheet above the composer, at a section (null: closed)
   const sh = $("#sheet");
   if (!sec || S.followId) { sh.hidden = true; return; }
@@ -1422,7 +1532,7 @@ async function fillForm(inputs) {
   if (inputs.las) { $("#laspath").value = inputs.las; await loadLas(inputs.las); }
   const iv = inputs.interval || {mode: "whole"};
   setMode(iv.mode || "whole");
-  if (iv.mode === "tops") { $("#topsunit").value = iv.unit || ""; $("#topspath").value = iv.tops || ""; await loadTops(iv.tops); $("#formation").value = iv.formation || ""; showFormation(); }
+  if (iv.mode === "tops") { $("#topsunit").value = iv.unit || ""; $("#topspath").value = iv.tops || ""; await loadTops(iv.tops); $("#formation").value = iv.top != null && iv.top !== "" ? `${iv.formation} @ ${iv.top}` : (iv.formation || ""); showFormation(); }
   if (iv.mode === "depths") { $("#top").value = iv.top ?? ""; $("#base").value = iv.base ?? ""; $("#unit").value = iv.unit || ""; $("#ivname").value = iv.name || ""; }
   $("#lithcurve").value = inputs.lithology_curve || ""; $("#lithtext").value = inputs.formation_lithology || "";
   $("#profile").value = inputs.profile || "";
@@ -1435,6 +1545,7 @@ async function fillForm(inputs) {
     await loadNotes(typeof inputs.field_notes === "string" ? inputs.field_notes : inputs.field_notes.path);
     if (S.notes) for (const [k, v] of Object.entries(S.notes.settings || {})) if (JSON.stringify(S.interp[k]) === JSON.stringify(v)) delete S.interp[k];
   } else showNotes(null);
+  $("#zonespath").value = inputs.zones || ""; await loadZones(inputs.zones || "");   // the zones it ran with
   chipsRender(); autosize(); $("#question").focus();
 }
 
@@ -1466,7 +1577,7 @@ function showRuns() {
   const f = $("#runfilter").value.trim().toLowerCase();
   const rows = S.runs.filter(r => !f || `${r.question} ${r.las} ${r.label} ${r.verdict}`.toLowerCase().includes(f));
   $("#history").innerHTML = rows.length ? rows.map(r => `<div class="runitem${r.id === S.job ? " cur" : ""}" data-id="${esc(r.id)}"><div class="rq">${r.turn > 1 ? `<span class="pill" style="padding:0 7px;margin-right:6px">follow-up ${r.turn}</span>` : ""}${esc(r.question)}</div>
-    <div class="rm"><span class="pill status ${esc(r.status)}" style="padding:0 8px">${esc(r.status)}</span><span>${esc(r.las)}</span><span>${esc(r.label)}</span>
+    <div class="rm"><span class="pill status ${esc(r.status)}" style="padding:0 8px">${esc(outcomeWord(r))}</span><span>${esc(r.las)}</span><span>${esc(r.label)}</span>
     ${r.elapsed ? `<span>${fmtS(r.elapsed)}</span>` : ""}${r.verdict ? `<span class="v-${esc(r.verdict)}">${esc(r.verdict)}</span>` : ""}</div></div>`).join("") :
     `<div class="hint">No runs yet.</div>`;
   $$(".runitem").forEach(x => x.onclick = () => { setPanel(false); S.pinned = false; openRun(x.dataset.id); });
@@ -1534,6 +1645,7 @@ function digest(events) {
     if (e.kind === "phase") m.phase[e.name] = e;
     else if (e.kind === "well") m.well = e;
     else if (e.kind === "display") m.display = e;
+    else if (e.kind === "settings") m.settings = e;          // a follow-up's settings change, as the server made it
     else if (e.kind === "call") { const c = {...e, reply: null}; m.calls.push(c); m.byN.set(e.n, c); if (e.type === "step") m.lastStep = Math.max(m.lastStep, e.number); }
     else if (e.kind === "reply") { const c = m.byN.get(e.n); if (c) c.reply = e; }
     else if (e.kind === "results") for (const it of e.items) {
@@ -1549,6 +1661,12 @@ function digest(events) {
 function phases(j, m) {
   const finished = !["queued", "running"].includes(j.status);
   const has = t => m.calls.some(c => c.type === t);
+  const st = j.result && j.result.status;
+  if (finished && (st === "ask_user" || st === "outside")) {      // it ended at the question: read, then asked back
+    const last = st === "outside" ? "Said what it does" : "Asked you";
+    return `<div class="progress">${[["Queue"], ["Interpret the well"], ["Read the question"], [last]].map(([n], i) =>
+      `${i ? `<span class="bar done"></span>` : ""}<span class="ph done"><span class="b">${i === 3 ? "?" : "✓"}</span>${esc(n)}</span>`).join("")}</div>`;
+  }
   const list = [["Queue", !!m.phase.started || finished], ["Interpret the well", m.calls.length > 0], ["Read the question", has("step") || has("settle") || has("writer")],
     [`Investigate${m.lastStep ? ` · ${m.lastStep} step${m.lastStep > 1 ? "s" : ""}` : ""}`, has("settle") || has("writer")], ["Settle the claims", has("writer")],
     ["Write", m.calls.some(c => c.type === "writer" && c.reply)], [m.calls.some(c => c.type === "repair") ? "Check · repair" : "Check", j.status === "done"]];
@@ -1561,6 +1679,42 @@ function phases(j, m) {
     html += `<span class="ph ${cls}"><span class="b">${badge}</span>${esc(name)}</span>`;
   });
   return `<div class="progress">${html}</div>`;
+}
+
+// ---------- what the run is doing now, in plain words, and the time it usually takes ----------
+function nowWords(j, m) {
+  if (!["queued", "running"].includes(j.status) || R.run) return "";
+  const has = t => m.calls.some(c => c.type === t);
+  const maxSteps = +((j.inputs && j.inputs.max_steps) || (S.cfg && S.cfg.max_steps) || 8);
+  let what;
+  if (j.status === "queued" || !m.phase.started) what = j.queue_position ? `Waiting for a free worker: number ${j.queue_position} in the queue.` : "Waiting for a free worker.";
+  else if (!m.calls.length) what = "Petrophys is interpreting the well: logs, zones and the record (once per well and settings).";
+  else if (has("repair")) what = "Checking the answer: a number it could not trace to a result is being rewritten.";
+  else if (has("writer")) what = m.calls.some(c => c.type === "writer" && c.reply) ? "Checking every number of the answer against the results." : "Writing the answer from the settled claims.";
+  else if (has("settle")) what = "Settling the claims: each one against the results it cites.";
+  else if (m.lastStep) {
+    // the step in flight has no reply yet: what the last answered step worked on
+    const done = [...m.calls].reverse().find(c => c.type === "step" && c.reply && c.reply.focus);
+    const focus = done ? `; step ${done.number} worked on: ${String(done.reply.focus).slice(0, 140)}` : "";
+    what = `Investigating, step ${m.lastStep} of at most ${maxSteps}${focus}`;
+  } else what = "Reading the question: what it asks and which stretch of the well.";
+  return `<span>${esc(what)}</span>${timeLeft(j, m)}`;
+}
+function timeLeft(j, m) {                       // from this server's answered runs of the same kind (direct, investigation)
+  const t = (S.cfg && S.cfg.typical) || {};
+  const read = [...m.calls].reverse().find(c => c.type === "read" && c.reply && c.reply.depth);
+  const kind = read ? (read.reply.depth === "direct" ? "direct" : "investigation") : null;
+  const pick = kind ? t[kind] : null, el = +j.elapsed || 0;
+  const mins = s => s < 90 ? `${Math.max(1, Math.round(s / 60))} min` : `${Math.round(s / 60)} min`;
+  if (!pick) {                                   // not read yet, or no runs of its kind: only what is known, by kind
+    if (kind) return "";
+    if (t.direct && t.investigation) return `<span class="left">A direct answer here takes about ${mins(t.direct[0])}, an investigation about ${mins(t.investigation[0])}.</span>`;
+    const [k, v] = Object.entries(t)[0] || [];
+    return k ? `<span class="left">${k === "direct" ? "Direct answers" : "Investigations"} here take about ${mins(v[0])} (${v[1]} runs).</span>` : "";
+  }
+  const [med, n] = pick, word = kind === "direct" ? "direct answers" : "investigations";
+  if (el < med * 0.9) return `<span class="left">About ${mins(med - el)} left: ${word} here take about ${mins(med)} (${n} runs).</span>`;
+  return `<span class="left">Longer than usual: ${word} here take about ${mins(med)} (${n} runs).</span>`;
 }
 
 // ---------- actions in plain words ----------
@@ -1592,6 +1746,42 @@ function action(text) {
   let label = rest.replace(/^\(|\)$/g, "").replace(/^\s*\(/, "");
   if (rest.startsWith("{")) { try { label = argText(JSON.parse(rest)); } catch (e) { label = rest; } }
   return {tool: m[1], ...groupOf(m[1]), label: label || m[1].replace(/_/g, " ")};
+}
+// a run that ended by asking the user (or by saying a request is outside what it does) is no answer: said so
+function scopePill(j) {                            // the stretch the answer computed on, when not the interval
+  const sc = j && j.result && j.result.scope;
+  if (!sc || !sc.used || !sc.used.length) return "";
+  const said = [sc.merged, sc.note].filter(Boolean).join(" ");
+  return `<span class="pill" title="${esc(said || `set by ${sc.by}`)}"><span class="k">on</span>${esc(sc.used.join(", "))}${sc.by === "your choice" ? ` <span class="k">· your choice</span>` : ""}</span>`;
+}
+function outcomeWord(r) {                          // a saved run or an earlier question: how it ended, in a word
+  return r.outcome === "ask_user" ? "asks you" : r.outcome === "outside" ? "outside" : r.status;
+}
+function runStatus(j) {
+  const st = j && j.result && j.result.status;
+  return st === "ask_user" ? "asks you" : st === "outside" ? "outside" : (j && j.status) || "";
+}
+function askCard(j, res) {
+  const a = res.ask, outside = a.outside;
+  S.askChoices = a.choices || [];
+  const buttons = S.askChoices.map((c, i) => `<button class="choice" data-choice="${i}" data-follow="${esc(j.id)}" title="${esc(c.question)}${c.scope ? ` (on ${esc(c.scope.join(", "))})` : ""}">${esc(c.label)}</button>`).join("");
+  return `<section class="hero ask"><div class="hl">${outside ? "Outside what I do here" : "A question for you before I answer"}</div>
+    <div class="prose lead">${md(a.text || "")}</div>
+    ${buttons ? `<div class="choices">${buttons}</div><div class="askhint">${outside ? "Click one to ask it, or write your own question below." : "Click your answer to go on, or write it in your own words below. Nothing was computed yet."}</div>` : ""}</section>`;
+}
+async function pickChoice(btn) {
+  const c = (S.askChoices || [])[+btn.dataset.choice];
+  if (!c) return;
+  document.querySelectorAll(".choice").forEach(b => b.disabled = true);
+  try {
+    const {id} = await post("/api/ask", {follow: btn.dataset.follow, question: c.question, ...(c.scope ? {scope: c.scope} : {})});
+    S.pinned = false; openRun(id); loadRuns();
+  } catch (e) { $("#formerr").textContent = e.message; document.querySelectorAll(".choice").forEach(b => b.disabled = false); }
+}
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-choice]"); if (b) pickChoice(b); });
+function notesHtml(res) {
+  const ns = (res && res.notes) || [];
+  return ns.length ? `<div class="qnotes"><b>Before you read:</b> ${ns.map(n => esc(n)).join("<br>")}</div>` : "";
 }
 function pill(text, extra = "") {
   const a = action(text);
@@ -1630,7 +1820,7 @@ function render() {
   const finished = !["queued", "running"].includes(j.status);
   const res = j.result && Array.isArray(j.result.claims) ? j.result : null;   // a run that failed early has none
   const sig = `${j.status}|${S.events.length}|${S.tab}|${!!res}|${JSON.stringify(j.rating || {})}`;
-  if (sig === S.sig) { const el = $("#elapsed"); if (el) el.textContent = fmtS(j.elapsed); return; }
+  if (sig === S.sig) { const el = $("#elapsed"); if (el) el.textContent = fmtS(j.elapsed); const nl = $("#nowline"); if (nl) nl.innerHTML = nowWords(j, m); return; }
   S.sig = sig; S.m = m; S.res = res;
   closePop();
   composerFor(j);
@@ -1642,16 +1832,16 @@ function render() {
   const qpos = j.queue_position ? `<span class="pill"><span class="k">queue</span>${j.queue_position}</span>` : "";
   const no = turnNo(j);
   let html = `<div id="turns">${turnsHtml(j)}</div><div class="runhead">${no ? `<div class="qno">Question ${no} of this conversation</div>` : ""}<h1>${esc(i.question)}</h1><div class="meta">
-    <span class="pill status ${esc(j.status)}">${esc(j.status)}</span>
+    <span class="pill status ${esc(runStatus(j))}">${esc(runStatus(j))}</span>
     <span class="pill" title="${esc(i.las)}"><span class="k">well</span>${esc(String(i.las || "").split("/").pop())}</span>
-    <span class="pill"><span class="k">interval</span>${esc(j.label || "")}</span>${qpos}
+    <span class="pill"><span class="k">interval</span>${esc(j.label || "")}</span>${scopePill(j)}${qpos}
     <span class="pill"><span class="k">time</span><span id="elapsed">${fmtS(j.elapsed)}</span></span>
     ${j.endpoint ? `<span class="pill" title="${esc(j.endpoint)}"><span class="k">model</span>${esc(host(j.endpoint))}</span>` : ""}</div>
     <div class="actions">${finished && !R.run && S.events.length ? `<button class="link" id="replaybtn" title="Play this run again as it happened, 8 times faster">▶ Replay</button>` : ""}
     ${R.run ? `<span class="hint" style="margin:0">Replay at ${R.speed}× · ${fmtS(R.t)} of ${fmtS(replayEnd())}</span><button class="link" id="stopreplay">Show the run</button>` : ""}
     ${finished && !R.run ? `<a class="link" href="/api/run/${esc(j.id)}/answer.md" target="_blank">answer.md</a><a class="link" href="/api/run/${esc(j.id)}/trace.json" target="_blank">trace.json</a>` : ""}
     <button class="link" id="reuse">Ask again or edit →</button></div>
-    ${settingsLine(j)}${phases(j, m)}</div>
+    ${settingsLine(j, m)}${phases(j, m)}<div class="nowline" id="nowline">${nowWords(j, m)}</div></div>
     <div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? "on" : ""}">${esc(l)}</button>`).join("")}</div><div class="pane">`;
   if (S.tab === "main" || S.tab === "answer") html += mainPane(j, m, res, finished, calls);
   else if (S.tab === "story") html += storyPane(j, m, res, finished, calls);
@@ -1955,9 +2145,12 @@ function basisHtml(res) {
 }
 // ---------- the conversation: the earlier questions stay on screen, each a box that opens to its answer ----------
 Object.assign(S, {conv: null, convKey: "", turnOpen: {}, turnsAll: false});
-function settingsLine(j) {                 // a question that changed the conversation's settings says so
-  const r = j.result && j.result.settings_changes, ch = (r && r.changed) || [];
+function settingsLine(j, m) {              // a question that changed the conversation's settings says so
+  const r = j.result && j.result.settings_changes;
+  const live = !j.result && m && m.settings ? m.settings.changes || [] : null;   // made, before the answer is written
+  const ch = (r && r.changed) || live || [];
   const mark = '<img src="/img/petrophys_mark.png" alt="">';
+  if (live && !live.length) return "";       // the settings asked for are those in force: nothing changed
   if (ch.length) return `<div class="setchg">${mark}<span><b>Settings changed for this question:</b> ${esc(setWords(ch))}. The well was interpreted again; earlier answers rest on the earlier settings.</span></div>`;
   if (j.inputs && j.inputs.adopt && !j.result) return `<div class="setchg">${mark}<span><b>Changing the settings for this question</b>: the well is interpreted again first.</span></div>`;
   return "";
@@ -1986,7 +2179,8 @@ function gist(answer) {                      // the answer's first sentence, as 
 function turnHtml(t, later) {
   const done = t.status === "done" && t.answer, live = ["queued", "running"].includes(t.status);
   const chg = (later || []).find(u => u.turn > t.turn && (u.settings_changed || []).length);
-  const g = done ? gist(t.answer) : live ? "Being answered…" : t.status === "error" ? "No answer: the run failed." : `No answer (${t.status}).`;
+  const g = (t.outcome === "ask_user" ? "Asked you: " : t.outcome === "outside" ? "Outside what it does: " : "")
+    + (done ? gist(t.answer) : live ? "Being answered…" : t.status === "error" ? "No answer: the run failed." : `No answer (${t.status}).`);
   const a = done ? answerSections(t.answer) : null;
   return `<details class="turn${live ? " live" : ""}" data-tid="${esc(t.id)}"${S.turnOpen[t.id] ? " open" : ""}>
     <summary><span class="tn">${t.turn}</span><span class="twrap"><span class="tq">${esc(t.question)}${chg ? `<span class="tbefore" title="${esc(setWords(chg.settings_changed))}">before the settings change at question ${chg.turn}</span>` : ""}</span><span class="tg">${esc(g)}</span></span><span class="tchev">▶</span></summary>
@@ -2204,6 +2398,7 @@ function storyPane(j, m, res, finished, calls) {
       "salvage, incomplete": "The reply was not complete JSON, nor was its fixed form; the harness read what it could recover.",
       "fix": "The reply was not valid JSON; the model's fixed reply was read."}[rec.repaired] : "";
     if (fixed) warns.push(fixed); else if (rec && rec.error) warns.push(rec.error);
+    else if (rep.salvaged && !rec) warns.push("The reply was not one complete JSON object; the harness read the edits and actions it holds.");
     else if (rep.unreadable && !(rec && rec.focus !== undefined)) warns.push(`The reply could not be read as JSON${finished ? "" : "; the harness asks the model to fix it"}.`);
     if (warns.length) parts.push(["Harness notes", `<div class="warnline">${warns.map(esc).join("\n")}</div>`]);
     if (rec && rec.stopped) parts.push(["Stopped", esc(rec.stopped)]);
@@ -2604,15 +2799,17 @@ function mainPane(j, m, res, finished, calls) {
   const key = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([z]) => z);
   // the questions asked so far in this conversation (none above a first question)
   let html = "";
-  // 1. the answer
+  // 1. the answer (or the question back to the user)
   if (finished && j.status !== "done" && !j.answer) return html + errorBox(j, j.result);
-  if (keySec) {
+  const asked = finished && res && res.ask;
+  if (asked) html += askCard(j, res);
+  else if (keySec) {
     const paras = keySec.body.trim().split(/\n\s*\n/);
     const ck = checkerState(res), unresolved = res && res.status === "unresolved_numbers";
     // sentences end at . ! or ? before a space and a capital (a decimal point never ends one)
     const sents = paras[0].replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s+(?=[A-Z(*])/);
     const lead = sents.slice(0, 2).join(" "), more = sents.length > 2 || paras.length > 1 || ans.secs.length > 1;
-    html += `<section class="hero"><div class="hl">The answer</div><div class="prose lead">${md(lead, {nums: true})}</div>
+    html += `<section class="hero"><div class="hl">The answer</div>${notesHtml(res)}<div class="prose lead">${md(lead, {nums: true})}</div>
       ${more ? `<button class="link" data-jump="full">Read the whole answer ↓</button>` : ""}
       ${res ? `<div class="heromt"><span class="stat"><b>${res.claims.length}</b>findings</span>${res.claims.length ? `<span class="gbwrap">${gradeBar(res.claims)}</span>` : ""}<span class="stat"><b>${res.opened.length}</b>computed results</span>
         <span class="chk ${unresolved || !ck.clean ? "warn" : ""}">${unresolved || !ck.clean ? MINI.warn : MINI.ok}${unresolved ? "A number in the answer is in no computed result" : ck.clean ? "Every number traced to a computed result" : "The checker's last findings stand"}</span></div>` : ""}</section>`;
@@ -2622,11 +2819,11 @@ function mainPane(j, m, res, finished, calls) {
     html += `<section class="hero"><div class="hl">The answer</div><div class="thinking"><span class="spin"></span>${esc(stage)}… The story below fills in as the investigation goes; <button class="morebtn" data-goto="story">every step is in the Investigation log →</button></div></section>`;
   }
   // the answer's figures, under the answer: drawn by Petrophys from the results the answer rests on
-  const figs = figuresHtml(j, res);
+  const figs = asked ? "" : figuresHtml(j, res);
   if (figs) html += `<section class="chap" id="figures"><h2 class="ch2">Figures</h2>
     <p class="lede2">Drawn by <span style="color:var(--pp);font-weight:600">Petrophys</span> from the computed results this answer rests on.</p>${figs}</section>`;
   // how it was computed: the answer's path back to the measured logs, through the Petrophys steps
-  if (finished && j.status === "done" && j.answer) html += lineageHtml(j);
+  if (finished && j.status === "done" && j.answer && !asked) html += lineageHtml(j);
   // 2. the well
   if (w) {
     const iv = res && res.interval;
@@ -2724,13 +2921,119 @@ function lithText(l) {
   return "no lithology log and no shale volume: not zoned by lithology";
 }
 
-// ---------- the empty page ----------
+// ---------- the empty page: a well to start with, then questions to start with ----------
 function emptyPage() {
   S.followId = null; chipsRender();
-  $("#run").innerHTML = `<div class="empty"><h2>Ask a well a question</h2><div>Choose a well and its interval with the chips below, then ask in your own words. Every next question continues the conversation.</div>
-    <div class="steps3"><div><span class="n">1</span>A LAS file: a path on the server, or an upload</div><div><span class="n">2</span>The interval: a formation from a tops file, depths, or the whole well</div><div><span class="n">3</span>The question, in your own words</div></div>
+  $("#run").innerHTML = `<div class="empty start"><h2>Ask a well a question</h2><div>Choose a well and its interval, then ask in your own words. Every next question continues the conversation.</div>
+    <div class="startbox" id="startwell"></div>
     <div class="flow3"><div><b>Petrophys interprets</b><span>the well: logs, zones, the record</span></div><i>→</i><div><b>The model investigates</b><span>step by step, citing every result</span></div><i>→</i><div><b>Code checks</b><span>every number against the results</span></div><i>→</i><div><b>You audit</b><span>the answer, its claims and the logs</span></div></div>
     <div class="tagline"><span class="pp"><img src="/img/petrophys_mark.png" alt=""><b>Petrophys</b>&nbsp;calculates</span><span class="sep">·</span><span><b>PetroHarness</b> investigates and records</span><span class="sep">·</span><span><b>${esc((S.cfg && S.cfg.label) || "The model")}</b> interprets</span></div></div>`;
+  startRender();
+}
+S.samples = null;
+const SAMPLES_SHOWN = 6;                         // the wells a group shows before "+ N more"
+const fmtR = v => v == null ? "–" : String(Math.round(+v));     // a depth on a sample card or the well card, whole
+api("/api/samples").then(r => { S.samples = r; startRender(); }).catch(() => { S.samples = []; });
+function startRender(msg) {                     // the empty page's well box: a well to choose, or questions to start with
+  const box = $("#startwell"); if (!box) return;
+  const said = msg ? `<div class="startmsg${msg.bad ? " bad" : ""}" id="startmsg">${esc(msg.text)}</div>` : `<div class="startmsg" id="startmsg"></div>`;
+  if (!S.las) {
+    const groups = {};
+    for (const [i, r] of (S.samples || []).entries()) (groups[r.folder] = groups[r.folder] || []).push([i, r]);
+    // groups with a tops file first, smaller groups before larger ones; a large group shows its first wells
+    const tops = g => groups[g].some(([, r]) => r.tops);
+    const order = Object.keys(groups).sort((a, b) => tops(b) - tops(a) || groups[a].length - groups[b].length || a.localeCompare(b));
+    const card = ([i, r]) => `<button class="sample" data-i="${i}" title="${esc(r.las)}"><b>${esc(r.well || r.name)}</b><span>${fmtR(r.top)}–${fmtR(r.base)} ${esc(r.unit || "")} · ${r.curves} curves</span>${r.tops ? `<em>tops</em>` : ""}</button>`;
+    box.innerHTML = `<div class="drop"><b>Drop a LAS file here</b><button class="link" id="startup">Upload a LAS…</button> &nbsp;·&nbsp; <button class="link" id="startpath">Give a path on the server</button></div>` + said +
+      (order.length ? `<div class="samples"><div class="lab2">Or start with a sample well from Petrophys</div>` + order.map(g => {
+        const ws = groups[g].sort((a, b) => a[1].name.localeCompare(b[1].name, undefined, {numeric: true}));
+        const open = S.samplesOpen && S.samplesOpen[g], shown = open || ws.length <= SAMPLES_SHOWN ? ws : ws.slice(0, SAMPLES_SHOWN - 1);
+        return `<div class="sgroup"><span class="sfolder">${esc(g)}</span><div class="wells">${shown.map(card).join("")}` +
+          (shown.length < ws.length ? `<button class="sample more" data-more="${esc(g)}">+ ${ws.length - shown.length} more</button>` : "") + `</div></div>`;
+      }).join("") + `</div>` : "");
+    $$("#startwell [data-more]").forEach(b => b.onclick = e => { e.stopPropagation(); S.samplesOpen = {...(S.samplesOpen || {}), [b.dataset.more]: true}; startRender(); });
+    $("#startup").onclick = e => { e.stopPropagation(); $("#lasfile").click(); };
+    $("#startpath").onclick = e => { e.stopPropagation(); sheet("well"); $("#laspath").focus(); };
+    $$("#startwell .sample[data-i]").forEach(b => b.onclick = e => { e.stopPropagation(); pickSample(S.samples[+b.dataset.i]); });
+    return;
+  }
+  // a well is chosen: its interval in one click, then questions to start with
+  const unit = S.las.depth_unit || S.las.depth_unit_raw || "";
+  const opts = S.mode === "tops" && S.formOpts ? Object.entries(S.formOpts) : [];
+  const ivs = `<button class="ivchip${S.mode === "whole" ? " on" : ""}" data-iv="">Whole well</button>` + opts.map(([v, f]) =>
+    `<button class="ivchip${S.mode === "tops" && $("#formation").value === v ? " on" : ""}" data-iv="${esc(v)}">${esc(f.row != null ? `${f.name} ${fmtR(f.top)}–${fmtR(f.base)}` : f.name)}</button>`).join("");
+  const ready = S.mode === "whole" || (S.mode === "tops" && formationChosen()) || S.mode === "depths";
+  box.innerHTML = `<div class="wellcard"><h3>${esc(S.las.well || S.las.name)}</h3><div class="sub2">${esc(S.las.name)} · ${fmtR(S.las.top)}–${fmtR(S.las.base)} ${esc(unit)} · ${S.las.curves.length} curves${S.tops ? ` · tops: ${esc(S.tops.name)}` : ""}</div>
+      <div class="ivchips">${ivs}${S.mode === "depths" ? `<button class="ivchip on">${esc(intervalBase())}</button>` : ""}</div>
+      ${ready ? `<div class="lab2" style="margin-top:16px">Questions to start with</div><div class="suggest">${suggestions().map(q => `<button data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`
+              : `<div class="startmsg">Choose the interval to ask about: a formation above, or the whole well.</div>`}
+      <div class="startlinks"><button class="link" id="startother">Choose another well</button> &nbsp;·&nbsp; <button class="link" id="startdepths">Give depths instead</button></div></div>` + said;
+  $$("#startwell .ivchip[data-iv]").forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    if (!b.dataset.iv) setMode("whole"); else { setMode("tops"); $("#formation").value = b.dataset.iv; showFormation(); }
+    chipsRender();
+  });
+  $$("#startwell .suggest button").forEach(b => b.onclick = e => { e.stopPropagation(); $("#question").value = b.dataset.q; $("#question").focus(); $("#question").dispatchEvent(new Event("input")); });
+  $("#startother").onclick = e => { e.stopPropagation(); S.las = null; $("#laspath").value = ""; clearTops(); setMode("whole"); chipsRender(); };
+  $("#startdepths").onclick = e => { e.stopPropagation(); setMode("depths"); sheet("interval"); $("#top").focus(); };
+}
+function suggestions() {                         // the harness's own example questions, on the interval chosen
+  const ex = (S.cfg && S.cfg.examples) || [];
+  const f = S.mode === "tops" ? formationChosen() : null;
+  const d2 = v => String(+(+v).toFixed(2));          // a listing's depths in a question, to 2 decimals
+  const name = S.mode === "whole" ? "the whole well" : f ? (f.row != null ? `${f.name} ${d2(f.top)}–${d2(f.base)}${f.unit ? " " + f.unit : ""}` : f.name) : intervalBase();
+  const out = ex.map(x => x.replace("{interval}", name));
+  if (f && f.base != null && S.tops && ex.length) {    // a unit of the tops file inside the formation: the first example on it
+    const inside = S.tops.formations.filter(u => !u.repeated && !u.error && u.name !== f.name && u.top >= f.top && u.base != null && u.base <= f.base)
+      .sort((a, b) => a.top - b.top);
+    if (inside.length) out.push(ex[0].replace("{interval}", inside[0].name));
+  }
+  return out;
+}
+function clearTops() {
+  S.tops = null; S.formOpts = {}; $("#topspath").value = ""; $("#topsmsg").textContent = "";
+  $("#formation").innerHTML = `<option value="">Load a tops file first</option>`;
+}
+async function pickSample(r) {                   // a sample well in one click: its LAS and its tops file, if any
+  startRender({text: `Loading ${r.well || r.name}…`});
+  startBusy = true;
+  try {
+    $("#formerr").textContent = "";
+    clearTops();
+    $("#laspath").value = r.las; await loadLas(r.las);
+    if (S.las && r.tops) { setMode("tops"); $("#topspath").value = r.tops.path; await loadTops(r.tops.path); }
+    else setMode("whole");
+  } finally { startBusy = false; }
+  if (!S.las) { startRender({text: $("#formerr").textContent || `${r.name} could not be read.`, bad: true}); return; }
+  chipsRender();
+}
+// a file dropped anywhere: a LAS loads the well, a table the tops (or your zones, dropped on them), YAML the field notes
+let dragDepth = 0;
+const hasFiles = e => [...((e.dataTransfer && e.dataTransfer.types) || [])].includes("Files");
+window.addEventListener("dragenter", e => { if (hasFiles(e)) { dragDepth++; document.body.classList.add("dragging"); } });
+window.addEventListener("dragleave", e => { if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
+window.addEventListener("dragover", e => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener("drop", async e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging");
+  const files = [...e.dataTransfer.files].sort((a, b) => /\.las$/i.test(b.name) - /\.las$/i.test(a.name));   // the well first
+  await dropFiles(files, e.target && e.target.closest ? e.target.closest("#zonesblock") : null);
+});
+async function dropFiles(files, onZones) {
+  if (S.followId) newConversation();             // a conversation keeps its well: a dropped file starts another
+  const say = (text, bad) => { if ($("#startwell")) startRender({text, bad}); else $("#formerr").textContent = bad ? text : ""; };
+  for (const f of files) {
+    try {
+      if (/\.las$/i.test(f.name)) { clearTops(); showLas(await upload("las", f, $("#lasmsg"))); setMode("whole"); }
+      else if (/\.(ya?ml)$/i.test(f.name)) showNotes(await upload("notes", f, $("#notesmsg")));
+      else if (/\.(csv|tsv|txt|xlsx|xls)$/i.test(f.name)) {
+        if (onZones) { const j = await upload("zones", f, $("#zonesmsg")); $("#zonespath").value = j.path; await loadZones(j.path); }
+        else { const j = await upload("tops", f, $("#topsmsg")); setMode("tops"); $("#topspath").value = j.path; await loadTops(j.path); }
+      } else { say(`${f.name}: drop a LAS file (.las), a tops or zones table (.csv, .xlsx) or field notes (.yaml).`, true); return; }
+    } catch (err) { say(`${f.name}: ${err.message}`, true); return; }
+  }
+  chipsRender();
+  if ($("#formerr").textContent) say($("#formerr").textContent, true);
 }
 
 // ---------- start ----------

@@ -98,6 +98,40 @@ def test_a_stated_bottom_is_the_base_and_is_included(tmp_path):
     assert (got.top, got.base, got.closed, got.unit, got.base_from) == (590.55, 873.8616, True, "m", "stated base")
 
 
+GROUPED = """formation_name,top_depth,bottom_depth,depth_unit,rank,parent
+VIKING GP.,2452,2841,m,group,
+Draupne Fm.,2452,2593,m,formation,VIKING GP.
+Heather Fm.,2593,2841,m,formation,VIKING GP.
+BRENT GP.,2841,2958,m,group,
+Ness Fm.,2841,2865,m,formation,BRENT GP.
+Etive Fm.,2865,2958,m,formation,BRENT GP.
+"""
+
+
+def test_the_units_a_tops_file_lists_inside_the_interval(tmp_path):
+    """A group's formations (Ness, Etive in the Brent Group) are the table's units inside its interval: a question
+    about them can be read on their depths. A formation with none inside, or the interval itself, lists none."""
+    table = read_tops(_file(tmp_path, "g.csv", GROUPED))
+    assert table.within(table.interval("BRENT GP.")) == [("Ness Fm.", 2841.0, 2865.0), ("Etive Fm.", 2865.0, 2958.0)]
+    assert table.within(table.interval("Ness Fm.")) == []
+    assert [u[0] for u in table.within(table.interval("VIKING GP."))] == ["Draupne Fm.", "Heather Fm."]
+
+
+def test_the_question_carries_the_units_inside_the_interval(tmp_path, las):
+    """The units reach the model with the question, as the user's other statements do (task_for)."""
+    import petroharness.ask as K
+    tops = _file(tmp_path, "t.csv", "name,top,base,depth_unit\nGRP,1000,1004,m\nUpper,1000,1002,m\nLower,1002,1004,m\n")
+    span = K._interval(las, "GRP", tops, None, None, None, {})
+    assert span["units"] == [["Upper", 1000.0, 1002.0], ["Lower", 1002.0, 1004.0]]
+    p = K.Prepared.__new__(K.Prepared)
+    p.span, p.las, p.said, p.data, p.notes = span, las, "", {"reach": "focus"}, {}
+    _, sent = K.task_for(p, "Compare Upper and Lower.")
+    assert sent.endswith("(The tops file lists these units inside this interval: Upper 1000-1002 m; Lower 1002-1004 m.)")
+    p.data = {}                                  # reach well (the default): the map lists every unit, the question none
+    _, sent = K.task_for(p, "Compare Upper and Lower.")
+    assert sent == "Compare Upper and Lower."
+
+
 def test_a_row_without_its_bottom_takes_the_next_top(tmp_path):
     table = read_tops(_file(tmp_path, "t.csv", "name,top,base\nA,100,\nB,150,180\n"))
     assert (table.interval("A").base, table.interval("A").closed) == (150.0, False)
@@ -141,6 +175,19 @@ def test_a_well_column_keeps_this_wells_rows(tmp_path):
 def test_a_unit_in_the_header(tmp_path, header, unit):
     table = read_tops(_file(tmp_path, "h.csv", f"{header}\nA,100\nB,200\n"))
     assert table.interval("A").unit == unit and table.interval("A").base == 200.0
+
+
+@pytest.mark.parametrize("text", ["A,100\nB,150,180\n", "name,top\nA,100\nB,150,180,9\n", ""])
+def test_a_tops_file_that_is_not_a_table_is_said_with_what_and_fix(tmp_path, text):
+    with pytest.raises(ValueError, match=r"WHAT: the tops file t.csv cannot be read as a table .*FIX: give every row"):
+        read_tops(_file(tmp_path, "t.csv", text))
+
+
+def test_a_settings_tops_table_that_is_not_a_table_is_said_with_what_and_fix(tmp_path):
+    from petroharness.well.formation import _tops_table
+    path = _file(tmp_path, "tops.csv", "uwi,form,top\nW,A,100\nW,B,150,9\n")
+    with pytest.raises(ValueError, match=r"WHAT: the settings' tops table tops.csv cannot be read as a table"):
+        _tops_table(str(path), (("well", "uwi"), ("name", "form"), ("top", "top")))
 
 
 def test_the_unit_given_then_the_las_unit_when_the_table_states_none(tmp_path):
@@ -230,6 +277,8 @@ def test_a_formation_from_the_tops_file(las, tmp_path):
 def test_interval_errors(las, tmp_path):
     tops = _file(tmp_path, "tops.csv", "formation,top\nUpper,1000.5\nLower,1002\n")
     with pytest.raises(ValueError, match="both a tops file and depths"):
+        A._interval(las, "Upper", tops, 1000.0, 1001.0, None, {})
+    with pytest.raises(LookupError, match="'Upper' has no row with top 1000 .*line 2: top 1000.5"):
         A._interval(las, "Upper", tops, 1000.0, None, None, {})
     with pytest.raises(ValueError, match="tops file is given without a formation.*Upper, Lower"):
         A._interval(las, None, tops, None, None, None, {})
@@ -305,28 +354,24 @@ def test_skills_none_reaches_the_config(monkeypatch, tmp_path):
 def test_the_model_endpoint(monkeypatch):
     from petroharness.models import MODELS
     monkeypatch.delenv("PETROHARNESS_MODEL_URL", raising=False)
-    monkeypatch.delenv("K2H_TOOL_URLS", raising=False)
     with pytest.raises(ValueError, match="no model endpoint.*PETROHARNESS_MODEL_URL"):
         A._model_key(None, None)
-    assert A._model_key(None, lambda cfg: None) == "k200t"                 # a stub model needs none
+    assert A._model_key(None, lambda cfg: None) == "k2-horizon-7b"                 # a stub model needs none
     key = A._model_key("http://h1:8100/v1,http://h2:8100/v1", None)
-    assert MODELS[key] == (MODELS["k200t"][0], ["http://h1:8100/v1", "http://h2:8100/v1"])
-    monkeypatch.setenv("PETROHARNESS_MODEL_URL", ",".join(MODELS["k200t"][1]))
-    assert A._model_key(None, None) == "k200t"
-    monkeypatch.delenv("PETROHARNESS_MODEL_URL")
-    monkeypatch.setenv("K2H_TOOL_URLS", "http://h3:8100/v1")              # read too
-    assert MODELS[A._model_key(None, None)][1] == ["http://h3:8100/v1"]
+    assert MODELS[key] == (MODELS["k2-horizon-7b"][0], ["http://h1:8100/v1", "http://h2:8100/v1"])
+    monkeypatch.setenv("PETROHARNESS_MODEL_URL", ",".join(MODELS["k2-horizon-7b"][1]))
+    assert A._model_key(None, None) == "k2-horizon-7b"
 
 
 def test_any_chat_model_by_its_served_name(monkeypatch):
     from petroharness.models import GENERIC_CARD, MODELS, label
     key = A._model_key("http://h:8000/v1", None, "Qwen/Qwen3-32B")
     assert MODELS[key] == (GENERIC_CARD, ["http://h:8000/v1"], "Qwen/Qwen3-32B")
-    assert A._model_label(key) == "Qwen/Qwen3-32B" and label(MODELS["k200t"][0]) == "K2-Horizon-7B"
-    assert A._model_key(None, lambda cfg: None, "m") != "k200t"            # a stub model with a name: the generic card
+    assert A._model_label(key) == "Qwen/Qwen3-32B" and label(MODELS["k2-horizon-7b"][0]) == "K2-Horizon-7B"
+    assert A._model_key(None, lambda cfg: None, "m") != "k2-horizon-7b"            # a stub model with a name: the generic card
     with pytest.raises(ValueError, match="names no model.*--model NAME"):
         A._model_key("http://h:8000/v1", None, model_card="generic")
-    with pytest.raises(ValueError, match="no model card 'nope'.*generic, k2_horizon_7b_grpo200"):
+    with pytest.raises(ValueError, match="no model card 'nope'.*generic, k2_horizon_7b"):
         A._model_key("http://h:8000/v1", None, model_card="nope")
 
 
@@ -371,7 +416,7 @@ def test_the_command_line(tmp_path, monkeypatch):
                   "top": None, "base": None, "depth_unit": "ft", "lithology_curve": "LITH",
                   "formation_lithology": "sandstone", "profile": None, "out": Path.cwd() / "petroharness-out" / "TW1",
                   "model_url": "http://h:8100/v1", "model": None, "model_card": None, "settings": None, "skills": None,
-                  "max_steps": None, "direct": True, "field_notes": None}
+                  "max_steps": None, "direct": True, "field_notes": None, "zones": None, "zones_sheet": None}
     kw = A.options(A.parser().parse_args(["--las", "a.las", "--question", "q", "--model", "Qwen/Qwen3-32B",
                                           "--investigate"]))
     assert (kw["model"], kw["model_card"], kw["direct"]) == ("Qwen/Qwen3-32B", None, False)
@@ -451,7 +496,7 @@ def test_the_help_shows_the_own_well_usage_and_names_benchmark_mode(monkeypatch,
 
 @pytest.mark.data
 @pytest.mark.parametrize("skills", [None, "none"])
-def test_a_question_about_a_sample_well_end_to_end(tmp_path, monkeypatch, skills):
+def test_a_question_about_a_sample_well_end_to_end(tmp_path, monkeypatch, capsys, skills):
     from test_read import Stub
     las, tops = SAMPLES / "tuhua-7.las", SAMPLES / "formations_tuhua-7.csv"
     if not las.exists() or not tops.exists():
@@ -479,3 +524,29 @@ def test_a_question_about_a_sample_well_end_to_end(tmp_path, monkeypatch, skills
     assert ("Skill library:** none (no guides)" in md) == (skills == "none")
     assert json.loads((tmp_path / "out" / "trace.json").read_text())["ask"]["interval"]["top"] == 590.55
     assert any((tmp_path / "out" / ".cache").rglob("*.pkl"))                       # the interpreted well, cached
+    # the setup it answered under: the hash `petroharness setup` gives for the same well and options, and its parts
+    from petroharness.core import setup as S
+    argv = ["--json", "--las", str(las), "--formation", "mount messenger", "--tops", str(tops)]
+    assert S.main(argv + (["--skills", skills] if skills else [])) == 0
+    assert r.trace["setup"] == json.loads(capsys.readouterr().out)["hash"]
+    assert r.trace["setup_parts"]["mode"] == "interactive" and S._sha(r.trace["setup_parts"]) == r.trace["setup"]
+
+
+def test_a_card_that_leaves_out_the_model_names_none(tmp_path):
+    """A card without `model:` names no model (the question asks for --model), not a default name."""
+    card = _file(tmp_path, "bare.yaml", "model:\n  temperature: 0.2\n")
+    with pytest.raises(ValueError, match="names no model"):
+        A._model_key("http://h:8000/v1", None, model_card=str(card))
+    assert A._model_key("http://h:8000/v1", None, "served-name", str(card))
+
+
+def test_a_name_the_tops_file_lists_twice_is_chosen_by_its_top(las, tmp_path):
+    """A repeated name (a repeated section) is refused alone, and chosen by the top of the row meant: the interval is
+    that row's, and the tops file stays for the other units (the web UI lists each listing; user, 2026-11-20: ask the
+    user to select one, or to fix the file)."""
+    tops = _file(tmp_path, "tops.csv", "formation,top,base\nRepeat,1000.5,1001.5\nOther,1001.5,1002\nRepeat,1002,1003\n")
+    with pytest.raises(LookupError, match="listed 2 times.*by its top: --formation NAME --tops FILE --top D"):
+        A._interval(las, "Repeat", tops, None, None, None, {})
+    got = A._interval(las, "repeat", tops, 1002.0, None, None, {})
+    assert (got["name"], got["top"], got["base"], got["closed"]) == ("Repeat", 1002.0, 1003.0, True)
+    assert A._interval(las, "Repeat", tops, 1000.5, None, None, {})["base"] == 1001.5

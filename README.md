@@ -10,16 +10,16 @@ Every number in the answer traces back to the log.
 
 **Petrophys calculates · the model investigates · the harness records · you decide**
 
-[![Version](https://img.shields.io/badge/version-1.0.0-011e3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.5.0-011e3f)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.10-011e3f)](#install)
 [![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](docs/MODELS.md)
 [![Default model](https://img.shields.io/badge/default-K2--Horizon--7B-ef6719)](docs/MODELS.md)
 [![Calculations](https://img.shields.io/badge/calculations-Petrophys-197e6f)](https://github.com/sambalshikhar/petrophys)
 [![Paper](https://img.shields.io/badge/paper-ADIPEC%202026%20%C2%B7%20SPE--236034--MS-011e3f)](#citation)
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [Your own wells](docs/USAGE.md) · [Models](docs/MODELS.md) · [Web UI](docs/UI.md) · [Architecture](docs/ARCHITECTURE.md) · [Citation](#citation)
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Evaluate a formation](docs/USAGE.md) · [Models](docs/MODELS.md) · [Web UI](docs/UI.md) · [Architecture](docs/ARCHITECTURE.md) · [Citation](#citation)
 
-<img src="docs/images/ui-answer.png" alt="The PetroHarness web UI: a question about the Mount Messenger formation of a well, answered conclusion first: the answer and how sure it is, then the well as Petrophys interpreted it, with the zones the answer names marked" width="100%">
+<img src="docs/images/ui-30_6-5-brent-answer.png" alt="The PetroHarness web UI: a question about the Brent Group of GeoLink well 30/6-5, answered: the phases the run went through, the answer's opening with every number traced to a computed result, its findings by confidence, and the figures Petrophys drew" width="100%">
 
 </div>
 
@@ -35,8 +35,8 @@ gives the model a petrophysicist's way of working instead, and keeps a record of
 
 #### Every number is traceable
 Each number in an answer cites the result it came from. Each result keeps the tool call that opened it, and each
-value in it names its source: a measurement, or the Petrophys step that computed it. The trace can rebuild every
-prompt.
+value in it names its source: a measurement, or the Petrophys step that computed it. A conversation keeps every
+request the model was sent, and its reply.
 
 </td>
 <td width="33%" valign="top">
@@ -84,18 +84,18 @@ K2-Horizon-7B is the default. Serve the model yourself and the well data stays o
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="docs/images/ui-progress.png" alt="How the answer was reached: each part of the question with its finding, its confidence, a chart of the zone values it rests on with the net-pay cutoff, why it matters and what could change it"></td>
-<td width="50%" valign="top"><img src="docs/images/ui-claims.png" alt="Evidence: each claim with its grade, what it means, what weakens it and the results it rests on, one of them opened under it as tables"></td>
+<td width="50%" valign="top"><img src="docs/images/ui-30_6-5-brent-lineage.png" alt="How it was computed: from the measured logs, through the Petrophys steps with their methods and parameters, to the results the model opened, the findings and the answer"></td>
+<td width="50%" valign="top"><img src="docs/images/ui-30_6-5-brent-evidence.png" alt="Evidence: each point of the question with its claims, graded, what each means, what weakens it, the code's checks and the computed results it rests on"></td>
 </tr>
 <tr>
-<td valign="top"><b>Follow the reasoning.</b> The answer comes first, then each part of the question: its finding, how sure it is, a chart of the zone values it rests on against the cutoff, and what could change it.</td>
-<td valign="top"><b>Check every claim.</b> Each claim shows what it means, what weakens it and the computed results it rests on; open them under the claim. Click any number in the answer to see the results that show it.</td>
+<td valign="top"><b>Trace every number.</b> Click a number in the answer and follow it back: the results that show it, the Petrophys steps and parameters that computed them, and the measured logs they start from.</td>
+<td valign="top"><b>Check every claim.</b> Each point of the question with its claims, graded: what each means, what weakens it, what the code checked, and the computed results it rests on.</td>
 </tr>
 <tr>
-<td colspan="2" valign="top"><img src="docs/images/ui-logs.png" alt="Well logs: the interval as Petrophys interpreted it, gamma ray, resistivity, density and neutron, sonic, shale volume, porosity, water saturation and permeability, the flags and the lithology zones, with the values at the cursor's depth"></td>
+<td colspan="2" valign="top"><img src="docs/images/ui-30_6-5-brent-logs.png" alt="Well logs: the Brent Group as Petrophys interpreted it, with the zones from the lithology log, gamma ray, resistivity, density and neutron, sonic, shale volume, porosity, water saturation, permeability and the flags"></td>
 </tr>
 <tr>
-<td colspan="2" valign="top"><b>See the well.</b> The interval as Petrophys interpreted it, track by track, with the lithology zones the investigation works in. Move over the logs to read every curve at a depth; click a zone to pick it.</td>
+<td colspan="2" valign="top"><b>See the well.</b> The interval as Petrophys interpreted it, track by track, with the zones from the lithology log the investigation works in. Move over the logs to read every curve at a depth; click a zone to pick it. Data: GeoLink, CC BY-SA 4.0.</td>
 </tr>
 </table>
 
@@ -120,6 +120,7 @@ Petrophys compute it: another method, an estimate, a what-if, a fit, or any of a
 
 When a method needs what the well does not carry (Rwb for dual water, CEC for Waxman–Smits, a normal-compaction
 trend for Eaton), the answer says what is missing. The tools and the functions behind them: [docs/TOOLS.md](docs/TOOLS.md).
+Six complex questions answered on wells that ship with Petrophys: [docs/EXAMPLES.md](docs/EXAMPLES.md).
 
 **Skill guides.** For the topic areas below, the skill library holds a sourced guide, and the model picks the guides
 a question needs. They guide the investigation; they do not limit what you can ask.
@@ -144,7 +145,7 @@ flowchart LR
     inv["Investigate<br/>up to 8 steps: tools,<br/>ledger, cited claims"]:::model
     skills[("Skill library<br/>sourced guides")]:::record
     settle["Settle<br/>final claims"]:::model
-    write["Write from the evidence<br/>claims + every result;<br/>code checks, repairs"]:::model
+    write["Write from the evidence<br/>points + limits + every result;<br/>code checks, repairs"]:::model
     out["Answer and<br/>full trace"]:::output
 
     las --> pp
@@ -168,103 +169,120 @@ flowchart LR
 | **2 · Read** | The model chooses the topic areas the question touches, lists the measurements the question names, and says whether the question is direct (a value, a setting, a count that one or two lookups state) or needs an investigation. A direct question skips stages 3 and 4: one or two lookups, then a short answer with its basis, in about a quarter of the model's work. Where the lookups do not state what is asked, it gets the investigation after all. `--investigate` gives every question the full investigation. |
 | **3 · Investigate** | Up to eight steps, each one model call rebuilt from the state. The model opens results with tools (statistics zone by zone, analyzer classes as located depth runs, profiles, comparisons, crossplots, overlaps, arithmetic), has Petrophys compute what the record does not hold (another method, an estimate, a what-if, any of its functions), and adds, revises or drops claims that cite them. Code checks each claim as it arrives. |
 | **4 · Settle** | With every opened result in view, the claims become final. |
-| **5 · Write and check** | The writer concludes once, from all the evidence: the settled claims, every result the investigation opened (where they differ, the results decide) and a card of what each curve is and how its values were made. A checker sends back numbers no result shows, statements the record contradicts and leftover working notes, for repair. |
+| **5 · Write and check** | The writer concludes once, from all the evidence: the question's points with the limits the settled claims found, every result the investigation opened and a card of what each curve is and how its values were made. A checker sends back numbers that nothing the writer was shown supports, statements the record contradicts and leftover working notes, for repair. |
 
 The parts in detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The question graph, node by node:
 [docs/GRAPH.md](docs/GRAPH.md). The design rules: [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Quick start
 
+```mermaid
+flowchart TB
+    i["Install<br/>pip install"]:::input --> c["Connect a model<br/>PETROHARNESS_MODEL_URL"]:::input
+    c --> a["Ask about an interval<br/>petroharness --las --question"]:::model
+    c --> b["Or ask in the browser<br/>petroharness ui"]:::model
+    a --> k["Keep asking<br/>petroharness chat"]:::model
+    k --> u["Audit the answers<br/>petroharness audit"]:::output
+
+    classDef input fill:#ffffff,stroke:#011e3f,color:#011e3f
+    classDef model fill:#e6ecf4,stroke:#011e3f,color:#011e3f
+    classDef output fill:#fdeee4,stroke:#ef6719,color:#7a3410
+```
+
 ### Install
 
 ```bash
 python3.10 -m venv .venv
 .venv/bin/pip install -r requirements.lock
-.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@916ca46c37980ceac56a0c4ac94b2eb0f8d8632c"
+.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@7aa9968e72e7c09a28e68af383471184af9f5f52"
 .venv/bin/pip install -e . --no-deps
+source .venv/bin/activate
 ```
 
-This installs the `petroharness` command. Petrophys is pinned at commit `916ca46`.
+This installs the `petroharness` command. Petrophys is pinned at commit `7aa9968`, and its sample wells are the ones
+the examples below ask about.
 
 ### Connect a model
 
-Point PetroHarness at any OpenAI-compatible endpoint:
-
 ```bash
-export PETROHARNESS_MODEL_URL=http://localhost:8000/v1     # several servers: comma-separated
+export PETROHARNESS_MODEL_URL=http://localhost:8000/v1     # any OpenAI-compatible endpoint; several: comma-separated
 ```
 
-The default model is K2-Horizon-7B. To use any other chat model, give its served name with `--model`:
-
-```bash
-petroharness --model Qwen/Qwen3-32B --las well.las --question "..."
-```
-
-How to serve a model with vLLM, SGLang or Ollama, a reasoning model's settings, a hosted API, and model cards:
-[docs/MODELS.md](docs/MODELS.md).
+The default model is K2-Horizon-7B. For any other chat model, give its served name with `--model Qwen/Qwen3-32B`.
+Serving with vLLM, SGLang or Ollama, reasoning models, hosted APIs and model cards: [docs/MODELS.md](docs/MODELS.md).
 
 ### Ask
 
+GeoLink well 30/6-5 ships with Petrophys. Its Brent Group (2841–2958 m) has a lithology log and core:
+
 ```bash
-petroharness --las well.las --tops tops.csv --formation "Mount Messenger" \
-    --question "Where are the best reservoir intervals, and is any of them hydrocarbon-bearing?"
+LAS=$(python -c "import petrophys; print(petrophys.sample('30/6-5'))")
+TOPS=$(python -c "import petrophys; print(petrophys.sample('formations_30_6-5.csv'))")
+
+petroharness --las $LAS --tops $TOPS --formation "BRENT GP." \
+  --question "What are the porosity, water saturation and permeability of the Brent Group, and is any of it hydrocarbon-bearing?"
 ```
 
-| You have | Choose the interval with |
-|---|---|
-| a tops file | `--tops tops.csv --formation NAME` (CSV, TSV or Excel; its columns are found by meaning) |
-| depths | `--top 5340 --base 5600 --depth-unit ft` |
-| neither | nothing: the whole well is the default |
+> **30_6-5: BRENT GP.** · 2841-2958 m, 768 samples · zones from the lithology log LITHOLOGY_GEOLINK (detected) ·
+> status ok, 8 investigation steps
+>
+> **Hydrocarbon potential.** No zone is confirmed to hold hydrocarbons. The integrated analyzer flags
+> **PRIME_OIL_TARGET on 23.6 m (28.4 % of the zoned thickness)** in Z1, Z4–Z5, Z6, Z7, Z8 and Z9. […]
 
-The answer is printed. `answer.md` and `trace.json` are written to `./petroharness-out/<well>/`; the trace holds
-every model call and every result opened. With no lithology log, the well is zoned by shale volume
-(`--lithology-curve` names one the harness does not find, and `--formation-lithology` states what you know). Every
-option, with examples on three wells: [docs/USAGE.md](docs/USAGE.md).
+| You have | Choose the interval with | A sample well that shows it |
+|---|---|---|
+| a tops file (CSV, TSV or Excel) | `--tops FILE --formation NAME` | GeoLink 30/6-5, `--formation "BRENT GP."` |
+| depths | `--top D --base D` | GeoLink 25/5-1, `--top 2990 --base 3290` (its cored section) |
+| neither | nothing: the whole log | Teapot 17-WX-21, in feet from surface (`petrophys.sample('teapot_17-wx-21')`) |
+
+The answer is printed, and `answer.md` and `trace.json` (every model call and every result opened) go to
+`./petroharness-out/<LAS name>/`. A well with no lithology log, such as Taranaki tuhua-7, is zoned by shale-volume
+bands. More: [docs/USAGE.md](docs/USAGE.md).
+
+Data: GeoLink, CC BY-SA 4.0; Teapot Dome (NPR-3), RMOTC, U.S. Department of Energy; Taranaki Basin Curated Well Logs
+Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.
 
 ### Keep asking
 
 ```bash
-petroharness chat --las well.las --tops tops.csv --formation "Mount Messenger"
+petroharness chat --las $LAS --tops $TOPS --formation "BRENT GP." --session brent
 ```
 
-One interval stays open and you ask as many questions as you like. A later question starts from what the earlier ones
-found: ask about an answer, try another method or parameter, or go further. Where a plot says it better, the answer
-carries figures drawn by Petrophys. [docs/SESSIONS.md](docs/SESSIONS.md).
+One interval stays open for as many questions as you have. A later question starts from what the earlier ones found:
+ask about an answer, try another method or parameter, or go further. Answers carry figures drawn by Petrophys where a
+plot says it better. [docs/SESSIONS.md](docs/SESSIONS.md).
 
 ### Audit an answer
 
 ```bash
-petroharness audit ./petroharness-sessions/well-20261114-101500
+petroharness audit brent                 # every answer's trail; --question N for one
+petroharness report brent                # the whole conversation as one document
 ```
 
-For each answer: the claims and the results they cite, each number with the results that show it, the curves those
-results read, the Petrophys steps and parameters behind the curves, and the LAS file's hash. It is read from the
-session folder alone. [docs/EVIDENCE.md](docs/EVIDENCE.md).
+Each answer's claims and the results they cite, and each number's path back through the curves and the Petrophys
+steps to the LAS file, read from the session folder alone. [docs/EVIDENCE.md](docs/EVIDENCE.md).
 
 ### In the browser
 
 ```bash
-petroharness ui                      # http://127.0.0.1:7860
+petroharness ui                          # http://127.0.0.1:7860
 ```
 
-In the browser you can:
+![An answer in the web UI](docs/images/ui-30_6-5-brent-answer.png "An answer in the web UI, on GeoLink 30/6-5, Brent Group: the phases it went through, the answer's opening, its findings by confidence, the results it rests on and the checker's outcome.")
 
-- pick a LAS file and the interval, and ask your question;
-- read the answer as a story: the conclusion, the well with the zones it names, and each finding with the zone values
-  it rests on;
-- see the interval's logs as Petrophys interpreted them;
-- trace any number in the answer to the results that show it, check each claim against its evidence, and follow
-  every step of the investigation in its log.
-
-Runs are saved, and can be rated and replayed. See [docs/UI.md](docs/UI.md).
+Pick a LAS file and the interval, and ask. The answer reads as a report, conclusion first, with the well as Petrophys
+interpreted it, its figures, and every number traceable to the results that show it. Runs are saved, and can be rated
+and replayed. [docs/UI.md](docs/UI.md).
 
 ### From Python
 
 ```python
+import petrophys
 from petroharness.ask import ask
 
-result = ask("well.las", "Are there any hydrocarbon indicators?", tops="tops.csv", formation="Oread",
-             model="Qwen/Qwen3-32B", model_url="http://localhost:8000/v1")
+result = ask(petrophys.sample("30/6-5"), "Which zone has the best reservoir quality?",
+             tops=petrophys.sample("formations_30_6-5.csv"), formation="BRENT GP.",
+             model_url="http://localhost:8000/v1")
 print(result.answer)          # result.trace: every call and every result opened
 ```
 
@@ -301,9 +319,13 @@ never recomputes petrophysics on its own. Documentation: [petrophys.netlify.app]
 
 ## Documentation
 
+Start at **[docs/README.md](docs/README.md)**: the map of the documentation, with reading paths by goal. Every command,
+field, setting, tool and record is described in the [reference](docs/README.md#4-reference).
+
 | Guide | What it covers |
 |---|---|
-| [docs/USAGE.md](docs/USAGE.md) | asking about your own wells: intervals, tops files, units, lithology, output, the Python API |
+| [docs/README.md](docs/README.md) | the map of the documentation: guides, concepts and the full reference |
+| [docs/USAGE.md](docs/USAGE.md) | evaluating a formation in your own wells: intervals, tops files, units, lithology, output, the Python API |
 | [docs/SESSIONS.md](docs/SESSIONS.md) | conversations: follow-up questions on one interval, figures, the session folder, resume |
 | [docs/EVIDENCE.md](docs/EVIDENCE.md) | the evidence graph and the audit trail of an answer |
 | [docs/SETUP.md](docs/SETUP.md) | the setup record: what answers a question, with one hash |

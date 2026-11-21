@@ -1,11 +1,8 @@
 """The switches under test. A switch exists only while an A/B needs it: it defaults off, and once measured it becomes
 the default (its branch deleted) or goes. Every trace records the options in force.
 
-No switch is under test. The six switches of the measured build (zone_order, see_first, stop_check, writer_points,
-writer_fresh, fresh_doubts) are the code; the 17 others were measured null or negative and removed with their code.
-The switch `depth` (the direct route for benchmark questions) was measured on the whole benchmark with both models and
-is the code too: a run that wants the full investigation for every question asks for it (`--investigate`,
-`direct=False`), as a setting of the run, not a switch.
+No switch is under test. A run that wants the full investigation for every question asks for it (`--investigate`,
+`direct=False`): that is a setting of the run, not a switch.
 
     PETROHARNESS_SET="name=true,other=a+b"     overrides the defaults for one run
     options.get()                              the options in force

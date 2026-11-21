@@ -41,7 +41,7 @@ def test_no_text_is_in_two_components():
 
 def test_the_former_constants_are_the_entries():
     from petroharness.agent import loop, writer
-    assert loop.STEP1 == C.text("C5", "step1") and loop.SETTLE_V9 == C.text("C10", "settle_v9")
+    assert loop.STEP1 == C.text("C5", "step1") and loop.SETTLE_WEAKNESSES == C.text("C10", "settle_weaknesses")
     assert writer.TABLE_RULE == C.text("C9", "table_rule") and loop.ASPECTS_RULE == C.text("C9", "aspects_rule")
 
 
@@ -63,7 +63,7 @@ def test_a_version_follows_its_files(tmp_path, monkeypatch):
         f.cache_clear()
     try:
         before = C.versions()
-        p = C.folder("C10") / C.meta("C10")["texts"]["settle_v9"]
+        p = C.folder("C10") / C.meta("C10")["texts"]["settle_weaknesses"]
         p.write_text(p.read_text() + " ")
         C.version.cache_clear()
         after = C.versions()
@@ -81,7 +81,7 @@ def _covers(spans, n):
 
 
 def test_attribution_covers_the_message_and_finds_the_entries():
-    rule, step = C.text("C10", "settle_v9"), C.text("C5", "settle")
+    rule, step = C.text("C10", "settle_weaknesses"), C.text("C5", "settle")
     msg = "QUESTION:\nWhat is the pay?\n\n" + step + rule + "\n\nsome data 1.234"
     spans = C.attribute(msg, "C5")
     _covers(spans, len(msg))
@@ -140,3 +140,24 @@ def test_every_call_of_a_golden_replay_is_attributed_whole(ds, monkeypatch):
             _covers(att["segments"], len(m.get("content") or ""))
     first_user = calls[0]["messages"][1]["segments"]
     assert {"C5", "C7"} <= {s[0] for s in first_user}                         # the READ call: its frame and the map
+
+
+def test_the_writer_s_sections_and_a_short_header_entry_are_attributed_to_their_components():
+    """The writer's request: the points and the limits (C3), the results (C7), the curve card (C9) each under its own
+    header; a header that is an entry shorter than MIN_MATCH (C8's 'Edits not applied:') is its component's, and the
+    list under it the header's owner's (C2)."""
+    from petroharness.agent import components as C
+    msg = ("QUESTION:\nHow porous?\n\nTHE QUESTION'S POINTS (the answer covers each):\nPoint 1: porosity by zone\n\n"
+           "LIMITS THE INVESTIGATION FOUND (in some results):\nPoint 1: one zone only\n\n"
+           "RESULTS (everything the investigation computed, by id):\n[E1] stats PHIE\n\n"
+           "WHAT THE CURVES ARE (from the record):\nPHIE: effective porosity\n\n"
+           + C.text("C8", "edits_not_applied") + "- C1 cites E9, which is no result\n")
+    spans = C.attribute(msg, "C9")
+
+    def who(sub):
+        i = msg.index(sub)
+        return next(cid for cid, _, a, b in spans if a <= i < b)
+
+    assert (who("Point 1: porosity"), who("Point 1: one zone"), who("[E1] stats PHIE"), who("PHIE: effective")) == \
+        ("C3", "C3", "C7", "C9")
+    assert who("Edits not applied") == "C8" and who("- C1 cites E9") == "C2"

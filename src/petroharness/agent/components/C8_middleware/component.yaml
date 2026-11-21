@@ -5,11 +5,12 @@ texts:
   not_run: not_run.md
   not_run_guide: not_run_guide.md         # with a skill library only
   actions_left_out: actions_left_out.md
+  extra_left_out: extra_left_out.md   # guides or calculations beyond a step's own caps
   withheld: withheld.md         # results over NEW's budget, shown first at the next step
   withheld_last: withheld_last.md   # the same before the last step: settle shows every result
   shown_above: shown_above.md   # a result asked for again in the step that already shows it
   nothing_new: nothing_new.md
-  done_waits: done_waits.md     # options.see_first: a done while opened results are still withheld waits one step
+  done_waits: done_waits.md     # a done while opened results are still withheld waits one step
   edits_not_applied: edits_not_applied.md
 frames:
 - agent/graph.py

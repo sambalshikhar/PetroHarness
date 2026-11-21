@@ -2,7 +2,7 @@ id: C7
 name: scripts
 purpose: 'the tool outputs and the map: computed by Petrophys and the harness''s code'
 texts:
-  parameter: parameter.md      # a step curve that holds one value for the whole well, labelled a parameter
+  one_value: one_value.md      # a step curve that holds one value over the whole well (its record says how)
 frames:
 - agent/tools.py
 - agent/compute.py

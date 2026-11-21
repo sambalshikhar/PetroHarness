@@ -124,8 +124,10 @@ def summary(x, log: bool = False) -> dict:
 
 
 def class_shares(line: str) -> dict:
-    """{code: (share %, samples)} of a class-codes line ('class 5 (SILT) 88.3% (106 samples, 15.9 m)')."""
-    return {float(c): (float(p), int(k)) for c, p, k in re.findall(r"class (-?\d+)(?: \([^)]*\))? ([\d.]+)% \((\d+) samples", line)}
+    """{codes: (share %, samples)} of a class-codes line ('class 5 (SILT) 88.3% (106 samples, 15.9 m)'; codes the
+    record's labels name alike are one class: 'class 9, 12 (LIMESTONE) ...' gives the key (9.0, 12.0))."""
+    return {tuple(float(x) for x in cs.split(", ")): (float(p), int(k)) for cs, p, k in
+            re.findall(r"class (-?\d+(?:, -?\d+)*)(?: \([^)]*\))? ([\d.]+)% \((\d+) samples", line)}
 
 
 def rank_corr(a, b) -> float:
@@ -172,7 +174,7 @@ _COEF = re.compile(r" \((?:Spearman|Pearson)[^()]*(?:\([^()]*\)[^()]*)*\)")
 _LABEL = re.compile(r"(?m)^(  [^:\n]*?), (?:log10\()?[A-Z][A-Za-z0-9_]*\)?(?: \([a-z][a-z ,]*\))?"
                     r"(?: on (?:log10\()?[A-Z][A-Za-z0-9_]*\)?)?: ")
 _SHORT = re.compile(r"^  Z\d+, ")                 # a zone's shorter row, shown when the full rows do not fit
-_TAILS = ("  zones pooled, ", "  these zones pooled, ", "  whole interval (", "  outside any zone (")
+_TAILS = ("  zones pooled, ", "  these zones pooled, ", "  whole interval (", "  every sample where ", "  outside any zone (")
 
 
 def plain_tool(fn):

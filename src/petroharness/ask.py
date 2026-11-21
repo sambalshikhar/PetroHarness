@@ -95,7 +95,7 @@ def _settings(las: Path, settings: Path | None, profile: str | None, lithology_c
         if not Path(path).is_file():
             raise FileNotFoundError(f"WHAT: no data settings file at {path}. FIX: give an existing YAML file "
                                     f"(configs/data.example.yaml shows the keys), or unset {DATA_FILE_ENV}.")
-        data = dict((yaml.safe_load(Path(path).read_text()) or {}).get("data") or {})
+        data = dict((yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}).get("data") or {})
     data.setdefault("las_dir", str(las.parent))
     data.setdefault("cache_dir", str(cache_dir))
     if lithology_curve:
@@ -142,17 +142,18 @@ def _interval(las: Path, formation: str | None, tops: Path | None, top: float | 
         raise ValueError(f"WHAT: depth unit {depth_unit!r} is not m or ft. FIX: give m or ft.")
     las_unit, names = _las_header(las)
     if tops is not None:
-        if top is not None or base is not None:
+        if base is not None:
             raise ValueError("WHAT: both a tops file and depths (--top/--base) are given. WHY: either gives the "
-                             "interval. FIX: keep one: --formation NAME --tops FILE, or --top D --base D.")
+                             "interval. FIX: keep one: --formation NAME --tops FILE (with --top D, the row's top, for "
+                             "a name the file lists twice), or --top D --base D.")
         table = read_tops(tops, names, stated, las_unit)
         if not formation:
             raise ValueError(f"WHAT: a tops file is given without a formation. FIX: add --formation with one of its "
                              f"names: {', '.join(table.names())}.")
-        got = table.interval(formation)
+        got = table.interval(formation, top)          # top: which row, for a name the file lists twice
         source = f"tops file {Path(tops).name}, base: {got.base_from}"
         out = {"name": got.name, "top": got.top, "base": got.base, "closed": got.closed, "unit": got.unit,
-               "from": source}
+               "from": source, "units": [list(u) for u in table.within(got)]}
     elif top is not None or base is not None:
         unit = stated or las_unit
         if top is None or base is None:
@@ -182,6 +183,37 @@ def _interval(las: Path, formation: str | None, tops: Path | None, top: float | 
     return out
 
 
+def _units(las: Path, tops: Path, depth_unit: str | None) -> tuple:
+    """The tops file's units of this well, for selections anywhere in it (data.units, reach "well";
+    docs/designs/zones-and-intervals.md): each {name, top, base, closed, unit, line}, in the file's unit (None: the
+    LAS's own), the base the unit's own where the file states it, else the next top (not included), else the end of the
+    log (None). A name the file lists twice keeps each of its rows (a selection of it is refused with them); a row the
+    file gets wrong (its base not below its top) is left out, as it would be refused as the focus, and kept with why
+    (a question naming it is asked back: the row to fix; question suite U05 was told the unit is not in the file).
+    (units, rows left out)."""
+    stated = depth_unit_name(depth_unit) if depth_unit else None
+    las_unit, names = _las_header(las)
+    table = read_tops(tops, names, stated, las_unit)
+    from petroharness.well.tops import name_key
+    out, left = [], []
+    for name in table.names():
+        rows = [t for t in table.tops if name_key(t.name) == name_key(name)]
+        if len(rows) > 1:
+            out += [{"name": t.name, "top": t.top, "base": t.base, "closed": t.base is not None, "unit": t.unit,
+                     "line": t.line} for t in rows]
+            continue
+        try:
+            got = table.interval(name)
+        except ValueError as e:
+            t = rows[0]
+            left.append({"name": t.name, "line": t.line, "top": t.top, "base": t.base, "unit": t.unit,
+                         "why": str(e).replace("WHAT: ", "").split(" FIX:")[0].strip()})
+            continue
+        out.append({"name": got.name, "top": got.top, "base": got.base, "closed": got.closed, "unit": got.unit,
+                    "line": rows[0].line})
+    return out, left
+
+
 def _factor(unit: str, to: str) -> float:
     from petroharness.well.tops import convert
     return convert(1.0, unit, to)
@@ -191,12 +223,12 @@ def _model_key(model_url: str | None, llm_factory, model: str | None = None, mod
     """The model registry key (petroharness.models): the model card (--model-card; else the generic card when --model
     names the served model; else K2-Horizon-7B's) and the endpoints (--model-url, else PETROHARNESS_MODEL_URL;
     comma-separated)."""
-    from petroharness.models import URL_ENVS, env_urls, register
+    from petroharness.models import DEFAULT_KEY, URL_ENVS, env_urls, register
 
     urls = [u.strip() for u in model_url.split(",") if u.strip()] if model_url else env_urls()
     if not urls:
         if llm_factory is not None and not (model or model_card):
-            return "k200t"
+            return DEFAULT_KEY
         if llm_factory is None:
             raise ValueError("WHAT: no model endpoint. WHY: the model answers through an OpenAI-compatible endpoint "
                              f"(/v1). FIX: set {URL_ENVS[0]}=http://HOST:PORT/v1 (several, comma-separated) or pass "
@@ -213,7 +245,7 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
         model_url: str | None = None, model: str | None = None, model_card: str | None = None, settings=None,
         skills: str | None = None, max_steps: int | None = None, llm_factory: Callable | None = None,
         on_view: Callable | None = None, direct: bool = True, interpretation: dict | None = None,
-        field_notes=None) -> AskResult:
+        field_notes=None, zones=None, zones_sheet: str | None = None) -> AskResult:
     """One question about one LAS file -> AskResult (answer, status, trace, the interval used). The interval: the
     formation `formation` of the tops file `tops`; or the depths `top`/`base` (`formation` names it); or, with
     neither, the whole well. `depth_unit` (m or ft): the unit of the depths given and of the answer's depths (default:
@@ -253,12 +285,12 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
         p = prepare(las, key, formation=formation, tops=tops, top=top, base=base, depth_unit=depth_unit,
                     lithology_curve=lithology_curve, formation_lithology=formation_lithology, profile=profile,
                     settings=settings, skills=skills, interpretation=interpretation, field_notes=notes,
-                    cache=cache)
+                    zones=zones, zones_sheet=zones_sheet, cache=cache)
         task, sent = task_for(p, question)
         check(p, task, on_view)
         with given_settings(p.given):
             got = graph.answer(task, key, 1, max_steps or graph.MAX_STEPS, "open", "profile",
-                               llm_factory=llm_factory, commit=COMMIT, depth=direct)
+                               llm_factory=llm_factory, commit=COMMIT, depth=direct, mode="interactive")
     trace = got["trace"]
     trace["answer"] = got["answer"]
     trace["ask"] = ask_record(p, question, sent, trace)
@@ -266,8 +298,8 @@ def ask(las, question: str, *, formation: str | None = None, tops=None, top: flo
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)
         result.files = {"answer": out_dir / "answer.md", "trace": out_dir / "trace.json"}
-        result.files["answer"].write_text(_answer_md(result, las))
-        result.files["trace"].write_text(json.dumps(trace, indent=1, default=str))
+        result.files["answer"].write_text(_answer_md(result, las), encoding="utf-8")
+        result.files["trace"].write_text(json.dumps(trace, indent=1, default=str), encoding="utf-8")
     return result
 
 
@@ -292,24 +324,45 @@ class Prepared:
 
 def prepare(las: Path, key: str, *, formation=None, tops=None, top=None, base=None, depth_unit=None,
             lithology_curve=None, formation_lithology=None, profile=None, settings=None, skills=None,
-            interpretation=None, field_notes=None, cache: Path) -> Prepared:
+            interpretation=None, field_notes=None, zones=None, zones_sheet=None, cache: Path) -> Prepared:
     """The data settings and the interval for this LAS (the arguments as ask()'s), with `cache` as the folder the
     interpreted well is kept in."""
     from petroharness.config import ResourcePaths
+    from petroharness.well.prepare import depth_order
+    problem = depth_order(las)                      # depths out of order: the file, the line and the fix, before all
+    if problem:
+        raise ValueError(problem)
     data, source = _settings(las, Path(settings) if settings else None, profile, lithology_curve, cache,
                              ResourcePaths().policy_file)
     if interpretation:
         _interpretation(data, interpretation)
     span = _interval(las, formation, Path(tops) if tops else None, top, base, depth_unit, data)
+    if tops:                                        # every unit of the tops file, for selections anywhere in the well
+        data["units"], data["units_left_out"] = _units(las, Path(tops), depth_unit)
+    if zones:                                       # the user's zones: the question's frame (well.user_zones)
+        from petroharness.well.user_zones import read_zones
+        data["zones"] = read_zones(zones, _las_header(las)[1], zones_sheet)
+        data["zones_source"] = Path(zones).name
     las_unit = span["las_unit"]
-    data.setdefault("depth_unit", "las" if span["report"] in (None, las_unit) else span["report"])
-    library = str(skills or "").strip()
-    if library and library.lower() != "none" and Path(library).expanduser().exists():
-        library = str(Path(library).expanduser().resolve())      # a folder of the user's (relative to here)
+    report = "las" if span["report"] in (None, las_unit) else span["report"]
+    if depth_unit:                                  # the command's --depth-unit wins over a settings file's
+        data["depth_unit"] = report
+    else:
+        data.setdefault("depth_unit", report)
+    library = library_given(skills)
     given = {"data": data, "eval": {}, **({"skills": library} if library else {})}
     return Prepared(las=las, key=key, data=data, source=source, span=span,
                     said=str(formation_lithology or "").strip(), given=given, skills_given=skills,
                     lithology_curve=lithology_curve, notes=dict(field_notes or {}))
+
+
+def library_given(skills) -> str:
+    """The skill library as given (--skills): a folder of the user's as its absolute path (it was given relative to
+    here), "none" or a packaged library's name as written, "" when none was given."""
+    library = str(skills or "").strip()
+    if library and library.lower() != "none" and Path(library).expanduser().exists():
+        library = str(Path(library).expanduser().resolve())
+    return library
 
 
 def task_for(p: Prepared, question: str, turn: int = 1):
@@ -322,6 +375,13 @@ def task_for(p: Prepared, question: str, turn: int = 1):
         # the zones are lithology-log runs or shale-volume bands: the operator's lithology reaches the model with
         # the question (the "formation" layout shows it on the zone)
         sent = f"{question}\n\n(The operator states this formation's lithology: {p.said}.)"
+    if span.get("units") and p.data.get("reach", "well") != "well":
+        # the tops file's units inside the interval, as the file gives them (reach focus: the map lists none). Under
+        # reach well the map lists every unit; said in the question, "inside this interval" read a question about
+        # another unit as one about the interval (question suite B02, T01)
+        u = span["unit"] or las_unit or ""
+        listed = "; ".join(f"{n} {t:g}-{b:g} {u}".rstrip() for n, t, b in span["units"])
+        sent = f"{sent}\n\n(The tops file lists these units inside this interval: {listed}.)"
     if p.notes.get("notes"):                     # the user's field notes, with every question
         from petroharness.well.notes import statement
         sent = f"{sent}\n\n{statement(p.notes)}"
@@ -335,10 +395,15 @@ def task_for(p: Prepared, question: str, turn: int = 1):
 
 
 def check(p: Prepared, task, on_view: Callable | None = None) -> None:
-    """The interval checked before any model call: Petrophys interprets the well, the interval must hold samples and a
-    named lithology curve data. Fills p.view, p.used and p.litho; `on_view(view)` is then called."""
-    from petroharness.config import DataPaths, HarnessConfig
+    """The interval checked before any model call: the skill library must load, Petrophys interprets the well, the
+    interval must hold samples and a named lithology curve data. Fills p.view, p.used and p.litho; `on_view(view)` is then called."""
+    from petroharness.agent import direction
+    from petroharness.agent.graph import task_config
+    from petroharness.config import DataPaths, HarnessConfig, given_settings
+    from petroharness.models import MODELS
     from petroharness.well.view import FormationView
+    with given_settings(p.given):                   # a skill library that cannot be used stops here, not at a question
+        direction.plugged(task_config(task, p.key, 1) if p.key in MODELS else None)   # (a card may name one)
     las, span, las_unit = p.las, p.span, p.span["las_unit"]
     cfg = HarnessConfig(data=DataPaths(**p.data), eval=None)
     view = FormationView.build(task, cfg)
@@ -379,6 +444,7 @@ def ask_record(p: Prepared, question: str, sent: str, trace: dict) -> dict:
             "skills_given": p.skills_given,
             "interpret": p.data.get("interpret"), "interpreter": p.data.get("interpreter"),
             "petrophys": library_identity(),
+            **({"zones_source": p.data["zones_source"]} if p.data.get("zones") and p.data.get("zones_source") else {}),
             **({"field_notes": {k: p.notes[k] for k in ("name", "sha256", "settings", "notes")}} if p.notes else {})}
 
 
@@ -439,6 +505,10 @@ def _answer_md(result: AskResult, las: Path) -> str:
     head = [f"# {las.stem}: {result.interval['name']}", "",
             f"- **Question:** {a['question']}",
             f"- **Interval:** {_interval_text(result.interval)}",
+            *([f"- **Scope:** {', '.join(result.trace['scope']['used'])} (the stretches the question is about)"]
+              if (result.trace.get("scope") or {}).get("used") else []),
+            *([f"- **Zones:** yours, from {a['zones_source']} ({len(a['zones'])}; the lithology zones are kept as L ids)"]
+              if a.get("zones_source") else []),
             f"- **Lithology:** {_lithology_text(a['lithology'])}",
             f"- **Model:** {a['model']}",
             f"- **Skill library:** {_skills_text(a['skills'])}",
@@ -488,13 +558,17 @@ def interval_options(ap: argparse.ArgumentParser) -> None:
     where = ap.add_argument_group("the interval (default: the whole well)")
     where.add_argument("--formation", help="the formation's name (in the tops file; or a label for --top/--base)")
     where.add_argument("--tops", type=Path, help="a tops table (CSV): formation,top[,base][,depth_unit][,well]")
-    where.add_argument("--top", type=float, help="the interval's top depth")
+    ap.add_argument("--zones", type=Path, help="your zones (CSV, TSV or Excel): zone,top,bottom[,depth_unit][,well]; "
+                                               "they frame the answer in place of the lithology zones")
+    ap.add_argument("--zones-sheet", help="the Excel sheet of the zones (default: the first)")
+    where.add_argument("--top", type=float, help="the interval's top depth (with --tops: the top of the row meant, "
+                       "for a formation the tops file lists twice)")
     where.add_argument("--base", type=float, help="the interval's base depth")
     where.add_argument("--depth-unit", help="m or ft: the unit of the depths given and of the answer's depths "
                                             "(default: the tops file's, else the LAS's own)")
     lith = ap.add_argument_group("lithology")
-    lith.add_argument("--lithology-curve", help="the lithology log's mnemonic (default: detected; none: zones from "
-                                                "shale-volume bands)")
+    lith.add_argument("--lithology-curve", help="the lithology log's mnemonic (default: detected; when the LAS has "
+                                                "none, the zones are shale-volume bands)")
     lith.add_argument("--formation-lithology", help="the formation's lithology as you know it, e.g. 'sandstone'")
     ap.add_argument("--field-notes", type=Path, help="a field notes file: the team's standing settings and notes for "
                                                      "this field (YAML: name, settings, notes; docs/SESSIONS.md)")
@@ -502,13 +576,16 @@ def interval_options(ap: argparse.ArgumentParser) -> None:
                                       "Petrophys's default interpretation)")
 
 
-def run_options(ap: argparse.ArgumentParser) -> None:
-    """The model, settings, skills and step-cap options (ask and chat)."""
+def run_options(ap: argparse.ArgumentParser, endpoint: bool = True) -> None:
+    """The model, settings, skills and step-cap options (ask and chat; `petroharness setup` without the endpoint,
+    which says where the model is reached, not what answers)."""
     llm = ap.add_argument_group("the model (default: K2-Horizon-7B)")
     llm.add_argument("--model", help="the served model's name, for any chat model on an OpenAI-compatible endpoint "
                                      "(as the server lists it at /v1/models)")
     llm.add_argument("--model-card", help="a model card: a YAML file (docs/MODELS.md), or a packaged card's name")
-    llm.add_argument("--model-url", help="the model endpoint(s), comma-separated (default: PETROHARNESS_MODEL_URL)")
+    if endpoint:
+        llm.add_argument("--model-url", help="the model endpoint(s), comma-separated (default: "
+                                             "PETROHARNESS_MODEL_URL)")
     ap.add_argument("--settings", type=Path, help="a data settings YAML to start from (default: PETROHARNESS_DATA "
                                                   "if set, else none)")
     ap.add_argument("--skills", help="the skill library the model reads guides from: a library folder, or 'none' for "
@@ -523,14 +600,15 @@ def run_options(ap: argparse.ArgumentParser) -> None:
 
 def options(args: argparse.Namespace) -> dict:
     """The parsed command line as ask()'s arguments."""
-    question = args.question if args.question is not None else Path(args.question_file).read_text()
+    question = args.question if args.question is not None else Path(args.question_file).read_text(encoding="utf-8")
     return {"las": args.las, "question": question, "formation": args.formation, "tops": args.tops, "top": args.top,
             "base": args.base, "depth_unit": args.depth_unit, "lithology_curve": args.lithology_curve,
             "formation_lithology": args.formation_lithology, "profile": args.profile,
             "out": args.out if args.out is not None else Path.cwd() / "petroharness-out" / Path(args.las).stem,
             "model_url": args.model_url, "model": args.model, "model_card": args.model_card, "settings": args.settings,
             "skills": args.skills, "max_steps": args.max_steps, "direct": not args.investigate,
-            "field_notes": args.field_notes}
+            "field_notes": args.field_notes, "zones": getattr(args, "zones", None),
+            "zones_sheet": getattr(args, "zones_sheet", None)}
 
 
 def main(argv: list | None = None) -> int:

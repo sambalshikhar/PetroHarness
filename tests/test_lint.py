@@ -10,8 +10,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from _reference import CFG
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -46,8 +44,6 @@ DATASET_IDENTIFIERS = {
 ALLOWED = {
     ("src/petroharness/resources/rules/curves.yaml", "north_sea: North Sea shaly-sand"):
         "display name of the library's saturation-model identifier 'north_sea' (a method name, not dataset data)",
-    ("src/petroharness/resources/policy/reference_v2.yaml", "class_tables: geolink"):
-        "petrophys's identifier of the eval packages' frozen class-table set (a library parameter value, not dataset data)",
 }
 # Violations in files owned by another work stream, listed so this lint passes until they are fixed. Remove an entry
 # with its fix (the stale-entry check below fails once the line is gone).
@@ -63,6 +59,7 @@ def _rel(path: Path) -> str:
 
 
 def _benchmark_names() -> tuple[set[str], set[str]]:
+    from _reference import CFG         # the data settings: only this check needs them (skipped without; the others run)
     wells = {p.stem.upper() for p in CFG.data.las_dir.glob("*.las")}
     wells |= {w.replace("_", "/") for w in wells}
     tops = pd.read_csv(CFG.data.tops_csv)

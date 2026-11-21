@@ -12,45 +12,14 @@ _NEGATIVE = re.compile(r"^NO_(?!.*DATA$)[A-Z_]+$")           # reads as "none fo
 _ONLY_WHEN = re.compile(r"only when (?:both )?([A-Z0-9_ ,]+?(?: and [A-Z0-9_]+)?) (?:are|is) present", re.I)
 
 
-_MINERALS = re.compile(r"^(?P<m>[A-Z0-9_, ]+): non-unique solver output; a mineral needs lithology-log or PEF/RHOB support$")
-
-
-def mineral_fact(view, minerals: list) -> str:
-    """The solver's mineral volumes as this interval has them - at how many samples the solver left values
-    and which of its supports (the lithology log, PEF, RHOB) are present here - instead of a caveat that reads as if
-    the supports were missing."""
-    import numpy as np
-    from petroharness.well.formation import MISSING_LITHOLOGY
-    ok = np.zeros(int(view.mask.sum()), dtype=bool)
-    for c in minerals:
-        x = view.values(c)
-        if x is not None:
-            ok |= np.isfinite(np.asarray(x, dtype=float))
-    labels = getattr(view, "labels", None)
-    has_log = labels is not None and any(str(v) != MISSING_LITHOLOGY for v in labels)
-    sup = [n for n, on in (("the lithology log", has_log), ("PEF", view.available("PEF")), ("RHOB", view.available("RHOB")))
-           if on]
-    return (f"{', '.join(minerals)}: mineral-solver volumes, with values at {int(ok.sum())} of {ok.size} samples here (the "
-            f"solver leaves the rest unsolved); a solver mix is non-unique on its own, and here "
-            + (f"{(', '.join(sup[:-1]) + ' and ' + sup[-1]) if len(sup) > 1 else sup[0]} "
-               f"{'is' if len(sup) == 1 else 'are'} present to support it" if sup else
-               "none of the lithology log, PEF or RHOB is present to support it"))
+from petroharness.record.card import mineral_fact  # noqa: F401,E402  (the card builds every fact; kept for callers)
 
 
 def _facts(view, curves: dict) -> list:
+    """The record's provenance facts, as the card builds them from data (record.card.provenance_facts): the notes
+    layer reads no fact's text."""
     from petroharness.record.card import provenance_facts
-    out = []
-    for x in provenance_facts(view):
-        if re.search(r":\s*method not recorded\s*$", x):
-            continue
-        m = _MINERALS.match(x)
-        if m:
-            x = mineral_fact(view, [c.strip() for c in m.group("m").split(",") if c.strip()])
-        if x.startswith("Core-calibrated curves") and any(curves.get(c) is not None and curves[c].source == "input"
-                                                         for c in ("PHIE_CC", "PERM_CC")):
-            continue
-        out.append(x)
-    return out
+    return list(provenance_facts(view))
 
 
 def bad_hole(view) -> list:

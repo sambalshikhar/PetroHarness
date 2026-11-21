@@ -237,7 +237,7 @@ def zone_stats(view: FormationView, curves: list[str], stats: list[str] = None, 
         rows.append(row)
     return {"facts": [_missing_text(view, missing)] if missing else [],
             "title": f"Zone {', '.join(stats)} of {', '.join(curves)}"
-            + (" (flag curves: mean = fraction of zone flagged)" if set(curves) & view.reg.flags else ""),
+            + (" (flag curves: mean = fraction of zone flagged)" if any(view.is_flag(c) for c in curves) else ""),
             "columns": cols, "rows": rows, "values": values + [z.top for z in view.zones] + [z.base for z in view.zones]}
 
 
@@ -260,12 +260,12 @@ def _class_cell(view: FormationView, c: str, data) -> str:
     """A flag's or class codes' cell (summary.curve_kind): the share of the samples with a value set, in each class,
     or at the one value; never a statistic of codes."""
     k = S.curve_kind(view, c)
-    n, counts = S.class_counts(data, k.codes)
+    labels = S.code_labels(view, c)
+    n, counts = S.class_counts(data, k.codes, labels if k.kind == "classes" else None)
     if not n:
         return "-"
     if k.kind == "flag":
         return f"set {fmt_pct(100 * dict(counts).get(1.0, 0) / n, 1, sign=False)}%"
-    labels = S.code_labels(view, c)
     return ", ".join(f"{S.code_text(code, labels)} {fmt_pct(100 * m / n, 1, sign=False)}%" for code, m in counts)
 
 
@@ -1155,9 +1155,12 @@ def threshold_exceedance(view: FormationView, curve: str, threshold: Optional[fl
         frac = float(np.mean(zx[zf])) if zf.any() else float("nan")
         m = float(np.mean(x[z.indices][zf])) if zf.any() else float("nan")
         by_mean = ("yes" if ops[op](m, threshold) else "no") if np.isfinite(m) else "-"
+        k = int(zx[zf].sum())
         rows.append([z.zone_id, z.lithology, f"{fmt_depth(z.top)}–{fmt_depth(z.base)}",
+                     f"{k} of {int(zf.sum())}" if zf.any() else None,
                      sig(100 * frac) if np.isfinite(frac) else None, sig(m) if np.isfinite(m) else None, by_mean])
-        values += [v for v in (sig(100 * frac) if np.isfinite(frac) else None, sig(m) if np.isfinite(m) else None)
+        values += [v for v in ((k, int(zf.sum())) if zf.any() else ()) + (sig(100 * frac) if np.isfinite(frac) else None,
+                                                                            sig(m) if np.isfinite(m) else None)
                    if v is not None]
     facts = [f"threshold {label} ({source})"]
     for b in S.bases(view)[-2:]:                          # the zones pooled, the whole interval
@@ -1166,13 +1169,14 @@ def threshold_exceedance(view: FormationView, curve: str, threshold: Optional[fl
             facts.append(f"{b.label}: no {curve} values")
             continue
         total, peak = float(np.mean(hit[b.idx][sel])), float(np.nanmax(x[b.idx]))
+        k = int(hit[b.idx][sel].sum())
         runs = _runs(view.depth[b.idx], hit[b.idx].astype(float), view.step)
-        facts.append(f"{b.label}: {fmt_pct(100 * total, 1)} of {int(sel.sum())} samples; {len(runs)} contiguous runs; "
+        facts.append(f"{b.label}: {S.count_share(k, int(sel.sum()))}; {len(runs)} contiguous runs; "
                      f"max {shown} = {fmt(peak)}")
-        values += [round(100 * total, 1), sig(peak), int(sel.sum()), S.outside(view)]
+        values += [k, round(100 * total, 1), sig(peak), int(sel.sum()), S.outside(view)]
     return {"title": f"Threshold exceedance {label}: each zone (% of its samples, and its mean), the zones pooled, the "
                      "whole interval",
-            "columns": ["zone", "lithology", f"depth ({view.depth_unit})", "% samples", f"mean {shown}",
+            "columns": ["zone", "lithology", f"depth ({view.depth_unit})", "samples beyond", "% samples", f"mean {shown}",
                         "mean beyond"], "rows": rows, "facts": facts, "values": [v for v in values if v is not None]}
 
 
@@ -1326,6 +1330,7 @@ def curve_order(view: FormationView, curves: list[str], relation: str = "decreas
 
     p_z, n_z = pct(holds, zoned)
     p_i, n_i = pct(holds, np.ones(valid.size, dtype=bool))
+    k_z, k_i = int((holds & zoned & valid).sum()), int((holds & valid).sum())
     if n_z == 0:
         raise EvidenceError("WHAT: no sample has all of these curves. FIX: choose curves that overlap.")
     # Zone by zone first: the zone-mean order of each zone and the share of its samples where the asked order holds.
@@ -1382,15 +1387,15 @@ def curve_order(view: FormationView, curves: list[str], relation: str = "decreas
     neither = 100 - shares["decreasing"] - shares["increasing"]
     dominant = ("decreasing" if shares["decreasing"] >= 50 else "increasing" if shares["increasing"] >= 50 else None)
     basis = "zoned samples" if view.zones else "samples"
-    facts += [f"asked, sample by sample: {asked} holds in {fmt_pct(p_z, 1)} of {n_z} {basis} with all {len(curves)} "
-              f"curves" + (f"; {S.whole_label(view)}: {fmt_pct(p_i, 1)} of {n_i}" if view.zones else ""),
+    facts += [f"asked, sample by sample: {asked} holds in {S.count_share(k_z, n_z, basis)} with all {len(curves)} "
+              f"curves" + (f"; {S.whole_label(view)}: {S.count_share(k_i, n_i)}" if view.zones else ""),
               f"both directions, sample by sample: {down} in {fmt_pct(shares['decreasing'], 1)}, {up} in "
               f"{fmt_pct(shares['increasing'], 1)}, neither (the curves cross) in {fmt_pct(neither, 1)}"
               + (f"; equal values in {fmt_pct(shares['tie'], 1)}" if shares["tie"] > 0 else "") + "; "
               + (f"the {'decreasing' if dominant == 'decreasing' else 'increasing'} order "
                  f"({down if dominant == 'decreasing' else up}) holds in most samples" if dominant
                  else "neither order holds in most samples")]
-    values = [round(p_z, 1), n_z, round(p_i, 1), n_i, round(shares["decreasing"], 1), round(shares["increasing"], 1),
+    values = [k_z, k_i, round(p_z, 1), n_z, round(p_i, 1), n_i, round(shares["decreasing"], 1), round(shares["increasing"], 1),
               round(neither, 1), round(shares["tie"], 1)]
     margins = []
     sel = valid & zoned
@@ -1563,43 +1568,58 @@ def adjacent_jumps(view: FormationView, curve: str, threshold: float) -> dict:
 
 
 def vertical_sequence(view: FormationView, curves: list[str] = None, min_change: Optional[float] = None) -> dict:
-    """Zones from base to top with the change of each curve from the zone below, grouped into packages of steps in
-    one direction. GR/VCL decreasing upward = cleaning-up (coarsening-upward); increasing upward = dirtying-up
-    (fining-upward). Steps smaller than min_change (default: 10% of the curve's zone-mean range, at least 3 API for
-    GR or 0.03 for VCL) count as no change, so weak trends are not called sequences."""
+    """Zones from base to top with the change of each curve named (default: GR, else VCL) from the zone below, grouped
+    into packages of steps in one direction. GR/VCL decreasing upward = cleaning-up (coarsening-upward); increasing
+    upward = dirtying-up (fining-upward). Steps smaller than min_change (default: 10% of the curve's zone-mean range, at
+    least 3 API for GR or 0.03 for VCL) count as no change, so weak trends are not called sequences. min_change is in
+    one curve's units: given with several curves, it is refused."""
+    named = bool(curves)
     curves, _ = _check_curves(view, curves or ["GR", "VCL"])
     if not curves or len(view.zones) < 2:
         raise EvidenceError("WHAT: need a curve with data and at least two zones. FIX: use depth_trend or zone_stats.")
+    if not named:
+        curves = curves[:1]                                           # the default: GR, else VCL
+    if min_change is not None and len(curves) > 1:
+        raise EvidenceError(f"WHAT: min_change with {len(curves)} curves. WHY: it is a change in one curve's units. "
+                            "FIX: ask one curve at a time with min_change, or leave min_change out (each curve's "
+                            "default threshold applies).")
     from petrophys.evaluation.intervals import stacking_pattern
 
-    c = curves[0]
     zs = list(reversed(view.zones))                                   # base first
-    means = np.array([_stat(view.zone_values(z, c), "mean") for z in zs])
-    pattern = stacking_pattern(means, c, min_change)                  # petrophys: steps and packages, base to top
-    thr = pattern["threshold"]
-    rows, values = [], []
-    for i, z in enumerate(zs):
-        ch, step = pattern["changes"][i], pattern["steps"][i]
-        rows.append([z.zone_id, z.lithology, f"{fmt_depth(z.top)}–{fmt_depth(z.base)}", sig(means[i]), sig(ch) if np.isfinite(ch) else None, step])
-        values += [sig(means[i])] + ([sig(ch)] if np.isfinite(ch) else [])
     kinds = {"cleaning_up": "cleaning-up (coarsening-upward)", "dirtying_up": "dirtying-up (fining-upward)",
              "abrupt_decrease": "abrupt decrease upward", "abrupt_increase": "abrupt increase upward"}
-    packages = [f"{zs[p['start']].zone_id}→{zs[p['end']].zone_id} {kinds[p['kind']]}, {c} {fmt(means[p['start']])}→{fmt(means[p['end']])}"
-                for p in pattern["packages"]]
     src = (S.threshold_source(True) if min_change is not None else
            "the workflow's: petrophys stacking_pattern's default, 10% of the curve's zone-mean range, at least 3 API for "
            "GR or 0.03 for VCL")
-    facts = [f"read from base to top; a step counts when {c} changes by at least {fmt(thr)} ({src})",
-             ("packages: " + "; ".join(packages)) if packages else f"no zone-to-zone change of {c} reaches {fmt(thr)}: no robust sequence"]
-    return {"title": f"Vertical sequence of zone-mean {c}, base to top", "rows": rows, "facts": facts, "values": values + [sig(thr)],
-            "columns": ["zone", "lithology", f"depth ({view.depth_unit})", f"mean {c}", "change from zone below", "step"]}
+    one = len(curves) == 1
+    rows = [[z.zone_id, z.lithology, f"{fmt_depth(z.top)}–{fmt_depth(z.base)}"] for z in zs]
+    columns = ["zone", "lithology", f"depth ({view.depth_unit})"]
+    facts, values = [], []
+    for c in curves:
+        means = np.array([_stat(view.zone_values(z, c), "mean") for z in zs])
+        pattern = stacking_pattern(means, c, min_change)              # petrophys: steps and packages, base to top
+        thr = pattern["threshold"]
+        for i in range(len(zs)):
+            ch, step = pattern["changes"][i], pattern["steps"][i]
+            rows[i] += [sig(means[i]), sig(ch) if np.isfinite(ch) else None, step]
+            values += [sig(means[i])] + ([sig(ch)] if np.isfinite(ch) else [])
+        values.append(sig(thr))
+        columns += [f"mean {c}", "change from zone below" if one else f"{c} change from zone below",
+                    "step" if one else f"{c} step"]
+        packages = [f"{zs[p['start']].zone_id}→{zs[p['end']].zone_id} {kinds[p['kind']]}, {c} "
+                    f"{fmt(means[p['start']])}→{fmt(means[p['end']])}" for p in pattern["packages"]]
+        facts += [f"read from base to top; a step counts when {c} changes by at least {fmt(thr)} ({src})",
+                  ("packages: " + "; ".join(packages)) if packages else
+                  f"no zone-to-zone change of {c} reaches {fmt(thr)}: no robust sequence"]
+    return {"title": f"Vertical sequence of zone-mean {', '.join(curves)}, base to top", "rows": rows, "facts": facts,
+            "values": values, "columns": columns}
 
 
 def flag_intervals(view: FormationView, flag: str, min_thickness_m: float = 0.0, max_items: int | None = None) -> dict:
     max_items = max_items or view.reg.limit("flag_intervals_max_items", 25)
     flag = flag.upper()
-    if flag not in view.reg.flags:
-        raise EvidenceError(f"WHAT: {flag} is not a flag curve. FIX: use one of {sorted(view.reg.flags)}.")
+    if not view.is_flag(flag):
+        raise EvidenceError(f"WHAT: {flag} is not a flag curve. FIX: use one of {sorted(view.reg.flags | view.calc_flags)}.")
     data = view.values(flag)
     if data is None or not np.isfinite(data).any():
         return {"title": f"{flag} intervals", "facts": [f"{flag} is not available in this interval"], "values": []}
@@ -1640,12 +1660,41 @@ def _limiting_cutoffs(view: FormationView, values: list) -> list[str]:
         return []
     label = {"shale_volume": "shale-volume cutoff (not NET_ROCK)", "porosity": "porosity cutoff (NET_ROCK but not NET_RES)",
              "saturation": "saturation cutoff (NET_RES but not NET_PAY)"}
+    # what the net-pay step left out of NET_RES and NET_PAY whatever the cutoffs: its NET_EXCLUSION curve, per sample
+    # the kind of exclusion that removed it (Petrophys's codes: bad hole, coal, ...); without it, the kinds its record
+    # lists are named beside the porosity cutoff
+    from petroharness.well.summary import code_labels
+    kinds = code_labels(view, "NET_EXCLUSION") if view.values("NET_EXCLUSION") is not None else {}
+    why = np.asarray(view.values("NET_EXCLUSION"), dtype=float) if kinds else None
+    listed = [k.replace("_", " ") for k in ((last_step(view.prep.steps, "net_pay") or {}).get("parameters") or {})
+              .get("excluded_from_net_reservoir_and_pay") or {}]
     parts = []
     for step in cutoff_attrition(flags["NET_ROCK"], flags["NET_RES"], flags["NET_PAY"]):      # petrophys
         share = step["fails"]
         values.append(round(100 * share))                       # as displayed (whole percent)
-        parts.append(f"{fmt_pct(100 * share)} of {'the interval' if step['tested'] == n else 'the rock passing the previous cutoff'} "
-                     f"fails the {label[step['cutoff']]}")
+        of = 'the interval' if step['tested'] == n else 'the rock passing the previous cutoff'
+        if step["cutoff"] == "porosity" and share > 0 and (why is not None or listed):
+            gap = (flags["NET_ROCK"] > 0.5) & ~(flags["NET_RES"] > 0.5)
+            tested = max(int(step["tested"]), 1)
+            if why is not None:                                 # each kind its share, the rest the porosity cutoff
+                from petroharness.well.summary import class_groups, in_class
+                cells = []
+                for key in class_groups(sorted(kinds), kinds):  # codes the labels name alike: one kind (O4)
+                    codes = key if isinstance(key, tuple) else (key,)
+                    kind = kinds[codes[0]]
+                    k = int((gap & in_class(why, key)).sum()) if all(codes) else int((gap & ~(why > 0)).sum())
+                    if not k:
+                        continue
+                    pct = 100 * k / tested
+                    values.append(round(pct))
+                    cells.append(f"{fmt_pct(pct)} fails the porosity cutoff" if not all(codes) else
+                                 f"{fmt_pct(pct)} is left out as {kind.replace('_', ' ')} (whatever its porosity)")
+                parts.append(f"{fmt_pct(100 * share)} of {of} is not NET_RES: " + ", ".join(cells))
+            else:
+                parts.append(f"{fmt_pct(100 * share)} of {of} is not NET_RES: it fails the porosity cutoff or is left "
+                             f"out as the step records ({', '.join(listed)})")
+            continue
+        parts.append(f"{fmt_pct(100 * share)} of {of} fails the {label[step['cutoff']]}")
     facts = ["cutoffs in order: " + "; ".join(parts)] if parts else []
     zones = [(z.zone_id, float(np.mean(pay[z.indices]))) for z in view.zones if pay[z.indices].any()]
     if view.zones:
@@ -1728,10 +1777,10 @@ _SECTION_META = ("description", "methodology", "calculation_thresholds")
 
 
 def make_analyzer(view: FormationView, family: str):
-    """A family's petrophys analyzer with the policy's class tables (policy analyzers.class_tables: the table set the
-    workflow of record's context classified with, "benchmark" for the reference contexts). Analyzers that take no
-    class_tables argument (the numerical one, or any in a library without class-table sets) are built with their
-    defaults."""
+    """A family's petrophys analyzer with the policy's class tables (policy analyzers.class_tables: the library's
+    current set, or the set a data config names in data.analyzer_class_tables, FormationView.build). Analyzers that
+    take no class_tables argument (the numerical one, or any in a library without class-table sets) are built with
+    their defaults."""
     import importlib
     import inspect
     module, cls = _ANALYZERS[family]
@@ -2054,7 +2103,8 @@ def _share_rows(view: FormationView, c: str, k, bases: list) -> tuple[list, list
     one value (the share at it): each zone high to low, the zones pooled and the whole interval; shares of the samples
     with a value."""
     labels = S.code_labels(view, c)
-    here = [code for code, _ in S.class_counts(view.values(c), k.codes)[1]]       # the classes the interval holds
+    grouped = labels if k.kind == "classes" else None                              # codes named alike: one class
+    here = [code for code, _ in S.class_counts(view.values(c), k.codes, grouped)[1]]  # the classes the interval holds
     codes = (1.0,) if k.kind == "flag" else here
     rows, values = [], []
     for code in codes:
@@ -2062,7 +2112,7 @@ def _share_rows(view: FormationView, c: str, k, bases: list) -> tuple[list, list
                 else f"share of class {S.code_text(code, labels)}")
         share = {}
         for b in bases:
-            n, counts = S.class_counts(view.values(c)[b.idx], k.codes)
+            n, counts = S.class_counts(view.values(c)[b.idx], k.codes, grouped)
             share[b.label or b.zone.zone_id] = round(100 * dict(counts).get(code, 0) / n, 1) if n else None
         zone_vals = sorted(((z.zone_id, share[z.zone_id]) for z in view.zones if share[z.zone_id] is not None),
                            key=lambda kv: -kv[1])
@@ -2172,69 +2222,45 @@ def core_vs_log(view: FormationView) -> dict:
             "values": values}
 
 
-# Decision text of the step record that states well-wide sample counts (the record describes the whole well).
-_FLAG_COUNT = re.compile(r"^(?P<head>(?P<flag>[A-Z][A-Z0-9_]*)\b.*?->\s*)\d+\s+samples\s*\(\s*[\d.]+\s*(?:m|ft)\s*\)")
-_FLAGGED_OUT_OF = re.compile(r"^\d+ (?P<what>[A-Za-z][\w-]*) samples flagged out of \d+")
-_RANGE = re.compile(r"^(?P<name>[A-Za-z_]+) range(?P<sep>\s*[:=]\s*)-?[\d.]+\s*(?:-|to)\s*-?[\d.]+(?P<unit>[ \t]+[A-Za-z][A-Za-z/.]*)?")
-_PART_COUNT_PAREN = re.compile(r"\s*\(\d+\s*(?:/|of)\s*\d+\s+samples(?:\s+[a-z]+)?\)")
-_PART_COUNT = re.compile(r"\b\d+\s*(?:/|of)\s*\d+\s+samples\b")
-_LIST_COUNT = re.compile(r"\b([A-Za-z][A-Za-z0-9_]*)=(\d+)(?![\d.])")      # name=12345 (integer counts only)
-_PLAIN_COUNT = re.compile(r"\s*\(\d+ samples\)")
-_ANY_COUNT = re.compile(r"\b\d+\s+samples\b")
-_MNEMONIC = re.compile(r"(?<![A-Za-z0-9_])[A-Z][A-Z0-9_]+(?![A-Za-z0-9_])")
+# A step's record lines describe the whole well's run; they are shown as written, under one label, and the interval's
+# own facts come from the step's output curves (interval_facts), not from rewriting the lines.
+RECORD_LABEL = "record (the whole well's run; its counts are the well's)"
 
 
-def scoped_decision(view: FormationView, text: str) -> tuple[Optional[str], list[float]]:
-    """A step-record decision scoped to the interval: the record counts samples over the whole well (e.g. a fallback
-    used for a few samples elsewhere), which an answer about this interval must not quote as its own. Flag and
-    bad-hole counts and value ranges are recomputed from the interval's curves; a partial count becomes the curve's
-    coverage in the interval; per-route counts keep only the route names; a count that cannot be scoped is dropped
-    with its line. Returns (text or None, the numbers it now shows)."""
-    n_all, step = int(view.mask.sum()), view.step
-    m = _FLAG_COUNT.match(text)
-    if m and m.group("flag") in view.reg.flags:
-        x = view.values(m.group("flag"))
-        if x is None or not np.isfinite(x).any():
-            return None, []
-        n = int(np.nansum(x > 0.5))
-        return f"{m.group('head')}{n} samples ({fmt(n * step)} {view.depth_unit}) in this interval" + text[m.end():], [n, sig(n * step)]
-    m = _FLAGGED_OUT_OF.match(text)
-    if m:
-        x = view.values(m.group("what").upper().replace("-", "_"))
-        if x is None or not np.isfinite(x).any():
-            return None, []
-        n = int(np.nansum(x > 0.5))
-        return f"{n} {m.group('what')} samples flagged out of {n_all} in this interval" + text[m.end():], [n, n_all]
-    m = _RANGE.match(text)
-    if m:
-        curve = m.group("name").upper()
-        x = view.values(curve)
-        if x is None or not np.isfinite(x).any():
-            return None, []
-        lo, hi = float(np.nanmin(x)), float(np.nanmax(x))
-        unit = view.unit(curve) or (m.group("unit") or "").strip()
-        return (f"{m.group('name')} range in this interval{m.group('sep')}{fmt(lo)} to {fmt(hi)}"
-                + (f" {unit}" if unit else "") + text[m.end():]), [sig(lo), sig(hi)]
-    nums: list[float] = []
-    note = ""
-    if _PART_COUNT_PAREN.search(text) or _PART_COUNT.search(text):
-        text = _PART_COUNT.sub("samples", _PART_COUNT_PAREN.sub("", text))
-        subject = next(iter(_MNEMONIC.findall(text)), None)          # the curve the decision is about
-        data = view.values(subject) if subject else None
-        if data is not None:
-            k = int(np.isfinite(view.own_values(subject)).sum())
-            added = int(np.isfinite(data).sum()) - k            # the analyzers' values where the workflow has none
-            note = f" (in this interval {subject} has values in {k} of {n_all} samples"
-            note += (f"; the analyzers add {added} where the workflow left it empty, computed from their own inputs)"
-                     if added > 0 else ")")
-            nums += [k, n_all] + ([added] if added > 0 else [])
-    if len(_LIST_COUNT.findall(text)) >= 2:
-        text = _LIST_COUNT.sub(r"\1", text)
-        note += " (routes used in the well; counts for this interval not recorded)"
-    text = _PLAIN_COUNT.sub("", text)
-    if _ANY_COUNT.search(text):
-        return None, []
-    return text + note, nums
+def interval_facts(view: FormationView, outputs) -> tuple[list[str], list[float]]:
+    """What a step's output curves hold in this interval, read from the curves: each flag's samples set here (and
+    their thickness); the range here of a step's one curve of values (a temperature, an Rw: the record's is the whole
+    well's); an output with values at only part of the interval's samples; and, where the analyzers filled
+    an output the step left empty (the view's values against its own_values), the step's samples and the analyzers'
+    apart: the record may say the step did not compute a curve the interval holds. (lines, their numbers)."""
+    from petroharness.well.summary import curve_kind
+    n_all, step, unit = int(view.mask.sum()), float(view.step), view.depth_unit
+    lines, nums = [], []
+    outs = [str(o) for o in dict.fromkeys(outputs or ()) if view.available(str(o))]
+    values = [c for c in outs if curve_kind(view, c).kind == "values"]
+    if len(values) == 1:                               # a step that writes one curve of values (a temperature, an
+        c = values[0]                                  #   Rw): its range here, as a flag gives its count (question
+        x = np.asarray(view.values(c), dtype=float)    #   suite X06: the record's range is the whole well's)
+        if np.isfinite(x).any():
+            lo, hi, u = float(np.nanmin(x)), float(np.nanmax(x)), (view.unit(c) or "").strip()
+            lines.append(f"{c} from {fmt(sig(lo))} to {fmt(sig(hi))}{' ' + u if u else ''}")
+            nums += [sig(lo), sig(hi)]
+    for c in dict.fromkeys(str(o) for o in outputs or ()):
+        if not view.available(c):
+            continue
+        x = np.asarray(view.values(c), dtype=float)
+        have = int(np.isfinite(x).sum())
+        own = view.own_values(c)
+        k = have if own is None else int(np.isfinite(np.asarray(own, dtype=float)).sum())
+        added = f" ({k} from the step; the analyzers add {have - k} where the step left it empty)" if have > k else ""
+        if curve_kind(view, c).kind == "flag":         # by the shape of its values, as every tool reads it
+            n = int(np.nansum(x > 0.5))
+            lines.append(f"{c} set at {n} of {have} samples ({fmt(n * step)} {unit})" + added)
+            nums += [n, have, sig(n * step)] + ([k, have - k] if added else [])
+        elif 0 < have < n_all or added:
+            lines.append(f"{c} has values at {have} of {n_all} samples" + added)
+            nums += [have, n_all] + ([k, have - k] if added else [])
+    return lines, nums
 
 
 _SXO_ROUTE_TEXT = {"quicklook": "the quicklook transform of SW", "measured": "from measured shallow resistivity",
@@ -2243,7 +2269,7 @@ _SXO_ROUTE_TEXT = {"quicklook": "the quicklook transform of SW", "measured": "fr
 
 def provenance(view: FormationView, topics: list[str]) -> dict:
     """How the workflow of record computed a quantity: each step's method and its first decisions, scoped to the
-    interval (see scoped_decision), plus the routes read from this interval's curves where the record describes the
+    interval's own facts from its curves (interval_facts), plus the routes read from this interval's curves where the record describes the
     whole well (which resistivity pair INVASION_RATIO uses, how SXO was obtained)."""
     facts, values = [], []
     table, aliases = view.reg.topics["provenance"], view.reg.topics.get("provenance_aliases", {})
@@ -2257,14 +2283,14 @@ def provenance(view: FormationView, topics: list[str]) -> dict:
             st = view.prep.steps.get(s) or {}
             if not st:
                 continue
-            decisions = []
-            for d in [d for d in (st.get("decisions") or []) if isinstance(d, str)][:4]:
-                text, nums = scoped_decision(view, d)
-                if text:
-                    decisions.append(text[:220])
-                    values += nums
+            said = [d for d in (st.get("decisions") or []) if isinstance(d, str)][:4]
+            decisions = [f"{RECORD_LABEL}: " + "; ".join(said)] if said else []     # whole: a verdict's alternatives
+            here, nums = interval_facts(view, st.get("outputs") or [])                #   are its end
+            if here:
+                decisions.append("in this interval: " + "; ".join(here))
+                values += nums
             if s == "invasion" and invasion_route(view):
-                decisions.append(f"in this interval INVASION_RATIO = {invasion_route(view)}/RDEP")
+                decisions.append(f"in this interval INVASION_RATIO = {invasion_route(view)}")
             if s in ("mhi", "saturation") and sxo_route(view) in _SXO_ROUTE_TEXT:
                 decisions.append(f"in this interval SXO is {_SXO_ROUTE_TEXT[sxo_route(view)]}")
             if s == "porosity":
@@ -2403,7 +2429,8 @@ def unit_roles(view: FormationView) -> dict:
     capacity = info[roles["capacity"]] if roles["capacity"] is not None else None
     say = {"bad_hole": lambda v: f"bad hole {100 * v:.0f}%: low confidence", "at_model_limit": lambda v: f"{kc} at the model limit: a bound",
            "shaly": lambda v: f"shaly (VCL {v:.2f}): the well's SWIRR comes from cleaner rock, so modelled {kc} is less certain", "water_bearing": lambda v: "water-bearing"}
-    role_text = {"strongest": "strongest", "baffle": "possible baffle", "flow": "flow interval", None: "flow interval"}
+    role_text = {"strongest": "strongest", "baffle": "possible baffle", "flow": "flow interval",
+                 None: f"no role (no {kc} value in the zone)"}         # Petrophys flow_roles: None without a permeability
     conservative = []
     for i, r in zip(info, roles["zones"]):
         quals = [say[code](v) for code, v in r["qualifiers"]]
@@ -2478,7 +2505,7 @@ def flagged_runs(view: FormationView, topics=None, flags=None) -> dict:
                         groups.append((sec, label, runs))
     for flag in [str(f).upper() for f in (flags or [])]:
         data = view.values(flag)
-        if flag not in view.reg.flags or data is None or not np.isfinite(data).any():
+        if not view.is_flag(flag) or data is None or not np.isfinite(data).any():
             continue
         runs = []
         for z in view.zones:

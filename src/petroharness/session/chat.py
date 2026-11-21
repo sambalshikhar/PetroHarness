@@ -7,9 +7,14 @@
 Questions come from --question (repeatable) and --questions-file (one per line), then from the terminal: type a
 question and press Enter; an empty line or Ctrl-D ends the conversation. Answers go to stdout, what was run to stderr.
 
-Two commands change or show the interpretation settings (docs/SESSIONS.md, "Changing a setting"), from the next
-question on; the well is interpreted again with them:
+Commands change the interpretation settings (docs/SESSIONS.md, "Changing a setting"; the well is interpreted again
+with them) and the stretches the questions are about ("Changing the scope, the frame or the zones"), from the next
+question on:
     /set m=1.8 rw=0.04         a setting's new value (several at once); name=default takes it back to its default
+    /scope <unit>, 2900-3000   the stretches the next questions are about (a unit, a depth range, your zones, the
+                               whole well) until changed; /scope alone: the interval
+    /frame lithology           the next questions report by the lithology zones; /frame zones: by the zones in force
+    /zones zones.csv           your zones from the next question (CSV, TSV or Excel); /zones none: the lithology zones
     /settings                  the settings in force and the changes made
 The conversation is kept in --session (default ./petroharness-sessions/<LAS name>-<time>): resume it later with --resume.
 """
@@ -80,7 +85,28 @@ def command(c: Conversation, line: str) -> str:
             return f"not changed: {exc}"
         return (f"from question {len(c.turns) + 1}: {describe(made)} (the well was interpreted again)" if made
                 else "no change: those are the settings in force")
-    return f"unknown command {word}: /set name=value, or /settings"
+    if word == "/scope":                            # the stretches of the next questions (agent.selection)
+        items = [x.strip() for x in rest.split(",") if x.strip()]
+        try:
+            got = c.set_scope(items)
+        except ValueError as exc:
+            return f"not changed: {exc}"
+        return (f"from question {len(c.turns) + 1}: scope {', '.join(got)}" if got
+                else f"from question {len(c.turns) + 1}: scope the interval")
+    if word == "/frame":
+        try:
+            got = c.set_frame(rest.strip() or None)
+        except ValueError as exc:
+            return f"not changed: {exc}"
+        return f"from question {len(c.turns) + 1}: " + ("by the lithology zones" if got else "by the zones in force")
+    if word == "/zones":
+        try:
+            said = c.adopt_zones(rest.strip() if rest.strip() and rest.strip().lower() != "none" else None)
+        except (ValueError, OSError) as exc:
+            return f"not changed: {exc}"
+        return f"from question {len(c.turns) + 1}: {said}"
+    return (f"unknown command {word}: /set name=value, /settings, /scope ITEMS, /frame lithology|zones, "
+            "/zones FILE|none")
 
 
 def _say(turn) -> None:
@@ -99,6 +125,15 @@ def main(argv: list | None = None) -> int:
         print("petroharness chat: give --las (a new conversation) or --resume (an earlier one), not both",
               file=sys.stderr)
         return 2
+    asked = list(args.question)
+    if args.questions_file:                         # read before a session folder is made
+        try:
+            asked += [ln.strip() for ln in Path(args.questions_file).read_text(encoding="utf-8").splitlines() if ln.strip()]
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"petroharness chat: WHAT: the questions file {args.questions_file} cannot be read "
+                  f"({getattr(exc, 'strerror', None) or exc}). FIX: give a text file with one question per line.",
+                  file=sys.stderr)
+            return 2
     try:
         if args.resume:
             c = Conversation.resume(args.resume, model_url=args.model_url,
@@ -113,7 +148,7 @@ def main(argv: list | None = None) -> int:
                                    settings=args.settings, skills=args.skills, model_url=args.model_url,
                                    model=args.model, model_card=args.model_card, max_steps=args.max_steps,
                                    figures=not args.no_figures, direct=not args.investigate,
-                                   field_notes=args.field_notes)
+                                   field_notes=args.field_notes, zones=args.zones, zones_sheet=args.zones_sheet)
             print(f"conversation in {c.folder}\n{c.p.las.name}: {A._interval_text(c.p.used)}", file=sys.stderr)
             shown = c.overview()
             if shown is not None:
@@ -124,9 +159,6 @@ def main(argv: list | None = None) -> int:
     except RuntimeError as exc:                     # Petrophys could not interpret the LAS
         print(f"petroharness chat: {exc}", file=sys.stderr)
         return 1
-    asked = list(args.question)
-    if args.questions_file:
-        asked += [ln.strip() for ln in Path(args.questions_file).read_text().splitlines() if ln.strip()]
     failed = False
     for q in asked:
         if q.startswith("/"):                       # a /set or /settings line among the questions

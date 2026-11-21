@@ -1,16 +1,24 @@
 id: C9
 name: answer
-purpose: 'the writer: its prompt (the claims, every opened result, the provenance card), the zone table and its frame'
+purpose: 'the writer: its prompt (the question''s points and their limits, every result, the map, the provenance card), the zone table and its frame'
 texts:
   table_rule: table_rule.md
   aspects_rule: aspects_rule.md
   write: write.md
-  points_rule: points_rule.md   # options.writer_points
+  points_rule: points_rule.md   # each point its own part of the answer
   later_rule: later_rule.md     # a later question of a conversation: the form follows the question
-  reply_brief: reply_brief.md   # a short answer: a direct question (options.depth), or a later question's "reply": "brief"
+  reply_brief: reply_brief.md   # a short answer: a direct question (the direct route), or a later question's "reply": "brief"
   brief_later: brief_later.md   # the short answer's rule for a later question of a conversation
   brief_direct: brief_direct.md # a direct question's short answer: the writer may hand it to an investigation
+  scope_rule: scope_rule.md     # reach well, a question's scope in force: the answer covers all of it
   figures: figures.md           # petroharness.figures: the call that chooses an answer's figures (interactive use)
+  ask_listed_twice: ask_listed_twice.md   # a question naming a unit the tops file lists more than once: the user chooses
+  ask_left_out: ask_left_out.md           # a question naming a unit whose tops row was left out: the row to fix
+  ask_did_you_mean: ask_did_you_mean.md   # a question naming no unit of the file but close to some: which one
+  ask_which_unit: ask_which_unit.md       # a bare name several units of the file share: which one
+  outside_reply: outside_reply.md         # a request outside the well's logs (READ depth "outside"): what this assistant does
+  outside_examples: outside_examples.json # the questions an outside reply offers to ask instead ({interval} filled)
+  premise: premise.md                     # a stated fact the results contradict is corrected (both writer prompts)
 frames:
 - agent/writer.py
 - resources/rules/shapes.yaml

@@ -83,7 +83,8 @@ def rebuild(trace: dict, task, cfg) -> tuple:
     s.points, s.intent = list(trace.get("points") or []), trace.get("intent") or "characterize"
     s.claims = Claims(s.points, s.ledger, s.map, task.question, s.f.view, (task.well,))
     for d in trace.get("claims", []):
-        s.claims.claims[d["id"]] = Claim(**{k: d[k] for k in ("id", "point", "text", "means", "ev", "grade", "weak", "flags", "history")})
+        s.claims.claims[d["id"]] = Claim(**{k: d[k] for k in ("id", "point", "text", "means", "ev", "grade", "weak", "flags", "history",
+                                                              "text_at") if k in d})
     s.claims._n = max([int(k[1:]) for k in s.claims.claims] + [0])
     traced_flags = {c.id: [f.split(" ")[0] for f in c.flags] for c in s.claims.claims.values()}
     s.claims.refresh()
@@ -218,8 +219,8 @@ def main():
     if args.limit:
         traces = traces[:args.limit]
     from petroharness.models import env_urls
-    urls = env_urls()                                       # PETROHARNESS_MODEL_URL (or K2H_TOOL_URLS)
-    cfg_file, _ = MODELS["k200t"]
+    urls = env_urls()                                       # PETROHARNESS_MODEL_URL
+    cfg_file, _ = MODELS["k2-horizon-7b"]
 
     def one(k_path):
         k, path = k_path

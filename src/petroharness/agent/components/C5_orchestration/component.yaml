@@ -2,20 +2,24 @@ id: C5
 name: orchestration
 purpose: 'what each stage asks: the reading, step 1, step k, the points request, settle (with its bookkeeping lists)'
 texts:
+  read_outside: read_outside.md   # reach well: a request outside the well's logs, answered with what this assistant does
   read: read.md
-  read_depth: read_depth.md               # options.depth: READ also says whether the question is direct
-  direct_step: direct_step.md             # options.depth: a direct question's look step
+  read_depth: read_depth.md               # READ also says whether the question is direct (the direct route)
+  read_scope: read_scope.md               # reach "well": the stretches a question is about (agent.selection)
+  read_scope_again: read_scope_again.md   # a scope that named no stretch, sent back once with the reason
+  direct_step: direct_step.md             # a direct question's look step
   step1: step1.md
   step1_guides: step1_guides.md           # with a skill library only
   step1_guide_call: step1_guide_call.md   # with a skill library only
   step1_later: step1_later.md             # a later question of a conversation (petroharness.session)
-  step1_reply: step1_reply.md             # a later question's answer length, said in step 1 (not with options.depth)
+  step1_reply: step1_reply.md             # a later question's answer length, said in step 1 (an investigated question)
   points_scope: points_scope.md
+  points_ask: points_ask.md               # step 1's points asked for once, when its edits number points it did not write
   settle: settle.md
   settle_lists: settle_lists.json      # the settle step's bookkeeping lists
   step_last: step_last.md
   step_next: step_next.md
-  step_settled_check: step_settled_check.md   # options.stop_check: the brief's checks once every point is settled
+  step_settled_check: step_settled_check.md   # the brief's checks once every point is settled
   section_owners: section_owners.json
 frames:
 - agent/graph.py

@@ -79,10 +79,12 @@ class _Capture:
 
 
 def test_default_profile_sends_the_plain_request():
-    llm = LLM(HarnessConfig())
+    cfg = HarnessConfig()
+    cfg.model.model = "served-name"                   # the default names no model: a card or --model gives one
+    llm = LLM(cfg)
     llm.client = cap = _Capture()
     llm.chat("spec", [{"role": "user", "content": "q"}], Usage(), 3000, json_schema={"type": "object"})
-    assert cap.kwargs == {"model": "qwen/qwen3.6-27b", "messages": [{"role": "user", "content": "q"}], "max_tokens": 3000,
+    assert cap.kwargs == {"model": "served-name", "messages": [{"role": "user", "content": "q"}], "max_tokens": 3000,
                           "temperature": 0.0, "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
                           "response_format": {"type": "json_schema", "json_schema": {"name": "spec", "schema": {"type": "object"}}}}
 

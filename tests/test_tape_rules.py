@@ -69,3 +69,23 @@ def test_the_behaviour_verdict_leaves_the_version_stamps_out():
     other = run(REC["trace"]["options"], calls=[{"stage": "step_1", "messages": [{"role": "user", "segments": [["C7", "abc", 0, 10]]}]}],
                 components={"C5": "abc"})
     assert "calls" in compare_run(other, rec, versions=False)                                  # another owner is behaviour
+
+
+def _with_setup(commit="abc1234", components=None, petrophys="3.0.0@files-1", harness="1.0.0"):
+    parts = {"harness": harness, "commit": commit, "petrophys": petrophys, "components": components or {"C1": "v1"},
+             "functions": "f1", "model": "m"}
+    return run({}, setup=f"hash-of-{commit}-{petrophys}-{components}", setup_parts=parts)
+
+
+def test_the_setup_hash_and_commit_do_not_decide_behaviour():
+    """The setup hash covers the commit (and the component versions): another commit of the same code, or another
+    package version, replays the same; its parts other than those are compared one by one."""
+    assert compare_run(_with_setup(commit="def5678", harness="1.0.1"), _with_setup(), versions=False) == ""
+    assert compare_run(_with_setup(commit="def5678"), _with_setup()) == ""
+    assert "petrophys" in compare_run(_with_setup(petrophys="3.0.1@files-2"), _with_setup(), versions=False)
+
+
+def test_the_setup_component_versions_are_stamps():
+    other = _with_setup(components={"C1": "v2"})
+    assert compare_run(other, _with_setup(), versions=False) == ""
+    assert "components" in compare_run(other, _with_setup())

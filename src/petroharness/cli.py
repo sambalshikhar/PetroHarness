@@ -11,7 +11,7 @@ evaluation index's category only groups the output files.
         --cats hydrocarbon,porosity --ids IDS.json --gt-dir GT --workers 40
 writes runs/<ARM>_<model>[r<rep>]_<cat>/{responses,traces} and the judge's reference subset runs/gt_subsets/<prefix>
 (the evaluation side; the harness never reads it). Resumes from saved traces of the same commit. The defaults are
-the configuration the benchmark runs with (model k200t, writer open, the reporting profile's format). Another
+the configuration the benchmark runs with (model k2-horizon-7b, writer open, the reporting profile's format). Another
 model: --model NAME (any chat model on an OpenAI-compatible endpoint) or --model-card CARD (docs/MODELS.md).
 """
 
@@ -21,7 +21,6 @@ import argparse
 import datetime as dt
 import json
 import re
-import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -30,9 +29,13 @@ from petroharness.agent import direction
 from petroharness.agent.graph import answer as graph_answer
 from petroharness.agent.loop import MAX_STEPS
 from petroharness.config import REPO_ROOT as ROOT, HarnessConfig
+from petroharness.core.setup import harness_commit
+from petroharness.models import DEFAULT_KEY
 from petroharness.tasks import load_tasks
 
-COMMIT = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
+# the harness's commit for a source checkout ("+dirty" with uncommitted source changes), "" for an installed package
+# (git answers for any folder inside a repository: core.setup.harness_commit counts only a tracked source file)
+COMMIT = harness_commit()
 
 
 def save(prefix: str, model_key: str, arm: str, items: list, index: dict, gt_dir: Path | None = None) -> None:
@@ -45,19 +48,19 @@ def save(prefix: str, model_key: str, arm: str, items: list, index: dict, gt_dir
         (out / "traces").mkdir(parents=True, exist_ok=True)
         (out / "responses").mkdir(exist_ok=True)
         for t, r in rows:
-            (out / "traces" / f"{t.task_id}.json").write_text(json.dumps(r["trace"], indent=1, default=str))
+            (out / "traces" / f"{t.task_id}.json").write_text(json.dumps(r["trace"], indent=1, default=str), encoding="utf-8")
         name = f"single_formation_{cat}_qa_pairs.json"
         pairs = [{"qa_id": index[t.task_id]["qa_id"], "question": t.question, "answer": r["answer"]} for t, r in rows]
         (out / "responses" / name).write_text(json.dumps({"metadata": {"category": cat, "model": model_key, "harness": f"petroharness {arm}",
                                                                        "created_utc": now, "answer_count": str(len(pairs))},
-                                                          "qa_pairs": pairs}, indent=1))
-        gt_all = json.loads(((gt_dir or ROOT / "runs" / "gt_subsets" / "dev") / name).read_text())
+                                                          "qa_pairs": pairs}, indent=1), encoding="utf-8")
+        gt_all = json.loads(((gt_dir or ROOT / "runs" / "gt_subsets" / "dev") / name).read_text(encoding="utf-8"))
         gt_rows = gt_all["qa_pairs"] if isinstance(gt_all, dict) else gt_all
         keep = {p["qa_id"] for p in pairs}
         sub = ROOT / "runs" / "gt_subsets" / prefix
         sub.mkdir(parents=True, exist_ok=True)
         kept = [p for p in gt_rows if p["qa_id"] in keep]
-        (sub / name).write_text(json.dumps({**gt_all, "qa_pairs": kept} if isinstance(gt_all, dict) else kept, indent=1))
+        (sub / name).write_text(json.dumps({**gt_all, "qa_pairs": kept} if isinstance(gt_all, dict) else kept, indent=1), encoding="utf-8")
 
 
 def answer(task, model_key: str, rep: int, max_steps: int, writer: str = "", fmt: str = "profile",
@@ -100,7 +103,7 @@ def benchmark(argv=None):
                                  description="Validation mode: run the harness on a benchmark's questions.")
     ap.add_argument("--arm", required=True)
     ap.add_argument("--cats", default="hydrocarbon")
-    ap.add_argument("--models", default="k200t", help="model registry keys, comma-separated (petroharness.models)")
+    ap.add_argument("--models", default=DEFAULT_KEY, help="model registry keys, comma-separated (petroharness.models)")
     ap.add_argument("--model", help="the served model's name, for any chat model (the generic card; instead of --models)")
     ap.add_argument("--model-card", help="a model card: a YAML file or a packaged card's name (instead of --models)")
     ap.add_argument("--rep", type=int, default=1)
@@ -118,14 +121,14 @@ def benchmark(argv=None):
     cfg = HarnessConfig()
     direction.plugged(cfg)                     # the skill library (skills, PETROHARNESS_SKILLS): a bad one stops the run here
     tasks, index = load_tasks(cfg.eval.questions, cfg.data.las_dir)
-    wanted = set(json.loads(Path(args.ids).read_text())["qa_ids"])
+    wanted = set(json.loads(Path(args.ids).read_text(encoding="utf-8"))["qa_ids"])
     cats = set(args.cats.split(","))
     tasks = [t for t in tasks if index[t.task_id]["qa_id"] in wanted and index[t.task_id]["category"] in cats]
     summary = {}
     if args.model or args.model_card:
         from petroharness.models import MODELS, card_file, env_urls, register
         name = re.sub(r"[^A-Za-z0-9._-]+", "-", args.model or Path(card_file(args.model_card)).stem)
-        keys = {name: register(env_urls() or MODELS["k200t"][1], args.model_card, args.model)}
+        keys = {name: register(env_urls() or MODELS[DEFAULT_KEY][1], args.model_card, args.model)}
     else:
         keys = {m: m for m in args.models.split(",")}
     for m, key in keys.items():
@@ -135,13 +138,13 @@ def benchmark(argv=None):
             group = index[t.task_id]["category"]                 # the output folder only; the run never sees it
             path = ROOT / "runs" / f"{prefix}_{group}" / "traces" / f"{t.task_id}.json"
             if path.exists():
-                tr = json.loads(path.read_text())
+                tr = json.loads(path.read_text(encoding="utf-8"))
                 if tr.get("commit") == COMMIT and "answer" in tr and not str(tr.get("status", "")).startswith("error"):
                     return {"answer": tr["answer"], "status": tr["status"], "trace": tr}
             r = answer(t, key, args.rep, args.max_steps, args.writer, args.format, direct=not args.investigate)
             r["trace"]["answer"] = r["answer"]
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(r["trace"], indent=1, default=str))
+            path.write_text(json.dumps(r["trace"], indent=1, default=str), encoding="utf-8")
             return r
 
         with ThreadPoolExecutor(args.workers) as ex:
@@ -156,7 +159,7 @@ def benchmark(argv=None):
                       "steps_mean": round(sum(len(x.get("steps", [])) for x in tr) / max(len(tr), 1), 2),
                       "opened_mean": round(sum(len(x.get("opened", [])) for x in tr) / max(len(tr), 1), 1)}
     (ROOT / "runs" / "summaries").mkdir(parents=True, exist_ok=True)
-    (ROOT / "runs" / "summaries" / f"run_{args.arm}_r{args.rep}.json").write_text(json.dumps(summary, indent=1))
+    (ROOT / "runs" / "summaries" / f"run_{args.arm}_r{args.rep}.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(json.dumps(summary, indent=1))
 
 

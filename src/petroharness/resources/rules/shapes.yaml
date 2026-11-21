@@ -1,5 +1,5 @@
-# Answer shapes. Step 1's intent selects the shape (Registry.shape_for); the writer's own format (writer variant '')
-# reads each shape's instructions.
+# Answer shapes. Step 1's intent selects the shape (Registry.shape_for); a list or report shape gets the code-composed
+# zone table in a full answer (agent/writer.py, prompt). No code reads the instructions texts.
 default: report
 shapes:
   direct_value:

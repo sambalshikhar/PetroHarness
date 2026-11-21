@@ -1,0 +1,1 @@
+Where the question states something about the well that the results contradict (a value, a depth, a thickness, a lithology, a fluid), the answer says so and gives what the results show

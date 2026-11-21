@@ -16,6 +16,7 @@ from petroharness.agent.compose import strip_citations
 
 from petroharness.agent.claims import Claims, _Item
 from petroharness.agent.ledger import get_lines
+from petroharness.agent import numbers as N  # the one grammar for written numbers
 from petroharness.agent import components as C  # noqa: E402  (the texts: src/petroharness/agent/components)
 from petroharness.agent import vocabulary
 
@@ -38,23 +39,12 @@ def claim_names(text: str) -> tuple:
 
 
 def k3_split(c) -> tuple:
-    """A claim's K3 flag as ({number: [items that hold it]}, [numbers no opened item shows])."""
-    held, none = {}, []
-    for f in c.flags:
-        if not f.startswith("K3"):
-            continue
-        body = re.sub(r"^K3\s+", "", f).split(" (cite the item")[0]
-        for part in [x.strip() for x in body.split(";") if x.strip()]:
-            m = re.match(r"(.+?) is in ((?:E\d+(?:, )?)+)$", part)
-            if m:
-                held[m.group(1).strip()] = [e.strip() for e in m.group(2).split(",")]
-                continue
-            m = re.match(r"(.+?) in no opened item$", part)
-            if m:
-                none += [x.strip() for x in m.group(1).split(",") if x.strip()]
-            else:                                                  # unread: stays unverified
-                none.append(re.sub(r"\s*\(.*$", "", part))
-    return held, none
+    """A claim's K3 numbers as ({number: [items that hold it]}, [numbers no opened item shows]), from the data the
+    check keeps with the claim (Claim.unshown), not from its flag's text."""
+    unshown = getattr(c, "unshown", None) or {}
+    if not any(str(f).startswith("K3") for f in getattr(c, "flags", ())):
+        return {}, []                                              # flags cleared since: nothing unshown
+    return ({x: list(e) for x, e in unshown.items() if e}, [x for x, e in unshown.items() if not e])
 
 
 def _held(c) -> dict:
@@ -70,12 +60,10 @@ def _number_lines(item, numbers: list) -> list:
     """The item's lines that show one of the numbers, at the number's written precision."""
     out = []
     for x in numbers:
-        v = re.sub(r"[^\d.\-]", "", x)
-        try:
-            val, dec = float(v), len(v.split(".")[1]) if "." in v else 0
-        except ValueError:
+        raw = N.first(str(x).replace("\u2212", "-"))
+        if raw is None:
             continue
-        tol = 0.5 * 10 ** -dec + 1e-12
+        val, tol = N.number(raw), N.half_unit(raw) + 1e-12
         out += [ln for ln, ns in item.rows if any(abs(n - val) <= tol for n in ns) and ln not in out]
     return out
 
@@ -175,12 +163,53 @@ def unsupported(text: str, s, table: str = "") -> list:
     same sentence passes); the zone table the writer is shown counts as shown, a dash right before a
     number is its minus sign, and a shown negative value supports its magnitude (otherwise an answer that holds only
     such numbers is sent to repair rounds for nothing)."""
-    items = [_Item(e) for e in s.ledger.items]
     text = _DASH_MINUS.sub("-", text)
-    items = [_Magnitudes(i) for i in items]
-    card = s.map + ("\n" + table if table else "") + ("\n" + getattr(s, "card", "") if getattr(s, "card", "") else "")
+    card, items = _shown_to_writer(s, table)
     bad, _ = number_provenance(text, card, items, s.f.view.reg.checks, (s.task.well,), s.task.question)
     return list(dict.fromkeys(bad))
+
+
+def _shown_to_writer(s, table: str = "") -> tuple:
+    """(card, items): what the writer is shown besides the results - the map without its notes, the zone table, the
+    curve card, and the question's points with the limits the investigation found (a number in the notes alone was
+    never shown to it) - and the results, a shown negative value also as its magnitude."""
+    items = [_Magnitudes(_Item(e)) for e in s.ledger.items]
+    shown = readings(s) if getattr(s, "claims", None) is not None else ""
+    card = writer_map(s.map) + ("\n" + table if table else "") + ("\n" + getattr(s, "card", "") if getattr(s, "card", "") else "") \
+        + ("\n" + shown if shown else "")
+    return card, items
+
+
+def derived(text: str, s, bad, table: str = "") -> dict:
+    """For each flagged number worked out from two numbers the answer states elsewhere (checks.derivations): the
+    arithmetic, for the repair to name (keep it, its inputs beside it)."""
+    from petroharness.agent.checks import derivations
+    card, items = _shown_to_writer(s, table)
+    return derivations(_DASH_MINUS.sub("-", text), card, items, bad, s.f.view.reg.checks, (s.task.well,), s.task.question)
+
+
+_MNEMONIC_NAME = re.compile(r"(?<![A-Za-z0-9_./-])([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+|[A-Z]+[0-9][A-Z0-9_]*)(?![A-Za-z0-9_])")
+
+
+def unknown_names(text: str, s, shown: str = "") -> list:
+    """Curve names the answer writes that the record does not hold and the writer was not shown, each with the curve
+    of the record it is close to (question suite F13): [(name, the record's curve)]. A mnemonic-shaped name only (an
+    underscore or a digit in it), and only a near miss of a curve the record holds (difflib ratio 0.85): a word, a
+    class label or an abbreviation is no curve name (measured on the golden and question-suite answers: the near
+    misses were misspellings, INVAISION_RATIO; any other unshown name was a word or a label)."""
+    import difflib
+    from petroharness.agent import engine as E
+    f = s.f
+    curves = sorted(set(f.inv.curves) | {str(c).upper() for c in getattr(f.view.prep.well, "curves", {}) or {}})
+    known = E.known_names(f) | set(curves) | set(_MNEMONIC_NAME.findall(shown or ""))
+    out = []
+    for name in dict.fromkeys(_MNEMONIC_NAME.findall(text or "")):
+        if name in known:
+            continue
+        near = difflib.get_close_matches(name, curves, n=1, cutoff=0.85)
+        if near:
+            out.append((name, near[0]))
+    return out
 
 
 def report_numbers(text: str) -> str:
@@ -290,7 +319,7 @@ LEAK = re.compile(r"(?:\.\.\.|…)\s*(?:wait|hmm|oops|sorry|no wait)\b|\b(?:wait
 
 
 # the writer's own drafting left in the reply ("We need answer per rules.", "Need ensure ...", "Need include ..."): lines
-# that open on "need" and a verb; two or more mark a draft (in 2,501 v3.5 answers only one, a drafted answer, had any)
+# that open on "need" and a verb; two or more mark a draft (of 2,501 measured answers only one, a drafted one, had any)
 DRAFT = re.compile(r"^\s*(?:we )?need (?!to\b|for\b|of\b|not\b)[a-z]+\b", re.I | re.M)
 
 
@@ -344,6 +373,33 @@ def clean_reply(text: str, draft: str = "") -> str:
 OPEN_CHARS = 24000
 
 
+GOT_HEAD = "  (more lines of this same result, beyond those above, as get or find showed them; not another result)"
+
+
+def result_text(s, e, whole: bool = False) -> str:
+    """A result as the writer and the settle step read it: its text, then the lines a get or find of this question
+    fetched beyond it (Session.got: a list's kept lines, "the other intervals"). `whole`: every line it holds, in its
+    order (a direct question's few results: the look step says its writer reads them whole, and a list cut at the
+    size limit lost its last intervals)."""
+    if whole:
+        return f"[{e.id}] " + "\n".join(e.lines)
+    got = (getattr(s, "got", None) or {}).get(e.id) or []
+    return f"[{e.id}] {e.text}" + (f"\n{GOT_HEAD}\n" + "\n".join(got) if got else "")
+
+
+def whole_while_it_fits(s, items: list, budget: int) -> str:
+    """Each result as shown (with what get fetched), then read whole - every line it holds - newest first while the
+    budget lasts: the lookups the question asked for before the broad first look (a direct question's writer)."""
+    texts = {e.id: result_text(s, e) for e in items}
+    used = sum(len(t) + 2 for t in texts.values())
+    for e in reversed(items):
+        full = result_text(s, e, whole=True)
+        extra = len(full) - len(texts[e.id])
+        if extra > 0 and used + extra <= budget:
+            texts[e.id], used = full, used + extra
+    return "\n\n".join(texts[e.id] for e in items)
+
+
 def opened_results(s, budget: int = OPEN_CHARS) -> str:
     """Every opened result: whole while the budget lasts, newest last; then digests. the results the
     claims cite and the newest are kept whole first, the oldest uncited ones digested first (a digested newest result
@@ -354,11 +410,11 @@ def opened_results(s, budget: int = OPEN_CHARS) -> str:
     order = [e for e in items if e.id in cited] + [e for e in reversed(items) if e.id not in cited]
     whole_ids, used = set(), sum(len(s.ledger.digest(e)) + 2 for e in items)
     for e in order:                                    # upgrade digests to the whole text while the budget lasts
-        extra = len(e.text) + len(e.id) + 3 - len(s.ledger.digest(e))
+        extra = len(result_text(s, e)) - len(s.ledger.digest(e))
         if used + extra <= budget:
             whole_ids.add(e.id)
             used += extra
-    return "\n\n".join(f"[{e.id}] {e.text}" if e.id in whole_ids else s.ledger.digest(e) for e in items)
+    return "\n\n".join(result_text(s, e) if e.id in whole_ids else s.ledger.digest(e) for e in items)
 
 
 # --- the reader's format (the reporting profile's `format` block: the zone table's style) ------------------------
@@ -408,34 +464,61 @@ def prompt(s, fmt: str = "profile", brief: bool = False) -> tuple:
     if later:                 # a later question of a conversation: its own results, and the earlier ones its claims cite
         cited = {x for c in s.claims.claims.values() for x in c.ev} | set(getattr(s, "fetched", ()))   # or it fetched whole
         items = [e for i, e in enumerate(items) if i >= s.turn_start or e.id in cited]
-    results = "\n\n".join(f"[{e.id}] {e.text}" for e in items)
+    if brief and getattr(s, "depth", "") == "direct":         # the look steps' results: whole while the budget lasts
+        results = whole_while_it_fits(s, items, RESULTS_CHARS)
+    else:
+        results = "\n\n".join(result_text(s, e) for e in items)
     if len(results) > RESULTS_CHARS:
         results = results[:RESULTS_CHARS] + "\n... (cut)"
     s.card = curve_card(s)
     seen = (f"THE ZONE TABLE (inserted where you write {{{{ZONE_TABLE}}}}; computed from the data, its values are exact "
             f"and are evidence like the results: what you write must agree with it, and an empty cell is a zone without "
             f"that curve):\n{table}") if table else ""
-    readings = (f"THE QUESTION'S POINTS (the answer covers each):\n"
-                + "\n".join(f"Point {k}: {p}" for k, p in enumerate(s.claims.points, 1)))
-    if lim := doubts(s):
-        readings += ("\n\nLIMITS THE INVESTIGATION FOUND (in some results or their methods, by point; weigh them as you "
-                     "read the results):\n" + "\n".join(f"Point {k}: {w}" for k, w in lim))
-    parts = [f"QUESTION:\n{s.task.question}", getattr(s, "earlier", ""), vocabulary.note(s), conventions_block(s),
-             readings,
+    stretch = question_stretch(s)
+    parts = [f"QUESTION:\n{s.task.question}", stretch, getattr(s, "earlier", ""), vocabulary.note(s), conventions_block(s),
+             readings(s),
              f"RESULTS (everything the investigation computed, by id):\n{results}",
              f"WHAT THE CURVES ARE (from the record: each curve's meaning, status and what its values show):\n{s.card}",
              seen, f"THE MAP\n{writer_map(s.map)}"]
     if brief:                 # a short reply: its own brief, no report form (C9 reply_brief)
-        system = C.text("C9", "reply_brief") + ("\n" + C.text("C9", "brief_later") if later else "")
+        system = C.prompt("C9", "reply_brief") + ("\n" + C.text("C9", "brief_later") if later else "")
         if getattr(s, "depth", "") == "direct":   # the look steps' results may not state it: the writer may hand over
             system += "\n" + C.text("C9", "brief_direct")
+        system += ("\n" + C.text("C9", "scope_rule")) if stretch else ""
         return system, "\n\n".join(p for p in parts if p), table, shape
-    system = C.text("C9", "write")
+    system = C.prompt("C9", "write")
     system += f"\n9. {TABLE_RULE}" if table else ""     # the zone table once, as the writer's
     system += "\n" + C.text("C9", "points_rule")
     if later:
         system += "\n" + C.text("C9", "later_rule").strip()
+    system += ("\n" + C.text("C9", "scope_rule")) if stretch else ""
     return system, "\n\n".join(p for p in parts if p), table, shape
+
+
+def question_stretch(s) -> str:
+    """THE QUESTION'S STRETCH for the writer (reach well, a scope in force: the stretches every lookup computed on),
+    with the interval as a part of it; "" without (the benchmark's reach focus has none). The steps read the scope
+    (loop.scope_text); without it the writer, told to answer about one interval, narrowed a whole-well answer to it."""
+    scope = list(getattr(s, "scope", None) or [])
+    if not scope:
+        return ""
+    inv = s.f.inv
+    who = "set by the user" if getattr(s, "scope_by_user", False) else "the stretches the question is about"
+    u = inv.depth_unit
+    named = [f"{x} {u}" if re.fullmatch(r"-?[\d.]+\s*-\s*-?[\d.]+", str(x)) else str(x) for x in scope]
+    return (f"THE QUESTION'S STRETCH: {', '.join(named)} ({who}; every lookup computed on it); the interval "
+            f"{inv.top:g}-{inv.base:g} {u} is one part of the well")
+
+
+def readings(s) -> str:
+    """The question's points and the limits the investigation found, as the writer reads them (the checker counts
+    their numbers as shown)."""
+    out = (f"THE QUESTION'S POINTS (the answer covers each):\n"
+           + "\n".join(f"Point {k}: {p}" for k, p in enumerate(s.claims.points, 1)))
+    if lim := doubts(s):
+        out += ("\n\nLIMITS THE INVESTIGATION FOUND (in some results or their methods, by point; weigh them as you "
+                "read the results):\n" + "\n".join(f"Point {k}: {w}" for k, w in lim))
+    return out
 
 
 def doubts(s) -> list:
@@ -444,7 +527,7 @@ def doubts(s) -> list:
     out, seen = [], set()
     for c in sorted(s.claims.claims.values(), key=lambda c: (c.point or 0)):
         w = (c.weak or "").strip()
-        if c.grade == "hypothesis" or not w or re.match(r"(none|n/?a|-)\b", w, re.I) or w in seen:
+        if c.grade == "hypothesis" or not w or re.match(r"(?:none|n/?a)\b|-+\s*$", w, re.I) or w in seen:
             continue
         seen.add(w)
         out.append((c.point, w))

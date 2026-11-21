@@ -3,12 +3,12 @@ name: tools
 purpose: 'what the model can call and how: tool descriptions, argument vocabularies, the condition grammar'
 texts:
   condition: condition.md
-  v9_descriptions: v9_descriptions.json
-  v9_zones: v9_zones.md
+  zones_argument: zones_argument.md
   argument_texts: argument_texts.json
   grammar: grammar.md
   tool_descriptions: tool_descriptions.json
   library: library.md      # Petrophys's functions are searched before a hand calculation
+  basis: basis.md          # which line of a result is the interval's value (the brief's numbers, the writer's)
 frames:
 - agent/schemas.py
 - agent/toolset.py

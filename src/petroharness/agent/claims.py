@@ -8,7 +8,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from petroharness.agent.checks import number_provenance
+from petroharness.agent import numbers as N
+from petroharness.agent.checks import _NUM, number, number_provenance
 from petroharness.agent.ledger import Ledger, shown_values
 
 GRADES = ("hypothesis", "low", "moderate", "high", "not indicated", "undetermined")
@@ -116,12 +117,12 @@ def coerce_edit(raw) -> Optional[dict]:
 
 def _share(raw: str, text: str) -> bool:
     """raw% = 100 * a / b for two numbers a, b in the same sentence."""
-    x, dec = float(raw), len(raw.split(".")[1]) if "." in raw else 0
+    x, dec = number(raw), N.decimals(raw)
     tol = 0.5 * 10 ** (-dec) + 1e-9
     for sent in re.split(r"(?<=[.!?])\s+(?=[A-Z(])|\n", text):
         if not re.search(rf"(?<![\d.]){re.escape(raw)}\s*%", sent):
             continue
-        nums = [float(n) for n in re.findall(r"(?<![A-Za-z_\d.])\d+(?:\.\d+)?(?![\d%])", sent)]
+        nums = [number(m.group(1)) for m in _NUM.finditer(sent) if not m.group(2)]     # as the checker reads them
         if any(b and abs(100 * a / b - x) <= tol for a in nums for b in nums if a < b):
             return True
     return False
@@ -186,6 +187,8 @@ class Claim:
     weak: str = ""
     flags: list = field(default_factory=list)
     history: list = field(default_factory=list)
+    text_at: int = 0                  # the results open when its text was written (a later id was opened after it)
+    unshown: dict = field(default_factory=dict)   # its K3 numbers as data: {number as written: [items that hold it]}
 
     @property
     def settles(self) -> bool:
@@ -217,7 +220,8 @@ class Claims:
             if x.endswith("%") and _share(raw, text):
                 continue                                       # a share of two numbers its sentence shows
             if re.search(_APPROX + re.escape(raw), text):
-                v = float(raw)
+                first = N.first(raw)                           # a number, or a pair "k of N" (its first)
+                v = number(first) if first else 0
                 vals = [a for e in cited for a in shown_values(e)]
                 if v and any(abs(a - v) <= 0.05 * abs(v) for a in vals):
                     continue                                   # an approximation of a shown value
@@ -232,12 +236,23 @@ class Claims:
         if c.grade != "hypothesis" and not [e for e in c.ev if e == "MAP" or e in items]:
             flags.append(_flag("K2"))
         text = f"{c.text} {c.means} {c.weak}".strip()
+        c.unshown = {}
         if c.grade != "hypothesis":
             cited = [items[e] for e in c.ev if e in items]
             bad = self._unsupported(text, cited)
             if bad:
-                where = {x: [e.id for e in items.values() if e.id not in c.ev
-                             and not number_provenance(x, "", [_Item(e)], self.checks, self.wells, "")[0]] for x in bad}
+                where = {}
+
+                def holders(x) -> list:
+                    """The results, not cited, that hold number x as written (for any number flagged, before or
+                    after the citations added below: the check is redone on the cited set, which can flag a number
+                    the first pass passed; benchmark N2 KeyError)."""
+                    if x not in where:
+                        where[x] = [e.id for e in items.values() if e.id not in c.ev
+                                    and not number_provenance(x, "", [_Item(e)], self.checks, self.wells, "")[0]]
+                    return where[x]
+                for x in bad:
+                    holders(x)
                 digits = lambda x: len(re.sub(r"[^0-9]", "", x).lstrip("0"))
 
                 def takes(x, i):
@@ -251,8 +266,9 @@ class Claims:
                     c.history.append({"op": "cite", "by": "code", "ev": auto})
                     bad = self._unsupported(text, [items[e] for e in c.ev if e in items])
                 if bad:
-                    held = [_flag("K3_held", number=x, items=", ".join(where[x][:3])) for x in bad if where[x]]
-                    none = [x for x in bad if not where[x]]
+                    c.unshown = {x: list(holders(x)[:3]) for x in bad}      # the flag's numbers, as data (k3_split)
+                    held = [_flag("K3_held", number=x, items=", ".join(holders(x)[:3])) for x in bad if holders(x)]
+                    none = [x for x in bad if not holders(x)]
                     flags.append(_flag("K3", numbers="; ".join(held + ([_flag("K3_none", numbers=", ".join(none))]
                                                                        if none else []))))
         if c.grade == "high" and len({e for e in c.ev if e == "MAP" or e in items}) < 2:
@@ -365,7 +381,7 @@ class Claims:
                 grade = grade or "hypothesis"                # no results cited: a hypothesis
                 self._n += 1
                 c = Claim(id=f"C{self._n}", point=e["point"], text=e["text"], means=e["means"] or "", ev=e["ev"] or [],
-                          grade=grade, weak=e["weak"] or "")
+                          grade=grade, weak=e["weak"] or "", text_at=len(self.ledger.items))
                 c.flags = self.check(c)
                 c.history.append({"op": "add", "text": c.text, "ev": c.ev, "grade": c.grade, "flags": c.flags})
                 self.claims[c.id] = c
@@ -386,8 +402,8 @@ class Claims:
                 c.history.append({"op": "drop", "why": e["why"]})
                 self.dropped.append(self.claims.pop(c.id))
                 continue
-            if e["text"]:
-                c.text = e["text"]
+            if e["text"] and e["text"] != c.text:
+                c.text, c.text_at = e["text"], len(self.ledger.items)
             if e["means"] is not None:
                 c.means = e["means"]
             if e["ev"] is not None:

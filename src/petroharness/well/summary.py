@@ -202,25 +202,79 @@ def curve_kind(view, c: str) -> Kind:
 
 def code_labels(view, c: str) -> dict:
     """{code: label} where the record maps a curve's codes to labels: the lithology log, by the code table the zones
-    are read with (the data's nomenclature); {} for any other curve, whose codes are shown as they are."""
+    are read with (the data's nomenclature); any other class curve by the labels Petrophys keeps with it, in the one
+    field its own analyzer and log viewer read (metadata.custom["category_labels"]: LITHO, LITHO_CLASS,
+    NET_EXCLUSION); {} for a curve without them, whose codes are shown as they are."""
     table = getattr(view, "code_table", None) or {}
-    if not table or c != getattr(view, "lithology_curve", None):
-        return {}
-    return {float(k): str(v) for k, v in table.items()}
+    if table and c == getattr(view, "lithology_curve", None):
+        return {float(k): str(v) for k, v in table.items()}
+    well = getattr(getattr(view, "prep", None), "well", None)
+    curve = well.get(c) if well is not None and c in set(getattr(well, "curves", {}) or {}) else None
+    custom = getattr(getattr(curve, "metadata", None), "custom", None) or {}
+    labels = custom.get("category_labels") or {}
+    return {float(k): str(v) for k, v in labels.items()}
 
 
-def code_text(code: float, labels: dict) -> str:
-    """A class code as written: '5 (SILT)' with the record's label, else '5'."""
-    c = int(code) if float(code).is_integer() else code
-    lab = labels.get(float(code))
-    return f"{c} ({lab})" if lab else str(c)
+def screened(view, c: str) -> str:
+    """What the preparation's range screening removed of a measured curve over the whole well, where Petrophys judges
+    the curve mostly implausible (metadata.custom["range_screening"]: masked of finite at least its
+    RANGE_SCREENING_WARNING_FRACTION, the share at which it warns of a wrong label, scale or curve type; a few spikes
+    it masks without a word, and so does this): "range screening removed 4914 of its 9427 readings over the well
+    (outside 38.5-300 us/ft); the rest is left out too" (the last where Petrophys left the whole curve out); ""
+    otherwise (question suite X25: DTC had no values in the interval and the answer said the well had no sonic
+    log)."""
+    from petrophys.preprocessing.standardization.curve_standardizer import RANGE_SCREENING_WARNING_FRACTION
+    well = getattr(getattr(view, "prep", None), "well", None)
+    curve = well.get(c) if well is not None and c in set(getattr(well, "curves", {}) or {}) else None
+    rs = (getattr(getattr(curve, "metadata", None), "custom", None) or {}).get("range_screening") or {}
+    k, n = int(rs.get("masked") or 0), int(rs.get("finite") or 0)
+    if not k or not n or k / n < RANGE_SCREENING_WARNING_FRACTION:
+        return ""
+    lo, hi, unit = rs.get("low"), rs.get("high"), str(rs.get("unit") or "").strip()
+    span = f" (outside {float(lo):g}-{float(hi):g}{' ' + unit if unit else ''})" if lo is not None and hi is not None else ""
+    hint = f"; {rs['hint']}" if rs.get("hint") else ""
+    rest = "; the rest is left out too" if rs.get("whole_curve") else ""
+    return f"range screening removed {k} of its {n} readings over the well{span}{hint}{rest}"
 
 
-def class_counts(x, codes) -> tuple:
-    """(n with a value, [(code, count)] of the codes present in x, in code order)."""
+def _code(c) -> str:
+    return str(int(c)) if float(c).is_integer() else str(c)
+
+
+def code_text(code, labels: dict) -> str:
+    """A class as written: '5 (SILT)' with the record's label, else '5'; codes the labels name alike, one class:
+    '9, 12 (LIMESTONE)' (class_groups)."""
+    if isinstance(code, tuple):
+        lab = (labels or {}).get(float(code[0]))
+        return f"{', '.join(_code(c) for c in code)}" + (f" ({lab})" if lab else "")
+    lab = (labels or {}).get(float(code))
+    return f"{_code(code)} ({lab})" if lab else _code(code)
+
+
+def class_groups(codes, labels: dict = None) -> list:
+    """The classes of a curve's codes: codes the record's labels name alike are one class (a tuple of them, question
+    suite F11: the data's code table names 9 and 12 LIMESTONE, listed twice), every other code its own; in the order of
+    each class's first code."""
+    by = {}
+    for c in codes:
+        lab = (labels or {}).get(float(c))
+        by.setdefault(("label", str(lab).strip().upper()) if lab else ("code", float(c)), []).append(c)
+    return [cs[0] if len(cs) == 1 else tuple(cs) for cs in by.values()]
+
+
+def in_class(x, key) -> np.ndarray:
+    """The samples of x in a class (one code, or the codes of one label)."""
+    x = np.asarray(x, dtype=float)
+    return np.isin(x, list(key)) if isinstance(key, tuple) else x == key
+
+
+def class_counts(x, codes, labels: dict = None) -> tuple:
+    """(n with a value, [(class, count)] of the classes present in x, in code order): with the record's labels, codes
+    named alike are one class (class_groups)."""
     x = np.asarray(x, dtype=float)
     fin = x[np.isfinite(x)]
-    return int(fin.size), [(c, int(np.count_nonzero(fin == c))) for c in codes if np.any(fin == c)]
+    out = [(k, int(np.count_nonzero(in_class(fin, k)))) for k in class_groups(codes, labels)]
+    return int(fin.size), [(k, m) for k, m in out if m]
 
 
 def kind_note(k: Kind, labels: dict) -> str:
@@ -229,7 +283,7 @@ def kind_note(k: Kind, labels: dict) -> str:
         return "0/1 values over the well: each basis gives the share set to 1"
     if k.kind == "classes":
         return (f"class codes ({len(k.codes)} integer values over the well: "
-                + ", ".join(code_text(c, labels) for c in k.codes)
+                + ", ".join(code_text(c, labels) for c in class_groups(k.codes, labels))
                 + "): each basis gives the share of each class (codes are labels, not quantities)")
     if k.kind == "one value":
         return f"one value over the well: {code_text(k.codes[0], labels)}"
@@ -257,23 +311,64 @@ class Basis:
     zone: object = None               # the zone, for kind "zone"
 
 
+def in_a_zone(view) -> np.ndarray:
+    """The interval's samples inside any of the formation's lithology zones: all of them, also on a view narrowed to
+    some (FormationView.of_zones), where `zoned` is the named zones' samples."""
+    every = getattr(view, "all_zones", None)
+    if not every:
+        return np.asarray(view.zoned, dtype=bool)
+    out = np.zeros(np.asarray(view.depth).size, dtype=bool)
+    for z in every:
+        out[np.asarray(z.indices)] = True
+    return out
+
+
 def outside(view) -> int:
     """The interval's samples outside every lithology zone."""
-    return int(np.asarray(view.depth).size - np.count_nonzero(view.zoned))
+    return int(np.asarray(view.depth).size - np.count_nonzero(in_a_zone(view)))
+
+
+def count_share(k: int, n: int, what: str = "samples") -> str:
+    """A share of samples written with its count: "2 of 768 samples (0.3%)". A share alone left a question asking how
+    many with no count to quote (question suite B05, Y02, Y11: "the absolute sample counts are not stated")."""
+    from petroharness.well.view import fmt_pct
+    return f"{int(k)} of {int(n)} {what} ({fmt_pct(100.0 * k / n, 1) if n else 'n/a'})"
 
 
 def pooled_label(view, zs) -> str:
-    every = {z.zone_id for z in zs} == {z.zone_id for z in view.zones}
+    every = {z.zone_id for z in zs} == {z.zone_id for z in (getattr(view, "all_zones", None) or view.zones)}
+    if getattr(view, "selection", None):                 # a selection's rows (agent.selection)
+        return "rows pooled" if every else "these rows pooled"
     return "zones pooled" if every else "these zones pooled"
 
 
 def whole_label(view) -> str:
-    return f"whole interval ({outside(view)} samples outside any zone)"
+    return whole_text(view, outside(view))
+
+
+def selection_name(view) -> str:
+    """A selection by its name and depths, each once (a depth range is its own name)."""
+    iv, unit = view.interval, getattr(view, "depth_unit", "") or ""
+    span = f"{iv.top:g}-{iv.base:g} {unit}"
+    return view.selection if span in view.selection else f"{view.selection} {span}"
+
+
+def whole_text(view, count) -> str:
+    """The whole interval's label with `count` (a number, or its text as a result writes it) samples outside any zone;
+    a selection (agent.selection) names itself with its depths, and its samples outside any row."""
+    if getattr(view, "selection", None):
+        return f"{selection_name(view)} ({count} samples outside any row)"
+    return f"whole interval ({count} samples outside any zone)"
+
+
+def pooled_word(view) -> str:
+    """What a view's rows are called in its pooled lines: zones, or the rows of a selection."""
+    return "rows" if getattr(view, "selection", None) else "zones"
 
 
 def outside_mask(view) -> np.ndarray:
     """The interval's samples outside every lithology zone (True there)."""
-    return ~np.asarray(view.zoned, dtype=bool)
+    return ~in_a_zone(view)
 
 
 def what_outside(view) -> str:
@@ -290,12 +385,35 @@ def what_outside(view) -> str:
     return f"{what}{size}; not a zone"
 
 
-def outside_label(view, short: bool = False) -> str:
-    """The basis label of the samples outside the zones: their count and what they are (short: a value line's label,
-    'not a zone' only; the tool's description and its other lines say what they are)."""
+def kept_outside(view, keep=None) -> int:
+    """The samples outside every zone (or row), of those `keep` keeps (a where's samples; all when None)."""
+    away = outside_mask(view)
+    return int(away.sum()) if keep is None else int((away & np.asarray(keep, dtype=bool)).sum())
+
+
+def whole_label_of(view, i=str, keep=None, where: str = "") -> str:
+    """The whole selection's label as every result line writes it, its counts written by i (a result's Out.i, so
+    they are numbers of the result): with its samples outside any zone or row; under a where (keep: its samples,
+    where: the condition as read), every sample where it holds, how many, and how many of them lie outside any zone
+    (question suite B01: 'whole interval (201 samples outside any zone)' over the 158 samples of a where was read
+    as the whole interval)."""
+    if keep is None:
+        return whole_text(view, i(outside(view)))
+    m = np.asarray(keep, dtype=bool)
+    word = "row" if getattr(view, "selection", None) else "zone"
+    return f"every sample where {where} ({i(int(m.sum()))} samples, {i(kept_outside(view, m))} of them outside any {word})"
+
+
+def outside_label(view, short: bool = False, keep=None) -> str:
+    """The basis label of the samples outside the zones: their count (of a where's samples, keep) and what they are
+    (short: a value line's label, 'not a zone' only; the tool's description and its other lines say what they
+    are)."""
+    n = kept_outside(view, keep)
+    if getattr(view, "selection", None):                 # a selection's samples between its rows
+        return f"outside any row ({n} samples; not a row)"
     if short:
-        return f"outside any zone ({outside(view)} samples; not a zone)"
-    return f"outside any zone ({outside(view)} samples, {what_outside(view)})"
+        return f"outside any zone ({n} samples; not a zone)"
+    return f"outside any zone ({n} samples, {what_outside(view)})"
 
 
 OUTSIDE_STATISTICS = ("n", "mean", "min", "max")     # what the samples outside the zones hold, on a value line

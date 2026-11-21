@@ -119,6 +119,13 @@ def test_g2_every_meaning_names_where_it_came_from():
 
 # --- G3 sources agree with an independent derivation ----------------------------------------------------------------
 
+@lru_cache(maxsize=None)
+def _las_mnemonics(path: str) -> frozenset:
+    """The LAS's own curves, read here (lasio), not by the harness; once per file."""
+    import lasio
+    return frozenset(c.mnemonic.upper() for c in lasio.read(path).curves)
+
+
 def _independent_source(v, inv, c: str) -> str:
     steps = v.prep.steps or {}
     listed = any("outputs" in (r or {}) for r in steps.values())
@@ -129,7 +136,7 @@ def _independent_source(v, inv, c: str) -> str:
                 writer = name                                   # the last step that wrote it
                 if ((rec or {}).get("stage") or "workflow") == "workflow":
                     workflow_writer = name
-    inputs = {x.upper() for x in v.prep.input_curves}
+    inputs = {x.upper() for x in v.prep.input_curves} | _las_mnemonics(str(v.task.las_path))
     if workflow_writer or (writer and c.upper() not in inputs):  # a LAS curve a preparation or QC only touched: input
         return "computed"
     reg = v.reg
@@ -457,24 +464,30 @@ def test_g11_the_saturation_model_and_its_coefficients_are_there():
 
 
 @pytest.mark.data
-def test_g11_interval_scoped_lines_count_this_interval():
-    """Flag counts in the scoped lines are this interval's; a flag with no data here has no line (the record counts
-    the whole well)."""
-    pat = re.compile(r"^(?P<flag>[A-Z][A-Z0-9_]*)\b.*?->\s*(?P<n>\d+) samples .* in this interval")
-    checked = 0
+def test_g11_a_steps_interval_facts_come_from_its_curves_and_its_record_lines_are_as_written():
+    """O3: a step's record lines are the whole well's run, as Petrophys wrote them (no line rewritten or dropped); what
+    its output curves hold in this interval is read from the curves (record.catalog.interval_facts): each flag's
+    samples set here equal numpy's count, and where the analyzers filled an output the step left empty, the two shares
+    are stated apart (the record may say the step did not compute it)."""
+    checked = filled = 0
     for t, v, s, inv in formations():
         for m in inv.methods:
-            for line in m.decisions_here + m.equations_here:
-                hit = pat.match(line)
-                if hit and hit.group("flag") in v.reg.flags:
-                    x = v.values(hit.group("flag"))
-                    assert x is not None and int(np.nansum(x > 0.5)) == int(hit.group("n")), (t.well, line)
+            assert m.decisions_here == m.decisions, (t.well, m.step)
+            for line in m.facts_here:
+                hit = re.match(r"^(?P<flag>[A-Z][A-Z0-9_]*) set at (?P<n>\d+) of (?P<have>\d+) samples", line)
+                if hit:
+                    x = np.asarray(v.values(hit.group("flag")), dtype=float)
+                    assert int(np.nansum(x > 0.5)) == int(hit.group("n")), (t.well, line)
+                    assert int(np.isfinite(x).sum()) == int(hit.group("have")), (t.well, line)
                     checked += 1
-            for line in m.decisions + m.equations:
-                f = re.match(r"^([A-Z][A-Z0-9_]*)\b.*->\s*\d+ samples", line)
-                if f and f.group(1) in v.reg.flags and not v.available(f.group(1)):
-                    assert not any(l.startswith(f.group(1)) for l in m.decisions_here), (t.well, line)
-    assert checked > 0
+                fill = re.search(r"^(?P<c>[A-Z][A-Z0-9_]*) .*\((?P<k>\d+) from the step; the analyzers add (?P<a>\d+) ", line)
+                if fill:                               # the analyzers' share: the view's values against its own
+                    c = fill.group("c")
+                    own = int(np.isfinite(np.asarray(v.own_values(c), dtype=float)).sum())
+                    full = int(np.isfinite(np.asarray(v.values(c), dtype=float)).sum())
+                    assert (own, full - own) == (int(fill.group("k")), int(fill.group("a"))), (t.well, line)
+                    filled += 1
+    assert checked > 0 and filled > 0
 
 
 # --- G10 deterministic and fast ---------------------------------------------------------------------------------------

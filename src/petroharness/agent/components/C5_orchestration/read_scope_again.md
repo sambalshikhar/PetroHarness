@@ -1,0 +1,1 @@
+SCOPE NOT USED: your scope named a stretch the well does not have as written. {reason} Reply with the same JSON object again; write each scope item as one name the map lists, "the whole well", or a depth range TOP-BASE in m or ft.

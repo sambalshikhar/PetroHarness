@@ -120,10 +120,52 @@ def absent(s) -> list:
 
 
 def note(s) -> str:
-    """The one line under QUESTION (C10 'absent_note'): "Named but not in this well's record: <name> (<curves>); ...";
-    empty when every named item has data here."""
+    """The lines under QUESTION (C10): "Named but not in this well's record: <name> (<curves>); ..." for the named
+    items whose curves the record does not hold, and "Named, in this well's record but with no values in this
+    interval: <name> (<curve>: what the range screening removed)" for those it holds without a value here (question
+    suite X25: DTC, held and screened out here, was said to be not in the record, and the answer said the well had no
+    sonic log). A quantity the workflow derives (the catalog's derived curves) also names the Petrophys functions that
+    may compute it (library_api.computes), so the model reaches for them before saying it cannot be had; empty when
+    every named item has data here. The same items as data, for the answer's reader: facts()."""
     from petroharness.agent import components as C
+    got = facts(s)
+    out = [f for f in got if f["kind"] == "absent"]
+    here = [f for f in got if f["kind"] == "empty"]
+    unit = getattr(s, "unit_note", "") or ""             # a unit the tops file does not have (loop.ask_back)
+
+    def item(f):
+        fns = f["computes"]
+        return f"{f['name']} ({', '.join(f['curves'])}" + (f"; Petrophys may compute it: {', '.join(fns)}" if fns else "") + ")"
+
+    def kept(f):
+        return f"{f['name']} ({'; '.join(f'{x[0]}: {x[1]}' if x[1] else x[0] for x in ((c['curve'], c['why']) for c in f['curves']))})"
+    lines = ([C.fill("C10", "absent_note", items="; ".join(item(f) for f in out))] if out else []) \
+        + ([C.fill("C10", "empty_note", items="; ".join(kept(f) for f in here))] if here else []) \
+        + ([unit] if unit else [])
+    return "\n".join(lines)
+
+
+def facts(s) -> list:
+    """note()'s items as data, for the answer's reader (the web UI words them): {"kind": "absent", "name", "curves",
+    "computes"} for a named item the record does not hold, {"kind": "empty", "name", "curves": [{"curve", "why"}]} for
+    one it holds with no value in this interval, then the session's own (loop.ask_back: a unit the tops file does not
+    have, the user's zones with no sample here)."""
+    from petroharness.well.summary import screened
     items = absent(s)
-    if not items:
-        return ""
-    return C.fill("C10", "absent_note", items="; ".join(f"{n[:NAME_CHARS]} ({', '.join(c)})" for n, c in items))
+    out, here = [], []
+    if items:
+        view = s.f.view
+        well = getattr(getattr(view, "prep", None), "well", None)
+        held = {str(c).upper() for c in getattr(well, "curves", {}) or {}}
+        derived = {str(c).upper() for c in ((view.reg.curves.get("inventory") or {}).get("derived") or [])}
+        for n, c in items:
+            if any(x.upper() in held for x in c):
+                here.append({"kind": "empty", "name": n[:NAME_CHARS],
+                             "curves": [{"curve": x, "why": screened(view, x) or ""} for x in c if x.upper() in held]})
+                continue
+            fns = []
+            if {x.upper() for x in c} & derived:
+                from petroharness.agent.library_api import computes
+                fns = computes(n)
+            out.append({"kind": "absent", "name": n[:NAME_CHARS], "curves": list(c), "computes": list(fns)})
+    return out + here + list(getattr(s, "unit_facts", None) or [])

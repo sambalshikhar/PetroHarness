@@ -11,6 +11,7 @@ texts:
   repair_keep: repair_keep.md
   flags: flags.json
   repair_leaks: repair_leaks.md    # working notes left in the answer
+  repair_names: repair_names.md    # a curve name the record does not hold, close to one it holds
 frames:
 - agent/claims.py
 - agent/checks.py

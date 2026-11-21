@@ -51,7 +51,7 @@ def record(llm, path: Path) -> list:
         rec = {"n": len(calls), "request": _plain(kwargs), "reply": _reply(resp)}
         with lock:
             calls.append(rec)
-            with path.open("a") as f:
+            with path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(rec) + "\n")
         return resp
 
@@ -66,9 +66,9 @@ def load(path: Path) -> list:
         path = Path(f"{path}.gz")
     if path.suffix == ".gz":
         import gzip
-        with gzip.open(path, "rt") as f:
+        with gzip.open(path, "rt", encoding="utf-8") as f:
             return [json.loads(line) for line in f if line.strip()]
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def _diff(a: Any, b: Any, where: str = "") -> str:
@@ -168,6 +168,8 @@ def unstamped(trace: dict) -> dict:
     span of `calls` ([component, version, start, end] -> [component, start, end]). What is left decides behaviour;
     the stamps say which files produced it (they change whenever a framed file is edited or moved)."""
     out = {k: v for k, v in trace.items() if k != "components"}
+    if isinstance(out.get("setup_parts"), dict):               # the setup's component versions: stamps too
+        out["setup_parts"] = {k: v for k, v in out["setup_parts"].items() if k != "components"}
     if isinstance(out.get("calls"), list):
         out["calls"] = [{**c, "messages": [{**m, "segments": [[s[0], *s[2:]] for s in m.get("segments") or []]}
                                            for m in c.get("messages") or []]} for c in out["calls"]]
@@ -192,6 +194,10 @@ def compare_run(got: dict, want: dict, replayer: "Replayer | None" = None, fixed
         return f"status {got['status']} against {want['status']}"
     g = {k: v for k, v in json.loads(json.dumps(got["trace"], default=str)).items() if k not in VOLATILE}
     w = {k: v for k, v in want["trace"].items() if k not in VOLATILE}
+    for t in (g, w):                  # the setup hash covers the commit: its parts are compared, less the volatile ones
+        t.pop("setup", None)
+        if isinstance(t.get("setup_parts"), dict):
+            t["setup_parts"] = {k: v for k, v in t["setup_parts"].items() if k not in VOLATILE}
     timing = lambda log: [{k: v for k, v in e.items() if k != "seconds"} for e in log or []]
     g["usage"], w["usage"] = timing(g.get("usage")), timing(w.get("usage"))
     added = {k: v for k, v in (g.get("options") or {}).items() if k not in (w.get("options") or {})}

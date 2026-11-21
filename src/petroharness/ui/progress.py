@@ -108,11 +108,17 @@ def read_reply_of(stage: str, text: str) -> dict:
     if kind in ("step", "settle"):
         if not text.strip():
             return {"empty": True}
+        salvaged = False
         try:
             obj = L.read_reply(text)
-        except ValueError:
-            return {"unreadable": True, "text": text[:TEXT_CHARS]}
+        except ValueError:            # read as the loop reads it: its salvage when that holds the whole reply
+            obj = L.complete_salvage(text, first=stage == "step_1")
+            if obj is None:
+                return {"unreadable": True, "text": text[:TEXT_CHARS]}
+            salvaged = True
         out: dict = {"edits": [edit_view(e) for e in (obj.get("edits") or []) if e]}
+        if salvaged:
+            out["salvaged"] = True
         if kind == "step":
             out["focus"] = str(obj.get("focus") or "")[:300]
             out["next"] = [_action_text(a) for a in (obj.get("next") or [])]

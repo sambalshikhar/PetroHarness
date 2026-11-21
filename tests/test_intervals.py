@@ -15,7 +15,10 @@ def test_tasks_carry_no_reference_fields():
     tasks, index = load_tasks(CFG.eval.questions, CFG.data.las_dir)
     assert len(tasks) == 221
     assert set(Task.model_fields) == {"task_id", "question", "well", "formation", "las_path", "top", "base", "depth_unit",
-                                      "base_closed", "formation_lithology"}  # inputs only (formation info may state its depths)
+                                      "base_closed", "formation_lithology", "scope", "frame", "scope_chosen"}  # inputs
+    # only (formation info may state its depths; scope, frame and a chosen scope are a conversation user's, never set
+    # by a benchmark task)
+    assert all(t.scope is None and t.frame is None and not t.scope_chosen for t in tasks)
     for t in tasks:
         assert t.task_id.startswith("t") and len(t.task_id) == 11
         assert t.las_path.exists(), t.las_path

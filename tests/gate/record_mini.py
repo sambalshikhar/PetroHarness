@@ -25,21 +25,22 @@ ROOT = Path(__file__).resolve().parents[2]
 MINI = Path(__file__).resolve().parent / "mini"
 sys.path[:0] = [str(ROOT / "src")]
 
-# name -> the sample well (petrophys.sample), its tops table beside it, the formation, the questions in order
+# name -> the sample well and its tops table (petrophys.sample), the formation, the questions in order. The Brent Group
+# of GeoLink 30/6-5: a lithology log to zone by, and core to compare with.
 SETS = {
-    "tuhua7": {"sample": "tuhua-7", "tops": "formations_tuhua-7.csv", "formation": "Mount Messenger",
-               "questions": ["What are the porosity and water saturation of this formation, and is any of it "
-                             "hydrocarbon-bearing?",
-                             "Which zone has the best reservoir quality, and why?",
-                             "What water resistivity did the saturation use?"]},
+    "brent": {"sample": "30/6-5", "tops": "formations_30_6-5.csv", "formation": "BRENT GP.",
+              "questions": ["What are the porosity and water saturation of the Brent Group, and is any of it "
+                            "hydrocarbon-bearing?",
+                            "Which zone has the best reservoir quality, and how does the log permeability compare with "
+                            "the core?",
+                            "What water resistivity did the saturation use?"]},
 }
 
 
 def sample_files(spec: dict) -> tuple:
     """(the LAS file, the tops table) of a set, from the installed Petrophys."""
     import petrophys
-    las = Path(petrophys.sample(spec["sample"]))
-    return las, las.parent / spec["tops"]
+    return Path(petrophys.sample(spec["sample"])), Path(petrophys.sample(spec["tops"]))
 
 
 def sha(text: str) -> str:
@@ -54,30 +55,53 @@ def expected(c, turn) -> dict:
             "figures": [[g["kind"], g["source"]] for g in turn.figures]}
 
 
+def other_build(recorded: str) -> str:
+    """Why a set recorded with Petrophys `recorded` (version@build) cannot be replayed here ("" when it can): another
+    build of the same version may compute other curves, and so other prompts."""
+    from petroharness.well.prepare import library_identity
+    here = library_identity()
+    if here == recorded:
+        return ""
+    if here.split("@")[0] != recorded.split("@")[0]:
+        return f"recorded with Petrophys {recorded}; this is {here}: the curves, and so the prompts, differ"
+    return f"recorded with another build of Petrophys {here.split('@')[0]} ({recorded}; this is {here}): its curves may differ"
+
+
 def record(name: str) -> None:
+    """Record a set live into a new folder; it replaces the set's folder only when every question was answered (a
+    failed question leaves the earlier recording as it was)."""
     from petroharness.session import Conversation
     from petroharness.well.prepare import library_identity
     spec = SETS[name]
     las, tops = sample_files(spec)
-    out = MINI / name
+    out, new = MINI / name, MINI / f".{name}.recording"
+    shutil.rmtree(new, ignore_errors=True)
+    (new / "turns").mkdir(parents=True)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Conversation.start(las, Path(tmp) / "session", formation=spec["formation"], tops=tops)
+            turns = {}
+            for q in spec["questions"]:
+                turn = c.ask(q)
+                n = f"{turn.number:02d}"
+                print(f"{name} question {turn.number}: {turn.status}, {len(turn.trace.get('steps') or [])} steps",
+                      flush=True)
+                if turn.status.startswith("error"):
+                    raise SystemExit(f"{name}: question {turn.number} failed ({turn.trace.get('error')}); the earlier "
+                                     "recording is kept")
+                with (turn.folder / "tape.jsonl").open("rb") as src, \
+                        gzip.open(new / "turns" / f"{n}.tape.jsonl.gz", "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                (new / "turns" / f"{n}.answer.md").write_text(turn.answer, encoding="utf-8")
+                turns[n] = expected(c, turn)
+            (new / "set.json").write_text(json.dumps(
+                {"name": name, **spec, "interval": c.p.used, "petrophys": library_identity(),
+                 "setup": {"hash": c.setup.hash(), **c.setup.to_dict()}, "turns": turns}, indent=1), encoding="utf-8")
+    except BaseException:
+        shutil.rmtree(new, ignore_errors=True)
+        raise
     shutil.rmtree(out, ignore_errors=True)
-    (out / "turns").mkdir(parents=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        c = Conversation.start(las, Path(tmp) / "session", formation=spec["formation"], tops=tops)
-        turns = {}
-        for q in spec["questions"]:
-            turn = c.ask(q)
-            n = f"{turn.number:02d}"
-            print(f"{name} question {turn.number}: {turn.status}, {len(turn.trace.get('steps') or [])} steps", flush=True)
-            if turn.status.startswith("error"):
-                raise SystemExit(f"{name}: question {turn.number} failed ({turn.trace.get('error')}); nothing kept")
-            with (turn.folder / "tape.jsonl").open("rb") as src, gzip.open(out / "turns" / f"{n}.tape.jsonl.gz", "wb") as dst:
-                shutil.copyfileobj(src, dst)
-            (out / "turns" / f"{n}.answer.md").write_text(turn.answer)
-            turns[n] = expected(c, turn)
-        (out / "set.json").write_text(json.dumps(
-            {"name": name, **spec, "interval": c.p.used, "petrophys": library_identity(),
-             "setup": {"hash": c.setup.hash(), **c.setup.to_dict()}, "turns": turns}, indent=1))
+    new.rename(out)
     print(f"{name}: kept in {out}")
 
 
@@ -87,7 +111,7 @@ def replay(name: str) -> None:
     from petroharness.session import Conversation
     from petroharness.well.prepare import library_identity
     out = MINI / name
-    old = json.loads((out / "set.json").read_text())
+    old = json.loads((out / "set.json").read_text(encoding="utf-8"))
     las, tops = sample_files(old)
     served = {}
 
@@ -109,13 +133,13 @@ def replay(name: str) -> None:
                 raise SystemExit(f"{name} question {n}: the code no longer builds the recorded requests ({why[:300]}); "
                                  "nothing written. Record it again live.")
             turns[key], answers[key] = expected(c, turn), turn.answer
-            changed = "changed" if turn.answer != (out / "turns" / f"{key}.answer.md").read_text() else "unchanged"
+            changed = "changed" if turn.answer != (out / "turns" / f"{key}.answer.md").read_text(encoding="utf-8") else "unchanged"
             print(f"{name} question {n}: {turn.status}, answer {changed}", flush=True)
         for key, text in answers.items():
-            (out / "turns" / f"{key}.answer.md").write_text(text)
+            (out / "turns" / f"{key}.answer.md").write_text(text, encoding="utf-8")
         (out / "set.json").write_text(json.dumps(
             {**old, "interval": c.p.used, "petrophys": library_identity(),
-             "setup": {"hash": c.setup.hash(), **c.setup.to_dict()}, "turns": turns}, indent=1))
+             "setup": {"hash": c.setup.hash(), **c.setup.to_dict()}, "turns": turns}, indent=1), encoding="utf-8")
     print(f"{name}: expectations rewritten from the tapes in {out}")
 
 

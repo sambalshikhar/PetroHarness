@@ -404,7 +404,7 @@ def test_status_tags_come_from_the_record_and_the_catalog():
         assert E.status(f, measured).startswith("measurement")
     par = next((x for x, cv in f.inv.curves.items() if cv.well_value is not None), None)
     if par:
-        assert "parameter: one value for the whole well" in E.status(f, par)
+        assert "one value over the whole well (" in E.status(f, par)
     inv = copy.copy(f.inv)                                           # the catalog decides, not the name
     inv.curves = {**f.inv.curves, twin: dataclasses.replace(f.inv.curves[twin], meaning="something else")}
     g = Formation(inv, f.view, f.store)

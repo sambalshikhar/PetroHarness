@@ -1,0 +1,1 @@
+The tops file lists {listed}. A name listed more than once is not one stretch, so I have not computed on it: which one do you mean, or all of them? Reply with its depths (for example /scope {example}), or fix the tops file so each listing has its own name, and ask again.

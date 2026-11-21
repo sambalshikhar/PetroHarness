@@ -131,10 +131,10 @@ NO_PREFERENCE = {
     "lead with the lithology-zone basis": "the profile's writer rule",
     "classified (zoned) thickness": "the profile's rock-type share rule",
     "lithology_share_basis": "the profile's basis setting",
-    "read each point zone by zone first": "settle_v9: the zone-mean basis first",
+    "read each point zone by zone first": "settle_weaknesses: the zone-mean basis first",
     "that rule is the flag": "v5_rules: the workflow's flag as the answer's basis",
     "as well as mean permeability": "no_reversal_rule: a per-property ranking rule",
-    "rank and compare zones on both": "v10_brief: a per-curve ranking rule (the values' shape decides the statistic)",
+    "rank and compare zones on both": "brief_levels: a per-curve ranking rule (the values' shape decides the statistic)",
     "best zone": "formation_summary: a ranking called the best",
     "weakest zone": "formation_summary: a ranking called the weakest",
 }
@@ -356,7 +356,8 @@ APPROVED_FACT_CHECKS = {"K1", "K2", "K3", "K4", "K5", "K7", "K8", "K9", "K10", "
 FACT_FLAGS = {"K1", "K2", "K3", "K3_held", "K3_none", "K4", "K5_present", "K5_route", "K7_unavailable", "K7_absent", "K8",
               "K9", "K10", "K11"}
 REPAIRS = {"fix", "skip", "not_done", "repair_contradictions", "repair_numbers", "repair_words", "repair_keep", "flags",
-           "repair_leaks"}                  # repair_leaks: working notes left in the answer
+           "repair_leaks", "repair_names"}  # repair_leaks: working notes left in the answer; repair_names: a curve name
+                                            #   the record does not hold, close to one it holds (O5)
 
 
 def test_the_checks_are_the_approved_fact_checks():

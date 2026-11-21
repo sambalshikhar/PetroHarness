@@ -1,0 +1,1 @@
+Your zones with no sample here: {items}. Name them when the question is about your zones; they are not computed.

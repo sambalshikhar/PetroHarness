@@ -47,7 +47,7 @@ class Direct(Model):
 
 def run(task, llm, tmp_path, question=SIMPLE):
     from petroharness.session import Conversation
-    c = Conversation.on_tasks(tmp_path / "s", "k200t", llm_factory=lambda cfg: llm, max_steps=4)
+    c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4)
     return c, c.ask_task(task.model_copy(update={"question": question}))
 
 
@@ -118,7 +118,7 @@ def test_a_direct_question_takes_look_steps_no_settle_and_the_short_writer_at_no
     assert not any(x["light"] for x in llm.sent) and True not in llm.lights     # every call thinks as the card says
     assert step1["messages"][-1]["content"].endswith(C.text("C5", "direct_step")) and "FIRST LOOK (" in step1["messages"][-1]["content"]
     assert "NEW (from step 1):" in step2["messages"][-1]["content"] and "stats VCL" in step2["messages"][-1]["content"]
-    assert writer["messages"][0]["content"] == C.text("C9", "reply_brief") + "\n" + C.text("C9", "brief_direct")
+    assert writer["messages"][0]["content"] == C.prompt("C9", "reply_brief") + "\n" + C.text("C9", "brief_direct")
     user = writer["messages"][-1]["content"]
     assert "THE ZONE TABLE" not in user and f"Point 1: {SIMPLE}" in user and "[E2] " in user
     tr = turn.trace
@@ -148,7 +148,7 @@ def test_the_look_step_can_send_the_question_to_an_investigation_at_normal_think
     assert look["messages"][-1]["content"].endswith(C.text("C5", "direct_step"))
     assert not first["messages"][-1]["content"].endswith(C.text("C5", "direct_step"))   # the investigation's own step 1
     writer = llm.sent[-1]["messages"]
-    assert writer[0]["content"].startswith(C.text("C9", "write")) and llm.sent[-1]["light"] is False
+    assert writer[0]["content"].startswith(C.prompt("C9", "write")) and llm.sent[-1]["light"] is False
     assert turn.trace["depth"] == {"read": "direct", "investigated_from_step": 1, "why": "the model asked for it"}
     assert turn.trace["steps"][0]["to_investigation"] and turn.trace["claims"]
 
@@ -167,7 +167,7 @@ def test_a_later_direct_question_reads_an_earlier_result_it_fetched_and_keeps_th
     from petroharness.session import Conversation
     from petroharness.session import earlier as E
     llm = Direct(first_steps(), depth="investigate")
-    c = Conversation.on_tasks(tmp_path / "s", "k200t", llm_factory=lambda cfg: llm, max_steps=4)
+    c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4)
     c.ask_task(formation)
     n1 = len(llm.sent)
     llm.depth, llm.steps = "direct", [{"next": [{"get": "E2"}], "done": False}, {"done": True}]
@@ -178,7 +178,7 @@ def test_a_later_direct_question_reads_an_earlier_result_it_fetched_and_keeps_th
     assert E.block(c.turns[:1]) in step1 and step1.endswith(C.text("C5", "direct_step"))
     assert C.text("C5", "step1_later") not in step1                 # the look step is not the investigation's step 1
     writer = later[-1]["messages"]
-    assert writer[0]["content"] == (C.text("C9", "reply_brief") + "\n" + C.text("C9", "brief_later") + "\n"
+    assert writer[0]["content"] == (C.prompt("C9", "reply_brief") + "\n" + C.text("C9", "brief_later") + "\n"
                                     + C.text("C9", "brief_direct"))
     # the writer reads what the look steps were shown: the first look (the same call as question 1's: E1) and E2
     assert "[E1] " in writer[-1]["content"] and "[E2] " in writer[-1]["content"] and c.live.fetched == ["E1", "E2"]
@@ -194,7 +194,7 @@ def test_a_later_direct_answer_is_written_from_the_earlier_results_its_look_step
     for lines read with get and find."""
     from petroharness.session import Conversation
     llm = Direct(first_steps(), depth="investigate")
-    c = Conversation.on_tasks(tmp_path / "s", "k200t", llm_factory=lambda cfg: llm, max_steps=4)
+    c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4)
     c.ask_task(formation)
     assert [e.id for e in c.live.ledger.items] == ["E1", "E2"]
     n1 = len(llm.sent)
@@ -266,13 +266,13 @@ def test_a_run_that_asks_for_the_investigation_takes_the_3_5_6_route(formation, 
     keeps it."""
     from petroharness.session import Conversation
     llm = Direct([{"done": True}])
-    c = Conversation.on_tasks(tmp_path / "s", "k200t", llm_factory=lambda cfg: llm, max_steps=4)
+    c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4)
     turn = c.ask_task(formation.model_copy(update={"question": SIMPLE}))
     assert [x["stage"] for x in llm.sent] == ["read", "step_1", "writer"] and turn.status == "ok"
     assert turn.trace["reads_depth"] is True and turn.trace["options"] == {}
     assert c.setup.depth is True and c.log.events("setup")[0]["depth"] is True
     plain = Direct(first_steps(), depth="direct")                      # the same model, a run not reading the route
-    c2 = Conversation.on_tasks(tmp_path / "t", "k200t", llm_factory=lambda cfg: plain, max_steps=4, direct=False)
+    c2 = Conversation.on_tasks(tmp_path / "t", "k2-horizon-7b", llm_factory=lambda cfg: plain, max_steps=4, direct=False)
     two = c2.ask_task(formation)
     assert two.trace["reads_depth"] is False and "depth" not in two.trace["read"] and c2.setup.depth is False
     assert [x["stage"] for x in plain.sent] == ["read", "step_1", "step_2", "settle", "writer"]
@@ -291,7 +291,7 @@ class HandsOver(Direct):
 
     def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
         out = super().chat(stage, messages, usage, max_tokens, json_schema, temperature, retry)
-        brief = messages[0]["content"].startswith(C.text("C9", "reply_brief"))
+        brief = messages[0]["content"].startswith(C.prompt("C9", "reply_brief"))
         if stage == "writer" and brief and not self.handed:
             self.handed = True
             return self.word
@@ -310,7 +310,7 @@ def test_the_short_answers_writer_can_hand_the_question_to_an_investigation(form
     assert stages[:4] == ["read", "step_1", "writer", "step_1"] and "settle" in stages and stages[-1] == "writer"
     assert "INVESTIGATE" in llm.sent[2]["messages"][0]["content"]                 # the short brief says how to hand over
     final = llm.sent[-1]["messages"][0]["content"]
-    assert final.startswith(C.text("C9", "write")) and C.text("C9", "brief_direct") not in final
+    assert final.startswith(C.prompt("C9", "write")) and C.text("C9", "brief_direct") not in final
     assert not llm.sent[3]["messages"][-1]["content"].endswith(C.text("C5", "direct_step"))   # the investigation's step 1
     assert turn.trace["depth"]["investigated_from"] == "the writer" and turn.trace["claims"]
     assert turn.answer.strip() and "INVESTIGATE" not in turn.answer.upper()
@@ -333,7 +333,7 @@ def test_a_later_direct_question_its_writer_hands_over_runs_the_later_investigat
     from petroharness.session import Conversation
     llm = HandsOver(first_steps())
     llm.depth, llm.handed = "investigate", True                       # question 1: an investigation, no hand-over
-    c = Conversation.on_tasks(tmp_path / "s", "k200t", llm_factory=lambda cfg: llm, max_steps=4)
+    c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4)
     c.ask_task(formation)
     n1 = len(llm.sent)
     llm.depth, llm.handed, llm.steps = "direct", False, [{"done": True}] + later_steps()

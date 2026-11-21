@@ -106,11 +106,11 @@ def main(argv: list[str]) -> int:
     meta = {"well": str(getattr(w, "name", "") or Path(las_path).stem), "depth_unit": str(getattr(w, "depth_unit", "") or ""),
             "units": units, "input_curves": input_curves, "header": header, "steps": steps,
             "warnings": [str(x) for x in result.base_result.warnings][:50],
-            "engine": json.loads(engine_meta.read_text()) if engine_meta.exists() else {"dir": str(engine_dir)},
+            "engine": json.loads(engine_meta.read_text(encoding="utf-8")) if engine_meta.exists() else {"dir": str(engine_dir)},
             "value_range_qc": bool(options.get("value_range_qc", True)),
             "value_range_qc_report": _jsonable(qc_report)}
     np.savez_compressed(f"{out_prefix}.npz", **arrays)
-    Path(f"{out_prefix}.json").write_text(json.dumps(meta))
+    Path(f"{out_prefix}.json").write_text(json.dumps(meta), encoding="utf-8")
     return 0
 
 

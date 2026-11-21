@@ -2,8 +2,8 @@
 the question graph on the same session, so the ledger and its ids go on and a later question reads what earlier ones
 opened. Each question runs through the session graph (petroharness.session.graph). The session folder:
 
-    log.jsonl              the events: session_start, question, result, turn_end, settings, session_resume
-                           (session/log.py)
+    log.jsonl              the events: session_start, setup, record, question, result, display, figure, turn_end,
+                           settings, session_resume (session/log.py)
     blobs/                 the texts the events name (results as shown, answers), each once, by SHA-256
     overview.png           the interval's log display by Petrophys, drawn when the conversation starts
     turns/NN/answer.md     question NN's answer with its header
@@ -38,7 +38,7 @@ from petroharness.session.log import SessionLog
 # it can change)
 INPUTS = ("formation", "tops", "top", "base", "depth_unit", "lithology_curve", "formation_lithology", "profile",
           "settings", "skills", "model", "model_card", "max_steps", "figures", "direct", "interpretation",
-          "field_notes")
+          "field_notes", "zones", "zones_sheet")
 
 
 @dataclass
@@ -79,6 +79,8 @@ class Conversation:
         self.turns: list = []             # one record per question asked (the log's turn_end events)
         self.live = None                  # the session the questions run on (petroharness.agent.loop.Session)
         self.on_view = None               # called with the interval's view when the well is interpreted (the UI's plot)
+        self._scope = None                # the user's /scope and /frame, waiting for the next question (Task.scope, .frame)
+        self._frame = None
 
     # --- opening ------------------------------------------------------------------------------------------------------
     @classmethod
@@ -88,7 +90,8 @@ class Conversation:
               skills: str | None = None, model_url: str | None = None, model: str | None = None,
               model_card: str | None = None, max_steps: int | None = None, llm_factory: Callable | None = None,
               on_view: Callable | None = None, figures: bool = True, direct: bool = True,
-              interpretation: dict | None = None, field_notes=None) -> Conversation:
+              interpretation: dict | None = None, field_notes=None, zones=None,
+              zones_sheet: str | None = None) -> Conversation:
         """A new conversation about one interval of a LAS file, kept in `folder` (the arguments are ask()'s). The
         interval is checked and the well interpreted here, before any question. `figures`: draw each answer's
         figures (one more model call per answer chooses them). `direct`: the model first says whether a question is
@@ -108,6 +111,8 @@ class Conversation:
                  "lithology_curve": lithology_curve, "formation_lithology": formation_lithology, "profile": profile,
                  "settings": settings, "skills": skills, "model": model, "model_card": model_card,
                  "max_steps": max_steps, "figures": figures, "direct": direct,
+                 **({"zones": str(Path(zones).expanduser().resolve())} if zones else {}),
+                 **({"zones_sheet": zones_sheet} if zones_sheet else {}),
                  **({"interpretation": dict(interpretation)} if interpretation else {}),
                  **({"field_notes": notes} if notes else {})}
         inputs = {k: (str(v) if isinstance(v, Path) else v) for k, v in given.items()}
@@ -206,6 +211,83 @@ class Conversation:
         changed = {x["key"] for e in self.changes() for x in e["changes"]}
         return sources(self.settings, self.inputs.get("field_notes"), changed)
 
+    def set_scope(self, scope, by: str = "user", chosen: bool = False) -> list:
+        """The stretches the user sets for the next questions (/scope): a list of units, depth ranges, the user's zones or
+        "the whole well" (agent.selection), [] for the interval. It reaches the next question's start (Task.scope), is
+        checked there as a selection (one that cannot be used is said to the model and left out), stays in force
+        while the questions restate it, and is logged with who asked and the question it takes effect at."""
+        items = [str(x).strip() for x in (scope or []) if str(x).strip()]
+        if items and self.live is not None and getattr(self.live.f.view, "reach", "focus") == "well":
+            from petroharness.agent import selection
+            from petroharness.agent.engine import ToolError
+            from petroharness.agent.loop import scope_items
+            try:                                      # checked on the well as it is now (zones may change before use)
+                selection.resolve(self.live.f, scope_items(self.live.f, items), force=True)
+            except ToolError as e:
+                raise ValueError(f"WHAT: scope {', '.join(items)}: {e}. FIX: name a unit of the tops file, one of "
+                                 "your zones, a depth range TOP-BASE or the whole well.") from e
+        if items and self.live is not None and getattr(self.live.f.view, "reach", "focus") != "well":
+            raise ValueError("WHAT: this conversation answers for its interval only (its data settings set reach "
+                             "\"focus\"). FIX: start it without that setting to ask about other stretches.")
+        self._scope = items
+        self._scope_chosen = bool(chosen and items)   # the user's answer to a question back: the next question's stretch
+        interval = ""                                 # a scope cleared names what is in force: the interval itself
+        if not items and self.live is not None:
+            from petroharness.agent.selection import interval_name
+            interval = interval_name(self.live.f)
+        self.log.append("scope", len(self.turns) + 1, scope=items, by=by, **({"interval": interval} if interval else {}),
+                        **({"chosen": True} if self._scope_chosen else {}))
+        return items
+
+    def set_frame(self, frame: str | None, by: str = "user") -> str | None:
+        """The frame of the next questions (/frame): "lithology" (every lookup reports by the lithology zones under the
+        user's zones) or None (the zones in force); logged as set_scope is."""
+        frame = None if str(frame or "").strip().lower() in ("", "zones", "none") else str(frame).strip().lower()
+        if frame not in (None, "lithology"):
+            raise ValueError(f"WHAT: frame {frame!r}. FIX: /frame lithology, or /frame zones (the zones in force).")
+        self._frame = frame or "zones"
+        self.log.append("frame", len(self.turns) + 1, frame=frame, by=by)
+        return frame
+
+    def adopt_zones(self, zones, sheet: str | None = None, by: str = "user") -> str:
+        """The user's zones from the next question on (/zones FILE; None: back to the lithology zones): the well's view
+        made again under them (no new interpretation), the live session moved to it as a settings change moves it, the
+        change logged and named to the model."""
+        if self.p is None:
+            raise ValueError("WHAT: this conversation runs prepared tasks. FIX: change zones in a conversation started "
+                             "from a LAS file.")
+        n = len(self.turns) + 1
+        path = str(Path(zones).expanduser().resolve()) if zones else None
+        before = dict(self.inputs)
+        try:
+            said = self._zones(path, sheet, n)
+        except Exception:
+            self.inputs = before                      # a file that cannot be used leaves the zones in force
+            raise
+        self.log.append("zones", n, zones=path, sheet=sheet if path else None, by=by)
+        return said
+
+    def _zones(self, path: str | None, sheet: str | None, n: int) -> str:
+        """The zones from question n: the inputs changed, the interval prepared again (the file read and checked
+        there), the live session moved to it."""
+        if path:
+            self.inputs["zones"] = path
+            self.inputs.pop("zones_sheet", None)
+            if sheet:
+                self.inputs["zones_sheet"] = sheet
+        else:
+            self.inputs.pop("zones", None)
+            self.inputs.pop("zones_sheet", None)
+        self.p = self._prepared(self.p.las, self.key, self.folder, self.inputs, self.on_view)
+        said = f"your zones from {Path(path).name}" if path else "the lithology zones (your zones taken away)"
+        if self.live is not None:
+            from petroharness.agent import graph
+            task, _ = A.task_for(self.p, "(the interval)", n)
+            with self._settings():
+                self.live.rewell(task, graph.task_config(task, self.key, 1), f"the zones changed before question {n} "
+                                 f"({said})")
+        return said
+
     def changes(self) -> list:
         """The settings changes so far (the log's settings events): each with the question it took effect at."""
         return [{k: e[k] for k in ("turn", "changes", "by") if k in e} for e in self.log.events("settings")]
@@ -292,9 +374,12 @@ class Conversation:
         for e in self.log.events("question"):
             tasks[e["turn"]] = Task(**e["task"])
         changes = self.log.events("settings")
+        zoned = self.log.events("zones")
         for rec in self.turns:
             for e in [e for e in changes if e["turn"] == rec["turn"]]:     # a settings change, where it was made
                 self._apply(e.get("interpretation") or {}, e["turn"], e["changes"])
+            for e in [e for e in zoned if e["turn"] == rec["turn"]]:       # a zones change, where it was made
+                self._zones(e.get("zones"), e.get("sheet"), e["turn"])
             with self._settings():
                 task = tasks[rec["turn"]]
                 if self.live is None:
@@ -319,12 +404,20 @@ class Conversation:
         last = self.turns[-1]["turn"] if self.turns else 0
         for e in [e for e in changes if e["turn"] > last]:                 # made after the last question
             self._apply(e.get("interpretation") or {}, e["turn"], e["changes"])
+        for e in [e for e in zoned if e["turn"] > last]:
+            self._zones(e.get("zones"), e.get("sheet"), e["turn"])
+        for kind in ("scope", "frame"):                                    # set for the next question, not yet used
+            later = [e for e in self.log.events(kind) if e["turn"] > last]
+            if later:
+                setattr(self, f"_{kind}", later[-1]["scope"] if kind == "scope" else (later[-1]["frame"] or "zones"))
         return bad
 
     # --- asking -------------------------------------------------------------------------------------------------------
     def earlier(self) -> str:
         """EARLIER IN THIS SESSION as the next question's prompts will show it ("" before the first question)."""
-        return block(self.turns, changes=self.changes())
+        made = self.changes() + [{**{k: e.get(k) for k in ("turn", "by", "scope", "frame", "zones", "interval")}, "kind": kind}
+                                 for kind in ("zones", "scope", "frame") for e in self.log.events(kind)]
+        return block(self.turns, changes=sorted(made, key=lambda e: e["turn"]))
 
     def ask(self, question: str) -> Turn:
         """The next question of a conversation on a LAS file -> its Turn. The first question is answered as
@@ -335,6 +428,13 @@ class Conversation:
         if not question:
             raise ValueError("WHAT: the question is empty. FIX: give the question to answer.")
         task, sent = A.task_for(self.p, question, len(self.turns) + 1)
+        pending = {k: v for k, v in (("scope", self._scope), ("frame", self._frame)) if v is not None}
+        if pending.get("scope") and getattr(self, "_scope_chosen", False):
+            pending["scope_chosen"] = True            # chosen in answer to a question back: this question's stretch
+        if pending:                                   # the user's /scope or /frame: from this question on
+            task = task.model_copy(update=pending)
+            self._scope = self._frame = None
+            self._scope_chosen = False
         return self._run(task, question, sent)
 
     def ask_task(self, task) -> Turn:
@@ -347,16 +447,20 @@ class Conversation:
         from petroharness.session import graph
         return graph.run(self, task, question, sent)
 
-    def _figures(self, task, question: str, answer: str, cited: list, tdir: Path) -> dict:
+    def _figures(self, task, question: str, answer: str, cited: list, tdir: Path, trace: dict | None = None) -> dict:
         """The answer's figures, after it is final (petroharness.figures.attach): one model call chooses among the
-        plots of the cited results, code draws them into turns/NN/figures. The answer's text is not touched."""
+        plots of the cited results, code draws them into turns/NN/figures. The answer's text is not touched. trace: the
+        question's, where the call's attribution is recorded with the others (trace["calls"])."""
         from petroharness import figures as F
+        from petroharness.agent import components as C
         from petroharness.agent import graph
         from petroharness.llm import Usage
         usage = Usage()
         try:
             with self._settings():
                 llm = self._factory(tdir)(graph.task_config(task, self.key, 1))
+                if trace is not None:
+                    C.recording(llm, trace)
                 graph._light(llm, True)               # choosing among listed plots needs little reasoning
                 try:
                     rec = F.attach(self.live, question, answer, cited, llm, usage, tdir / "figures")

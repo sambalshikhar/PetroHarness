@@ -13,7 +13,7 @@ from petroharness.agent import engine as E
 from petroharness.agent.engine import Formation, Result, ToolError
 from petroharness.well import summary as S
 
-_NUM = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?(?![A-Za-z0-9_])")
+from petroharness.agent import numbers as N                                   # the one grammar for written numbers
 
 
 def _check(name: str, value, choices) -> str:
@@ -31,7 +31,7 @@ def _cell_numbers(cells) -> list:
         if isinstance(v, (int, float)):
             out.append(float(v))
         else:
-            out += [float(x) for x in _NUM.findall(re.sub(r"\bZ\d+\b|[A-Za-z_]+\d[A-Za-z0-9_]*", " ", str(v)))]
+            out += N.values(str(v))
     return out
 
 
@@ -100,9 +100,12 @@ def harness_names(message: str) -> str:
 
 
 def _run(f: Formation, name: str, zones=None, notes=(), **args) -> Result:
-    """A catalog computation as an item; notes: lines said first (a statistic not computed, and how to derive it)."""
+    """A catalog computation as an item; notes: lines said first (a statistic not computed, and how to derive it).
+    zones: the computation runs on those zones (FormationView.of_zones: their lines and their pool; the whole
+    interval as it is), not on every zone with the others' rows dropped after."""
+    view = f.view.of_zones(E.zones(f, zones)) if zones else f.view
     try:
-        d = CATALOG[name](f.view, **args)
+        d = CATALOG[name](view, **args)
     except EvidenceError as e:
         raise ToolError(harness_names(str(e))) from None
     if notes:
@@ -128,7 +131,29 @@ def zone_contrast(f: Formation, curve: str, inputs=None, zones=None) -> Result:
     return _run(f, "zone_contrast", zones, curve=E.curve(f, curve), inputs=E.curves(f, inputs) if inputs else None)
 
 
-def curve_order(f: Formation, curves, relation: str = "decreasing", zones=None) -> Result:
+def _order_written(f: Formation, curves, relation):
+    """An order written as a chain of curves ("RSHA > RMED > RDEP", benchmark N3/N4: 6 calls): its curves, in its
+    order, and its relation (all '>' decreasing, all '<' increasing); one sign alone (">") is the relation of the curves
+    in the order given. (curves, relation) as given otherwise."""
+    r = str(relation or "").strip()
+    signs = set(re.findall(r"[<>]", r))
+    if not signs or len(signs) > 1:
+        return curves, relation
+    rel = "decreasing" if signs == {">"} else "increasing"
+    names = [x.strip() for x in re.split(r"\s*[<>]=?\s*", r) if x.strip()]
+    if not names:
+        return curves, rel
+    given = [] if not curves else ([curves] if isinstance(curves, str) else list(curves))
+    if given and {E.curve(f, c) for c in given} != {E.curve(f, c) for c in names}:
+        raise ToolError(f"relation {r!r} orders {', '.join(names)}, curves are {', '.join(map(str, given))}: give the "
+                        "curves in the order to test and relation decreasing, increasing or between")
+    return names, rel
+
+
+def curve_order(f: Formation, curves=None, relation: str = "decreasing", zones=None) -> Result:
+    curves, relation = _order_written(f, curves, relation)
+    if not curves:
+        raise ToolError("curve_order needs curves, in the order to test (or relation written as their chain, A > B > C)")
     cs = E.curves(f, curves)
     if len(cs) < 2:
         raise ToolError("curve_order needs at least two curves with data, in the order to test")
@@ -140,7 +165,8 @@ def threshold_exceedance(f: Formation, curve: str, threshold: Optional[float] = 
                          absolute: Optional[bool] = None, zones=None) -> Result:
     op = str(op).strip()
     if op not in (">", ">=", "<", "<="):
-        raise ToolError(f"op must be one of > >= < <=, not {op!r}")
+        also = " (absolute: true compares the curve's absolute value)" if op.lower().startswith("abs") else ""
+        raise ToolError(f"op must be one of > >= < <=, not {op!r}{also}")
     E.no_codes(f, "a threshold", E.curve(f, curve))
     return _run(f, "threshold_exceedance", zones, curve=E.curve(f, curve), threshold=threshold, op=op, absolute=absolute)
 
@@ -291,14 +317,14 @@ def spikes(f: Formation, curves, ks: list, baseline: str, zones=None, scale: str
                             else f"; every zone has samples beyond {E.num(min(ks))} std" if not sparse else "")
                          + (f"; too few values to screen in {len(sparse)} zones: {_ids(sparse)}" if sparse else ""), prow))
             wrow = out.child()
-            tail.append((f"  whole interval ({wrow.i(outside)} samples outside any zone), {c}: "
+            tail.append((f"  {_whole(f, wrow, outside)}, {c}: "
                          + ("the samples outside the zones have no zone baseline and are not screened" if outside
                             else "every sample is in a zone"), wrow))
         else:                                                 # one baseline: each zone's count, then its basis
             before, after = ([(each, None)] if rows and each else []), []
             if baseline == "zoned" or zones:
                 wrow = out.child()
-                after.append((f"  whole interval ({wrow.i(outside)} samples outside any zone), {c}: the screen is over the "
+                after.append((f"  {_whole(f, wrow, outside)}, {c}: the screen is over the "
                               f"zones' samples", wrow))
             elif pooled_hits:
                 prow = out.child()
@@ -335,7 +361,13 @@ def spikes(f: Formation, curves, ks: list, baseline: str, zones=None, scale: str
 
 
 def _whole_label(row, f: Formation) -> str:
-    return f"whole interval ({row.i(S.outside(f.view))} samples outside any zone)"
+    return _whole(f, row, S.outside(f.view))
+
+
+def _whole(f: Formation, row, outside: int) -> str:
+    """The whole interval's label, its count of samples outside any zone kept as a number of the result; a selection
+    (agent.selection) names itself, with its samples outside any row."""
+    return S.whole_text(f.view, row.i(outside))
 
 
 def num_short(x: float) -> str:

@@ -43,7 +43,9 @@ def _pay(text: str, label: str) -> float:
 def test_the_records_cutoffs_by_default(teapot):
     r = summarize(teapot)
     assert "VCL < 0.3 (record), PHIE > 0.08 (record), SW < 0.7 (record)" in r.text
-    assert "zones pooled:" in r.text and "whole interval (11300 samples)" in r.text and "HCPT" in r.text
+    from petroharness.well import summary as S
+    whole = r.text.index(f"  {S.whole_label_of(teapot.view)}:")           # the whole selection first, its label shared
+    assert whole < r.text.index("zones pooled:") and "HCPT" in r.text
     assert "written:" not in r.text                                       # nothing asked: no flags written
     assert r.numbers and all(np.isfinite(x) for x in r.numbers)
 

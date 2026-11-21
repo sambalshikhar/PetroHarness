@@ -1,10 +1,13 @@
-"""petrophys computes, the harness orchestrates: every evidence tool reaches the library, or is a generic data
-operation listed here with its reason.
+"""petrophys computes, the harness orchestrates: every tool the model can call reaches the library, or is a generic
+data operation or a reader of the workflow's record listed here with its reason.
 
 A static call graph over the harness modules: a tool's own functions and the harness functions they call, followed to
-the petrophys functions they import or the analyzers they run (evidence.zone_results / _ANALYZERS). A new tool that
-computes petrophysics in the harness fails here until its computation is in petrophys (or it is shown to be a generic
-data operation and listed below).
+the petrophys functions they import or the analyzers they run (evidence.zone_results / _ANALYZERS). The tools are the
+catalog's computations and every tool of the toolset (agent/toolset.py: agent/tools.py, agent/compute.py; a compute
+function that runs a catalog computation by name, _run(f, "name") or CATALOG["name"], reaches what that computation
+reaches). The verbs (agent/library_api.py) run Petrophys's own registered functions. A new tool that computes
+petrophysics in the harness fails here until its computation is in petrophys (or it is shown to be a generic data
+operation and listed below).
 
     .venv/bin/python -m pytest tests/test_petrophys_integration.py -q
 """
@@ -17,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULES = {"catalog": "src/petroharness/record/catalog.py", "sections": "src/petroharness/record/sections.py",
            "card": "src/petroharness/record/card.py", "view": "src/petroharness/well/view.py", "stats": "src/petroharness/well/stats.py",
            "formation": "src/petroharness/well/formation.py", "prepare": "src/petroharness/well/prepare.py", "store": "src/petroharness/record/store.py",
-           "summary": "src/petroharness/well/summary.py"}
+           "summary": "src/petroharness/well/summary.py", "tools": "src/petroharness/agent/tools.py",
+           "compute": "src/petroharness/agent/compute.py", "engine": "src/petroharness/agent/engine.py"}
 # Reaching any of these runs a petrophys analyzer (imported by name at run time).
 ANALYZER_ENTRIES = {("catalog", "zone_results"), ("catalog", "zone_classes_raw")}
 
@@ -37,6 +41,7 @@ GENERIC = {
 # decisions): library output read, not computed.
 RECORD_READERS = {
     "provenance": "the workflow's step record for the topics asked",
+    "step": "one step of the workflow's record: its method, inputs, the curves it wrote, equations and parameters",
 }
 
 
@@ -67,6 +72,12 @@ def _graph():
                     for a in sub.names:
                         local[a.asname or a.name] = f"{sub.module}.{a.name}"
             for sub in ast.walk(node):
+                if isinstance(sub, ast.Subscript) and isinstance(sub.value, ast.Name) and sub.value.id == "CATALOG" \
+                        and isinstance(sub.slice, ast.Constant) and isinstance(sub.slice.value, str):
+                    calls[key].add(("catalog", sub.slice.value))         # CATALOG["name"](...): that computation
+                if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name) and sub.func.id == "_run" \
+                        and len(sub.args) > 1 and isinstance(sub.args[1], ast.Constant):
+                    calls[key].add(("catalog", sub.args[1].value))       # compute._run(f, "name"): that computation
                 if isinstance(sub, ast.Call):
                     f = sub.func
                     name = f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else None
@@ -103,14 +114,21 @@ def _reaches_petrophys(key, defs, calls, lib, seen=None) -> bool:
 def test_every_tool_reaches_petrophys_or_is_a_listed_data_operation():
     import sys
     sys.path.insert(0, str(ROOT / "src"))
+    from petroharness.agent.toolset import TOOLSET
     from petroharness.record.catalog import CATALOG
     defs, calls, lib = _graph()
     tools = [("catalog", name) for name in CATALOG]
-    missing = [k[1] for k in tools
-               if k[1] not in GENERIC and k[1] not in RECORD_READERS and not _reaches_petrophys(k, defs, calls, lib)]
+    for tool in TOOLSET:
+        module, name = tool.run.__module__, tool.run.__name__
+        if module == "petroharness.agent.library_api":                 # a verb: Petrophys's registered functions
+            continue
+        assert module.split(".")[-1] in MODULES, f"{tool.name}: {module} is not in the graph (MODULES)"
+        tools.append((module.split(".")[-1], name, tool.name))
+    missing = [k[-1] for k in tools if k[-1] not in GENERIC and k[-1] not in RECORD_READERS
+               and not _reaches_petrophys(k[:2], defs, calls, lib)]
     assert not missing, (f"{missing}: WHY: petrophys computes, the harness orchestrates. FIX: put the computation in "
                          "petrophys and call it, or list the tool in GENERIC with why it is a generic data operation.")
-    stale = [t for t in {**GENERIC, **RECORD_READERS} if not any(k[1] == t for k in tools)]
+    stale = [t for t in {**GENERIC, **RECORD_READERS} if not any(k[-1] == t for k in tools)]
     assert not stale, f"{stale} are not tools any more: remove them from GENERIC / RECORD_READERS"
 
 

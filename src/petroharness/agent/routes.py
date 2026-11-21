@@ -19,18 +19,37 @@ def _values(view, c: str) -> Optional[np.ndarray]:
     return None if x is None else np.asarray(x, dtype=float)
 
 
+def invasion_pair(view) -> tuple:
+    """(deep curve, the shallow-side curves in the record's order, the medium ones among them) of the invasion step's
+    record: its inputs and rxo_source_counts (shallow_source_counts: the true shallow logs; the others are a medium log
+    taken where no shallow one is). Without that record: RDEP, SHALLOW, {RMED}."""
+    rec = (getattr(view.prep, "steps", None) or {}).get("invasion") or {}
+    p = rec.get("parameters") or {}
+    counts = p.get("rxo_source_counts") or {}
+    if not counts:
+        return "RDEP", list(SHALLOW), {FALLBACK}
+    order = [str(c) for c in p.get("rxo_curve_order") or SHALLOW]
+    side = [c for c in order if c in counts] + [c for c in counts if c not in order]
+    true = set(p.get("shallow_source_counts") or {})
+    deep = next((str(i) for i in rec.get("inputs") or [] if "+" not in str(i) and str(i) not in counts), "RDEP")
+    return deep, side, {c for c in side if c not in true}
+
+
 def invasion_counts(view) -> Optional[dict]:
-    """Per sample with an INVASION_RATIO value, the resistivity pair that gives it (shallow / RDEP within 0.1%); a sample
-    two curves fit counts for the first in SHALLOW. None without the ratio or RDEP."""
-    ratio, deep = _values(view, "INVASION_RATIO"), _values(view, "RDEP")
+    """Per sample with an INVASION_RATIO value, the resistivity pair that gives it (a shallow-side curve of the record
+    over its deep curve, within 0.1%); a sample two curves fit counts for the first in the record's order. None without
+    the ratio or the deep curve. Keys: n, deep, side (the record's order), medium (those taken where no shallow log
+    is), each side curve's count, other."""
+    deep_name, side, medium = invasion_pair(view)
+    ratio, deep = _values(view, "INVASION_RATIO"), _values(view, deep_name)
     if ratio is None or deep is None:
         return None
     ok = np.isfinite(ratio)
     if not ok.any():
         return None
-    out, taken = {"n": int(ok.sum())}, np.zeros(ratio.size, dtype=bool)
+    out, taken = {"n": int(ok.sum()), "deep": deep_name, "side": side, "medium": medium}, np.zeros(ratio.size, dtype=bool)
     with np.errstate(invalid="ignore", divide="ignore"):
-        for c in SHALLOW:
+        for c in side:
             s = _values(view, c)
             if s is None:
                 continue
@@ -41,6 +60,11 @@ def invasion_counts(view) -> Optional[dict]:
                 taken |= fit
     out["other"] = int((ok & ~taken).sum())
     return out
+
+
+def medium_used(c: dict) -> list:
+    """The medium curves the ratio takes in place of a shallow log at some sample here."""
+    return [m for m in c.get("side", []) if m in c.get("medium", ()) and c.get(m)]
 
 
 def sxo_counts(view) -> Optional[dict]:
@@ -63,9 +87,12 @@ def _pairs(c: dict) -> str:
     # the count names its unit: a bare count after "at" reads as a depth
     # ("RSHA/RDEP at 1924" -> "at 1 sample (1924 ft)")
     u = " samples"
-    parts = [f"{k}/RDEP at {c[k]}{u}" for k in SHALLOW if c.get(k)]
+    deep = c.get("deep", "RDEP")
+    parts = [f"{k}/{deep} at {c[k]}{u}" + (" (a medium resistivity, where no shallow log is)" if k in c.get("medium", ())
+                                           else "")
+             for k in c.get("side", SHALLOW) if c.get(k)]
     if c.get("other"):
-        parts.append(f"no listed pair at {c['other']}{u}")
+        parts.append(f"no pair of the record at {c['other']}{u}")
     return ", ".join(parts)
 
 
@@ -75,8 +102,8 @@ def route_lines(view) -> dict:
     c = invasion_counts(view)
     if c:
         line = f"in this interval INVASION_RATIO = {_pairs(c)} of its {c['n']} samples with a ratio"
-        if not c.get(FALLBACK):
-            line += "; the medium/deep fallback (RMED/RDEP) is not used here"
+        if not medium_used(c):
+            line += "; no medium resistivity stands in for a shallow one here"
         out["invasion"] = [line]
     s = sxo_counts(view)
     if s:
@@ -95,20 +122,6 @@ def route_lines(view) -> dict:
     return out
 
 
-WELL_WIDE = re.compile(r"fallback|routes used in the well", re.I)
-
-
-_NOT_RECORDED = re.compile(r"\s*\(routes used in the well; counts for this interval not recorded\)")
-
-
-def well_wide(line: str) -> str:
-    """A record line about the whole well's routes, labelled as such; the note that the interval's counts are not
-    recorded is dropped (answers copied it into their limitations; the label says the line is the well's)."""
-    if not WELL_WIDE.search(line) or line.startswith("well-wide"):
-        return line
-    return "well-wide record: " + _NOT_RECORDED.sub(" (routes used in the well)", line)
-
-
 _SAYS_FALLBACK = re.compile(r"\bRMED\s*/\s*RDEP\b|medium[- /]+deep\s+(?:resistivity\s+)?(?:proxy|fallback|ratio)|"
                             r"\bfall(?:s|ing)?[- ]?back\b[^.;]{0,60}\b(?:RMED|medium)\b|\bINVASION_RATIO\b[^.;]{0,80}\bfallback\b",
                             re.I)
@@ -125,8 +138,8 @@ def contradictions(text: str, view) -> list:
     for sent in re.split(r"(?<=[.!?;])\s+|\n", text or ""):
         if _NEGATED.search(sent):
             continue
-        if c and not c.get(FALLBACK) and c["n"] - c.get("other", 0) > 0 and _SAYS_FALLBACK.search(sent):
-            out.append(f"says INVASION_RATIO uses the medium/deep (RMED/RDEP) fallback here, but in this interval it is "
+        if c and not medium_used(c) and c["n"] - c.get("other", 0) > 0 and _SAYS_FALLBACK.search(sent):
+            out.append(f"says INVASION_RATIO uses the medium/deep fallback here, but in this interval it is "
                        f"{_pairs(c)} of its {c['n']} samples (the fallback text in the step record describes the well)")
             c = None
         if s and not s["quicklook"] and s["measured"] and _SAYS_QUICKLOOK.search(sent):

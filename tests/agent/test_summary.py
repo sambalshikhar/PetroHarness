@@ -68,7 +68,8 @@ def formation():
 
 ZONE = re.compile(r"\bZ\d+\b")
 POOLED = re.compile(r"(?:^|, )(?:these )?zones pooled[:|, ]|^all zones:|^zones asked:")
-WHOLE = re.compile(r"(?:^|, )whole interval \(\d+ samples outside any zone\)")
+WHOLE = re.compile(r"(?:^|, )(?:whole interval \(\d+ samples outside any zone\)|every sample where .+ \(\d+ samples, \d+ of "
+                   r"them outside any zone\))")                  # under a where: the samples it covers (summary)
 
 SUMMARISING = [("stats", {"curves": ["PHIE"]}), ("stats", {"curves": ["PHIE", "PERM", "GR", "VCL"]}),
                ("stats", {"curves": ["PHIE"], "where": "VCL < 0.3"}), ("profile", {"curve": "PERM"}),
@@ -96,7 +97,12 @@ def test_every_summarising_tool_shows_each_zone_the_zones_pooled_and_the_whole_i
     zone, pooled, whole = _bases(text)
     assert None not in (zone, pooled, whole) and zone < pooled < whole, (tool, text[:1500])
     k = S.outside(f.view)
-    assert f"whole interval ({k} samples outside any zone)" in text
+    if "where" in args:                                         # the where's samples, and those outside the zones
+        from petroharness.agent import engine as E
+        m = E.select(f, args["where"]).mask
+        assert f"({int(m.sum())} samples, {S.kept_outside(f.view, m)} of them outside any zone)" in text
+    else:
+        assert f"whole interval ({k} samples outside any zone)" in text
 
 
 ON_THE_BASIS = ("stats", "profile", "compare", "crossplot", "runs")       # the tools the data's basis setting applies to

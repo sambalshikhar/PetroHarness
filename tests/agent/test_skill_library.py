@@ -163,7 +163,7 @@ def _run(monkeypatch, nxt):
                 "intent": "characterize", "focus": "porosity",
                 "edits": [{"op": "add", "point": 1, "text": "Porosity is likely moderate", "grade": "hypothesis"}],
                 "next": nxt, "done": False})
-    out = graph.answer(t, "k200t", 1, 2, "open", "profile", llm_factory=lambda cfg: llm)
+    out = graph.answer(t, "k2-horizon-7b", 1, 2, "open", "profile", llm_factory=lambda cfg: llm)
     assert not out["trace"].get("error"), out["trace"].get("traceback")
     return s, llm, out
 

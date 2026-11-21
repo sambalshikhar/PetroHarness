@@ -97,6 +97,18 @@ def test_step_replies_are_read_with_the_harness_parser():
     assert P.read_reply_of("writer", "## A\ntext") == {"draft": "## A\ntext", "chars": 9}
 
 
+def test_a_reply_the_loop_salvages_is_shown_as_salvaged_not_unreadable():
+    """A step reply cut off before its last brace: the loop reads the edits and actions it holds (salvage), so the
+    page shows them, marked salvaged, rather than "could not be read; the harness asks the model to fix it"."""
+    from petroharness.agent import loop as L
+    cut = ('{"focus": "pay by zone", "edits": [{"op": "add", "point": 1, "grade": "low", "text": "Pay in Z2", '
+           '"ev": ["E1"]}], "next": [{"runs": {"condition": "NET_PAY"}}], "done": false')
+    assert L.complete_salvage(cut) is not None
+    got = P.read_reply_of("step_2", cut)
+    assert got.get("salvaged") is True and "unreadable" not in got
+    assert got["edits"] == [{"op": "add", "point": 1, "grade": "low", "text": "Pay in Z2", "ev": ["E1"]}]
+
+
 # --- results as the prompts show them -----------------------------------------------------------------------------------
 
 E1 = "stats of PHIE, VCL\nPHIE [v/v]\n  Z1 mean 0.12 (n 40)\n  zones pooled: mean 0.11"

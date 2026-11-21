@@ -28,6 +28,8 @@ def build(view: FormationView) -> Store:
     view.analyzer_curves.update(derived.new)
     view.analyzer_fills.clear()
     view.analyzer_fills.update(derived.fills)
+    view.analyzer_described.clear()
+    view.analyzer_described.update(derived.described)
     if full.get("PHI_NORM") is None and "PHI_NORM" not in derived.new:
         view.analyzer_curves["PHI_NORM"] = phi_norm(full)
     background = frozenset(str(c) for c in view.reg.topics.get("background_classes", []) or [])

@@ -25,7 +25,7 @@ def folder(cid: str) -> Path:
 
 @lru_cache(maxsize=None)
 def meta(cid: str) -> dict:
-    return yaml.safe_load((folder(cid) / "component.yaml").read_text()) or {}
+    return yaml.safe_load((folder(cid) / "component.yaml").read_text(encoding="utf-8")) or {}
 
 
 @lru_cache(maxsize=None)
@@ -34,6 +34,16 @@ def text(cid: str, entry: str):
     path = folder(cid) / meta(cid)["texts"][entry]
     raw = path.read_text(encoding="utf-8")
     return json.loads(raw) if path.suffix == ".json" else raw
+
+
+# texts several prompts read, kept once: each fills its slot wherever the slot stands ({basis}: which line of a result is
+# the interval's value, in the brief the claims are written under and in both writer prompts)
+SHARED = {"basis": ("C4", "basis"), "premise": ("C9", "premise")}
+
+
+def prompt(cid: str, entry: str, **values) -> str:
+    """The entry as a prompt: the shared texts (SHARED) and the values given in their slots."""
+    return fill(cid, entry, **{**{k: text(*v) for k, v in SHARED.items()}, **values})
 
 
 def fill(cid: str, entry: str, **values) -> str:
@@ -83,12 +93,13 @@ def catalog(skills: tuple = ()) -> list:
     first; list entries contribute each string. skills: the plugged library's guide lines (C6's texts are data, in the
     library: direction.Library.lines)."""
     out = []
+    heads = {h for h, _ in headers()}                 # an entry that is a section's header is found however short
     for cid in COMPONENTS:
         for entry in (meta(cid).get("texts") or {}):
             value = text(cid, entry)
             for t in strings(value):
                 for piece in SLOT.split(t)[::2]:
-                    if len(piece.strip()) >= MIN_MATCH:
+                    if len(piece.strip()) >= MIN_MATCH or piece in heads:
                         out.append((cid, piece))
     out += [("C6", ln.strip()) for ln in skills if len(ln.strip()) >= MIN_MATCH]
     return sorted(set(out), key=lambda x: -len(x[1]))
@@ -138,7 +149,7 @@ def attribute(message: str, owner: str, skills: tuple = ()) -> list:
 
 # the component owning a call's unheaded text, by stage and message position (an assistant turn is the model's own text)
 OWNERS = ((re.compile(r"read(_retry)?$"), ("C1", "C5")),
-          (re.compile(r"step_\d+(_retry)?$"), ("C1", "C5")), (re.compile(r"step_\d+_fix$"), ("C2",)),
+          (re.compile(r"step_\d+(_retry)?$"), ("C1", "C5")), (re.compile(r"(step_\d+|settle)_fix$"), ("C2",)),
           (re.compile(r"step_1_points$"), ("C1", "C5", "C3", "C5")), (re.compile(r"settle$"), ("C1", "C5")),
           (re.compile(r"writer(_retry|_again)?$"), ("C9", "C9")), (re.compile(r"repair_\d+(_again)?$"), ("C9", "C9", "C3", "C2")),
           (re.compile(r"figures(_retry)?$"), ("C9", "C9")))

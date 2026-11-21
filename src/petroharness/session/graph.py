@@ -129,7 +129,7 @@ def project(state: State, runtime: Runtime[Ctx]) -> dict:
     rests, shows = [], {}
     try:
         rests = basis.used(c.live, state["cited"], got["answer"])
-        shows = links.shows(got["answer"], c.live.ledger.items)
+        shows = links.shows(got["answer"], c.live.ledger.items, c.live.f.view.reg.checks, (c.live.task.well,))
     except Exception as exc:                              # noqa: BLE001 - a projection never costs the answer
         got["trace"]["projection_error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
     got["trace"]["basis"] = rests
@@ -140,7 +140,7 @@ def figures(state: State, runtime: Runtime[Ctx]) -> dict:
     """One model call chooses among the plots Petrophys can draw from what the answer rests on; Petrophys draws them
     (petroharness.figures). The answer's text is not touched."""
     c, got, n = runtime.context.conversation, state["got"], state["n"]
-    rec = c._figures(state["task"], state["question"], got["answer"], state["cited"], state["folder"])
+    rec = c._figures(state["task"], state["question"], got["answer"], state["cited"], state["folder"], got["trace"])
     got["trace"]["figures"] = rec
     for g in rec["figures"]:
         c.log.append("figure", n, **{k: g[k] for k in ("id", "kind", "source", "caption", "file", "samples")})
@@ -175,8 +175,8 @@ def commit(state: State, runtime: Runtime[Ctx]) -> dict:
         body = A._answer_md(result, c.p.las)
     else:
         body = f"**Question {n}:** {state['question']}\n\n---\n\n{got['answer']}\n"
-    (folder / "answer.md").write_text(body + markdown(figs) + basis.markdown(rests))
-    (folder / "trace.json").write_text(json.dumps(trace, indent=1, default=str))
+    (folder / "answer.md").write_text(body + markdown(figs) + basis.markdown(rests), encoding="utf-8")
+    (folder / "trace.json").write_text(json.dumps(trace, indent=1, default=str), encoding="utf-8")
     c.log.append("turn_end", n, **{k: v for k, v in rec.items() if k != "turn"})
     c.turns.append(rec)
     return {"out": Turn(number=n, question=state["question"], answer=got["answer"], status=got["status"], trace=trace,

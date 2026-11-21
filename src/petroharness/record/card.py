@@ -99,7 +99,7 @@ def curve_origin(view: FormationView, curve: str) -> Optional[tuple]:
     steps = view.prep.steps or {}
     listed = any("outputs" in (rec or {}) for rec in steps.values())
     made = producer(steps, curve) if listed else None
-    supplied = curve.upper() in {c.upper() for c in view.prep.input_curves}
+    supplied = curve.upper() in {c.upper() for c in view.prep.input_curves} or curve.upper() in _las_names(view)
     if made and not (supplied and (steps[made[0]] or {}).get("stage", "workflow") != "workflow"):
         return ("step",) + made                         # (a LAS curve a preparation read in or a QC screened: supplied)
     if supplied:
@@ -111,6 +111,16 @@ def curve_origin(view: FormationView, curve: str) -> Optional[tuple]:
         if other != curve and _same_values(whole, view.prep.curve(other)):
             return ("copy", other)
     return ("unrecorded",)
+
+
+def _las_names(view: FormationView) -> set:
+    """The LAS file's own curve mnemonics (the loaded well's names are the library's aliases: RESD read in as RDEP); an
+    unreadable header gives none."""
+    from petroharness.well.view import las_mnemonics
+    try:
+        return set(las_mnemonics(str(view.task.las_path)))         # every curve, described or not
+    except Exception:  # noqa: BLE001
+        return set()
 
 
 def _las_description(view: FormationView, curve: str) -> str:
@@ -320,15 +330,20 @@ def swirr_text(perm: dict) -> Optional[str]:
 
 
 def perm_fact(perm: dict, names: dict) -> Optional[str]:
+    """How the record made PERM; None where it records nothing about it (a line saying only "method not recorded"
+    adds nothing, and answers copied it into their limitations)."""
     if not perm:
         return None
     p = _params(perm)
     method = p.get("empirical_method")
-    text = "PERM: " + (_name(names, method) if method else "method not recorded")
     swirr = swirr_text(perm)
+    clip = _num(p.get("perm_max_clip_md"))
+    if not (method or swirr or clip):
+        return None
+    text = "PERM: " + (_name(names, method) if method else "method not recorded")
     if swirr:
         text += f" with {swirr}"
-    if _num(p.get("perm_max_clip_md")):
+    if clip:
         text += f"; clipped <= {_f(p['perm_max_clip_md'])} mD"
     return text
 
@@ -359,8 +374,9 @@ def readers(steps: dict, curves: list[str]) -> list[str]:
     return out
 
 
-def unmodelled_fact(view: FormationView, curve: str) -> Optional[str]:
-    """A curve no recorded step computed: what it is instead (supplied, or the same values as a supplied curve)."""
+def unmodelled_fact(view: FormationView, curve: str, unknown: bool = True) -> Optional[str]:
+    """A curve no recorded step computed: what it is instead (supplied, or the same values as a supplied curve);
+    with neither, "method not recorded" (None when not `unknown`)."""
     if not view.available(curve):
         return None
     origin = curve_origin(view, curve)
@@ -371,18 +387,54 @@ def unmodelled_fact(view: FormationView, curve: str) -> Optional[str]:
                 f"supplied {origin[1]}")
     if origin[0] == "supplied":
         return f"{curve}: supplied in the LAS; no model in the record"
-    return f"{curve}: method not recorded"
+    return f"{curve}: method not recorded" if unknown else None
+
+
+def mineral_fact(view, minerals: list) -> str:
+    """The solver's mineral volumes as this interval has them - at how many samples the solver left values
+    and which of its supports (the lithology log, PEF, RHOB) are present here - instead of a caveat that reads as if
+    the supports were missing."""
+    import numpy as np
+    from petroharness.well.formation import MISSING_LITHOLOGY
+    ok = np.zeros(int(view.mask.sum()), dtype=bool)
+    for c in minerals:
+        x = view.values(c)
+        if x is not None:
+            ok |= np.isfinite(np.asarray(x, dtype=float))
+    labels = getattr(view, "labels", None)
+    # a lithology log only where the zones come from one: shale-volume band labels are not a lithology log
+    has_log = (getattr(view, "lithology_curve", None) is not None and labels is not None
+               and any(str(v) != MISSING_LITHOLOGY for v in labels))
+    sup = [n for n, on in (("the lithology log", has_log), ("PEF", view.available("PEF")), ("RHOB", view.available("RHOB")))
+           if on]
+    return (f"{', '.join(minerals)}: mineral-solver volumes, with values at {int(ok.sum())} of {ok.size} samples here (the "
+            f"solver leaves the rest unsolved); a solver mix is non-unique on its own, and here "
+            + (f"{(', '.join(sup[:-1]) + ' and ' + sup[-1]) if len(sup) > 1 else sup[0]} "
+               f"{'is' if len(sup) == 1 else 'are'} present to support it" if sup else
+               "none of the lithology log, PEF or RHOB is present to support it"))
+
+
+def core_plugs(view) -> str:
+    """The core itself beside the core-calibrated curves: each core plug curve with values here and its count (an
+    answer about "the core" read the calibrated log curve)."""
+    plugs = [c for c in ((view.reg.curves.get("core") or {}).get("curves") or []) if view.available(c)]
+    counts = [(c, int(np.isfinite(np.asarray(view.values(c), dtype=float)).sum())) for c in plugs]
+    counts = [(c, n) for c, n in counts if n]
+    if not counts:
+        return ""
+    return ("; they are log curves fitted to the core, not the core: the plug measurements here are "
+            + ", ".join(f"{c} ({n} plugs)" for c, n in counts))
 
 
 def core_fact(available: bool, source: Optional[str], supplied: Optional[list] = None,
-              readers: Optional[list] = None) -> str:
+              readers: Optional[list] = None, plugs: str = "") -> str:
     head = "Core-calibrated curves (PHIE_CC, PERM_CC): "
     if supplied:
         return head + (f"{', '.join(supplied)} supplied in the LAS as core-corrected values, the calibrated data of record "
                        "(the workflow reads them, it does not compute them)"
                        + (f"; read by the steps {'; '.join(readers)}" if readers else ""))
     if available:
-        return head + "available (transform fitted on " + (source or "core plugs; source not recorded") + ")"
+        return head + "available (transform fitted on " + (source or "core plugs; source not recorded") + ")" + plugs
     if source:
         return head + f"not available in this interval (the well's transform is fitted on {source})"
     return head + "not available (no core model fitted in this well)"
@@ -436,20 +488,27 @@ def cutoff_fact(net_pay: dict, policy: dict) -> str:
 
 
 def vcl_fact(vcl: dict, names: dict) -> Optional[str]:
-    """The shale-volume estimates the record says were used, how they were combined, and the GR endpoints applied."""
+    """The shale-volume estimates the record says were used, how it combined them (its vcl_rule parameter), the ones
+    it computed but left out of VCL (sp_in_vcl, nd_in_vcl) and the GR endpoints applied."""
     if not vcl:
         return None
     p, decisions = _params(vcl), _decisions(vcl)
-    used, unused = [], []
+    used, unused, left = [], [], []
     if p.get("gr_method"):
         used.append(f"GR ({_name(names, p['gr_method'])})")
-    for key, label in (("use_sp", "SP"), ("use_nd", "neutron-density")):
-        if p.get(key) is True:
+    for key, inside, label, curve in (("use_sp", "sp_in_vcl", "SP", "VCL_SP"),
+                                      ("use_nd", "nd_in_vcl", "neutron-density", "VCL_ND")):
+        if p.get(key) is True and p.get(inside) is False:
+            left.append(curve)                     # computed, not in the combination
+        elif p.get(key) is True:
             used.append(label)
         elif p.get(key) is False:
             unused.append(label)
+    rule = p.get("vcl_rule") if isinstance(p.get("vcl_rule"), str) and p.get("vcl_rule").strip() else None
     listing = ", ".join(used[:-1]) + " and " + used[-1] if len(used) > 1 else "".join(used)
-    if not used:
+    if rule:
+        text = f"VCL: {rule} at each depth, as the record states it" + (f" (from {listing})" if listing else "")
+    elif not used:
         text = "VCL: method not recorded"
     elif len(used) == 1:
         text = f"VCL: {listing} estimate"
@@ -457,14 +516,17 @@ def vcl_fact(vcl: dict, names: dict) -> Optional[str]:
         text = f"VCL: minimum of {listing} estimates"
     else:
         text = f"VCL: from {listing} estimates (combination rule not recorded)"
+    if left:
+        text += f"; {' and '.join(left)} computed but left out of VCL"
     if unused:
         text += f" ({' and '.join(unused)} not used)"
     lo = p.get("gr_min_used") if _num(p.get("gr_min_used")) else p.get("gr_min")
     hi = p.get("gr_max_used") if _num(p.get("gr_max_used")) else p.get("gr_max")
     if _num(lo) and _num(hi):
         text += f"; GR endpoints {_f(lo)}–{_f(hi)} API"
+    if not (rule or used or left or unused or (_num(lo) and _num(hi))):
+        return None                                    # the record holds nothing about VCL: no line saying so
     return text
-
 
 
 _EQUATION_NAME = re.compile(r"(?<![A-Za-z0-9_])([A-Z][A-Z0-9_]+(?:\+[A-Z][A-Z0-9_]+)*)(?![A-Za-z0-9_(])")
@@ -547,20 +609,12 @@ def sxo_route(view: FormationView, idx=None) -> str:
 
 
 def invasion_route(view: FormationView) -> str:
-    """Which resistivity pair INVASION_RATIO is in this interval, read from the computed curves (the well's step
-    record can describe a fallback used elsewhere in the well)."""
-    inv, deep = view.values("INVASION_RATIO"), view.values("RDEP")
-    if inv is None or deep is None:
-        return ""
-    used = []
-    for shallow in ("RXO", "RSHA", "RMED"):
-        s = view.values(shallow)
-        if s is None:
-            continue
-        ok = np.isfinite(inv) & np.isfinite(s) & np.isfinite(deep) & (deep > 0)
-        if ok.any() and np.mean(np.abs(inv[ok] - s[ok] / deep[ok]) < 1e-3) >= 0.5:
-            used.append(shallow)
-    return used[0] if used else ""
+    """Which resistivity pairs INVASION_RATIO is in this interval, read from the computed curves against the pairs the
+    invasion step's record names (petroharness.agent.routes; the record's fallback text can describe the well
+    elsewhere): "RESM/RESD at 544 samples (a medium resistivity, where no shallow log is)"; "" when none is read."""
+    from petroharness.agent.routes import _pairs, invasion_counts
+    c = invasion_counts(view)
+    return _pairs(c) if c and c["n"] > c.get("other", 0) else ""
 
 
 # ---------------------------------------------------------------------------
@@ -581,14 +635,17 @@ def provenance_facts(view: FormationView) -> list[str]:
         saturation_fact(sat, names, reg.curves.get("sw_model_parameters", {}) or {}),
         sxo_fact(route, sat, names, reg.curves.get("sxo_quicklook_methods", []) or []),
         mhi_fact(_step(view, "mhi"), view.available("MHI"), route),
-        perm_fact(_step(view, "permeability"), names) or unmodelled_fact(view, "PERM"),
-        core_fact(view.available("PHIE_CC") or view.available("PERM_CC"), core_source(steps, names, view.task.well),
-                  supplied=[c for c in ("PHIE_CC", "PERM_CC") if c in set(view.prep.input_curves) and view.available(c)],
-                  readers=readers(steps, [c for c in ("PHIE_CC", "PERM_CC") if c in set(view.prep.input_curves)])),
+        (perm_fact(_step(view, "permeability"), names) if _step(view, "permeability")
+         else unmodelled_fact(view, "PERM", unknown=False)),           # no permeability record: what PERM is instead
     ]
+    core = ("PHIE_CC", "PERM_CC")
+    supplied = [c for c in core if (curve_origin(view, c) or ("",))[0] == "supplied"]   # one reader: the inventory's
+    if not supplied:                                  # supplied ones are inputs the map lists with their meaning
+        facts.append(core_fact(view.available("PHIE_CC") or view.available("PERM_CC"),
+                               core_source(steps, names, view.task.well), plugs=core_plugs(view)))
     minerals = [m for m in reg.curves.get("minerals", {}) if view.available(m)]
     if minerals:
-        facts.append(f"{', '.join(minerals)}: non-unique solver output; a mineral needs lithology-log or PEF/RHOB support")
+        facts.append(mineral_fact(view, minerals))
     facts.append(cutoff_fact(_step(view, "net_pay"), view.policy))
     facts.append(vcl_fact(_step(view, "vclay"), names))
     return [f for f in facts if f]

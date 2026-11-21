@@ -9,6 +9,10 @@ import pytest
 from petroharness.agent.compose import leftover_citations, strip_citations
 
 CASES = [
+    ("Gaps as the record states them: E16 cites the gap (1) and E9/E15 cite the penalty (3).",
+     "Gaps as the record states them: The result cites the gap (1) and the results cite the penalty (3)."),
+    ("E12 lacks RXO, so E13 falls back.", "The result lacks RXO, so the result falls back."),
+    ("In Z12, E12 overlaps show A and B together.", "In Z12, overlaps show A and B together."),     # a noun: no subject
     ("mean SW 0.45 [E1].", "mean SW 0.45."),
     ("values [E1, E4] here", "values here"),
     ("Z10 0.9767 [E1/E7]. BVW", "Z10 0.9767. BVW"),

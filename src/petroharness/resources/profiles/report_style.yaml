@@ -1,7 +1,8 @@
-# Report style: a configurable answer format (G2 class f, report style). It sets how an answer is laid out - its
-# sections, its length, the by-interval zone table and the limitations rule - never what it concludes or which basis a
-# number is taken on. The policy names the style it uses (reporting.profile); a user or dataset can supply its own, and
-# the run option --format default ignores it (the writer then uses its own default format).
+# Report style: a configurable answer format (G2 class f, report style), never what an answer concludes or which basis a
+# number is taken on. The code reads one key, format.zone_table (the style of the code-composed zone table); shapes,
+# words, zone_names and rules are read by no code and do not reach the writer. The policy names the style it uses
+# (reporting.profile); a user or dataset can supply its own, and the run option --format default ignores it (the zone
+# table is then by_curve).
 format:
   shapes:          # by the writer's shape (the loop's intent picks it)
     report: >-

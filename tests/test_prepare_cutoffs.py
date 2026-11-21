@@ -31,3 +31,16 @@ def test_a_numeric_cutoff_unlike_the_policys_still_stops_the_run():
         _check_cutoffs(_result({"vcl_cutoff": 0.4, "sw_cutoff": 0.7, "phie_cutoff": 0.08}), POLICY)
     with pytest.raises(RuntimeError, match="vcl_cutoff"):
         _check_engine_cutoffs({"net_pay": {"parameters": {"vcl_cutoff": 0.5}}}, POLICY)
+
+
+def test_a_carbonate_interpretation_is_checked_against_the_carbonate_cutoff():
+    """Petrophys records the net-pay step's domain as `lithology`: a carbonate run used phie_cutoff 0.045, the
+    policy's carbonate cutoff, and passes."""
+    from petroharness.well.prepare import lithology_domain
+    carbonate = {"lithology": "carbonate", "vcl_cutoff": 0.4, "sw_cutoff": 0.6, "phie_cutoff": 0.045}
+    assert lithology_domain(carbonate) == "carbonate" and lithology_domain({}) == "clastic"
+    assert lithology_domain({"lithology_domain": "carbonate"}) == "carbonate"
+    _check_cutoffs(_result(carbonate), POLICY)
+    _check_engine_cutoffs({"net_pay": {"parameters": carbonate}}, POLICY)
+    with pytest.raises(RuntimeError, match="phie_cutoff"):
+        _check_cutoffs(_result({**carbonate, "lithology": "clastic"}), POLICY)

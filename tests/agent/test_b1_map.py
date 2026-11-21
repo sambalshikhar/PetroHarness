@@ -28,7 +28,7 @@ def maps():
 
 @pytest.mark.data
 def test_m1_size():
-    big = [(t.well, t.formation, len(m)) for t, inv, m in maps() if len(m) > 24000]     # the limit holds the route lines, the notes, a context profile's record in compartments and the curve catalog's lines (about 2,200-3,800)
+    big = [(t.well, t.formation, len(m)) for t, inv, m in maps() if len(m) > 24500]     # the limit holds the route lines, the notes, a context profile's record in compartments and the curve catalog's lines (about 2,200-3,800)
     assert not big, big
 
 

@@ -125,6 +125,12 @@ def test_an_interpretation_with_errors_is_refused(las, interpret):
         prepare_well(las, {"name": "p"}, interpret={"_errors": ["no porosity input"]})
 
 
+def test_a_setting_petrophys_does_not_have_is_named_and_refused(las):
+    """The real petrophys.interpret: it refuses the unknown setting; the harness says which, as WHAT / FIX."""
+    with pytest.raises(ValueError, match="WHAT: data.interpret names settings Petrophys does not have: bogus_option"):
+        prepare_well(las, {"name": "p"}, interpret={"bogus_option": 1, "m": 2.0})
+
+
 def test_the_cache_keeps_interpretations_with_other_options_apart(las, interpret, tmp_path):
     a = prepare_well(las, {"name": "p"}, cache_dir=tmp_path / "c", interpret={"context_profile": "costa"})
     b = prepare_well(las, {"name": "p"}, cache_dir=tmp_path / "c", interpret={"context_profile": "danish"})
