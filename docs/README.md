@@ -10,12 +10,13 @@ in an answer traces back to the log. Start with the reading path for what you wa
 
 | You want to | Read, in this order |
 |---|---|
+| See it work, screen by screen | [TOUR](TOUR.md) → [TRACE](TRACE.md) |
 | See what it does with hard questions | [EXAMPLES](EXAMPLES.md) → [USAGE](USAGE.md) |
 | Evaluate a formation in your own wells | [README quick start](../README.md) → [USAGE](USAGE.md) → [SESSIONS](SESSIONS.md) → [UI](UI.md) |
 | Run it with your own model | [MODELS](MODELS.md) → [Model cards and configuration](reference/CONFIGURATION.md) |
 | Choose how Petrophys interprets the well | [Interpretation settings](reference/INTERPRETATION_SETTINGS.md) → [Well preparation](reference/WELL_PREPARATION.md) |
-| Understand how an answer is produced | [ARCHITECTURE](ARCHITECTURE.md) → [GRAPH](GRAPH.md) → [Investigation state](reference/INVESTIGATION_STATE.md) → [Writer and checker](reference/WRITER_AND_CHECKER.md) |
-| Check an answer, number by number | [EVIDENCE](EVIDENCE.md) → [Records](reference/RECORDS.md) |
+| Understand how an answer is produced | [TRACE](TRACE.md) → [ARCHITECTURE](ARCHITECTURE.md) → [GRAPH](GRAPH.md) → [Investigation state](reference/INVESTIGATION_STATE.md) → [Writer and checker](reference/WRITER_AND_CHECKER.md) |
+| Check an answer, number by number | [TRACE](TRACE.md) → [EVIDENCE](EVIDENCE.md) → [Records](reference/RECORDS.md) |
 | Script it or build on it | [Python API](reference/PYTHON_API.md) → [Command line](reference/CLI.md) → [Web UI API](reference/WEB_UI_API.md) |
 | Add a tool, a guide or a model | [DESIGN](DESIGN.md) → [Extending](reference/EXTENDING.md) → [Testing](reference/TESTING.md) |
 
@@ -25,10 +26,12 @@ How to do something, with examples.
 
 | Page | What it covers |
 |---|---|
-| [EXAMPLES](EXAMPLES.md) | Complex questions answered: two formations compared, net pay's sensitivity, logs against core, missing logs, a carbonate against a clastic reading, a fluid contact |
+| [TOUR](TOUR.md) | One question from start to finish in the web UI, screen by screen, with the command that does the same |
+| [EXAMPLES](EXAMPLES.md) | Eleven questions worked through: two formations compared, net pay's sensitivity, logs against core, missing logs, a carbonate, a fluid contact, a direct question, a conversation, a whole well, your own zones, the solved minerals against the lithology log |
 | [USAGE](USAGE.md) | Evaluating a formation from any LAS file: intervals, tops files, units, lithology, output |
 | [SESSIONS](SESSIONS.md) | Conversations: follow-up questions, figures, settings mid-conversation, field notes, resume |
 | [UI](UI.md) | The web UI: the page, its options and its runs |
+| [TRACE](TRACE.md) | Reading the work behind an answer: each step's results, findings and reasoning, in the page and in the files |
 | [MODELS](MODELS.md) | Serving a model, model cards, reasoning models, hosted APIs |
 | [TOOLS](TOOLS.md) | What the model can ask Petrophys for, by kind of request |
 

@@ -10,7 +10,7 @@ Every number in the answer traces back to the log.
 
 **Petrophys calculates · the model investigates · the harness records · you decide**
 
-[![Version](https://img.shields.io/badge/version-2.0.0-011e3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.1-011e3f)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.10-011e3f)](#install)
 [![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](docs/MODELS.md)
 [![Default model](https://img.shields.io/badge/default-K2--Horizon--7B-ef6719)](docs/MODELS.md)
@@ -84,8 +84,14 @@ K2-Horizon-7B is the default. Serve the model yourself and the well data stays o
 
 <table>
 <tr>
+<td colspan="2" valign="top"><img src="docs/images/ui-30_6-5-brent-progress.png" alt="The work while a question runs: a finished step with the results it opened, the findings it added and its reasoning; the next step streaming its reasoning"></td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><b>Watch the work.</b> Each step as it finishes: what it looked at, the results it opened, the findings it added or revised, and the model's reasoning for the call, streamed while it thinks. <a href="docs/TRACE.md">How to read it</a>.</td>
+</tr>
+<tr>
 <td width="50%" valign="top"><img src="docs/images/ui-30_6-5-brent-lineage.png" alt="How it was computed: from the measured logs, through the Petrophys steps with their methods and parameters, to the results the model opened, the findings and the answer"></td>
-<td width="50%" valign="top"><img src="docs/images/ui-30_6-5-brent-evidence.png" alt="Evidence: each point of the question with its claims, graded, what each means, what weakens it, the code's checks and the computed results it rests on"></td>
+<td width="50%" valign="top"><img src="docs/images/ui-30_6-5-brent-evidence.png" alt="Evidence: each point of the question with its claims, graded, what each means, what weakens it and the computed results it rests on"></td>
 </tr>
 <tr>
 <td valign="top"><b>Trace every number.</b> Click a number in the answer and follow it back: the results that show it, the Petrophys steps and parameters that computed them, and the measured logs they start from.</td>
@@ -120,7 +126,7 @@ Petrophys compute it: another method, an estimate, a what-if, a fit, or any of a
 
 When a method needs what the well does not carry (Rwb for dual water, CEC for Waxman–Smits, a normal-compaction
 trend for Eaton), the answer says what is missing. The tools and the functions behind them: [docs/TOOLS.md](docs/TOOLS.md).
-Six complex questions answered on wells that ship with Petrophys: [docs/EXAMPLES.md](docs/EXAMPLES.md).
+Eleven questions worked through on wells that ship with Petrophys: [docs/EXAMPLES.md](docs/EXAMPLES.md).
 
 **Skill guides.** For the topic areas below, the skill library holds a sourced guide, and the model picks the guides
 a question needs. They guide the investigation; they do not limit what you can ask.
@@ -268,11 +274,13 @@ steps to the LAS file, read from the session folder alone. [docs/EVIDENCE.md](do
 petroharness ui                          # http://127.0.0.1:7860
 ```
 
-![An answer in the web UI](docs/images/ui-30_6-5-brent-answer.png "An answer in the web UI, on GeoLink 30/6-5, Brent Group: the phases it went through, the answer's opening, its findings by confidence, the results it rests on and the checker's outcome.")
+![An answer in the web UI](docs/images/ui-30_6-5-brent-answer.png "An answer in the web UI, on GeoLink 30/6-5, Brent Group: the work folded to one line, then the answer's opening, its findings by confidence, the results it rests on and the checker's outcome.")
 
-Pick a LAS file and the interval, and ask. The answer reads as a report, conclusion first, with the well as Petrophys
-interpreted it, its figures, and every number traceable to the results that show it. Runs are saved, and can be rated
-and replayed. [docs/UI.md](docs/UI.md).
+Pick a LAS file and the interval, and ask. The page shows the well as Petrophys interpreted it, then the work as it
+happens (each step with what it looked at, the results it opened, the findings it added and the model's reasoning),
+then the answer, conclusion first, with its figures and every number traceable to the results that show it. Runs are
+saved, and can be rated and replayed. A tour in pictures: [docs/TOUR.md](docs/TOUR.md). The page in full:
+[docs/UI.md](docs/UI.md).
 
 ### From Python
 
@@ -325,12 +333,15 @@ field, setting, tool and record is described in the [reference](docs/README.md#4
 | Guide | What it covers |
 |---|---|
 | [docs/README.md](docs/README.md) | the map of the documentation: guides, concepts and the full reference |
+| [docs/TOUR.md](docs/TOUR.md) | a tour in pictures: one question from start to finish in the web UI, with the command that does the same |
+| [docs/EXAMPLES.md](docs/EXAMPLES.md) | eleven questions worked through, on wells that ship with Petrophys |
 | [docs/USAGE.md](docs/USAGE.md) | evaluating a formation in your own wells: intervals, tops files, units, lithology, output, the Python API |
 | [docs/SESSIONS.md](docs/SESSIONS.md) | conversations: follow-up questions on one interval, figures, the session folder, resume |
 | [docs/EVIDENCE.md](docs/EVIDENCE.md) | auditing an answer: the evidence graph, the audit trail, the report, and the setup record with its hash |
 | [docs/TOOLS.md](docs/TOOLS.md) | the tools by request, and Petrophys's functions: calculate, estimate, what_if, check, classify, summarize, calibrate |
 | [docs/MODELS.md](docs/MODELS.md) | models: serving, model cards, reasoning models, hosted APIs |
 | [docs/UI.md](docs/UI.md) | the web UI: options, the parts of the page, its API |
+| [docs/TRACE.md](docs/TRACE.md) | reading the work behind an answer: each step's results, findings and reasoning |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the parts, and how a question flows through them |
 | [docs/GRAPH.md](docs/GRAPH.md) | the three graphs: the question graph node by node, the later-question graph and the session graph |
 | [docs/DESIGN.md](docs/DESIGN.md) | the design rules and the generality contract |

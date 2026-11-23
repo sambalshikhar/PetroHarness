@@ -763,3 +763,55 @@ def test_a_job_shows_its_call_in_flight_only_while_it_runs():
     job.set_live({"n": 4, "thinking": "x"})
     job.finished = time.time()
     assert "live" not in job.view() and "live" not in job.record()
+
+
+def test_a_step_shows_what_it_produced_and_its_reasoning_in_both_views():
+    """The Interpretation page's work lines and the Investigation log's cards build a step from the same parts (what it
+    looked at, the results it opened, the findings it added or revised), and each adds the call's reasoning."""
+    page = (U.STATIC / "index.html").read_text()
+    stage = _js_function(page, "stepStage")
+    for part in ('"Points to settle"', '"Looked at"', '"Results"', "claimsWord", '"Harness notes"'):
+        assert part in stage
+    work, story = _js_function(page, "workHtml"), _js_function(page, "storyPane")
+    assert "workParts(c, m, res, calls, finished)" in work and '["Reasoning", th]' in work
+    parts = _js_function(page, "workParts")
+    assert 'stepStage(c.number, m, res, calls, finished, "Findings")' in parts and "checkerFound(round)" in parts
+    assert 'stepStage(k, m, res, calls, finished, "Claims")' in story and "thinkPart(st.main)" in story
+    assert story.count('["Reasoning", ') >= 5          # the read, each step, the settle step, the writer, each repair
+    assert "workHtml(j, m, finished, res, calls)" in _js_function(page, "mainPane")
+    assert "All of its reasoning" in _js_function(page, "thinkPart")
+
+
+def test_the_reasoning_lines_shown_skip_the_ones_that_only_announce_the_reply():
+    """thinkTail drops a line that says nothing about the well (the model announcing its reply) and keeps the rest."""
+    import re
+    page = (U.STATIC / "index.html").read_text()
+    src = re.search(r"^const THINK_SKIP = /(.+)/i;$", page, re.M).group(1)
+    skip = re.compile(src, re.I)
+    for line in ("Let me write the JSON.", "Let me reply with JSON.", "Now write JSON.", "Now the JSON.", "Reply JSON only.", "I'll output the reply.",
+                 "Only JSON.", "Final answer:", "[… 5,201 characters left out …]"):
+        assert skip.search(line), line
+    for line in ("Now Z8 has the highest RQI, 0.3352 um.", "Reply: the Brent Group holds 20 zones.", "JSON keys: focus, edits, next.",
+                 "- C4: revise cite: EXCELLENT_RESERVOIR 35.6% is in E6."):
+        assert not skip.search(line), line
+
+
+def test_a_dropped_finding_keeps_its_small_badge():
+    """The badge of a finding edit (+, ~, −) carries the class of its operation, and "drop" is also the class of the
+    start page's drop zone: the badge's own rule resets the box that class gives (its border and padding)."""
+    import re
+    page = (U.STATIC / "index.html").read_text()
+    badge = re.search(r"^\.cl \.o \{([^}]*)\}", page, re.M).group(1)
+    zone = re.search(r"^\.drop \{([^}]*)\}", page, re.M).group(1)
+    assert "padding:" in zone and "border:" in zone                 # what the drop zone sets
+    assert "padding: 0;" in badge and "border: 0;" in badge and "width: 18px" in badge
+    assert '<span class="o ${esc(e.op)}">' in _js_function(page, "claimEdits")
+
+
+def test_an_opening_that_introduces_a_list_is_shown_with_its_items():
+    """The answer block shows the answer's first two sentences; an opening that ends on a colon before a list would
+    stop at the colon, so the list's items follow it, each by its first sentence."""
+    page = (U.STATIC / "index.html").read_text()
+    assert "leadList(sents, paras[1])" in _js_function(page, "mainPane")
+    lead = _js_function(page, "leadList")
+    assert "/:$/.test(" in lead and "slice(0, 6)" in lead and "sents.length > 2" in lead

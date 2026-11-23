@@ -288,7 +288,7 @@ The server of [section 3](#3-command-line-and-environment), one endpoint up and 
 model's name and the runs folder replaced):
 
 ```json
-{"version": "2.0.0", "model": "<served model name>", "label": "K2-Horizon-7B",
+{"version": "2.0.1", "model": "<served model name>", "label": "K2-Horizon-7B",
  "endpoints": [{"url": "http://HOST:8000/v1", "ok": true, "models": ["<served model name>"], "ms": 6, "busy": 0},
                {"url": "http://localhost:8001/v1", "ok": false, "models": [],
                 "error": "URLError: <urlopen error [Errno 111] Connection refused>", "busy": 0}],

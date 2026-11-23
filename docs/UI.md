@@ -5,7 +5,7 @@ investigation as it runs, then read the answer with its figures, the claims and 
 number was computed. Every run is saved, to come back to, rate and replay. The page asks the same harness as the
 `petroharness` command, with the same inputs.
 
-![The web UI with GeoLink 30/6-5 loaded](images/ui-30_6-5-brent-interval.png "A new conversation: GeoLink 30/6-5 loaded from its LAS file and the Brent Group (2841–2958 m) chosen from its tops file. The chips above the question box hold the well, the interval, the interpretation settings and the options.")
+![The web UI with GeoLink 30/6-5 loaded](images/ui-30_6-5-brent-interval.png "A new conversation: GeoLink 30/6-5 loaded from Petrophys's sample wells, with its tops file. 1: the formations of the tops file as buttons, the Brent Group (2841–2958 m) chosen. 2: questions to start with. 3: the chips above the question box hold the well, the interval, the interpretation settings and the options.")
 
 ## Start it
 
@@ -54,6 +54,8 @@ refuses its requests (403) until you name that host: `petroharness ui --allow-ho
 The page is laid out as a chat: the question box is docked at the bottom, and the saved runs are in a drawer (the
 menu button, top left). Four chips above the box hold the setup; clicking one opens its settings in a sheet. Enter
 sends the question, Shift+Enter starts a new line.
+
+![The start page](images/ui-start.png "The start page. 1: drop a LAS file, upload one, or give its path on the server. 2: Petrophys's sample wells, by dataset; tops marks a well whose formation tops load with it. 3: the model. 4: the chips for the well, the interval, the interpretation settings and the options. 5: the question box.")
 
 The start page gets you to a first question in a few clicks:
 
@@ -162,7 +164,7 @@ and the note under the box says which question it will be. **New conversation** 
 another, with the current well, interval and settings in the chips, ready to change. Opening a run from the drawer
 makes the box continue that run's conversation.
 
-![A follow-up question](images/ui-30_6-5-brent-followup.png "A follow-up: question 2 of the conversation on GeoLink 30/6-5, Brent Group, with question 1 above it in a box. Every number in this answer was traced to a computed result, and its figures, drawn by Petrophys, follow the answer.")
+![A follow-up question](images/ui-30_6-5-brent-followup.png "A follow-up: question 2 of the conversation on GeoLink 30/6-5, Brent Group, answered in 8 min 18 s over 7 steps. Question 1 sits above it in a box that opens to its answer; the evidence now counts the results of both questions (26); the well plot marks the zones this answer centres on (Z5, Z19).")
 
 <details>
 <summary>Changing a setting in a conversation</summary>
@@ -195,7 +197,7 @@ water, Water saturation, Permeability, Net reservoir and pay, Temperature, Mud, 
 box finds a setting by name or by its help. Each row shows the setting, Petrophys's own help, its control and its
 default; a changed setting is marked, with *Reset to default*, and *Reset all* clears them.
 
-![The interpretation settings panel](images/ui-30_6-5-brent-settings.png "The settings panel on GeoLink 30/6-5, Brent Group. The bar previews the interval as Petrophys zones it (20 zones from the lithology log LITHOLOGY_GEOLINK); below, the Zones group, each setting with its help, its control and its default.")
+![The interpretation settings panel](images/ui-30_6-5-brent-settings.png "The settings panel on GeoLink 30/6-5, Brent Group. 1: the bar previews the interval as Petrophys zones it (20 zones from the lithology log LITHOLOGY_GEOLINK). 2: the groups of settings. 3: the Zones group, each setting with its help, its control and its default.")
 
 The bar at the top previews the interpretation on the chosen well and interval as you change settings: the zones you
 get, drawn as a strip, and in each row the value Petrophys applied on this well. A setting that cannot be used is said
@@ -241,7 +243,7 @@ writing, checking the numbers) and the time left: once the question is read as d
 median time of this server's answered runs of that kind, as "About N min left: investigations here take about M min
 (K runs)". With fewer than three such runs, no time is guessed.
 
-![A question being answered](images/ui-30_6-5-brent-progress.png "A question on GeoLink 30/6-5, Brent Group, 14 minutes in: the investigation's 8 steps, the settle step and the writer are done, and the checker is at work. The tabs and the interval's logs are already open, and the box waits for the answer.")
+![A question being answered](images/ui-30_6-5-brent-progress.png "Question 1 on GeoLink 30/6-5, Brent Group, about a minute in. Step 1 has finished. 1: the results it opened. 2: the findings it added, each still a hypothesis. 3: the last lines of its reasoning. 4: the whole of it, on a click. Step 2 is in flight. 5: the call. 6: the model is thinking. 7: its reasoning as it writes it. 8: the call's time so far. 9: the findings so far, part by part, fill in below the work.")
 
 ## Reading the answer
 
@@ -259,13 +261,15 @@ The run opens on **Interpretation**, one column read top to bottom: the well, th
    lithology are called **lithology zones**; zones of shale-volume bands, and your own zones, are named as such. The
    **lithology zone table** and the **lithology** summary (each lithology's zones, thickness and share of the zoned
    thickness) open from the two buttons under them.
-2. **The work:** one line per model call, in order (reading the question, each investigation step, settling the
-   findings, writing the answer, the checker's repairs), with its time, what it came back with, and the last lines
-   of the model's reasoning for that call; *All of its reasoning* opens the whole of it. These grey lines are the
-   model's working notes: shown as the server returned them and never checked. The checked part is the answer. While
-   the run goes on, the call in flight streams: its reasoning comes in line by line as the model writes it
-   (*Thinking · 1,184 characters*), then *Writing the reply* with its length, with the call's time so far. Once the
-   answer is in, the work folds to one line (*Worked 12 min · 11 model calls · 6 steps*), which opens it again.
+2. **The work:** one block per model call, in order (reading the question, each investigation step, settling the
+   findings, writing the answer, the checker's repairs), with its time. A step shows what it produced: its focus,
+   what it looked at, the results it opened (click one to read it) and the findings it added or revised, each with
+   its grade. Under them, in grey, come the last lines of the model's reasoning for that call; *All of its
+   reasoning* opens the whole of it. The reasoning is the model's working notes: shown as the server returned it
+   and never checked. The checked part is the answer. While the run goes on, the call in flight streams: its
+   reasoning comes in line by line as the model writes it (*Thinking · 1,184 characters*), then *Writing the reply*
+   with its length, with the call's time so far. Once the answer is in, the work folds to one line (*Worked 12 min ·
+   11 model calls · 6 steps*), which opens it again. Each part, explained: [Read the work](TRACE.md).
 3. **The answer:** its opening sentences, the findings by confidence, the results computed, and the checker's outcome
    (every number traced to a computed result, or not). The questions of the conversation are listed above the run, and
    the answer's **figures**, drawn by Petrophys, follow right under it. When the harness told the model something
@@ -277,16 +281,24 @@ The run opens on **Interpretation**, one column read top to bottom: the well, th
 6. **The whole written answer.** Click a number to see every computed result that shows it, or a zone to find it on
    the logs. Then rate the answer (good, partly or wrong) with a note.
 
-![An answer on the Interpretation page](images/ui-30_6-5-brent-answer.png "Question 1 on GeoLink 30/6-5, Brent Group, done after 15 min 29 s: the phase bar, the tabs, and the answer's opening with its findings by confidence, the 10 computed results it rests on and the checker's outcome (here, its last findings stand). Numbers and zones in the answer are links.")
+![An answer on the Interpretation page](images/ui-30_6-5-brent-answer.png "Question 1 on GeoLink 30/6-5, Brent Group, answered: the work folded to one line (14 min 46 s, 14 model calls, 8 steps), then the answer block with the answer's opening, its 5 findings by confidence, the 14 computed results it rests on and the checker's outcome (every number traced to a computed result). Numbers and zones in the answer are links.")
+
+![The work, opened](images/ui-30_6-5-brent-work.png "The work of that question, opened: the fold line (1), the read, and step 1 with its parts: the call (2), its focus (3), what it did at a glance (4), the points to settle (5), what it looked at (6), the results it opened (7), the findings it added (8) and its reasoning (9). Each part, explained: Read the work.")
+
+![How the lithology zones were made](images/ui-tuhua-7-zones-made.png "Under the well plot of Taranaki tuhua-7, McKee Formation, a well without a lithology log: how Petrophys ran, with the lithology step marked; the flow from the input curves through the mineral solver (clastic domain, 13,418 of 13,652 samples solved) to the 11 lithology zones; Petrophys's record in its own words; and the question about the lithology, with its buttons. Data: Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.")
 
 | Tab | What it holds |
 |---|---|
 | **Well logs** | the full plot, track by track, each curve marked measured (LAS) or computed by Petrophys; read every curve at a depth, pick a zone, zoom 2x or 4x; **Open the log viewer** (below); and Petrophys's own log viewer of the interval |
 | **Evidence** | by question part, each claim with its grade, what weakens it, the code's checks and the results it rests on; *All results* lists every result the model read, with a filter |
-| **Investigation log** | the run as it happened: every stage, each step's focus, the results it opened, its claims, the settle step, the writer and the checker's rounds |
+| **Investigation log** | the run as it happened: every stage, each step's focus, the results it opened, its claims and its reasoning, the settle step, the writer and the checker's rounds |
 | **Details** | steps, model calls, tokens, time; the interval and its zones; the topics, measurements and skills used; the data settings and the Petrophys version; the inputs |
 
 `answer.md` and `trace.json` open from the run's header.
+
+![The Well logs tab](images/ui-30_6-5-brent-logs.png "Well logs: the Brent Group as Petrophys interpreted it, track by track, each curve tagged LAS (measured) or PP (computed by Petrophys), with the zones of the lithology log on the left and the flags on the right.") ![The Evidence tab](images/ui-30_6-5-brent-evidence.png "Evidence, by question point: part 1 with its claim C1, of moderate confidence, what it means, what weakens it and the six results it rests on, each a click from its full text.")
+
+![The Investigation log](images/ui-30_6-5-brent-log.png "The Investigation log: what the question was read as, the investigation in numbers and the checker's outcome; the strip of stages; then the cards, here down to step 2, opened to what it looked at, its results, its claim edits, a harness note and its reasoning.")
 
 ### The log viewer
 
@@ -310,6 +322,8 @@ program does:
 
 The viewer changes no result: it draws the well as Petrophys interpreted it for this run.
 
+![The log viewer](images/ui-30_6-5-brent-viewer.png "The log viewer, zoomed to 9 m of the Brent Group (2871–2880 m), every sample drawn. On the left, the whole interval with the part on screen marked. Under the title, every curve read at the depth under the pointer, with its zone. On the right, the tracks with their scales, and every curve of the well to add.")
+
 ### How it was computed
 
 Under the figures, a graph draws what the answer rests on, left to right: the measured logs, the Petrophys steps
@@ -317,7 +331,7 @@ that computed its curves (with key parameters such as Archie's a, m, n and Rw), 
 findings and the answer. Click a box to light up its path, or a number in the answer to follow it back to the measured
 logs. It is drawn from the conversation's evidence graph ([Audit an answer](EVIDENCE.md)).
 
-![How it was computed](images/ui-30_6-5-brent-lineage.png "How it was computed, for that answer: the measured logs, the Petrophys steps that computed its curves with their key parameters, the results the model opened, the findings and the answer. Clicking 2841.0 in the answer lit its path: it appears in E1, E4 and E5, and the steps behind their curves.")
+![How it was computed](images/ui-30_6-5-brent-lineage.png "How it was computed, for that answer, after a click on 0.1988 (the mean total porosity of the zones): the number appears in results E1 and E6. Lit are the measured logs, the Petrophys steps that computed the curve with their key parameters, the two results, the finding that cites them and the answer.")
 
 Under the written answer: **Methods and parameters this answer rests on** (read from the well's record) and the
 **Audit trail**, every number's path from the answer back to the LAS file.
@@ -327,10 +341,11 @@ Under the written answer: **Methods and parameters this answer rests on** (read 
 
 - **The well** plots gamma ray, resistivity, density and neutron, shale volume, porosity, water saturation,
   permeability, the pay flags, the lithology column and the zones.
-- **The work** reads each call's reply as the Investigation log does (a step's focus, its parts, its finding edits,
-  the results it opened, its next actions; the settle step's edits; the writer's length). The reasoning comes from the
-  model server's reasoning field; a server that returns none shows the lines without it, as do runs saved before the
-  reasoning was kept.
+- **The work** shows each call with the parts the Investigation log's cards show: a step's focus, its points to
+  settle (step 1), what it looked at (while the run goes on, what it asks for), the results it opened, its finding
+  edits and any harness note; the settle step's edits; what the checker found before a repair; the writer's length.
+  The reasoning comes from the model server's reasoning field; a server that returns none shows the calls without
+  it, as do runs saved before the reasoning was kept.
 - **A finding** gives its confidence and its reading, a chart of the zone values it rests on for each curve it names
   (with the net-pay step's cutoff, and the zones it names marked), why it matters, what could change it, and a link to
   the computed results it rests on. While the run goes on, the parts fill in with the model's working readings.
@@ -350,7 +365,7 @@ Under the written answer: **Methods and parameters this answer rests on** (read 
 - **Investigation log** opens with a strip of every stage (each step with the results it opened and the claims it
   added or revised), then each stage as a card: the well, the question as read, the first look, each step (its
   focus, what it looked at in plain words, the results it opened, its claims, any harness note), the settle step,
-  the writer and the checker's rounds.
+  the writer and the checker's rounds. Each card of a model call ends with that call's reasoning.
 - **Details** also lists each model call's usage and the checker's rounds.
 </details>
 
@@ -367,6 +382,8 @@ On tuhua-7, with McKee as the interval, "What is the mean gamma ray of the Manga
 > The tops file lists Manganui 2 times (line 3: 874.014-1250.75 m, line 10: 2164.99-2347.42 m). A name listed more
 > than once is not one stretch, so I have not computed on it: which one do you mean, or all of them? Reply with its
 > depths (for example /scope 874.014-1250.75 m), or fix the tops file so each listing has its own name, and ask again.
+
+![The harness asks back](images/ui-tuhua-7-asks.png "The card of that question: the harness's text, one button per choice, and the note that nothing was computed yet.")
 
 with the buttons "Manganui 874.014-1250.75 m", "Manganui 2164.99-2347.42 m" and "all 2 of them". Clicking the first
 asks the same question on that stretch. The run header shows "on Manganui (874.014-1250.75 m) · your choice", and

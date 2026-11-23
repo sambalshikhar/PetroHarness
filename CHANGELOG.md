@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.0.1 (2026-11-23)
+
+The harness, its prompts and its tools are as in 2.0.0: no answer changes.
+
+- **Web UI: a step shows what it produced beside its reasoning.** On the Interpretation page, each step of the work
+  lists its points to settle (step 1), what it looked at, the results it opened and the findings it added or revised,
+  each with its grade, then the model's reasoning for the call; the settle step lists its edits, and a repair what
+  the checker found. In the Investigation log, the cards of the read, each step, the settle step, the writer and each
+  repair end with the call's reasoning. Both views build a step from the same parts.
+- **Web UI fixes.**
+  - A dropped finding keeps its small badge; it drew as a large block.
+  - The answer block shows the items of a list its opening introduces, each by its first sentence; the opening alone
+    ended on its colon.
+  - A long curve name stays inside its box in *How it was computed*.
+  - The reasoning lines shown skip more lines that only announce the reply.
+- **Docs.**
+  - `docs/TOUR.md`: one question from start to finish in the web UI, in pictures, with the command that does the same.
+  - `docs/TRACE.md`: reading the work behind an answer: the calls of a question, which text is checked and which is
+    not, a step part by part, the reasoning, and where each of these is in the files.
+  - `docs/EXAMPLES.md`: five more worked examples, each with the steps of its investigation: a direct question, a
+    conversation that changes the pay cutoffs, a whole well, your own zones, the solved minerals against the
+    lithology log.
+  - The web UI's screenshots are retaken on the page as it is, several with numbered callouts.
+
 ## 2.0.0 (2026-11-23)
 
 - **Licence.** PetroHarness is released under CC BY 4.0 (`LICENSE`).

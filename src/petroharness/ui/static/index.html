@@ -456,7 +456,7 @@ h3.sec:first-child { margin-top: 0; }
 @media (max-width: 640px) { .spart { grid-template-columns: 1fr; } .sc { grid-template-columns: 26px minmax(0, 1fr); gap: 8px; } .sc .ic { width: 26px; height: 26px; } .sc .ic svg { width: 14px; height: 14px; } .sc:not(:last-child) .ic::after { left: 11.25px; top: 28px; } }
 .cl { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .cl li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); }
-.cl .o { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-weight: 800; font-size: 12px; margin-top: 1px; background: var(--code); color: var(--ink); }
+.cl .o { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 5px; display: grid; place-items: center; font-weight: 800; font-size: 12px; margin-top: 1px; background: var(--code); color: var(--ink); }
 .cl .o.add { background: var(--done-soft); color: var(--done); } .cl .o.revise { background: var(--look-soft); color: var(--look); } .cl .o.drop { background: var(--bad-soft); color: var(--bad); }
 .cl .cid { font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--ink); margin-right: 4px; }
 .morebtn { border: 0; background: none; padding: 0; color: var(--accent-ink); font-size: 12.5px; cursor: pointer; }
@@ -729,6 +729,10 @@ details.ritem > summary .apill { min-width: 0; }
 @keyframes blink { 50% { opacity: 0; } }
 .wthink.full { white-space: pre-wrap; max-height: 420px; overflow: auto; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
 .wmore { margin-top: 5px; font-size: 12px; }
+.wcount { padding: 7px 0 0; }
+.wparts { padding: 9px 0 3px; }
+.wparts .wthink { margin-top: 1px; }
+.wparts .wmore { margin-top: 4px; }
 .wtogs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .wtog { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; color: var(--ink-2); cursor: pointer; }
 .wtog.on { border-color: var(--navy); color: var(--navy); }
@@ -810,7 +814,8 @@ details.ritem > summary .apill { min-width: 0; }
 .ln:hover { border-color: var(--faint); }
 .ln:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ln.log { font-family: var(--mono); font-size: 11.5px; padding: 3px 8px; display: flex; justify-content: space-between; gap: 6px; }
-.ln.log small { color: var(--faint); }
+.ln.log small { color: var(--faint); flex: none; }
+.ln.log .lname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ln.step { border-color: var(--pp); background: var(--pp-soft); }
 .ln.step .sh { font-weight: 650; color: var(--pp); }
 .ln.step .sm { color: var(--muted); font-weight: 400; }
@@ -2118,7 +2123,7 @@ function lineageHtml(j) {
       ${s.outs.length ? `<div class="io">→ ${s.outs.map(c => outs.includes(c) ? `<b>${esc(c)}</b>` : esc(c)).join(" ")}</div>` : ""}
       ${keys.length ? `<div class="kp">${keys.map(([a, v]) => `${esc(a)} = ${esc(typeof v === "number" ? +v.toPrecision(5) : v)}`).join(" · ")}</div>` : ""}</div>`; };
   const cols = [
-    `<div class="lin-col"><h4>Measured logs</h4>${M.logs.map(c => `<div class="ln log" tabindex="0" data-node="log:${esc(c.name)}">${esc(c.name)}<small>${esc(c.unit || "")}</small></div>`).join("")}</div>`,
+    `<div class="lin-col"><h4>Measured logs</h4>${M.logs.map(c => `<div class="ln log" tabindex="0" data-node="log:${esc(c.name)}" title="${esc(c.name)}"><span class="lname">${esc(c.name)}</span><small>${esc(c.unit || "")}</small></div>`).join("")}</div>`,
     `<div class="lin-col"><h4><img src="/img/petrophys_mark.png" alt="">Petrophys steps</h4>${M.order.map(step).join("")}</div>`,
     `<div class="lin-col"><h4>Results the model opened</h4>${M.res.map(r => `<div class="ln res" tabindex="0" data-node="res:${esc(r.id)}"><span class="rid">${esc(r.id)}</span><span class="rt">${esc(TOOL_WORDS[r.tool] || (r.tool || "").replace(/_/g, " "))}</span><div class="mono" style="font-size:11px">${esc(resWords(r))}</div></div>`).join("")}</div>`,
     hasClaims ? `<div class="lin-col"><h4>Findings</h4>${M.claims.map(c => `<div class="ln claim" tabindex="0" data-node="claim:${esc(c.id)}"><span class="g ${esc(c.grade)}">${esc(c.grade)}</span><span class="ct">${esc(c.text)}</span></div>`).join("")}</div>` : "",
@@ -2454,6 +2459,56 @@ function journey(nodes) {
   return `<div class="journey">${nodes.map((n, i) => `${i ? `<span class="jline"></span>` : ""}<button class="jn k-${n.kind}${n.live ? " live" : ""}" data-jump="${n.id}" title="${esc(n.title || n.label)}">
     <span class="jc">${n.icon || esc(n.num)}</span><span class="jl">${esc(n.label)}</span><span class="jm">${n.res ? `<span class="r">${MINI.doc}${n.res}</span>` : ""}${n.add ? `<span class="a">+${n.add}</span>` : ""}${n.rev ? `<span class="v">${MINI.pen}${n.rev}</span>` : ""}</span></button>`).join("")}</div>`;
 }
+// ---------- what a stage produced, as labelled parts: the Investigation log's cards and the work lines both show them ----------
+function stepMain(k, m) {                         // the call a step's card speaks for (a question sent on from a look has two step_1 calls: the later one)
+  const cs = m.calls.filter(c => c.type === "step" && c.number === k);
+  return [...cs].reverse().find(c => c.stage === `step_${k}` && c.reply && !c.reply.empty && !c.reply.unreadable) || cs.find(c => c.reply && (c.reply.focus !== undefined)) || cs[0];
+}
+function stepStage(k, m, res, calls, finished, claimsWord) {
+  const cs = m.calls.filter(c => c.type === "step" && c.number === k);
+  const main = stepMain(k, m);
+  const rep = (main && main.reply) || {};
+  const rec = res && res.steps.find(s => s.step === k);
+  const parts = [];
+  if (rep.asks) parts.push(["The question asks", inline(rep.asks)]);
+  const asked = m.calls.find(c => c.stage === `step_${k}_points` && c.reply && c.reply.points);
+  const points = (rep.points && rep.points.length && rep.points) || (asked && asked.reply.points) || (k === 1 && res && res.points.length ? res.points : null);
+  if (points) parts.push(["Points to settle", `<ol class="points2">${points.map(p => `<li>${inline(p)}</li>`).join("")}</ol>`]);
+  const actions = rec ? rec.actions : (rep.next || []);
+  if (actions.length) parts.push([rec ? "Looked at" : "Asks for", more(actions.map(a => pill(a)), 6, `act-${k}`, h => `<div class="apills">${h}</div>`)]);
+  const opened = [...m.resultStep].filter(([, s]) => s === k).map(([id]) => id);
+  if (opened.length) parts.push(["Results", resultChips(opened, m, calls, `res-${k}`)]);
+  const edits = rep.edits && rep.edits.length ? rep.edits : (rec ? rec.edits : []);
+  if (edits && edits.length) parts.push([claimsWord, claimEdits(edits, `ed-${k}`)]);
+  const warns = [];
+  if (rec && rec.edit_msgs && rec.edit_msgs.length) warns.push(...rec.edit_msgs);
+  const fixed = rec && rec.repaired ? {"salvage": "The reply was not one complete JSON object; the harness read the edits and actions it holds.",
+    "salvage, incomplete": "The reply was not complete JSON, nor was its fixed form; the harness read what it could recover.",
+    "fix": "The reply was not valid JSON; the model's fixed reply was read."}[rec.repaired] : "";
+  if (fixed) warns.push(fixed); else if (rec && rec.error) warns.push(rec.error);
+  else if (rep.salvaged && !rec) warns.push("The reply was not one complete JSON object; the harness read the edits and actions it holds.");
+  else if (rep.unreadable && !(rec && rec.focus !== undefined)) warns.push(`The reply could not be read as JSON${finished ? "" : "; the harness asks the model to fix it"}.`);
+  if (warns.length) parts.push(["Harness notes", `<div class="warnline">${warns.map(esc).join("\n")}</div>`]);
+  if (rec && rec.stopped) parts.push(["Stopped", esc(rec.stopped)]);
+  const done = rep.done || (rec && rec.done);
+  const counts = (points ? cnt(MINI.flag, points.length, points.length === 1 ? "point to settle" : "points to settle") : "") + cnt(MINI.eye, actions.length, "looked at") +
+    cnt(MINI.doc, opened.length, opened.length === 1 ? "result" : "results") + editCounts(edits) + cnt(MINI.warn, warns.length, warns.length === 1 ? "harness note" : "harness notes", "cw") +
+    (done ? `<span class="cdone">${MINI.ok}points settled</span>` : "");
+  return {cs, main, parts, counts, focus: (rec && rec.focus) || rep.focus, opened, edits};
+}
+// what the checker found in a round, as labelled parts
+function checkerFound(r) {
+  return [["Numbers no result shows", r.unsupported], ["Words about the process", r.process], ["Statements the record contradicts", r.contradictions], ["Working notes", r.leaks]]
+    .filter(([, v]) => v && v.length).map(([l, v]) => [l, `<div class="warnline">${v.map(esc).join(l.startsWith("Numbers") ? ", " : "\n")}</div>`]);
+}
+// a call's reasoning: its last lines that say something, the whole of it on a click (the model's working notes, never checked)
+function thinkPart(c) {
+  const r = (c && c.reply) || {};
+  if (!r.thinking) return "";
+  const key = `w:th-${c.n}`, full = !!S.det[key], tail = thinkTail(r.thinking, 3);
+  return (full ? `<div class="wthink full">${esc(r.thinking)}</div>` : tail.length ? `<div class="wthink">${tail.map(l => `<div>${esc(clip(l, 260))}</div>`).join("")}</div>` : "") +
+    `<button class="morebtn wmore" data-more="${key}">${full ? "Show the last lines" : `All of its reasoning (${fmtN(r.thinking_chars || r.thinking.length)} characters)`}</button>`;
+}
 function storyPane(j, m, res, finished, calls) {
   const live = c => !finished && c && !c.reply;
   const out = [], nodes = [], stepKeys = [];
@@ -2483,6 +2538,8 @@ function storyPane(j, m, res, finished, calls) {
     if (route) parts.push(["Read as", esc(routeText(route))]);
     if (res && res.absent && res.absent.length) parts.push(["Not in this well", res.absent.map(a => esc(a.name)).join(", ")]);
     if (rep.unreadable) parts.push(["Reply", `<div class="warnline">The reply could not be read${reads.length > 1 ? "" : "; it is asked once more"}.</div>`]);
+    const rth = thinkPart(r);
+    if (rth) parts.push(["Reasoning", rth]);
     const lv = live(reads[reads.length - 1]);
     out.push(card("read", "Reading the question", rep.topics ? topicsHtml(rep.topics) : "", parts, callMeta(reads), lv, false, {id: "st-read"}));
     nodes.push({kind: "read", label: "Read", id: "st-read", icon: ICONS.read, live: lv});
@@ -2497,41 +2554,13 @@ function storyPane(j, m, res, finished, calls) {
   // the steps
   const steps = [...new Set(m.calls.filter(c => c.type === "step").map(c => c.number))].sort((a, b) => a - b);
   for (const k of steps) {
-    const cs = m.calls.filter(c => c.type === "step" && c.number === k);
-    // a question sent to an investigation after a look has two step_1 calls: the card shows the later one, the investigation's
-    const main = [...cs].reverse().find(c => c.stage === `step_${k}` && c.reply && !c.reply.empty && !c.reply.unreadable) || cs.find(c => c.reply && (c.reply.focus !== undefined)) || cs[0];
-    const rep = (main && main.reply) || {};
-    const rec = res && res.steps.find(s => s.step === k);
-    const parts = [];
-    if (rep.asks) parts.push(["The question asks", inline(rep.asks)]);
-    const asked = m.calls.find(c => c.stage === `step_${k}_points` && c.reply && c.reply.points);
-    const points = (rep.points && rep.points.length && rep.points) || (asked && asked.reply.points) || (k === 1 && res && res.points.length ? res.points : null);
-    if (points) parts.push(["Points to settle", `<ol class="points2">${points.map(p => `<li>${inline(p)}</li>`).join("")}</ol>`]);
-    const actions = rec ? rec.actions : (rep.next || []);
-    if (actions.length) parts.push([rec ? "Looked at" : "Asks for", more(actions.map(a => pill(a)), 6, `act-${k}`, h => `<div class="apills">${h}</div>`)]);
-    const opened = [...m.resultStep].filter(([, s]) => s === k).map(([id]) => id);
-    if (opened.length) parts.push(["Results", resultChips(opened, m, calls, `res-${k}`)]);
-    const edits = rep.edits && rep.edits.length ? rep.edits : (rec ? rec.edits : []);
-    if (edits && edits.length) parts.push(["Claims", claimEdits(edits, `ed-${k}`)]);
-    const warns = [];
-    if (rec && rec.edit_msgs && rec.edit_msgs.length) warns.push(...rec.edit_msgs);
-    const fixed = rec && rec.repaired ? {"salvage": "The reply was not one complete JSON object; the harness read the edits and actions it holds.",
-      "salvage, incomplete": "The reply was not complete JSON, nor was its fixed form; the harness read what it could recover.",
-      "fix": "The reply was not valid JSON; the model's fixed reply was read."}[rec.repaired] : "";
-    if (fixed) warns.push(fixed); else if (rec && rec.error) warns.push(rec.error);
-    else if (rep.salvaged && !rec) warns.push("The reply was not one complete JSON object; the harness read the edits and actions it holds.");
-    else if (rep.unreadable && !(rec && rec.focus !== undefined)) warns.push(`The reply could not be read as JSON${finished ? "" : "; the harness asks the model to fix it"}.`);
-    if (warns.length) parts.push(["Harness notes", `<div class="warnline">${warns.map(esc).join("\n")}</div>`]);
-    if (rec && rec.stopped) parts.push(["Stopped", esc(rec.stopped)]);
-    const done = rep.done || (rec && rec.done);
-    const counts = (points ? cnt(MINI.flag, points.length, points.length === 1 ? "point to settle" : "points to settle") : "") + cnt(MINI.eye, actions.length, "looked at") +
-      cnt(MINI.doc, opened.length, opened.length === 1 ? "result" : "results") + editCounts(edits) + cnt(MINI.warn, warns.length, warns.length === 1 ? "harness note" : "harness notes", "cw") +
-      (done ? `<span class="cdone">${MINI.ok}points settled</span>` : "");
-    const focus = (rec && rec.focus) || rep.focus;
-    const lv = live(cs[cs.length - 1]);
+    const st = stepStage(k, m, res, calls, finished, "Claims");
+    const th = thinkPart(st.main);
+    if (th) st.parts.push(["Reasoning", th]);
+    const lv = live(st.cs[st.cs.length - 1]);
     stepKeys.push(`st-step-${k}`);
-    out.push(card("step", `Step ${k}`, focus ? inline(focus) : "", parts, callMeta(cs), lv, false, {key: `st-step-${k}`, counts, id: `st-step-${k}`, open: !finished && k === steps[steps.length - 1]}));
-    nodes.push({kind: "step", label: `Step ${k}`, num: k, id: `st-step-${k}`, title: focus || "", res: opened.length, add: (edits || []).filter(e => e.op === "add").length, rev: (edits || []).filter(e => e.op === "revise").length, live: lv});
+    out.push(card("step", `Step ${k}`, st.focus ? inline(st.focus) : "", st.parts, callMeta(st.cs), lv, false, {key: `st-step-${k}`, counts: st.counts, id: `st-step-${k}`, open: !finished && k === steps[steps.length - 1]}));
+    nodes.push({kind: "step", label: `Step ${k}`, num: k, id: `st-step-${k}`, title: st.focus || "", res: st.opened.length, add: (st.edits || []).filter(e => e.op === "add").length, rev: (st.edits || []).filter(e => e.op === "revise").length, live: lv});
   }
   // settle
   const settles = m.calls.filter(c => c.type === "settle");
@@ -2539,6 +2568,8 @@ function storyPane(j, m, res, finished, calls) {
     const rep = settles[0].reply || {}, st = res && res.settle;
     const head = st ? `With every result in view, the claims were made final: ${fmtN(st.claims_after)} claim${st.claims_after === 1 ? "" : "s"}.` : "With every result in view, the claims are made final.";
     const parts = rep.edits && rep.edits.length ? [["Claims", claimEdits(rep.edits, "ed-settle")]] : [];
+    const sth = thinkPart(settles[0]);
+    if (sth) parts.push(["Reasoning", sth]);
     const lv = live(settles[settles.length - 1]);
     out.push(card("settle", "Settle", head, parts, callMeta(settles), lv, false, {key: "st-settle", id: "st-settle", counts: rep.edits ? (rep.edits.length ? editCounts(rep.edits) : `<span>no edits</span>`) : ""}));
     nodes.push({kind: "settle", label: "Settle", id: "st-settle", icon: ICONS.settle, add: (rep.edits || []).filter(e => e.op === "add").length, rev: (rep.edits || []).filter(e => e.op === "revise").length, live: lv});
@@ -2549,6 +2580,8 @@ function storyPane(j, m, res, finished, calls) {
     const last = [...writers].reverse().find(c => c.reply) || writers[writers.length - 1];
     const rep = last.reply || {};
     const parts = rep.draft != null ? [["Draft", `<pre class="rawpre">${esc(rep.draft)}${rep.chars > rep.draft.length ? "\n…" : ""}</pre>`]] : [];
+    const wth = thinkPart(last);
+    if (wth) parts.push(["Reasoning", wth]);
     const lv = live(writers[writers.length - 1]);
     out.push(card("writer", "Writing the answer", "Concluded once, from the claims, every opened result (they decide where the two differ) and a card of what each curve is.", parts, callMeta(writers), lv, true,
       {key: "st-writer", id: "st-writer", counts: rep.chars ? cnt(MINI.pen, fmtN(rep.chars), "characters drafted") : ""}));
@@ -2556,8 +2589,7 @@ function storyPane(j, m, res, finished, calls) {
   }
   // the checker and its repairs
   const vr = (res && res.verify_rounds) || [];
-  const findings = r => [["Numbers no result shows", r.unsupported], ["Words about the process", r.process], ["Statements the record contradicts", r.contradictions], ["Working notes", r.leaks]]
-    .filter(([, v]) => v && v.length).map(([l, v]) => [l, `<div class="warnline">${v.map(esc).join(l.startsWith("Numbers") ? ", " : "\n")}</div>`]);
+  const findings = checkerFound;
   const nfind = r => r ? ["unsupported", "process", "contradictions", "leaks"].reduce((a, k) => a + ((r[k] || []).length), 0) : 0;
   const rounds = [...new Set(m.calls.filter(c => c.type === "repair").map(c => c.number))];
   for (const n of rounds) {
@@ -2566,6 +2598,8 @@ function storyPane(j, m, res, finished, calls) {
     const parts = r ? findings(r) : [["Findings", `<pre class="rawpre">${esc(cs[0].findings || "")}</pre>`]];
     const rep = cs[cs.length - 1].reply;
     if (rep && rep.draft != null) parts.push(["Repaired", `<pre class="rawpre">${esc(rep.draft)}</pre>`]);
+    const pth = thinkPart(cs[cs.length - 1]);
+    if (pth) parts.push(["Reasoning", pth]);
     const lv = live(cs[cs.length - 1]);
     out.push(card("repair", `Check · repair ${n}`, "The checker found something to fix and sent the draft back to the writer.", parts, callMeta(cs), lv, true,
       {key: `st-repair-${n}`, id: `st-repair-${n}`, counts: cnt(MINI.warn, nfind(r), nfind(r) === 1 ? "finding" : "findings", "cw")}));
@@ -3129,7 +3163,7 @@ function finding(c, w, calls, m, shown) {
 // ---------- the work, as it happens: each model call on a line, with the last lines of its reasoning ----------
 // The reasoning is the model's own working notes for the call (the server's reasoning text): shown as it is, never
 // checked; the answer's numbers are the checked part.
-const THINK_SKIP = /^(?:let me (?:write|output|produce|format|now)|let's (?:write|output|produce)|now (?:i'll|i will|let me) (?:write|output|produce)|i'?ll (?:write|output|produce|reply|respond|return)|(?:reply|respond|return|output|answer) (?:with )?only\b|only (?:the )?json\b|(?:the )?(?:final )?(?:json|output|answer) ?(?:is|:)?\s*$|\[… [\d,]+ characters left out …\])/i;
+const THINK_SKIP = /^(?:let me (?:write|output|produce|format|reply|respond|now)|let's (?:write|output|produce)|now (?:i'll|i will|let me) (?:write|output|produce)|now,? (?:write |output |produce )?(?:the |valid )?json\b|i'?ll (?:write|output|produce|reply|respond|return)|(?:reply|respond|return|output|answer) (?:with )?(?:only\b|(?:the |valid )?json\b)|only (?:the )?json\b|(?:the )?(?:final )?(?:json|output|answer) ?(?:is|:)?\s*$|\[… [\d,]+ characters left out …\])/i;
 function thinkTail(text, n) {                     // the last n lines of a call's reasoning that say something
   const lines = String(text || "").split(/\n+/).map(l => l.trim())
     .filter(l => l && !/^[{}\[\]"`]/.test(l) && !/^[-=*_#]{3,}$/.test(l) && !THINK_SKIP.test(l));
@@ -3189,10 +3223,27 @@ function liveUpdate(j) {                          // between re-renders: the cal
   box.innerHTML = liveLines(j.live, c);
   const meta = $("#livemeta"); if (meta) meta.textContent = liveMeta(j.live, c);
 }
-function workHtml(j, m, finished) {
+// what a call produced, as the Investigation log's cards show it: a step's actions, results and findings, the settle
+// step's findings, what the checker found before a repair
+function workParts(c, m, res, calls, finished) {
+  const r = c.reply || {};
+  if (!c.reply || r.error) return {parts: [], counts: ""};
+  if (c.type === "step") {
+    const main = stepMain(c.number, m);
+    if (!main || main.n !== c.n) return {parts: [], counts: ""};
+    const st = stepStage(c.number, m, res, calls, finished, "Findings");
+    return {parts: st.parts.filter(([l]) => l !== "The question asks"), counts: st.counts, focus: st.focus};
+  }
+  if (c.type === "settle") return {parts: r.edits && r.edits.length ? [["Findings", claimEdits(r.edits, "ed-settle")]] : [], counts: r.edits ? (r.edits.length ? editCounts(r.edits) : `<span>no edits</span>`) : ""};
+  if (c.type === "repair") {
+    const round = ((res && res.verify_rounds) || [])[c.number - 1];
+    return {parts: round ? checkerFound(round) : c.findings ? [["The checker found", `<pre class="rawpre">${esc(c.findings)}</pre>`]] : [], counts: ""};
+  }
+  return {parts: [], counts: ""};
+}
+function workHtml(j, m, finished, res, calls) {
   if (!m.calls.length) return "";
   const live = c => !finished && !c.reply;
-  const secs = m.calls.reduce((s, c) => s + ((c.reply && c.reply.seconds) || 0), 0);
   const steps = m.lastStep;
   const open = S.det["w:work"] ?? !finished;
   const head = finished
@@ -3203,20 +3254,23 @@ function workHtml(j, m, finished) {
   const anyThink = m.calls.some(c => c.reply && c.reply.thinking);
   html += `<div class="wlist">`;
   for (const c of m.calls) {
-    const r = c.reply || {}, isLive = live(c), key = `w:th-${c.n}`, full = !!S.det[key];
-    const tail = thinkTail(r.thinking, 3);
+    const r = c.reply || {}, isLive = live(c);
     const time = isLive ? `<span id="calltime" data-t0="${c.t || 0}">${fmtS(Math.max(0, (+j.elapsed || 0) - (c.t || 0)))}</span>` : r.seconds != null ? `${Math.round(r.seconds)} s` : "";
+    const wp = isLive ? {parts: [], counts: ""} : workParts(c, m, res, calls, finished);
+    const th = isLive ? "" : thinkPart(c);
+    // a call with parts says its focus, then counts, then the parts with the reasoning last; another says what it came back with
+    const did = wp.parts.length || wp.counts ? (wp.focus ? esc(clip(wp.focus, 300)) : "") : workDid(c, m);
+    const parts = wp.parts.length && th ? [...wp.parts, ["Reasoning", th]] : wp.parts;
     html += `<div class="wrow${isLive ? " live" : ""}${r.error ? " bad" : ""}">
       <div class="wic">${isLive ? `<span class="spin"></span>` : r.error ? MINI.warn : MINI.ok}</div>
       <div class="wbody"><div class="whead"><span class="wl">${esc(workLabel(c, isLive))}</span><span class="wt">${time}</span></div>
         ${isLive ? `<div class="wdid" id="livemeta">${liveMeta(j.live, c)}</div><div class="wthink live" id="livethink" data-n="${c.n}">${liveLines(j.live, c)}</div>`
-          : (() => { const d = workDid(c, m); return d ? `<div class="wdid">${d}</div>` : ""; })()}
-        ${tail.length && !full ? `<div class="wthink">${tail.map(l => `<div>${esc(clip(l, 260))}</div>`).join("")}</div>` : ""}
-        ${full ? `<div class="wthink full">${esc(r.thinking)}</div>` : ""}
-        ${r.thinking ? `<button class="morebtn wmore" data-more="${key}">${full ? "Show the last lines" : `All of its reasoning (${fmtN(r.thinking_chars || r.thinking.length)} characters)`}</button>` : ""}</div></div>`;
+          : did ? `<div class="wdid">${did}</div>` : ""}
+        ${wp.counts ? `<div class="scount wcount">${wp.counts}</div>` : ""}
+        ${parts.length ? `<div class="sparts wparts">${parts.map(([l, v]) => `<div class="spart"><span class="lb">${l}</span><div class="vl">${v}</div></div>`).join("")}</div>` : th}</div></div>`;
   }
   html += `</div>`;
-  if (anyThink) html += `<div class="wnote">The grey lines are the model's own reasoning for each call: its working notes, not checked. The checked part is the answer: every number in it is traced to a computed result.</div>`;
+  html += `<div class="wnote">Under each step: what it looked at, the results it opened and the findings it added or revised${anyThink ? `, then the model's own reasoning for the call in grey. The reasoning is its working notes, not checked` : ""}. The checked part is the answer: every number in it is traced to a computed result.</div>`;
   return html + `</section>`;
 }
 // ---------- under the plot: how the lithology zones were made, and a question about the lithology ----------
@@ -3317,6 +3371,13 @@ function lithTable(w) {
     ${rows.map(e => `<tr><td class="nw"><span class="swatch" style="background:${lithColor(e.lith)}"></span>${esc(e.lith)}</td><td class="num">${e.n}</td><td class="num">${fmtV(e.thick)}</td>
       <td class="num"><span class="lshare"><span class="ltrack"><span class="lbar" style="width:${Math.max(1, Math.round(e.share))}%;background:${lithColor(e.lith)}"></span></span><span>${e.share.toFixed(1)}%</span></span></td></tr>`).join("")}</tbody></table></div>`;
 }
+// an answer's opening that introduces a list ("... the reads are:") is shown with the list's items, each by its first
+// sentence (at most 6): the opening alone would end on its colon
+function leadList(sents, next) {
+  if (sents.length > 2 || !/:$/.test(sents[sents.length - 1] || "") || !next) return "";
+  const items = next.split(/\n(?=\s*(?:[-*]|\d+[.)])\s)/).filter(x => /^\s*(?:[-*]|\d+[.)])\s/.test(x));
+  return items.length ? "\n\n" + items.slice(0, 6).map(x => x.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s+(?=[A-Z(*])/)[0]).join("\n") : "";
+}
 function mainPane(j, m, res, finished, calls) {
   const w = m.well && !m.well.error ? m.well : null;
   if (w) S.wellData = w;
@@ -3346,7 +3407,7 @@ function mainPane(j, m, res, finished, calls) {
             <div class="wnote">Zone values are plain means of each zone's samples (permeability: the median), for orientation.</div>` : ""}`; })()}</section>`;
   } else if (!finished && m.phase.interpreting) html += `<section class="chap"><h2 class="ch2">The well</h2><div class="thinking"><span class="spin"></span>Petrophys is interpreting the well; its logs appear here.</div></section>`;
   // 2. the work: each model call, with the last lines of its reasoning (folded once the answer is in)
-  html += workHtml(j, m, finished);
+  html += workHtml(j, m, finished, res, calls);
   // 3. the answer (or the question back to the user)
   if (finished && j.status !== "done" && !j.answer) return html + errorBox(j, j.result);
   const asked = finished && res && res.ask;
@@ -3356,7 +3417,8 @@ function mainPane(j, m, res, finished, calls) {
     const ck = checkerState(res), unresolved = res && res.status === "unresolved_numbers";
     // sentences end at . ! or ? before a space and a capital (a decimal point never ends one)
     const sents = paras[0].replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s+(?=[A-Z(*])/);
-    const lead = sents.slice(0, 2).join(" "), more = sents.length > 2 || paras.length > 1 || ans.secs.length > 1;
+    const more = sents.length > 2 || paras.length > 1 || ans.secs.length > 1;
+    const lead = sents.slice(0, 2).join(" ") + leadList(sents, paras[1]);
     html += `<section class="hero"><div class="hl">The answer</div>${notesHtml(res)}<div class="prose lead">${md(lead, {nums: true})}</div>
       ${more ? `<button class="link" data-jump="full">Read the whole answer ↓</button>` : ""}
       ${res ? `<div class="heromt"><span class="stat"><b>${res.claims.length}</b>findings</span>${res.claims.length ? `<span class="gbwrap">${gradeBar(res.claims)}</span>` : ""}<span class="stat"><b>${res.opened.length}</b>computed results</span>
