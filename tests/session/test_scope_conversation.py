@@ -179,6 +179,12 @@ def test_frame_lithology_and_zones_files_mid_conversation(env, tmp_path):
     assert "- **Zones:** yours, from zones.csv (2; the lithology zones are kept as L ids)" in head, head
     assert ("Zones changed before question 2 (by the user): your zones from zones.csv frame the interval (Z ids); the "
             "lithology zones keep L ids. Results E1 to E2 were read under the earlier zones" in model.last("step_1"))
+    said = [ln for ln in model.last("step_1").splitlines() if "cut anew" in ln or ln.startswith("  then Z")]
+    ev = c.log.events("zones")[0]                                    # the zones before and after, in the log
+    assert len(ev["zones_now"]) == 2 and len(ev["zones_before"]) > 2
+    assert said[0].startswith(f"The zones were cut anew: {len(ev['zones_before'])} before, 2 now.")
+    assert len(said) == 1 + len(ev["zones_before"]) and ": now inside Z1 " in said[1]     # each lithology zone of before
+    assert all("zones as cut then" in c.live.ledger.digest(e) for e in c.live.ledger.items[:2])
     assert CH.command(c, "/frame lithology") == "from question 3: by the lithology zones"
     _, s3 = _ask(c, model, "By lithology?", [])
     assert re.search(r"^  L1 ", s3.text, re.M) and not re.search(r"^  Z\d ", s3.text, re.M)

@@ -68,3 +68,31 @@ def test_a_tape_replays_to_a_streaming_client_and_to_a_whole_one(tmp_path):
         assert llm.chat("read", msgs, u, 100) == '{"a": 1}' and r.left() == 0
         assert llm.last_reasoning == "Mean PHIE of Z1." and u.log[-1]["completion_tokens"] == 8
         assert heard == (["reasoning", "content"] if streams else [])
+
+
+def test_a_reply_left_as_it_ran_on_is_taped_as_far_as_it_was_read_and_replays_the_same(tmp_path):
+    """A reply that runs whitespace is ended by its reader (llm.WHITESPACE_RUN). The tape keeps the call with what was
+    read of it, so a replay makes the same call, meets the same reply and leaves it at the same place: an empty
+    reply again, and the next call is the tape's next."""
+    from petroharness.llm import RAN_ON, WHITESPACE_RUN
+    ran_on = [_chunk(reasoning="topics first."), _chunk(content='{"topics": ["porosity"]')] \
+        + [_chunk(content=" " * 50) for _ in range(40)]
+    good = [_chunk(content='{"a": 1}', finish="stop"), _chunk(usage=SimpleNamespace(prompt_tokens=9, completion_tokens=8, total_tokens=17))]
+    served = iter([iter(ran_on), iter(good)])
+    src = LLM(HarnessConfig(model=ModelConfig(reasoning=True)))
+    src.client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kw: next(served))))
+    calls = tape.record(src, tmp_path / "t.jsonl")
+    msgs, u, schema = [{"role": "user", "content": "q"}], Usage(), {"type": "object"}
+    assert src.chat("read", msgs, u, 100, json_schema=schema) == "" and u.log[-1]["finish_reason"] == RAN_ON
+    assert src.chat("read_retry", msgs, u, 100, json_schema=schema) == '{"a": 1}'
+    assert len(calls) == 2 and "stream" not in calls[0]["request"]
+    kept = calls[0]["reply"]["content"]
+    assert kept.startswith('{"topics"') and len(kept) - len(kept.rstrip()) == WHITESPACE_RUN and calls[0]["reply"]["finish_reason"] is None
+    rec = tape.load(tmp_path / "t.jsonl")
+    again, v = LLM(HarnessConfig(model=ModelConfig(reasoning=True))), Usage()
+    r = tape.replay(again, rec)
+    assert again.chat("read", msgs, v, 100, json_schema=schema) == "" and v.log[-1]["discarded"] == u.log[0]["discarded"]
+    assert again.chat("read_retry", msgs, v, 100, json_schema=schema) == '{"a": 1}' and r.left() == 0
+    timing = lambda log: [{k: x for k, x in e.items() if k != "seconds"} for e in log]
+    assert timing(v.log) == timing(u.log)
+

@@ -14,7 +14,7 @@ from typing import Annotated, Any, Callable, Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from petroharness.llm import LLM, Usage, assistant_turn
+from petroharness.llm import LLM, STOPPED, Stopped, Usage, assistant_turn
 
 from petroharness.agent import components as C
 from petroharness import options
@@ -961,6 +961,9 @@ def turn(task, model_key: str, rep: int, max_steps: int = MAX_STEPS, writer: str
     try:
         out = (GRAPH if session is None else LATER).invoke({"max_steps": max_steps}, context=run, config=_CONFIG)
         text, status = out["answer"], out["status"]
+    except Stopped:                                  # its user stopped it: nothing to deliver, and no failure
+        trace["stopped"] = True
+        text, status = "", STOPPED
     except Exception as exc:                         # one question's failure is recorded, the run goes on
         trace["error"] = f"{type(exc).__name__}: {exc}"
         trace["traceback"] = traceback.format_exc()[-4000:]

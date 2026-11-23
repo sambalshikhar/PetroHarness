@@ -499,6 +499,7 @@ class Job:
         self.conversation: dict = {}       # {root, turn, thread: [{turn, question, run}]}, once the question ran
         self.saved = False                 # its finished record is on disk (the server sets it after saving)
         self.live: dict = {}               # the model call in flight as it streams (progress.Observed); never saved
+        self.stop = threading.Event()      # set when its user stops it (the page's Stop): the run ends "stopped"
         self._lock = threading.Lock()
 
     def emit(self, event: dict) -> None:
@@ -558,7 +559,7 @@ def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | No
     harness's own LLM)."""
     import shutil
 
-    from petroharness.llm import LLM
+    from petroharness.llm import LLM, Stopped
     from petroharness.session import Conversation
 
     base = model_factory or LLM
@@ -577,7 +578,8 @@ def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | No
         kw = dict(job.kwargs)
         question = kw.pop("question")
         numbers = itertools.count(1)                         # one numbering for the run's calls (the question's client
-        factory = lambda cfg: Observed(base(cfg), job.emit, numbers, live=job.set_live)   # and the figures call's)
+        factory = lambda cfg: Observed(base(cfg), job.emit, numbers, live=job.set_live,   # and the figures call's)
+                                       stop=job.stop.is_set)
         session = (root_out or out) / "session"
         with _asking(session):
             if root_out is None:
@@ -606,6 +608,8 @@ def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | No
             if scope is not None:                         # a stretch the user chose (an answer to a question back)
                 got = c.set_scope([str(x) for x in scope], chosen=True)
                 job.emit({"kind": "scope", "scope": got})
+            if job.stop.is_set():                         # stopped while the well was interpreted: not asked
+                raise Stopped("before the question was read")
             turn = c.ask(question)
             runs = json.loads((session / "runs.json").read_text(encoding="utf-8")) if (session / "runs.json").exists() else {}
             runs[str(turn.number)] = job.id
@@ -624,9 +628,11 @@ def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | No
         job.result["basis"] = turn.basis
         if turn.trace.get("settings"):                    # the conversation's settings changed: in force, and how
             job.result["settings_changes"] = turn.trace["settings"]
-        job.status = "done" if turn.ok else "error"
-        if not turn.ok:
+        job.status = "stopped" if turn.stopped else "done" if turn.ok else "error"
+        if not turn.ok and not turn.stopped:
             job.error = str(turn.trace.get("error") or turn.status)
+    except Stopped:                                            # before its question entered the conversation
+        job.status = "stopped"
     except (ValueError, LookupError, OSError) as exc:          # the inputs (ask's own checks): said as ask says them
         job.status, job.error = "error", str(exc)
     except Exception as exc:  # noqa: BLE001  (one question's failure is recorded; the server goes on)

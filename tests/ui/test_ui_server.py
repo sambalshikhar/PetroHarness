@@ -815,3 +815,24 @@ def test_an_opening_that_introduces_a_list_is_shown_with_its_items():
     assert "leadList(sents, paras[1])" in _js_function(page, "mainPane")
     lead = _js_function(page, "leadList")
     assert "/:$/.test(" in lead and "slice(0, 6)" in lead and "sents.length > 2" in lead
+
+
+def test_the_composers_button_stops_the_question_in_flight():
+    """While a question is waiting or running the composer's one button is Stop, not a disabled Ask: a click posts
+    /api/stop/<id>, the button waits ("Stopping") until the run ends, and Enter asks nothing meanwhile. A stopped run
+    is no failure on the page: its own box, its status, and the next question of its conversation follows it."""
+    page = (U.STATIC / "index.html").read_text()
+    button = _js_function(page, "askButton")
+    assert "STOP_ICON" in button and "ASK_ICON" in button and '"Stop this question"' in button
+    assert "b.disabled = !!(j && stopping)" in button                # enabled while it runs, until Stop is pressed
+    assert "askButton(running ? j : null)" in _js_function(page, "chipsRender")
+    assert "post(`/api/stop/${j.id}`, {})" in _js_function(page, "stopRun")
+    assert '$("#ask").onclick = () => (isRunning() ? stopRun() : ask());' in page
+    assert "if (!isRunning() && !$(\"#ask\").disabled) ask();" in page       # Enter never asks over a running question
+    assert 'e.name === "stopping"' in _js_function(page, "stoppingNow")       # pressed in another tab: the run says so
+    assert 'if (j.status === "stopped") return stoppedBox(j, res);' in _js_function(page, "errorBox")
+    assert "No answer was written." in _js_function(page, "stoppedBox")
+    assert 'j.status === "stopped" && j.conversation && j.conversation.turn' in _js_function(page, "composerFor")
+    assert '"Stopped before it was answered."' in _js_function(page, "turnHtml")
+    assert ".status.stopped {" in page and ".stopbox {" in page
+

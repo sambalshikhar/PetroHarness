@@ -265,7 +265,7 @@ A new tool's description goes into `tool_descriptions.json` ([TOOLS_REFERENCE.md
 | `settle_lists` | `settle_lists.json` | `{items}` per list | the BOOKKEEPING head and its `named`, `unused` and `hypotheses` lists | `settle.bookkeeping` |
 | `section_owners` | `section_owners.json` | | frame header to owning component (section 8) | `components.headers` |
 | `read_outside` | `read_outside.md` | | the READ prompt's line offering the `outside` depth: a request not about this well's logs | `read.read_question` |
-| `read_scope` | `read_scope.md` | | the READ prompt's `scope` key: the stretches the question is about, one item each | `read.read_question`, `read._with_scope` |
+| `read_scope` | `read_scope.md` | | the READ prompt's `scope` key: the stretches the question is about, one item each. In a conversation with a scope in force, `Scope in force: [...]` follows, each item as a reply can write it (a name the map lists once, else its depth range: `selection.as_written`) | `read.read_question`, `read._with_scope` |
 | `read_scope_again` | `read_scope_again.md` | `{reason}` | `SCOPE NOT USED: ...`: READ asked once more, single-turn, with the resolver's reason | `read.read_question` |
 
 `step_last.md`, filled with `done="set done to true"`:
@@ -466,7 +466,16 @@ data_quality - hole condition, tool and environmental effects, spikes, gaps, dep
 ...
 ```
 
-The call carries a JSON schema (`read.read_schema`). Stages `read` and `read_retry`; owners `C1`, `C5`.
+The call carries a JSON schema (`read.read_schema`). The benchmark's reply chooses its `depth` from two words and
+names at least one topic. Where a request may be outside the well's logs (reach well, the depth read), the reply
+can hold what the model means either way:
+
+- `depth` is one word as the model writes it, and only `outside` is read as outside. With a list of three words to
+  choose from, a reply whose reasoning meant another word (step 1's `compare`) came out as `outside`.
+- `topics` may be none. A reply that had to name a topic for a request that needs none went on as for a question
+  about the well.
+
+Stages `read` and `read_retry`; owners `C1`, `C5`.
 
 </details>
 

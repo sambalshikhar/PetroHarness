@@ -175,6 +175,7 @@ body.dragging::after { content: "Drop a LAS file, a tops or zones table, or fiel
 .status.queued { background: var(--code); }
 .status.done { background: var(--done-soft); color: var(--done); border-color: transparent; }
 .status.error, .status.interrupted { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.status.stopped { background: var(--code); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 12px; }
 
 /* progress phases */
@@ -186,6 +187,7 @@ body.dragging::after { content: "Drop a LAS file, a tops or zones table, or fiel
 .ph.done { color: var(--ink-2); } .ph.done .b { background: var(--done); border-color: var(--done); color: #fff; }
 .ph.cur { color: var(--accent-ink); font-weight: 650; } .ph.cur .b { border-color: var(--accent); }
 .ph.fail { color: var(--bad); } .ph.fail .b { background: var(--bad); border-color: var(--bad); color: #fff; }
+.ph.halt { color: var(--ink-2); font-weight: 650; } .ph.halt .b { border-color: var(--ink-2); font-size: 8px; }
 .bar { flex: 1; min-width: 14px; height: 2px; background: var(--line); margin: 0 8px; }
 .bar.done { background: var(--done); }
 .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: sp .9s linear infinite; flex: none; }
@@ -374,6 +376,8 @@ h3.sec:first-child { margin-top: 0; }
 .rate textarea { min-height: 64px; }
 .v-good { color: var(--done); font-weight: 650; } .v-partly { color: var(--warn); font-weight: 650; } .v-wrong { color: var(--bad); font-weight: 650; }
 .errbox { background: var(--bad-soft); color: var(--bad); border-radius: 10px; padding: 12px 16px; font-size: 13.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.stopbox { background: var(--code); color: var(--ink-2); border-radius: 10px; padding: 12px 16px; font-size: 13.5px; }
+.stopbox b { color: var(--ink); }
 .errbox pre { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; margin: 8px 0 0; color: var(--ink-2); }
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 50; }
 
@@ -1576,7 +1580,7 @@ function chipsRender() {
     box.innerHTML = `<span class="cchip lock" title="This conversation's well and interval"><span class="k">Well</span><span class="v">${esc(wellName(inp))} · ${esc(intervalName(inp))}</span></span>
       <button class="cchip${pend.length ? " pend" : ""}" id="cset" title="Change the interpretation settings for the next questions"${running ? " disabled" : ""}>${mark}<span class="v">${pend.length ? `${pend.length} change${pend.length > 1 ? "s" : ""} from the next question` : nNow ? `${nNow} interpretation setting${nNow > 1 ? "s" : ""} changed` : "Petrophys defaults"}</span><span class="k">· change</span></button>
       <button class="cchip ghost" id="cnew">+ New conversation</button>`;
-    $("#cmode").innerHTML = running ? `Question ${turnNo(j) || n} is being answered<span class="long">; ask the next one when it finishes</span>.` :
+    $("#cmode").innerHTML = running ? (stoppingNow(j) ? `Stopping question ${turnNo(j) || n}…` : `Question ${turnNo(j) || n} is being answered<span class="long">; stop it with the button, or ask the next one when it finishes</span>.`) :
       pend.length ? `Continues this conversation as question ${n + 1}, with ${esc(setWords(pend))}<span class="long">: the well is interpreted again with it; earlier answers keep their settings</span>. <button class="link" id="cundo">Keep the settings</button>` :
       `Continues this conversation as question ${n + 1}<span class="long">: the same well, interval and settings, with the results already found</span>.`;
     $("#cnew").onclick = newFrom;
@@ -1591,9 +1595,30 @@ function chipsRender() {
     $$("#cchips [data-open]").forEach(b => b.onclick = e => { e.stopPropagation(); sheet(b.dataset.open); });
     $("#cinterp").onclick = e => { e.stopPropagation(); sheet(null); interpOpen(); };
   }
-  $("#ask").disabled = !!running;
+  askButton(running ? j : null);
   $("#question").placeholder = running ? "Answering… ask the next question when this one finishes" : S.followId ? "Ask a follow-up" : "Ask about this well";
   if (typeof startRender === "function" && $("#startwell") && !startBusy) startRender();     // the empty page follows the setup
+}
+const ASK_ICON = `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14V4M4.5 8.5 9 4l4.5 4.5"/></svg>`;
+const STOP_ICON = `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="4.5" y="4.5" width="9" height="9" rx="1.5" fill="currentColor"/></svg>`;
+function isRunning() { const j = S.last; return !!(j && !R.run && ["queued", "running"].includes(j.status)); }
+function stoppingNow(j) {                   // Stop was pressed (here, or in another tab: the run's own event says so)
+  return !!j && (S.stopping === j.id || (S.events || []).some(e => e.kind === "phase" && e.name === "stopping"));
+}
+function askButton(j) {                     // the composer's one button: Ask, or Stop while a question is being answered
+  const b = $("#ask"), stopping = stoppingNow(j);
+  if (!j) S.stopping = null;
+  b.classList.toggle("stop", !!j);
+  if (b.dataset.icon !== (j ? "stop" : "ask")) { b.innerHTML = j ? STOP_ICON : ASK_ICON; b.dataset.icon = j ? "stop" : "ask"; }
+  b.title = j ? (stopping ? "Stopping…" : "Stop this question") : "Ask (Enter)";
+  b.setAttribute("aria-label", j ? (stopping ? "Stopping" : "Stop this question") : "Ask");
+  b.disabled = !!(j && stopping);
+}
+async function stopRun() {                  // Stop: the question in flight ends without an answer; the conversation goes on
+  const j = S.last; if (!j || !isRunning()) return;
+  S.stopping = j.id; $("#formerr").textContent = ""; chipsRender();
+  try { await post(`/api/stop/${j.id}`, {}); }
+  catch (e) { S.stopping = null; $("#formerr").textContent = e.message; chipsRender(); }
 }
 let startBusy = false;
 function sheet(sec) {                       // the sheet above the composer, at a section (null: closed)
@@ -1615,7 +1640,8 @@ $$("#ivmode button").forEach(b => b.addEventListener("click", chipsRender));
 function autosize() { const t = $("#question"); t.style.height = "auto"; t.style.height = `${Math.min(220, t.scrollHeight)}px`; }
 $("#question").addEventListener("input", autosize);
 function composerFor(j) {                   // after each render: a finished answer of a conversation is followed by the next question
-  S.followId = j && !R.run && j.status === "done" && j.conversation ? j.id : null;
+  const goesOn = j && (j.status === "done" || (j.status === "stopped" && j.conversation && j.conversation.turn));   // a stopped question's conversation goes on
+  S.followId = j && !R.run && goesOn && j.conversation ? j.id : null;
   if (S.followId) sheet(null);
   chipsRender();
 }
@@ -1645,8 +1671,8 @@ async function ask() {
   } catch (e) { $("#formerr").textContent = e.message; }
   finally { btn.disabled = false; chipsRender(); }
 }
-$("#ask").onclick = ask;
-$("#question").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!$("#ask").disabled) ask(); } });
+$("#ask").onclick = () => (isRunning() ? stopRun() : ask());
+$("#question").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!isRunning() && !$("#ask").disabled) ask(); } });
 async function fillForm(inputs) {
   newConversation();
   $("#question").value = inputs.question || "";
@@ -1794,8 +1820,8 @@ function phases(j, m) {
   let html = "", marked = false;
   list.forEach(([name, done], i) => {
     let cls = done ? "done" : "";
-    if (!done && !marked) { cls = finished ? (j.status === "done" ? "" : "fail") : "cur"; marked = true; }
-    const badge = cls === "done" ? "✓" : cls === "cur" ? `<span class="spin" style="width:10px;height:10px"></span>` : cls === "fail" ? "!" : i + 1;
+    if (!done && !marked) { cls = finished ? (j.status === "done" ? "" : j.status === "stopped" ? "halt" : "fail") : "cur"; marked = true; }
+    const badge = cls === "done" ? "✓" : cls === "cur" ? `<span class="spin" style="width:10px;height:10px"></span>` : cls === "fail" ? "!" : cls === "halt" ? "■" : i + 1;
     if (i) html += `<span class="bar ${done ? "done" : ""}"></span>`;
     html += `<span class="ph ${cls}"><span class="b">${badge}</span>${esc(name)}</span>`;
   });
@@ -1808,7 +1834,8 @@ function nowWords(j, m) {
   const has = t => m.calls.some(c => c.type === t);
   const maxSteps = +((j.inputs && j.inputs.max_steps) || (S.cfg && S.cfg.max_steps) || 8);
   let what;
-  if (j.status === "queued" || !m.phase.started) what = j.queue_position ? `Waiting for a free worker: number ${j.queue_position} in the queue.` : "Waiting for a free worker.";
+  if (m.phase.stopping) what = m.calls.length ? "Stopping: the model call in flight is being left." : "Stopping: as soon as Petrophys has interpreted the well.";
+  else if (j.status === "queued" || !m.phase.started) what = j.queue_position ? `Waiting for a free worker: number ${j.queue_position} in the queue.` : "Waiting for a free worker.";
   else if (!m.calls.length) what = "Petrophys is interpreting the well: logs, zones and the record (once per well and settings).";
   else if (has("repair")) what = "Checking the answer: a number it could not trace to a result is being rewritten.";
   else if (has("writer")) what = m.calls.some(c => c.type === "writer" && c.reply) ? "Checking every number of the answer against the results." : "Writing the answer from the settled claims.";
@@ -2043,7 +2070,12 @@ function skillsText(res) {
   if (!s.library || s.library === "none") return "none (no guides)";
   return `${esc(s.library)}${s.version ? ` <small>(version ${esc(s.version)})</small>` : ""}${res.guides && res.guides.length ? `<br><small>guides read: ${esc(res.guides.join(", "))}</small>` : ""}`;
 }
+function stoppedBox(j, res) {                // a question its user stopped: no failure, and what it leaves
+  const n = ((res && res.opened) || []).length, turn = j.conversation && j.conversation.turn;
+  return `<div class="stopbox"><b>Stopped.</b> No answer was written.${n ? ` The ${n} result${n > 1 ? "s" : ""} it had opened ${n > 1 ? "stay" : "stays"} in the conversation.` : ""} ${turn ? "The next question continues this conversation." : "Ask the question again, or another one."}</div>`;
+}
 function errorBox(j, res) {
+  if (j.status === "stopped") return stoppedBox(j, res);
   const tb = res && res.traceback;
   return `<div class="errbox">${esc(j.error || (res && res.error) || j.status)}${tb ? `<details><summary><span class="caret">▶</span>Traceback</summary><pre>${esc(tb)}</pre></details>` : ""}</div>`;
 }
@@ -2306,7 +2338,7 @@ function turnHtml(t, later) {
   const done = t.status === "done" && t.answer, live = ["queued", "running"].includes(t.status);
   const chg = (later || []).find(u => u.turn > t.turn && (u.settings_changed || []).length);
   const g = (t.outcome === "ask_user" ? "Asked you: " : t.outcome === "outside" ? "Outside what it does: " : "")
-    + (done ? gist(t.answer) : live ? "Being answered…" : t.status === "error" ? "No answer: the run failed." : `No answer (${t.status}).`);
+    + (done ? gist(t.answer) : live ? "Being answered…" : t.status === "error" ? "No answer: the run failed." : t.status === "stopped" ? "Stopped before it was answered." : `No answer (${t.status}).`);
   const a = done ? answerSections(t.answer) : null;
   return `<details class="turn${live ? " live" : ""}" data-tid="${esc(t.id)}"${S.turnOpen[t.id] ? " open" : ""}>
     <summary><span class="tn">${t.turn}</span><span class="twrap"><span class="tq">${esc(t.question)}${chg ? `<span class="tbefore" title="${esc(setWords(chg.settings_changed))}">before the settings change at question ${chg.turn}</span>` : ""}</span><span class="tg">${esc(g)}</span></span><span class="tchev">▶</span></summary>

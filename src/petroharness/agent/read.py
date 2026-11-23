@@ -25,19 +25,28 @@ READ = C.text("C5", "read")
 
 
 SCOPE_ITEM_CHARS = 60          # one scope item: a unit's name, a zone's, a depth range (a sentence is not a stretch)
+DEPTH_WORD = "^[a-z_]{1,24}$"  # reach well: the reply's depth, one word as the model writes it (_reading reads it)
 
 
 def read_schema(depth: bool = False, scope: bool = False, names: tuple = ()) -> dict:
     """The READ reply's JSON schema: the topics from the index's areas and the measurements the question names (nothing
     that frames the question before the evidence is in view); with `depth`, also what kind of answer it asks for; with
-    `scope` (reach well), the stretches it is about, each one of `names` (selection.names) or a depth range."""
+    `scope` (reach well), the stretches it is about, each one of `names` (selection.names) or a depth range.
+
+    Where a request may be outside the well's logs (reach well, the depth read) the reply can hold what the model
+    means either way: its depth is one word as the model writes it (DEPTH_WORD), and its topics may be none. A list
+    of three words made the decoder put one of them where the reasoning meant another ("compare", step 1's intent),
+    and it put "outside"; and a reply that had to name a topic for a request that needs none went on as for a
+    question about the well. The benchmark's READ (reach focus) chooses between two words and names a topic."""
+    offered = depth and scope
     schema = {"type": "object",
-              "properties": {"topics": {"type": "array", "items": {"enum": list(direction.areas())}, "minItems": 1,
-                                        "maxItems": 4},
+              "properties": {"topics": {"type": "array", "items": {"enum": list(direction.areas())},
+                                        "minItems": 0 if offered else 1, "maxItems": 4},
                              "named": {"type": "array", "items": {"type": "string"}, "maxItems": 12}},
               "required": ["topics", "named"]}
     if depth:
-        schema["properties"]["depth"] = {"enum": ["direct", "investigate"] + (["outside"] if scope else [])}
+        schema["properties"]["depth"] = ({"type": "string", "pattern": DEPTH_WORD} if offered
+                                         else {"enum": ["direct", "investigate"]})
         schema["required"] = ["topics", "named", "depth"]
     if scope:                                        # reach well: the stretches the question is about
         from petroharness.agent.selection import RANGE_PATTERN
@@ -50,7 +59,8 @@ def read_schema(depth: bool = False, scope: bool = False, names: tuple = ()) -> 
 
 def _reading(text: str, depth: bool = False, outside: bool = False) -> Optional[dict]:
     """The READ reply as {topics, named} (with `depth`: and depth); None when it is not the JSON object the schema asks
-    for (topics not one of the areas). Other keys are not read."""
+    for (topics not one of the areas). Other keys are not read. With `outside` (a request may be outside the well's
+    logs) a reply that names no topic is read as it is: the model named none."""
     try:
         obj = json.loads(text or "")
     except json.JSONDecodeError:
@@ -59,7 +69,7 @@ def _reading(text: str, depth: bool = False, outside: bool = False) -> Optional[
         return None
     areas = direction.areas()
     topics = list(dict.fromkeys(x for x in obj["topics"] if isinstance(x, str) and x in areas))[:4]
-    if not topics:
+    if not topics and (obj["topics"] or not outside):    # it named things that are no areas, or none where one is due
         return None
     named = obj.get("named")
     got = {"topics": topics,
@@ -97,7 +107,7 @@ def read_question(llm: LLM, s: Session, usage: Usage, max_tokens: int, trace: di
     for stage in ("read", "read_retry"):
         text = llm.chat(stage, messages, usage, max_tokens, json_schema=read_schema(
             s.reads_depth, well, tuple(selection_names(s.f)) if well else ()))
-        got = _reading(text, s.reads_depth, outside=well)
+        got = _reading(text, s.reads_depth, outside=well and s.reads_depth)
         if got is not None and well and _scope_repeats(text):   # its scope's items are a set, which the schema
             kept, got = kept or (got, text), None                # does not hold (read_schema): asked once more
         if got is not None:
@@ -159,8 +169,9 @@ def _with_scope(head: str, s: Session) -> str:
     """The READ text under reach "well": the scope line, before the reply's example, which gains "scope"; the scope
     in force (a conversation's) said when there is one."""
     line = C.text("C5", "read_scope").strip()
-    if s.scope:
-        line += f" Scope in force: {json.dumps(list(s.scope))}."
+    if s.scope:                                      # as a reply's scope can write it (selection.as_written)
+        from petroharness.agent.selection import as_written
+        line += f" Scope in force: {json.dumps(as_written(s.f, s.scope))}."
     parts = head.rsplit("\nReply with one JSON object", 1)
     head = parts[0] + "\n" + line + "\nReply with one JSON object" + parts[1] if len(parts) == 2 else head + "\n" + line
     return head.replace('"named": ["..."]', '"named": ["..."], "scope": ["..."]', 1)

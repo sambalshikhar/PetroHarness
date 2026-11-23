@@ -358,6 +358,9 @@ class Ledger:
         # a conversation's settings change (petroharness.session: Conversation.adopt): the well was interpreted again;
         # the items opened before it -> the change, in words ("the settings change before question 3: m 2 -> 1.8")
         self.before: dict = {}
+        # a change that cut the zones anew (a setting that re-zones the interval, the user's zones): the items opened
+        # before it -> the formation they were opened under, whose zones their zone ids name (item id -> Formation)
+        self.then: dict = {}
         # the lines the last get or find showed, as data: {item id: [line]} (take_fetched; the session keeps them)
         self._fetched: dict = {}
 
@@ -408,32 +411,44 @@ class Ledger:
                 if self._keys.get(e.key) is e:
                     del self._keys[e.key]
 
-    def rewell(self, f: Formation, change: str) -> None:
+    def rewell(self, f: Formation, change: str, rezoned: bool = False) -> None:
         """The well interpreted again under changed settings: the items go on (their ids stay and continue), each
         item opened so far says when read again that it rests on the earlier settings (`change`, in words), and the
-        same call asked again is computed anew on the new well instead of served from them."""
+        same call asked again is computed anew on the new well instead of served from them. rezoned: the change cut
+        the zones anew, so an item opened so far keeps the zones it was opened under (its zone ids name those)."""
+        was = self.f
         self.f = f
         for e in self.items:
             self.before.setdefault(e.id, change)
+            if rezoned and was is not None:
+                self.then.setdefault(e.id, was)
         self._keys = {}
+
+    def _then(self, item: Item, short: bool = False) -> str:
+        """What an item opened before a re-zoning says of its zone ids ("" for any other item)."""
+        if item.id not in self.then:
+            return ""
+        return "; its zone ids: the zones as cut then" if short else ", and its zone ids name the zones as cut then"
 
     def show(self, item: Item, new: bool = True) -> str:
         """The item whole: a call opened before shows its item again in full, never only a pointer to it."""
         if item.id in self.before:                        # read again after the settings changed
-            return (f"[{item.id}] (opened before {self.before[item.id]}: these values rest on the earlier settings; "
-                    f"{item.call_text()}) {item.text}")
+            return (f"[{item.id}] (opened before {self.before[item.id]}: these values rest on the earlier settings"
+                    f"{self._then(item)}; {item.call_text()}) {item.text}")
         if item.id in self.superseded:                    # read again after a later question computed its curve again
             curve, by = self.superseded[item.id]
             return (f"[{item.id}] (opened before {curve} was computed again in [{by}]: these are the earlier values; "
                     f"{item.call_text()}) {item.text}")
         return f"[{item.id}] {item.text}" if new else f"[{item.id}] (opened before: {item.call_text()}) {item.text}"
 
-    def zone_of(self, depth: float) -> Optional[str]:
-        """The zone holding a depth of this formation, or 'between zones' (None with no formation)."""
-        if self.f is None:
+    def zone_of(self, depth: float, item: Optional[Item] = None) -> Optional[str]:
+        """The zone holding a depth of this formation, or 'between zones' (None with no formation). item: the zone as
+        that item's zones had it (an item opened before a re-zoning names the zones it was opened under)."""
+        f = self.then.get(item.id, self.f) if item is not None else self.f
+        if f is None:
             return None
         from petroharness.agent.engine import zone_at
-        return zone_at(self.f, depth)
+        return zone_at(f, depth)
 
     def by_id(self, eid) -> Optional[Item]:
         k = str(eid).strip().strip("[]").strip().upper()
@@ -445,7 +460,7 @@ class Ledger:
         fetch the rest."""
         full = f"[{item.id}] {item.text}"
         if item.id in self.before:                        # opened before the settings changed: said in its digest
-            full = f"[{item.id}] (before {self.before[item.id]}) {item.text}"
+            full = f"[{item.id}] (before {self.before[item.id]}{self._then(item, True)}) {item.text}"
         section = item.tool == "section"
         if len(full) <= (SECTION_DIGEST_CHARS if section else DIGEST_CHARS):
             return full
@@ -485,7 +500,7 @@ class Ledger:
         zs = sorted(zones_in("\n".join(lines)), key=lambda z: int(z[1:]))
         what = (f"a zone ({zs[0]}-{zs[-1]})" if zs else "") + (", " if zs else "") + "a curve, class, parameter or depth"
         hint = f"  ({left} more lines: get {item.id} with find: {what})"
-        mark = f"(before {self.before[item.id]}) " if item.id in self.before else ""
+        mark = f"(before {self.before[item.id]}{self._then(item, True)}) " if item.id in self.before else ""
         out = "\n".join([f"[{item.id}] {mark}{keep[0]}"] + keep[1:] + [hint])
         return out if len(out) < len(full) else full
 
@@ -498,11 +513,11 @@ class Ledger:
         zs, words = _terms(find)
         if not zs and not words:
             return self.show(item, False)
-        out = get_lines(item, find, parts=True, zone_at=self.zone_of)
+        out = get_lines(item, find, parts=True, zone_at=lambda d: self.zone_of(d, item))
         if not out:
             names = ", ".join(_names(item)[:MISS_NAMES])
             return f"[{item.id}] nothing in {item.id} matches {find} ({read_as(find)})" + (f"; its names: {names}" if names else "")
-        mark = (f" (opened before {self.before[item.id]}: these values rest on the earlier settings)"
+        mark = (f" (opened before {self.before[item.id]}: these values rest on the earlier settings{self._then(item)})"
                 if item.id in self.before else "")
         text = "\n".join([f"[{item.id}] {item.call_text()} (find: {find}){mark}"] + out)
         cap = max(GET_CHARS, max_chars())                    # a tool's output is at most the result cap: any line fits
@@ -515,7 +530,7 @@ class Ledger:
 
     def find(self, find: str) -> str:
         """get over every item: which items match, first; then each item's lines while they fit; then the ones left."""
-        ids = [e.id for e in self.items if get_lines(e, find, parts=True, zone_at=self.zone_of)]
+        ids = [e.id for e in self.items if get_lines(e, find, parts=True, zone_at=lambda d, e=e: self.zone_of(d, e))]
         if not ids:
             return f"no opened item matches {find} ({read_as(find)})"
         out, left = [f"{find} is in {', '.join(ids)}"], []

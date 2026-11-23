@@ -13,6 +13,7 @@ EARLIER_CHARS = 6000       # the block at most; the newest questions whole, olde
 OPENING_CHARS = 600        # an answer's opening as shown
 QUESTION_CHARS = 300
 CLAIM_CHARS = 240
+ZONES_THEN = 24            # the zones of before a re-zoning, each listed with where its depths lie now; the rest counted
 
 
 def _line(text: str) -> str:
@@ -37,6 +38,9 @@ def opening(answer: str, limit: int = OPENING_CHARS) -> str:
 def entry(rec: dict, full: bool = True) -> str:
     """One earlier question: its text, how its answer opened and (full) what was found, with the result ids."""
     lines = [f"Question {rec['turn']}: {_line(rec['question'])[:QUESTION_CHARS]}"]
+    if rec.get("status") == "stopped":                    # its user stopped it: what it opened is listed in OPENED
+        lines.append("  (not answered: the user stopped it)")
+        return "\n".join(lines)
     if str(rec.get("status", "")).startswith("error"):
         lines.append("  (not answered: the run failed)")
         return "\n".join(lines)
@@ -48,6 +52,39 @@ def entry(rec: dict, full: bool = True) -> str:
             lines.append(f"  - {_line(c['text'])[:CLAIM_CHARS]} ({c.get('grade', '')}{'; ' + ids if ids else ''})")
         if not rec.get("claims") and rec.get("read_from"):     # a short answer: the results it was read from
             lines.append(f"  (read from {', '.join(rec['read_from'])})")
+    return "\n".join(lines)
+
+
+def rezoned(then: list, now: list, unit: str = "", step: float = 0.0) -> str:
+    """After a change that cut the zones anew: the zones as they were ([{zone, lithology, top, base}], as the log
+    holds them), each with where its depths lie in the zones now. Depths only: no result is read, nothing is compared.
+    step: the sample spacing (two zones one step apart leave no sample between them)."""
+    from petroharness.agent.map import num
+    u = f" {unit}" if unit else ""
+    span = lambda a, b: f"{num(a)}-{num(b)}{u}"
+    lines = [f"The zones were cut anew: {len(then)} before, {len(now)} now. A zone id in a result or an answer from "
+             "before names the zone as it was then, and the same id may name another stretch now:"]
+    for z in then[:ZONES_THEN]:
+        top, base = float(z["top"]), float(z["base"])
+        hits = sorted(((max(top, float(n["top"])), min(base, float(n["base"])), n) for n in now
+                       if max(top, float(n["top"])) <= min(base, float(n["base"]))), key=lambda h: h[0])
+        if not hits:
+            where = "outside any zone"
+        elif len(hits) == 1 and (float(hits[0][2]["top"]), float(hits[0][2]["base"])) == (top, base):
+            where = f"{hits[0][2]['zone']} {hits[0][2]['lithology']} (the same depths)"
+        elif len(hits) == 1 and (hits[0][0], hits[0][1]) == (top, base):
+            n = hits[0][2]
+            where = f"inside {n['zone']} {n['lithology']} ({span(n['top'], n['base'])})"
+        else:
+            gap = 1.5 * step if step else 0.0          # more than a sample step between two pieces: samples left out
+            whole = (hits[0][0] - top <= 1e-9 and base - hits[-1][1] <= 1e-9
+                     and all(b[0] - a[1] <= gap + 1e-9 for a, b in zip(hits, hits[1:])))
+            where = (", ".join(f"{n['zone']} {n['lithology']} over {span(a, b)}" for a, b, n in hits)
+                     + ("" if whole else "; the rest outside any zone"))
+        lines.append(f"  then {z['zone']} {z['lithology']} {span(top, base)}: now {where}")
+    if len(then) > ZONES_THEN:
+        lines.append(f"  ({len(then) - ZONES_THEN} more zones of then, to {span(then[-1]['top'], then[-1]['base'])}: a "
+                     "result opened before states each zone's depths)")
     return "\n".join(lines)
 
 
@@ -69,16 +106,18 @@ def changed(change: dict, turns: list) -> str:
                 + ("every lookup reports by the lithology zones (L1..)." if change["frame"] == "lithology"
                    else "every lookup reports by the zones in force."))
     ids = [x for r in turns if r["turn"] < n for x in r.get("opened") or []]
+    cut = ("\n" + rezoned(change["then"], change["now"], change.get("unit") or "", change.get("step") or 0.0)
+           if change.get("then") and change.get("now") else "")       # the change cut the zones anew
     if change.get("kind") == "zones":                  # the user's zones file: the view made again, no new interpretation
         rest = (f" Results {ids[0]} to {ids[-1]} were read under the earlier zones; read again, a result says so."
                 if len(ids) > 1 else f" Result {ids[0]} was read under the earlier zones." if ids else "")
         said = (f"your zones from {Path(change['zones']).name} frame the interval (Z ids); the lithology zones keep L ids"
                 if change.get("zones") else "your zones taken away; the lithology zones frame the interval again")
-        return f"Zones changed before question {n} (by the {who}): {said}.{rest}"
+        return f"Zones changed before question {n} (by the {who}): {said}.{rest}{cut}"
     rest = (f" Results {ids[0]} to {ids[-1]} and the answers before rest on the earlier settings; read again, a result "
             "says so." if len(ids) > 1 else f" Result {ids[0]} rests on the earlier settings." if ids else "")
     return (f"Settings changed before question {n} (by the {change.get('by') or 'user'}): {describe(change['changes'])}. "
-            f"The well was interpreted again with them.{rest}")
+            f"The well was interpreted again with them.{rest}{cut}")
 
 
 def block(turns: list, budget: int = EARLIER_CHARS, changes: list | None = None) -> str:

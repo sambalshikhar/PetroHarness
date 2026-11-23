@@ -210,6 +210,50 @@ def test_the_earlier_block_keeps_the_newest_whole_and_counts_the_oldest():
     assert E.block([]) == ""
     failed = E.entry({"turn": 3, "question": "Why?", "status": "error: Timeout"})
     assert failed == "Question 3: Why?\n  (not answered: the run failed)"
+    stopped = E.entry({"turn": 4, "question": "And then?", "status": "stopped", "opening": "", "claims": []})
+    assert stopped == "Question 4: And then?\n  (not answered: the user stopped it)"
+
+
+class Stops(Model):
+    """The scripted model, stopped by its user at one stage (as the web UI's Stop does through LLM.stop_if)."""
+    stop_at = None
+
+    def chat(self, stage, *args, **kwargs):
+        from petroharness.llm import Stopped
+        if stage == self.stop_at:
+            raise Stopped(stage)
+        return super().chat(stage, *args, **kwargs)
+
+
+@pytest.mark.data
+def test_a_question_its_user_stops_ends_without_an_answer_and_the_conversation_goes_on(formation, tmp_path):
+    """Stopped at its second step, a question ends with the status "stopped": no answer, no error, its files and its
+    turn_end written, the result it had opened kept under its id. The next question sees it as not answered, and a
+    conversation resumed from the log stands where this one does."""
+    llm = Stops(first_steps() + later_steps())
+    c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4)
+    assert c.ask_task(formation).ok
+    llm.stop_at = "step_2"
+    turn = c.ask_task(formation.model_copy(update={"task_id": "second", "question": Q2}))
+    assert turn.status == "stopped" and turn.stopped and not turn.ok and turn.answer == ""
+    assert turn.trace["stopped"] is True and "error" not in turn.trace and "traceback" not in turn.trace
+    end = c.log.events("turn_end")[-1]
+    assert end["turn"] == 2 and end["status"] == "stopped" and end["opened"] == ["E3"]
+    assert (turn.folder / "trace.json").exists() and (turn.folder / "answer.md").exists()
+    assert [e.id for e in c.live.ledger.items] == ["E1", "E2", "E3"]            # what it opened stays
+    shutil.copytree(c.folder, tmp_path / "copy")
+    third = formation.model_copy(update={"task_id": "third", "question": Q3})
+    llm.stop_at, mark = None, len(llm.sent)
+    llm.steps = [{"points": [Q3], "intent": "locate", "edits": [], "next": [], "done": True}]
+    assert c.ask_task(third).ok
+    shown = next(x["messages"][-1]["content"] for x in llm.sent[mark:] if x["stage"] == "step_1")
+    assert f"Question 2: {Q2}\n  (not answered: the user stopped it)" in shown and "the run failed" not in shown
+    again = Model([{"points": [Q3], "intent": "locate", "edits": [], "next": [], "done": True}])
+    r = Conversation.resume(tmp_path / "copy", llm_factory=lambda cfg: again)
+    assert [t["status"] for t in r.turns] == ["ok", "stopped"] and [e.id for e in r.live.ledger.items] == ["E1", "E2", "E3"]
+    assert r.log.events("session_resume")[-1]["differences"] == []
+    r.ask_task(third)
+    assert messages(again) == [(x["stage"], x["messages"]) for x in llm.sent[mark:]]   # the same third question
 
 
 def test_the_opening_is_the_first_prose_paragraph():

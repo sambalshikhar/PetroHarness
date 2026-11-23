@@ -26,6 +26,7 @@ API (JSON):
     GET  /api/zones?path=[&las=]    the user's zones a zones file gives, and what is wrong in them
     GET  /api/notes?path=           a field notes file: its name, settings and notes, checked
     POST /api/ask                   the inputs (petroharness.ui.adapter) -> {id}
+    POST /api/stop/<id>             stop a question that is waiting or running -> {id, status}
     GET  /api/job/<id>?since=N      status, the events from N on, then the answer and the result
     GET  /api/runs                  the runs, newest first (running and saved)
     GET  /api/run/<id>              a saved run in full
@@ -173,7 +174,8 @@ class App:
         scope = A.scope_input(inputs.get("scope")) if isinstance(inputs, dict) else None   # wrong: said now
         if follow:                                  # a follow-up: the next question of that run's conversation
             prev = self._record(follow)
-            if prev.get("status") != "done":
+            stopped = prev.get("status") == "stopped" and (prev.get("conversation") or {}).get("turn")
+            if prev.get("status") != "done" and not stopped:     # a stopped question's conversation goes on
                 raise A.InputError("WHAT: that question has no answer yet. FIX: wait for it to finish, then ask the "
                                    "follow-up.")
             root = (prev.get("conversation") or {}).get("root") or follow
@@ -201,12 +203,38 @@ class App:
         self._queue.put(job)
         return job
 
+    def stop(self, run_id: str) -> dict:
+        """Stop a question: one still waiting is taken off the queue; one running is told to stop, and ends once the
+        model call in flight is left (the page shows it stopping meanwhile). Its conversation goes on with the next
+        question. A run that has finished is not changed."""
+        job = self._job(run_id)
+        if job is None or job.finished is not None:
+            self._record(run_id)                                 # an unknown run: KeyError (404)
+            raise A.InputError("WHAT: that question is not running. FIX: nothing to stop.")
+        with self._lock:                                         # a worker takes a job off the list under this lock
+            waiting = job.id in self.waiting
+            if waiting:
+                self.waiting.remove(job.id)
+                job.status, job.finished = "stopped", time.time()
+        job.stop.set()
+        if waiting:                                              # never started: its worker will pass it by
+            job.emit({"kind": "phase", "name": "finished", "status": "stopped"})
+            self.store.save(job.record())
+            job.saved = True
+        else:
+            job.emit({"kind": "phase", "name": "stopping"})
+        return {"id": job.id, "status": "stopped" if waiting else "stopping"}
+
     def _work(self) -> None:
         while True:
             job = self._queue.get()
             with self._lock:
                 if job.id in self.waiting:
                     self.waiting.remove(job.id)
+                gone = job.finished is not None                  # stopped while it waited (App.stop)
+            if gone:
+                self._queue.task_done()
+                continue
             url = None
             try:
                 if self.model_factory is None:
@@ -536,6 +564,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(A.zones_info(q.get("path"), q.get("las") or None))
             if method == "POST" and what == "ask":
                 return self._json({"id": app.submit(self._payload()).id})
+            if method == "POST" and what == "stop":
+                return self._json(app.stop(arg))
             if method == "GET" and what == "job":
                 return self._json(app.job_view(arg, int(q.get("since", 0) or 0)))
             if method == "GET" and what == "runs":

@@ -121,16 +121,17 @@ class Session:
         if getattr(task, "frame", None) is not None:
             self.frame = None if task.frame in ("", "zones", "none") else task.frame
 
-    def rewell(self, task, cfg, change: str) -> None:
+    def rewell(self, task, cfg, change: str, rezoned: bool = False) -> None:
         """A conversation's settings changed: the well as Petrophys interpreted it again (`task`: the new prepared
-        well), read from here on; the ledger goes on and marks what was opened before (Ledger.rewell)."""
+        well), read from here on; the ledger goes on and marks what was opened before (Ledger.rewell; rezoned: the
+        change cut the zones anew)."""
         from petroharness.well.view import FormationView
         from petroharness.record.store import build as build_store
         from petroharness.agent.inventory import from_view
         view = FormationView.build(task, cfg)
         store = build_store(view)
         self.f = Formation(from_view(view, store), view, store)
-        self.ledger.rewell(self.f, change)
+        self.ledger.rewell(self.f, change, rezoned)
         self.task = task
         self.map = render(self.f.inv)
 

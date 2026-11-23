@@ -50,6 +50,21 @@ def assistant_turn(content: str, usage: Usage, reasoning_model: bool = False) ->
     return turn
 
 
+WHITESPACE_RUN = 400      # characters of nothing but whitespace on end in a reply's content: no reply needs them.
+#   A server that types a reply by a grammar (guided JSON) may let whitespace stand between its tokens, and a model
+#   now and then writes nothing else, up to the token limit (K2-Horizon-7B on vLLM: about 2 in 1000 READ replies,
+#   eight minutes each). Such a reply is ended where it stops saying anything and discarded as an empty one is.
+RAN_ON = "whitespace"     # the finish reason of a reply ended there (the usage log's finish_reason)
+
+
+class Stopped(Exception):
+    """The user stopped the question (LLM.stop_if): the call in flight is left where it is and no other is made. Not
+    a failure: the question ends with the status "stopped" (agent.graph.turn), and its conversation goes on."""
+
+
+STOPPED = "stopped"       # the status of a question its user stopped
+
+
 def _field(obj, name: str):
     """A field of a streamed delta, also when the client keeps a server's own field (vLLM's reasoning) as an extra."""
     return getattr(obj, name, None) or (getattr(obj, "model_extra", None) or {}).get(name)
@@ -64,6 +79,8 @@ class LLM:
     def chat(self, stage: str, messages: list[dict], usage: Usage, max_tokens: int,
              json_schema: Optional[dict] = None, temperature: Optional[float] = None, retry: bool = False) -> str:
         """One completion. retry=True marks the single retry after an empty reply (profile retry settings)."""
+        if self.stop_if is not None and self.stop_if():
+            raise Stopped(stage)
         m = self.cfg.model
         kwargs: dict[str, Any] = {"model": m.model, "messages": messages, m.max_tokens_param: max_tokens}
         if m.send_temperature:
@@ -77,7 +94,9 @@ class LLM:
         elif json_schema is not None and m.structured_output == "json_object":
             kwargs["response_format"] = {"type": "json_object"}
         t0 = time.perf_counter()
-        resp, shrunk = self._streamed(kwargs) if self.stream_to is not None else self._create(kwargs)
+        watched = (self.stream_to is not None or self.stop_if is not None      # a reply the server types by a grammar is
+                   or "response_format" in kwargs)                              # read as it comes (RAN_ON); so is one
+        resp, shrunk = self._streamed(kwargs) if watched else self._create(kwargs)   # that may be stopped (stop_if)
         choice = resp.choices[0]
         content = choice.message.content or ""
         reasoning = getattr(choice.message, "reasoning", None) or getattr(choice.message, "reasoning_content", None) or ""
@@ -93,6 +112,9 @@ class LLM:
         if m.reasoning_end and m.reasoning_end in content:      # reasoning the server left in the reply: any call's
             content = content.rsplit(m.reasoning_end, 1)[1].lstrip()
             usage.log[-1]["reasoning_left"] = True
+        if choice.finish_reason == RAN_ON:
+            usage.log[-1]["discarded"] = "whitespace without end"
+            return ""                     # callers ask again, as after an empty reply
         if choice.finish_reason == "length" and self.cfg.model.reasoning:
             usage.log[-1]["discarded"] = "truncated reasoning reply"
             return ""                     # callers retry or keep their previous draft
@@ -117,9 +139,19 @@ class LLM:
 
     def _streamed(self, kwargs: dict):
         """The completion streamed: each piece of reasoning and of content goes to stream_to as it arrives. Returns
-        (a response shaped as the whole one: its message, finish reason and usage; the shrunk allowance or None)."""
-        stream, shrunk = self._create(kwargs | {"stream": True, "stream_options": {"include_usage": True}})
-        content, reasoning, finish, used = [], [], None, None
+        (a response shaped as the whole one: its message, finish reason and usage; the shrunk allowance or None).
+        A reply whose content runs WHITESPACE_RUN characters of whitespace on end is ended there (finish reason
+        RAN_ON; its usage is not known). A server that does not stream is asked for the whole reply, and one that
+        answers whole is read whole."""
+        try:
+            stream, shrunk = self._create(kwargs | {"stream": True, "stream_options": {"include_usage": True}})
+        except Exception as exc:
+            if "stream" not in str(exc).lower():
+                raise
+            return self._create(kwargs)
+        if hasattr(stream, "choices"):                 # the whole reply, although a stream was asked for
+            return stream, shrunk
+        content, reasoning, finish, used, run = [], [], None, None, 0
         for chunk in stream:
             used = getattr(chunk, "usage", None) or used
             if not getattr(chunk, "choices", None):
@@ -132,10 +164,22 @@ class LLM:
                 if text:
                     into.append(text)
                     self._tell(kind, text)
+                    if kind == "content":              # the whitespace the content ends with, so far
+                        said = len(text.rstrip())
+                        run = len(text) - said if said else run + len(text)
+            if run >= WHITESPACE_RUN:
+                finish, used = RAN_ON, None
+                getattr(stream, "close", lambda: None)()
+                break
+            if self.stop_if is not None and self.stop_if():       # stopped by its user: the call is left here
+                getattr(stream, "close", lambda: None)()
+                raise Stopped(str(kwargs.get("model") or ""))
         message = SimpleNamespace(content="".join(content), reasoning="".join(reasoning), reasoning_content=None)
         return SimpleNamespace(choices=[SimpleNamespace(message=message, finish_reason=finish)], usage=used), shrunk
 
     def _tell(self, kind: str, text: str) -> None:
+        if self.stream_to is None:
+            return
         try:
             self.stream_to(kind, text)
         except Exception:  # noqa: BLE001  (a listener never fails the call)
@@ -147,9 +191,11 @@ class LLM:
 
     light = False                     # the calls that follow need little reasoning (set_light)
     last_reasoning = ""               # the last call's reasoning text, for the web UI to show; the run never reads it
+    stop_if = None                    # stop_if() says whether the question's user stopped it (the web UI's Stop):
+                                      # asked before a call and as a reply streams; a call then raises Stopped
     stream_to = None                  # a listener for a call's text as it arrives (the web UI): stream_to(kind, text),
                                       # kind "reasoning" or "content". None (every run but the web UI's): the reply
-                                      # comes whole, the request as it always was
+                                      # comes whole, except one the server types by a grammar (chat: watched)
 
     def set_light(self, on: bool) -> None:
         """From here on, calls use the card's light thinking setting (light_template_kwargs), or its normal one again.

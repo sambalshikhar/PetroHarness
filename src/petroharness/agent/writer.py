@@ -82,7 +82,7 @@ def cited_lines(claims: Claims, budget: int = LINES_CHARS, only=None) -> str:
             if e is None or not (zones or words):
                 continue
             q = ", ".join(words + zones) if words else ", ".join(zones)
-            lines = [ln for ln in get_lines(e, q, zone_at=claims.ledger.zone_of) if (eid, ln) not in seen]
+            lines = [ln for ln in get_lines(e, q, zone_at=lambda d, e=e: claims.ledger.zone_of(d, e)) if (eid, ln) not in seen]
             if not lines:
                 continue
             block = f"[{eid}] {e.call_text()} (for {c.id})\n" + "\n".join(lines)

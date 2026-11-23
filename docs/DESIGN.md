@@ -239,10 +239,16 @@ bookkeeping, and show the model a factual contradiction with the record; the mod
 
 **Why.** See "The model decides; code structures and checks" above.
 
+A reply typed by a schema must be able to hold what the model means, or the decoder decides for it. Where a
+request may be outside the well's logs, the READ reply's depth is the model's own word and its topics may be none;
+the figures reply may choose no figure.
+
 **Guard.** `test_no_overrides` feeds claims and an answer that a verdict-pushing check would change and asserts they
 reach the settle step and the answer unchanged. `test_the_checks_are_the_approved_fact_checks` pins the claim flags
 and the repair texts to the fact checks the test lists. `tests/agent/test_b6_claims.py` checks that the grade is the
 model's: a claim that cites results and has no readable grade is refused with a message, never graded by code.
+`tests/test_scope.py` checks the READ reply's schema where a request may be outside: one word for the depth, read
+as the model wrote it, and topics that may be none.
 
 </details>
 

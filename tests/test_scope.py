@@ -173,6 +173,33 @@ def test_a_scope_that_repeats_an_item_is_asked_once_more_then_read_once_each(bre
     assert trace["read"]["parse"] == "ok" and trace["scope"]["read"] == ["Ness Fm.", "Etive Fm."]
 
 
+def test_the_scope_in_force_is_shown_as_a_reply_can_write_it(brent, tmp_path):
+    """Question suite U14: "Manganui" is listed twice in a tops file; asked which, the user set /scope by its depths
+    and asked on, and the answer was computed on the Mangahewa. The READ showed the scope in force by its label, the
+    unit's name with its depths; a reply's scope items are typed (a name the map lists once, or a depth range), so the
+    label could not be restated, and from the name's first letters the decoder went on to another unit (76 of 120
+    replies to that call named another unit; with the line as it is now, none). The scope in force is shown as a
+    reply can write it: a name the map lists once, else its depths."""
+    from petroharness.agent.read import read_schema, selection_names
+    from petroharness.agent.selection import as_written
+    s, data = brent
+    assert as_written(s.f, ["Etive Fm.", "2900-2950 m", "Z3", "the whole well"]) == ["Etive Fm.", "2900-2950 m", "Z3", "the whole well"]
+    case = _tops_variant(tmp_path, "Ness Fm.,2841.0,2865.0,", "Ness Fm.,2841.0,2865.0,")
+    p = tmp_path / "tops.csv"
+    p.write_text(p.read_text().rstrip("\n") + "\nNess Fm.,3300.0,3350.0,Sandstone,m,formation,DUNLIN GP.\n")
+    s, data = _session(case)
+    s.reads_depth = True
+    _read(s, _reply(["2841-2865 m"]), data)                       # the user's stretch, by its depths
+    assert s.scope == ["Ness Fm. (2841-2865 m)"], s.scope
+    llm, _ = _read(s, _reply(["2841-2865 m"]), data)              # the next question goes on with it
+    shown = json.loads(re.search(r"Scope in force: (\[.*?\])\.", llm.first("read")[1]).group(1))
+    assert shown == ["2841-2865 m"] == as_written(s.f, s.scope)
+    schema = read_schema(True, True, tuple(selection_names(s.f)))
+    assert "Ness Fm." not in selection_names(s.f)                 # listed twice: no name of one stretch
+    assert all(_typed(schema, x) for x in shown) and not _typed(schema, "Ness Fm. (2841-2865 m)")
+    assert s.scope == ["Ness Fm. (2841-2865 m)"]                  # restated, it is the same stretch
+
+
 def test_an_empty_scope_is_the_interval(brent):
     s, data = brent
     _read(s, _reply([]), data)
@@ -483,10 +510,68 @@ def test_outside_is_offered_only_where_users_type_freely():
     """The benchmark (reach focus) asks about its interval by construction: its READ schema offers no "outside", and a
     reply that says it anyway is an investigation."""
     from petroharness.agent.read import _reading, read_schema
-    assert "outside" in read_schema(True, True)["properties"]["depth"]["enum"]
-    assert "outside" not in read_schema(True, False)["properties"]["depth"]["enum"]
+    assert _typed_depth(read_schema(True, True), "outside")
+    assert read_schema(True, False)["properties"]["depth"] == {"enum": ["direct", "investigate"]}
     reply = json.dumps({"topics": ["porosity"], "named": [], "depth": "outside"})
     assert _reading(reply, True, outside=False)["depth"] == "investigate"
+
+
+def _typed_depth(schema: dict, word: str) -> bool:
+    """Whether the READ schema's depth takes `word` (a list of words, or one word by its pattern)."""
+    d = schema["properties"]["depth"]
+    return word in d["enum"] if "enum" in d else bool(d["type"] == "string" and re.fullmatch(d["pattern"], word))
+
+
+def test_under_reach_well_the_depth_is_the_models_own_word_and_only_outside_is_outside():
+    """A conversation's third question ("how do the porosity and the pay change from your first answer?") was
+    answered with "That is outside what I do here". The reply's reasoning had settled on "depth": "compare" (the
+    word of step 1's intent); the schema let depth be one of three words, so the decoder put one of them, and put
+    "outside" (2 of 49 replies to that call; none in 135 replies to other questions). Under reach well the depth is
+    one word as the model writes it: "direct" is direct, "outside" is outside, any other word an investigation
+    (sent again 48 times: "compare" 4 times, "outside" never)."""
+    from petroharness.agent.read import DEPTH_WORD, _reading, read_schema
+    schema = read_schema(True, True)
+    assert schema["properties"]["depth"] == {"type": "string", "pattern": DEPTH_WORD} and "depth" in schema["required"]
+    for word in ("direct", "investigate", "outside", "compare", "qc_check"):
+        assert _typed_depth(schema, word), word
+    for text in ("", "investigate: how the porosity changes", "Outside", "a" * 25, "two words"):   # one short word
+        assert not _typed_depth(schema, text), text
+    s, data = _session()
+    s.reads_depth = True
+    for word, read in (("compare", "investigate"), ("characterize", "investigate"), ("direct", "direct"),
+                       ("investigate", "investigate"), ("outside", "outside")):
+        reply = json.dumps({"topics": ["porosity"], "named": [], "depth": word, "scope": []})
+        assert _reading(reply, True, outside=True)["depth"] == read, word
+        llm, trace = _read(s, reply, data)
+        assert s.depth == read and bool(trace.get("outside")) == (read == "outside"), (word, s.depth)
+        assert llm.sent[0]["schema"]["properties"]["depth"] == schema["properties"]["depth"]
+        assert f'"depth": "{word}"' in trace["read"]["reply"]            # the word as written stays in the trace
+
+
+def test_a_request_outside_the_wells_logs_names_no_topic():
+    """The other way round: a request the reasoning called "outside" ("Translate ...", "Hi, how are you today?") was
+    read as a question about the well in 6 of 192 replies. Each reasoning planned "topics": [] with "depth":
+    "outside"; the schema asked for at least one topic, and after naming topics the reply went on as for a question
+    about the well. Where a request may be outside, the topics may be none (0 of 192 such replies then; 170 of the
+    182 outside replies name none), and a reply that names none is read as it is. A question about the well still
+    names its topics (0 of 231 replies without), and the benchmark's READ names at least one."""
+    from petroharness.agent.read import _reading, read_schema
+    assert read_schema(True, True)["properties"]["topics"]["minItems"] == 0
+    for depth, scope in ((True, False), (False, False), (False, True)):          # no "outside" offered: a topic is due
+        assert read_schema(depth, scope)["properties"]["topics"]["minItems"] == 1, (depth, scope)
+    none = json.dumps({"topics": [], "named": [], "depth": "outside", "scope": []})
+    assert _reading(none, True, outside=True) == {"topics": [], "named": [], "depth": "outside"}
+    assert _reading(none, True, outside=False) is None                           # the benchmark: not a reading
+    assert _reading(none.replace('"outside"', '"direct"'), True, outside=True)["depth"] == "direct"   # the model's own
+    assert _reading(json.dumps({"topics": ["poetry"], "named": [], "depth": "outside"}), True, outside=True) is None
+    s, data = _session()
+    s.reads_depth = True
+    llm, trace = _read(s, none, data)                                            # read once, not asked again
+    assert llm.stages() == ["read"] and trace["read"]["parse"] == "ok" and trace["read"]["topics"] == []
+    assert s.depth == "outside" and s.ask_status == "outside" and s.topics == [] and "outside what I do here" in s.ask_user
+    s.reads_depth = False                                                        # --investigate: no "outside" offered
+    llm, trace = _read(s, [none, _reply([])], data)
+    assert llm.stages() == ["read", "read_retry"] and trace["read"]["parse"] == "retry"
 
 
 def test_the_users_zones_with_no_sample_here_are_said_not_dropped(tmp_path):

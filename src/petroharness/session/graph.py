@@ -187,10 +187,11 @@ def commit(state: State, runtime: Runtime[Ctx]) -> dict:
 # --- routes ----------------------------------------------------------------------------------------------------------
 
 def after_turn(state: State, runtime: Runtime[Ctx]) -> str:
-    """An answered question goes on to its projections; one with no answer (an error, an empty reply) is committed
-    as it is."""
+    """An answered question goes on to its projections; one with no answer (an error, an empty reply, a question its
+    user stopped) is committed as it is."""
+    from petroharness.session.conversation import unanswered
     c, got = runtime.context.conversation, state["got"]
-    answered = c.live is not None and got["answer"].strip() and not got["status"].startswith("error")
+    answered = c.live is not None and got["answer"].strip() and not unanswered(got["status"])
     return "project" if answered else "commit"
 
 

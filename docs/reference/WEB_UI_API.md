@@ -17,9 +17,11 @@ flowchart TD
     job["GET /api/job/ID?since=N<br/>the events while it runs, then the answer"]
     run["The saved run: GET /api/run/ID<br/>answer.md · trace.json · figures · conversation · lineage · audit"]
     rate["POST /api/rate/ID"]
+    stop["POST /api/stop/ID<br/>stops a question waiting or running"]
     inputs --> ask
     settings --> ask
     ask --> queue --> job --> run --> rate
+    job -.-> stop
     run -- "a follow-up: follow = ID" --> ask
 ```
 
@@ -44,6 +46,7 @@ flowchart TD
 | [`POST /api/upload`](#post-apiupload) | stores a LAS, tops, zones or field notes file |
 | [`POST /api/ask`](#post-apiask) | queues a question and gives its run id |
 | [`GET /api/job/ID`](#get-apijobid) | a job's status and its events from `since` on |
+| [`POST /api/stop/ID`](#post-apistopid) | stops a question that is waiting or running |
 | [`GET /api/runs`](#get-apiruns) | the run list |
 | [`GET /api/run/ID`](#get-apirunid) | one run's record in full |
 | [`GET /api/run/ID/answer.md`, `trace.json`](#get-apirunidanswermd-and-get-apirunidtracejson) | the answer file, the trace |
@@ -288,7 +291,7 @@ The server of [section 3](#3-command-line-and-environment), one endpoint up and 
 model's name and the runs folder replaced):
 
 ```json
-{"version": "2.0.1", "model": "<served model name>", "label": "K2-Horizon-7B",
+{"version": "2.0.2", "model": "<served model name>", "label": "K2-Horizon-7B",
  "endpoints": [{"url": "http://HOST:8000/v1", "ok": true, "models": ["<served model name>"], "ms": 6, "busy": 0},
                {"url": "http://localhost:8001/v1", "ok": false, "models": [],
                 "error": "URLError: <urlopen error [Errno 111] Connection refused>", "busy": 0}],
@@ -872,7 +875,7 @@ with the answer (14,444 characters) and the result. `queue_position` is `null` f
 had already taken the job off the queue.
 
 - A job whose answer is complete but whose record is not yet saved still reads `running` (`Job.view`). Once it reads
-  `done`, `error` or `interrupted`, `run.json` on disk holds the whole record.
+  `done`, `stopped`, `error` or `interrupted`, `run.json` on disk holds the whole record.
 
 </details>
 
@@ -886,7 +889,7 @@ first (`App.runs`, `store.brief`).
 | Name | Type | Meaning | Defined in |
 |---|---|---|---|
 | `id`, `status` | string | The run id and its status. | `store.brief` |
-| `outcome` | string or null | The answer's status (`result.status`): `ok`, `unresolved_numbers`, `ask_user` (it asked the user back), `outside` (a request outside what it does) or `error: ...`; `null` until the run has a result. The page shows `ask_user` as *asks you*. | `store.brief` |
+| `outcome` | string or null | The answer's status (`result.status`): `ok`, `unresolved_numbers`, `ask_user` (it asked the user back), `outside` (a request outside what it does), `stopped` (its user stopped it) or `error: ...`; `null` until the run has a result. The page shows `ask_user` as *asks you*. | `store.brief` |
 | `question` | string | The question. | `store.brief` |
 | `las`, `las_path` | string | The LAS file's name and its path on the server. | `store.brief` |
 | `label` | string | The interval as the list names it: the formation (with `from TOP` for one listing of a name the tops file lists twice, `Manganui from 2164.99`), the depth label or span, or `whole well` (`adapter.interval_label`). | `adapter.interval_label` |
@@ -1128,6 +1131,33 @@ Returns the audit trail of the run's answer as Markdown (`evidence.audit.markdow
 
 </details>
 
+<a id="post-apistopid"></a>
+<details>
+<summary>POST /api/stop/ID</summary>
+
+Stops a question that is waiting or running (`App.stop`); the page's Stop button. The body is an empty JSON object.
+
+Response:
+
+| Name | Type | Meaning | Defined in |
+|---|---|---|---|
+| `id` | string | The run. | `App.stop` |
+| `status` | string | `stopped`: the question was still waiting and is off the queue. `stopping`: it is running and has been told to stop; `GET /api/job/ID` reads `running` until the model call in flight is left, then `stopped`. | `App.stop` |
+
+```bash
+curl -s -X POST localhost:7860/api/stop/RUN_1 -H 'Content-Type: application/json' -d '{}'
+```
+
+```json
+{"id": "RUN_1", "status": "stopping"}
+```
+
+- A run that has finished answers 400 `WHAT: that question is not running. FIX: nothing to stop.`; an unknown run 404.
+- A stopped run has no answer and no error. One that had entered its conversation (`conversation.turn` is set) can be
+  followed by the next question; one stopped while the well was interpreted cannot.
+
+</details>
+
 <a id="post-apirateid"></a>
 <details>
 <summary>POST /api/rate/ID</summary>
@@ -1171,14 +1201,17 @@ stateDiagram-v2
     queued --> error: Endpoints.acquire finds no endpoint
     running --> done: Turn.ok
     running --> error: error status or exception
+    queued --> stopped: App.stop
+    running --> stopped: App.stop, once the model call in flight is left
     queued --> interrupted: server stopped, Store.interrupted at restart
     running --> interrupted: server stopped, Store.interrupted at restart
     done --> [*]
     error --> [*]
+    stopped --> [*]
     interrupted --> [*]
 ```
 
-There is no route to cancel or delete a job or a run: a job ends only by finishing, or by stopping the server.
+A question waiting or running can be stopped (`POST /api/stop/ID`). There is no route to delete a run.
 
 <details>
 <summary>States</summary>
@@ -1189,6 +1222,7 @@ There is no route to cancel or delete a job or a run: a job ends only by finishi
 | `running` | status | | A worker runs it. A job whose answer is complete but whose record is not saved yet also reads `running`. | `adapter.run`, `Job.view` |
 | `done` | status | | The question was answered (`Turn.ok`: the answer's status does not start with `error`, so it is `ok`, `unresolved_numbers`, `ask_user` or `outside`). A run that asked the user back (`ask_user`) or said a request is outside what it does (`outside`) is `done` with nothing computed: its `result.status` says which, and `result.ask` holds the text and the choices ([section 11](#answering-a-question-back)). | `adapter.run`, `agent.graph.ask_user` |
 | `error` | status | | No endpoint could be reserved, the inputs failed a check the worker makes, the run raised, or the answer's status starts with `error`. `error` holds the message; an unexpected exception also stores `result.traceback` (the last 4000 characters). | `App._work`, `adapter.run` |
+| `stopped` | status | | Its user stopped it (`POST /api/stop/ID`): taken off the queue, or ended once the model call in flight was left. No answer and no `error`; `result.status` is `stopped` when the question had entered its conversation. | `App.stop`, `adapter.run` |
 | `interrupted` | status | | Set at the next start of the server on every saved run left `queued` or `running`, with `error: "the server stopped before this run finished"`. Its events are kept. | `Store.interrupted` |
 
 </details>
@@ -1212,9 +1246,10 @@ How jobs wait and run at once.
 curl -s localhost:7860/api/config | python -c 'import json,sys; c=json.load(sys.stdin); print(c["running"], c["queued"], c["workers"])'
 ```
 
-- A job in the queue or running ends only by finishing, or by stopping the server (it is then marked `interrupted` at
-  the next start).
-- A follow-up checks only that the run it follows is `done`. Two follow-ups sent to the same run are both accepted;
+- A job in the queue or running ends by finishing, by being stopped (`POST /api/stop/ID`), or by stopping the server
+  (it is then marked `interrupted` at the next start). A stop is cooperative: a worker thread is never killed; the
+  model call in flight is left as its reply streams (`LLM.stop_if`), and no further call is made.
+- A follow-up checks that the run it follows is `done`, or `stopped` with a question in its conversation. Two follow-ups sent to the same run are both accepted;
   the conversation lock runs them one after the other, and each is numbered in the order it ran.
 
 </details>
@@ -1275,14 +1310,15 @@ Each kind, who emits it, and its fields beyond `t` and `kind`.
 | `phase` / `queued` | phase | | `{"name": "queued"}` when the job is accepted. | `App.submit` |
 | `phase` / `started` | phase | | `{"name": "started", "endpoint": URL}`; `endpoint` is `""` with a test model. | `adapter.run` |
 | `phase` / `interpreting` | phase | | `{"name": "interpreting"}`, right after `started`, before Petrophys interprets the well. | `adapter.run` |
-| `phase` / `finished` | phase | | `{"name": "finished", "status": "done" \| "error", "error": MESSAGE}`; `error` is present only when not empty. | `adapter.run`, `App._work` |
+| `phase` / `stopping` | phase | | `{"name": "stopping"}` when a running question is told to stop; `finished` follows once the model call in flight is left. | `App.stop` |
+| `phase` / `finished` | phase | | `{"name": "finished", "status": "done" \| "stopped" \| "error", "error": MESSAGE}`; `error` is present only when not empty. | `adapter.run`, `App.stop`, `App._work` |
 | `well` | interval plot | | The interval's logs for the page's plot (`wellplot.payload`, [below](#the-well-events-plot-payload)), or `{"error": "<Type>: <message>"}` when the plot cannot be built (the run goes on). Emitted each time the well is prepared for the run: for a first question when the conversation starts, for a follow-up when it resumes, and again after an adopted settings change. | `adapter.run.plot`, `ui.wellplot.payload` |
 | `display` | file | | `{"file": "overview.png"}`: the interval's log display by Petrophys, copied to the run's `figures/`. Absent when it could not be drawn. | `adapter.run`, `Conversation.overview` |
 | `settings` | change list | | `{"changes": [{"key", "from", "to"}, ...]}` on a follow-up that carries `interpretation`; `[]` when the settings asked for are those in force. `from` or `to` `null` means the default. | `adapter.run`, `Conversation.adopt` |
 | `scope` | stretch list | | `{"scope": [...]}` on a follow-up that carries `scope`, after the `well` and `display` events and before the question is read: the stretches as the conversation set them for this question (`Conversation.set_scope(..., chosen=True)`). From the tuhua-7 choice: `{"t": 2.6, "kind": "scope", "scope": ["874.014-1250.75 m"]}`. | `adapter.run`, `Conversation.set_scope` |
 | `call` | model call | | `{"stage", "type", "n"}` before a request; `number` for a step or a repair; `findings` (the checker's request, at most 4000 characters) for a repair. | `progress.Observed.chat` |
 | `results` | results | | `{"stage", "items": [{"id", "title", "text", "digest"}]}`: results that appear in this request's prompts for the first time, or more fully than before, in id order; emitted just before the request's `call` event. `title` is the first line (at most 200 characters); `digest` is `true` for a shortened result. | `progress.Observed._scan`, `progress.results_in` |
-| `reply` | model reply | | `{"stage", "type", "n", "seconds"}`, the usage fields `prompt_tokens`, `completion_tokens`, `finish_reason`, `discarded` where the client logged them, and what the reply says ([Stage types](#stage-types)); `thinking` and `thinking_chars` when the server returned reasoning for the call (`LLM.last_reasoning`: the text, whole up to 12,000 characters, else its first 4,000 and last 8,000 with the count left out between; and its full length); or `error` (at most 400 characters) when the call raised. | `progress.Observed.chat` |
+| `reply` | model reply | | `{"stage", "type", "n", "seconds"}`, the usage fields `prompt_tokens`, `completion_tokens`, `finish_reason`, `discarded` where the client logged them, and what the reply says ([Stage types](#stage-types)); `thinking` and `thinking_chars` when the server returned reasoning for the call (`LLM.last_reasoning`: the text, whole up to 12,000 characters, else its first 4,000 and last 8,000 with the count left out between; and its full length); or `error` (at most 400 characters) when the call raised; `stopped: true` when the call was left because its user stopped the question. | `progress.Observed.chat` |
 
 From the Brent question: the first `results` event, the `call` of the repair round of the follow-up, and the `reply`
 of step 2.
@@ -1445,7 +1481,7 @@ record, its events and answer cut:
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `status` | string | | The answer's status: `ok`, `unresolved_numbers`, `ask_user` (the harness asked the user back), `outside` (a request outside what it does), or `error: ...`. | `adapter.summary` |
+| `status` | string | | The answer's status: `ok`, `unresolved_numbers`, `ask_user` (the harness asked the user back), `outside` (a request outside what it does), `stopped` (its user stopped it), or `error: ...`. | `adapter.summary` |
 | `seconds` | number | | The question's time in the trace. | `adapter.summary` |
 | `interval` | object | | The interval as used (`Prepared.used`). | `adapter.run` |
 | `question_sent`, `lithology`, `zones`, `settings`, `interpret`, `petrophys`, `skills_given` | | | From the trace's `ask` record: the question as sent, the zoning's source, the zones, where the data settings came from, the `petrophys.interpret` options, the Petrophys build, the skill library asked for. | `adapter.summary` |

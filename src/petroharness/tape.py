@@ -89,11 +89,16 @@ def record(llm, path: Path) -> list:
             with path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(rec) + "\n")
 
-    def kept_as_it_streams(stream, kwargs: dict):          # recorded once the stream is read to its end
-        seen = []
-        for chunk in stream:
-            seen.append(chunk)
-            yield chunk
+    def kept_as_it_streams(stream, kwargs: dict):          # recorded once the stream is read to its end, or
+        seen = []                                          # as far as it was read when its reader left it (a reply
+        try:                                               # that ran on: llm.WHITESPACE_RUN), so that a replay
+            for chunk in stream:                           # meets the same reply and leaves it at the same place
+                seen.append(chunk)
+                yield chunk
+        except GeneratorExit:
+            getattr(stream, "close", lambda: None)()
+            keep(kwargs, _streamed_reply(seen))
+            raise
         keep(kwargs, _streamed_reply(seen))
 
     def recorded(**kwargs):

@@ -188,6 +188,19 @@ def names(f: Formation) -> list:
     return list(dict.fromkeys(x for x in out + [WHOLE_WELL_ITEM] if x))
 
 
+def as_written(f: Formation, labels) -> list:
+    """A scope's labels as a READ reply can write them: one of names(f) or a depth range, as they are; a unit's name
+    with its depths ("NAME (TOP-BASE m)": a range that is a unit's own, also of a name the tops file lists more than
+    once) by its depths. The READ shows the scope in force this way: shown by its label, a reply that restated it
+    could not be typed, and the decoder went on from the name's first letters to another unit's name."""
+    known, out = set(names(f)), []
+    for label in labels:
+        label = str(label)
+        m = re.fullmatch(r".+ \((" + RANGE_PATTERN.strip("^$") + r")\)", label)
+        out.append(m.group(1) if m and label not in known else label)
+    return out
+
+
 def _items(f: Formation, asked: str) -> list:
     """The items one asked word names, beyond the focus's zones: lithology zones under the user's zones (an L id, or a
     lithology: each of its zones), a unit (of the tops file or the user's zones), a depth range."""

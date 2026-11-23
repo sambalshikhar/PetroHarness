@@ -32,7 +32,7 @@ investigation step and in Markdown when it writes the answer.
 |---|---|
 | An OpenAI-compatible endpoint | A base URL ending in `/v1` that answers `POST /chat/completions`, and lists its models at `GET /models` (the web UI's health check) |
 | A context window of 64k tokens or more | Prompts run up to about 40,000 tokens (39,340 at most in the [Conversations](SESSIONS.md) example on GeoLink 30/6-5), and each reply needs room on top. A request that does not fit is sent once more with a smaller output allowance |
-| JSON replies on request | Each investigation step asks, in its prompt, for one JSON object. A reply that is not valid JSON is salvaged where it can be, or sent back once to be fixed. The READ call and the figure choice also carry their reply's JSON schema, for servers that support structured output (`structured_output` below) |
+| JSON replies on request | Each investigation step asks, in its prompt, for one JSON object. A reply that is not valid JSON is salvaged where it can be, or sent back once to be fixed. The READ call and the figure choice also carry their reply's JSON schema, for servers that support structured output (`structured_output` below). A server that types a reply by a grammar may let whitespace stand between its tokens, and a model now and then writes nothing else up to the token cap; these two calls are read as they stream, and a reply that runs 400 characters of whitespace on end is ended there and asked again |
 
 ## Choosing the model
 

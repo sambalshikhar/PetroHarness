@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.0.2 (2026-11-23)
+
+A stop button in the web UI, and three fixes for conversations and for questions typed freely. A single question on
+one interval is answered as in 2.0.1: its prompts and its replies do not change.
+
+- **Web UI: a question that is waiting or running can be stopped.** While a question waits or is being answered,
+  the button of the box at the bottom is Stop. A question still waiting is taken off the queue; one running ends as
+  soon as the model call in flight is left, usually within a second. A stopped question is no failure: it has no
+  answer, the work it had done stays on the page, and the next question continues the same conversation
+  (`docs/UI.md`, *Stopping a question*; `POST /api/stop/ID`).
+- **After a change that cuts the zones anew, a zone id of before is not read as the zone of that id now.** A zone
+  rule cuts the zones anew, and so do the lithology domain of a well without a lithology log and zones of your own;
+  `Z3` then names another stretch than it did, and a later question compared the two as one zone. The next questions
+  are now shown the zones as they were, each with where its depths lie now; a result opened before says that its zone
+  ids are the zones of then; and a zone asked of such a result is found by the zones it was opened under. The
+  session's log keeps the zones of before (`zones_before`). See `docs/SESSIONS.md`, *What a settings change does*.
+- **The reply that reads a question says what the model means.** Where you type freely (a conversation, the web
+  UI), the reply that reads a question is typed by a schema. Three faults came from what that schema could not hold:
+  - A question about the well was now and then answered with "That is outside what I do here". The reply had to
+    choose the kind of answer from three words, and a reply whose reasoning meant another word came out as `outside`.
+    The kind of answer is now the model's own word, and only `outside` is read as outside.
+  - A request outside the well's logs was now and then investigated. The reply had to name a topic for a request
+    that needs none, and then went on as for a question about the well. Such a reply may now name no topic.
+  - After a stretch chosen by its depths for a name the tops file lists more than once (`/scope 874-1250 m` for "the
+    Manganui"), the next question was often computed on another unit with a similar name. The scope in force was
+    shown by a label the reply could not write back. It is now shown as the reply writes it: a name the map lists
+    once, else its depths.
+- **A reply that fills with whitespace is ended and asked again.** A server that types a reply by a grammar may let
+  whitespace stand between its tokens, and a model now and then wrote nothing else up to the token cap: about 2 in
+  1,000 questions waited eight minutes before the question was read again. The two calls with a reply schema (reading
+  the question, choosing the figures) are now read as they stream, and a reply that runs 400 characters of
+  whitespace on end is ended there and asked again, in seconds.
+
 ## 2.0.1 (2026-11-23)
 
 The harness, its prompts and its tools are as in 2.0.0: no answer changes.

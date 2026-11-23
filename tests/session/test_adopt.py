@@ -80,6 +80,7 @@ def test_the_change_is_logged_and_the_well_interpreted_again(changed):
     ev = c.log.events("settings")
     assert len(ev) == 1 and ev[0]["turn"] == 2 and ev[0]["by"] == "user" and ev[0]["interpretation"] == {"m": 1.8}
     assert ev[0]["zones"] and ev[0]["interval"]
+    assert "zones_before" not in ev[0]                                         # this change cut no zone anew
     assert T.used(c.p.view.prep)["m"]["value"] == pytest.approx(1.8)            # the saturation step ran with it
     assert changed["m_before"] != pytest.approx(1.8)
     assert c.adopt({"m": 1.8}) == [] and len(c.log.events("settings")) == 1       # the settings in force: no change
@@ -105,6 +106,7 @@ def test_the_next_question_s_prompts_name_the_change(changed):
     text = later["messages"][-1]["content"]
     assert "Settings changed before question 2 (by the user): m the default" in text and "-> 1.8" in text
     assert "The well was interpreted again with them." in text
+    assert "cut anew" not in text and not changed["c"].live.ledger.then      # the zones are as they were
     assert not any("Settings changed" in m["content"] for x in changed["model"].sent[:changed["asked2"]]
                    for m in x["messages"])                                   # never before the change
 
@@ -155,3 +157,69 @@ def test_settings_helpers():
                                                        {"key": "a", "from": None, "to": 1.0}]
     assert T.describe([{"key": "m", "from": 2.0, "to": 1.8}]) == "m 2 -> 1.8"
     assert T.describe([{"key": "rw", "from": None, "to": 0.04}]).startswith("rw the default")
+
+
+# ---------- a change that cuts the zones anew ----------
+REZONE = {"zone_min_thickness_m": 5}      # the window's thin first zone goes: Z2 and Z3 of before are Z1 and Z2 after
+
+
+@pytest.fixture(scope="module")
+def rezoned(env, tmp_path_factory):
+    """Question 1, then a zone rule that cuts the zones anew, then question 2."""
+    folder = tmp_path_factory.mktemp("rezoned") / "s"
+    model = Model()
+    c = Conversation.start(LAS, folder, **WINDOW, llm_factory=lambda cfg: model, figures=False, direct=False)
+    then = [(z.zone_id, z.top, z.base) for z in c.p.view.zones]
+    c.ask(Q1)
+    opened1 = list(c.turns[0]["opened"])
+    c.adopt(REZONE)
+    asked2 = len(model.sent)
+    shown = c.earlier()
+    c.ask(Q2)
+    now = [(z.zone_id, z.top, z.base) for z in c.p.view.zones]
+    return {"c": c, "model": model, "opened1": opened1, "asked2": asked2, "then": then, "now": now, "folder": folder,
+            "shown": shown}
+
+
+def test_the_log_holds_the_zones_before_a_change_that_cut_them_anew(rezoned):
+    c, then, now = rezoned["c"], rezoned["then"], rezoned["now"]
+    assert len(now) < len(then) and then[1][1:] == now[0][1:] and then[1][0] != now[0][0]   # the same stretch, another id
+    ev = c.log.events("settings")[0]
+    assert [(z["zone"], z["top"], z["base"]) for z in ev["zones_before"]] == then
+    assert [(z["zone"], z["top"], z["base"]) for z in ev["zones"]] == now
+
+
+def test_the_next_question_is_shown_the_zones_of_then_and_where_each_lies_now(rezoned):
+    then, now = rezoned["then"], rezoned["now"]
+    later = [x for x in rezoned["model"].sent[rezoned["asked2"]:] if x["stage"] == "step_1"][0]
+    text = later["messages"][-1]["content"]
+    assert f"The zones were cut anew: {len(then)} before, {len(now)} now." in text
+    assert "A zone id in a result or an answer from before names the zone as it was then" in text
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip().startswith("then Z")]
+    assert len(lines) == len(then)
+    assert lines[0].startswith(f"then {then[0][0]} ") and lines[0].endswith(": now outside any zone")
+    assert f": now {now[0][0]} " in lines[1] and lines[1].endswith("(the same depths)")       # then Z2 = now Z1
+    assert text.index("Settings changed before question 2") < text.index("The zones were cut anew")
+    assert rezoned["shown"] in text                                                 # the block as earlier() gives it
+
+
+def test_a_result_opened_before_keeps_the_zones_it_was_opened_under(rezoned):
+    c, then, now = rezoned["c"], rezoned["then"], rezoned["now"]
+    led = c.live.ledger
+    first, second = _sw_items(c)[0], _sw_items(c)[-1]
+    assert set(rezoned["opened1"]) == set(led.then) and second.id not in led.then
+    assert "and its zone ids name the zones as cut then" in led.show(first, False)
+    assert "its zone ids: the zones as cut then" in led.digest(first)
+    assert "zones as cut then" in led.get(first.id, then[1][0]) and "zones as cut then" not in led.show(second)
+    depth = (then[1][1] + then[1][2]) / 2                      # inside the stretch whose id changed
+    assert led.zone_of(depth, first) == then[1][0]             # by the zones the result was opened under
+    assert led.zone_of(depth) == led.zone_of(depth, second) == now[0][0]
+
+
+def test_resuming_keeps_the_zones_of_what_was_opened_before(rezoned, tmp_path):
+    copy = tmp_path / "copy"
+    shutil.copytree(rezoned["folder"], copy, symlinks=True)
+    r = Conversation.resume(copy, llm_factory=lambda cfg: Model())
+    assert r.log.events("session_resume")[-1]["differences"] == []
+    assert set(rezoned["opened1"]) == set(r.live.ledger.then)
+    assert "The zones were cut anew" in r.earlier()

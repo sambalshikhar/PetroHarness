@@ -207,13 +207,13 @@ Set in `agent/graph.py` unless noted.
 | `components` | object | always | Each prompt component's version, `C1` to `C10`: 12 hex of SHA-1 over its files and the code it frames | `agent/components.py`, `versions` |
 | `reads_depth` | bool | always | Whether the READ call was asked if the question is direct (false with `--investigate`) | `turn` |
 | `options` | object | after the investigation | The switches in force (`options.py`); `{}` when none is defined | `close` |
-| `status` | str | always | `ok`, `unresolved_numbers`, `ask_user` (asked back, nothing computed), `outside` (a request outside what the harness does), `error: empty answer (the writer's last draft was empty)` or `error: <exception type>` | `turn`, `finalize`, `answer_status` |
+| `status` | str | always | `ok`, `unresolved_numbers`, `ask_user` (asked back, nothing computed), `outside` (a request outside what the harness does), `stopped` (its user stopped it: no answer, and `stopped: true` in the trace), `error: empty answer (the writer's last draft was empty)` or `error: <exception type>` | `turn`, `finalize`, `answer_status` |
 | `seconds` | float | always | Wall time of the question graph, to 0.1 s | `turn` |
 | `error`, `traceback` | str | the run failed | `<type>: <message>`, and the last 4,000 characters of the traceback; for an empty answer only `error`, `the writer's last draft was empty` | `turn`, `finalize` |
 | `answer` | str | always | The delivered answer | `ask.py`, `session/graph.py`, `cli.py` |
 
 ```json
-{"task_id": "a2f8275dd57", "well": "30_6-5", "formation": "BRENT GP.", "harness": "petroharness 2.0.1",
+{"task_id": "a2f8275dd57", "well": "30_6-5", "formation": "BRENT GP.", "harness": "petroharness 2.0.2",
  "commit": "<commit>", "model": "K2-Horizon-7B", "skills": {"library": "researched", "version": "18c03ad5d3f8"},
  "components": {"C1": "6f8f4c39893a", "...": "..."}, "reads_depth": true, "status": "ok", "seconds": 903.5}
 ```
@@ -228,8 +228,8 @@ Set in `agent/graph.py` unless noted.
 | Key | Type | Present | Meaning | Set by |
 |---|---|---|---|---|
 | `map_chars` | int | always | Length of the map, set after `build` and after the READ call | `build`, `read_step` |
-| `read` | object | always | The READ call: `reply` (first 3,000 characters), `parse` (`ok`, `retry`, `failed`), `topics`, `named`, and `depth` (`direct` or `investigate`) when asked | `agent/read.py`, `read_question` |
-| `topics` | list of str | always | The topic areas the model chose (at most 4; `[]` when unreadable) | `agent/read.py`, `read_question` |
+| `read` | object | always | The READ call: `reply` (first 3,000 characters), `parse` (`ok`, `retry`, `failed`), `topics`, `named`, and `depth` when asked (`direct` or `investigate`; `outside` for a request outside what the harness does). `reply` keeps the word as the model wrote it | `agent/read.py`, `read_question` |
+| `topics` | list of str | always | The topic areas the model chose (at most 4; `[]` when unreadable, or when the model named none: a request outside what the harness does needs none) | `agent/read.py`, `read_question` |
 | `absent` | list of objects | always | `{"name", "curves"}` for each measurement the question names with no data here | `first_look` |
 | `overview` | str | a first look ran | The first look's call, as `stats {"curves": [...]}` | `first_look` |
 | `depth` | object | a direct question went to an investigation | `{"read": "direct", "investigated_from_step": k, "why": ...}` from a look step, or `{"read": "direct", "investigated_from": "the writer", "why": ...}` | `look`, `write_brief` |
@@ -424,11 +424,11 @@ The writer call of question 1:
 | `prompt_tokens`, `completion_tokens` | int | always | As the server reports them (0 when none) | `Usage.add` |
 | `seconds` | float | always | Time of the call, to 0.01 s | `Usage.add` |
 | `reasoning_chars`, `content_tokens` | int | the reply carried reasoning | Reasoning length; completion tokens apportioned to the content by character share | `Usage.add` |
-| `finish_reason` | str | not `stop` | The server's finish reason (`length` and so on) | `Usage.add` |
+| `finish_reason` | str | not `stop` | The server's finish reason (`length` and so on); `whitespace` for a reply the client ended because it ran whitespace on end | `Usage.add`, `LLM._streamed` |
 | `max_tokens_shrunk` | int | the server refused the prompt as too long | The output allowance the request was sent again with | `LLM.chat` |
 | `template_kwargs` | object | a retry call with the card's retry settings | The chat template settings used | `LLM.chat` |
 | `light` | bool | a call at the card's light thinking setting | `true` | `LLM.chat` |
-| `discarded` | str | a reasoning model's reply cut at the cap | `truncated reasoning reply`: the reply was returned as `""` | `LLM.chat` |
+| `discarded` | str | a reply the client did not pass on | `truncated reasoning reply` (a reasoning model's reply cut at the cap) or `whitespace without end` (a reply ended as it ran whitespace; its token counts are not known and read 0): the reply was returned as `""` | `LLM.chat` |
 
 ```json
 {"stage": "figures", "prompt_tokens": 5481, "completion_tokens": 173, "seconds": 2.54, "light": true}
@@ -601,7 +601,7 @@ The setup record of the process answering from this question on ([section 9](#9-
 
 ```json
 {"seq": 3, "time": "<time>", "turn": 1, "type": "setup", "hash": "d70dbbf039dd",
- "harness": "2.0.1", "commit": "<commit>", "petrophys": "3.0.0@files-c5de047fe601",
+ "harness": "2.0.2", "commit": "<commit>", "petrophys": "3.0.0@files-c5de047fe601",
  "components": {"C1": "6f8f4c39893a", "...": "..."}, "functions": "1e177d0c7ca2", "model": "<served model name>",
  "card": "33012b760d52", "data": "61dcbf7ecfe4", "policy": "7631a4a859eb", "writer": "open", "max_steps": 8, "...": "..."}
 ```
@@ -703,7 +703,7 @@ The question's summary; later questions, the resume and the evidence graph read 
 | Field | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
 | `question`, `task_id` | str | none | The question as asked, and its task id | `commit` |
-| `status` | str | none | `ok`, `unresolved_numbers`, `ask_user`, `outside`, `error: empty answer (...)` or `error: <type>`, as the trace's `status` | `commit` |
+| `status` | str | none | `ok`, `unresolved_numbers`, `ask_user`, `outside`, `stopped`, `error: empty answer (...)` or `error: <type>`, as the trace's `status` | `commit` |
 | `opening` | str | `""` | The answer's first prose paragraph of at least 40 characters, at most 600 (`earlier.opening`) | `session/earlier.py`, `opening` |
 | `claims` | list of objects | `[]` | The settled claims (not `hypothesis`): `point`, `text`, `grade`, `ev` | `turn` |
 | `opened` | list of str | `[]` | The ids this question opened | `commit` |
@@ -738,6 +738,7 @@ The question's summary; later questions, the resume and the evidence graph read 
 | `by` | str | `user` | Who asked | `Conversation.adopt` |
 | `interpretation` | object | none | The settings in force after the change | `Conversation.adopt` |
 | `interval`, `zones` | object, list | none | The interval and the zones of the well interpreted again | `Conversation.adopt` |
+| `zones_before` | list | absent | The zones before the change, when it cut them anew (the same fields as `zones`); a `zones` event (your zones file) carries `zones_before` and `zones_now` the same way | `Conversation.adopt`, `Conversation.adopt_zones` |
 
 `Conversation.adopt({"m": 1.8})` on a resumed copy of the Brent conversation, before question 3 (`adopt` logs nothing
 when the settings asked for are those in force):
@@ -879,7 +880,7 @@ Set in `core/setup.py`, `of` unless noted.
 
 | Field | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `harness` | str | none | The package version (`petroharness.__version__`, `2.0.1`) | `of` |
+| `harness` | str | none | The package version (`petroharness.__version__`, `2.0.2`) | `of` |
 | `commit` | str | `""` for an installed package | The harness commit when `core/setup.py` is a tracked file, with `+dirty` when `src/` has changes | `harness_commit` |
 | `petrophys` | str | none | The Petrophys build (`library_identity`) | `well/prepare.py` |
 | `components` | object | none | Each component's version | `agent/components.py`, `versions` |
@@ -1221,7 +1222,7 @@ Defined in `evidence/report.py`, `markdown` unless noted.
 - **Interval:** BRENT GP. (2841.0-2958.0 m; 768 samples)
 - **LAS file:** `<site-packages>/petrophys/datasets/geolink/30_6-5.las`, SHA-256 `5ecf2c53...801b9`
 - ...
-- **PetroHarness:** 2.0.1 commit <commit>, setup `d70dbbf039dd`
+- **PetroHarness:** 2.0.2 commit <commit>, setup `d70dbbf039dd`
 - **Questions:** 2 answered of 2 asked
 ```
 

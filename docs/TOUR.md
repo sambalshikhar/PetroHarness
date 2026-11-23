@@ -80,7 +80,8 @@ The model first reads the question and says whether it is direct. A direct quest
 two lookups state) gets a short answer in a minute or two. This one needs an investigation: at most 8 steps, about
 15 minutes here.
 
-How to read each line of the work: [Read the work](TRACE.md).
+How to read each line of the work: [Read the work](TRACE.md). To end a question before it is answered, press
+**Stop**: while a question runs, it is the button of the box at the bottom ([Stopping a question](UI.md#stopping-a-question)).
 
 On the command line: `petroharness --las FILE ... --question "..."` writes `answer.md` and `trace.json` when it is
 done; the steps are in the trace.

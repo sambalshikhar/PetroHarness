@@ -122,7 +122,8 @@ the areas it serves. The READ reply of the first question of the Brent conversat
 ```
 
 - The READ reply's schema allows one to four topics, each an area name; names that are not areas are dropped, and a
-  reply with none is unreadable.
+  reply with none is unreadable. Where a request may be outside the well's logs (a conversation, the web UI), a
+  reply may name no topic: such a request needs none.
 - The first topic is the primary one: the lookups a guide opens follow its families (section 7).
 
 <details>

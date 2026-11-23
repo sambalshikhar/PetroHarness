@@ -860,6 +860,7 @@ trace.
 |---|---|---|
 | The writer's reply is empty, or working notes throughout | `writer_retry`, or `writer_again` and then the first draft (section 2) | `agent/graph.py`, `_write` |
 | A reasoning model's writer reply is cut at the token cap | the client returns `""` and logs `discarded` in the usage entry; the retry rules apply | `llm.py`, `LLM.chat` |
+| A reply typed by a schema (READ, the figure choice) runs whitespace on end | the client ends the call after `WHITESPACE_RUN` (400) characters of whitespace, returns `""` and logs `discarded`; the call is asked again as after an empty reply | `llm.py`, `LLM._streamed` |
 | The final draft is empty | no repair; answer `""`, status `error: empty answer (the writer's last draft was empty)`, `trace.error` `the writer's last draft was empty`; `answer.md` shows `(no answer: the writer's last draft was empty)`; a conversation draws no figures for it | `agent/graph.py`, `after_verify`, `finalize`, `answer_status` |
 | `RESULTS` exceeds 60,000 characters | cut with `... (cut)`; the checker still accepts numbers from every result (section 3) | `agent/writer.py`, `prompt` |
 | A number survives the last round | status `unresolved_numbers` (only numbers change the status) | `agent/graph.py`, `answer_status` |

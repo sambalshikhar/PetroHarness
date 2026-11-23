@@ -464,6 +464,18 @@ under a new id:
   Z1: ... SW mean 0.6757; ...
 ```
 
+A change can also cut the zones anew: a zone rule, the lithology domain of a well without a lithology log, zones
+of your own. A zone id then names another stretch than before, so the change line of EARLIER IN THIS SESSION lists
+the zones as they were, each with where its depths lie now (KGS Morgan No. 1-17, Lansing-Kansas City, after the
+carbonate domain was set), and an earlier item says whose zones its ids are:
+
+```text
+The zones were cut anew: 4 before, 3 now. A zone id in a result or an answer from before names the zone as it was then, and the same id may name another stretch now:
+  then Z3 SANDSTONE 4050-4059.5 ft: now Z2 LIMESTONE over 4050-4051 ft; the rest outside any zone
+  then Z4 SHALE 4060-4068 ft: now Z3 NO_LITHOLOGY_DATA (the same depths)
+[E1] (opened before the settings change before question 3 (lithology_domain the default -> carbonate; ...): these values rest on the earlier settings, and its zone ids name the zones as cut then; stats PERM, PHIE, ...) ...
+```
+
 <details>
 <summary><code>Ledger.turn_start</code> and <code>Ledger.superseded</code></summary>
 
@@ -484,14 +496,18 @@ under a new id:
 
 | Name | Type | Meaning | Defined in |
 |---|---|---|---|
-| `Session.rewell(task, cfg, change)` | method | rebuilds the view, store, inventory and map from the newly prepared well, then calls `Ledger.rewell` | `state.Session.rewell` |
-| `Ledger.rewell(f, change)` | method | `f` replaced; every existing id gets `before[id] = change` (first change kept); `_keys` cleared | `ledger.Ledger.rewell` |
+| `Session.rewell(task, cfg, change, rezoned)` | method | rebuilds the view, store, inventory and map from the newly prepared well, then calls `Ledger.rewell` | `state.Session.rewell` |
+| `Ledger.rewell(f, change, rezoned)` | method | `f` replaced; every existing id gets `before[id] = change` (first change kept); `_keys` cleared; with `rezoned`, every existing id also keeps the formation it was opened under, `then[id]` (first kept) | `ledger.Ledger.rewell` |
 | `change` | `str` | the change in words: `the settings change before question <n> (<description>)` | `session.conversation.Conversation` |
+| `rezoned` | `bool` | the change cut the zones anew: the zones before it are not the zones after it (`Conversation._rezoned`) | `session.conversation.Conversation` |
+| `Ledger.zone_of(depth, item)` | method | the zone holding a depth; for an item in `then`, by the zones it was opened under (`get`, `find` and the writer's cited lines look a zone up this way) | `ledger.Ledger.zone_of` |
+| `earlier.rezoned(then, now, unit, step)` | function | the lines above: each zone of before with where its depths lie now (the same depths, inside a zone, over part of one or more, or outside any zone); at most `ZONES_THEN = 24` zones listed, the rest counted | `session.earlier.rezoned` |
 
 - Ids continue after the change; the same call asked again is computed on the new well because `_keys` is empty.
 - The marks appear in `show`, in the digest (`[E1] (before the settings change before question 2 (m the default ->
   1.8)) ...`) and in a `get` header (`[E1] stats ... (find: SW, Z7) (opened before the settings change before question
-  2 (m the default -> 1.8): these values rest on the earlier settings)`).
+  2 (m the default -> 1.8): these values rest on the earlier settings)`). For an item in `then` they add `, and its
+  zone ids name the zones as cut then` (in the digest: `; its zone ids: the zones as cut then`).
 
 </details>
 
@@ -867,7 +883,8 @@ so a test that sets one of them changes the run.
 | `MINERAL_VOLUMES` | `tuple` | `VCL`, `VQUAR`, `VCALC`, `VDOLO`, `VANHY`, `VSAND`, `VSILT`, `VSHALE`, `VCOAL` | added to the first look when `lithology_mineralogy` (`MINERAL_TOPIC`) is a topic | `prompts.MINERAL_VOLUMES` |
 | `CORE_LOOK_CAP` | `int` | `14` | the first look's curves: the curves other than the reservoir and mineral curves are cut to `max(14 - <their count>, 8)` | `prompts.CORE_LOOK_CAP` |
 | first look | rule | 8 + named, 12 | at most 8 topic overview curves, then the named curves, 12 in all, before the core curves and twins are added | `graph.first_look` |
-| READ reply | schema | 1 to 4 topics; 12 names | `topics` from the topic areas; `named` strings | `read.read_schema` |
+| READ reply | schema | 1 to 4 topics; 12 names | `topics` from the topic areas; `named` strings. Where a request may be outside the well's logs (reach well, the depth read), 0 to 4 topics: such a request needs none | `read.read_schema` |
+| `DEPTH_WORD` | pattern | one lowercase word, at most 24 letters | the READ reply's `depth` where users type freely (reach well): the word as the model writes it; `direct` is direct, `outside` is outside, any other word an investigation | `read.DEPTH_WORD`, `read._reading` |
 | `NAME_CHARS` | `int` | `80` | a name as the absent note shows it | `vocabulary.NAME_CHARS` |
 | `EARLIER_CHARS` | `int` | `6000` | EARLIER IN THIS SESSION; `OPENING_CHARS` 600, `QUESTION_CHARS` 300, `CLAIM_CHARS` 240 | `session/earlier.py` |
 | `RECURSION_LIMIT` | `int` | `200` | LangGraph supersteps of one question | `graph.RECURSION_LIMIT` |
@@ -886,6 +903,7 @@ The output caps come from the model card ([MODELS.md](../MODELS.md)).
 | fix call | `int` | `min(max_tokens_spec, len(reply) // 2 + 3000)` | the call that fixes a reply's JSON syntax; sent with the card's retry settings | `replies.parse` |
 | empty reply | rule | one retry | a step, look or writer call that returns nothing is sent again with `retry=True` (`step_k_retry`, `writer_retry`) | `graph.ask`, `graph.look`, `graph._write` |
 | READ retry | rule | one | an unreadable READ reply is sent again as `read_retry` (same settings) | `read.read_question` |
+| `WHITESPACE_RUN` | `int` | `400` | characters of whitespace on end after which a streamed reply is ended and discarded (a reply typed by a schema is always streamed) | `llm.WHITESPACE_RUN` |
 
 The output caps in the packaged `generic.yaml` card:
 
@@ -1195,7 +1213,7 @@ The JSON shape of every reply the harness reads.
 
 | Stage | Type | Shape | Defined in |
 |---|---|---|---|
-| `read` | JSON schema | `{"topics": [area, ...], "named": [str, ...]}`, with `"depth": "direct" or "investigate"` when depth is read | `read.read_schema`, `read._reading` |
+| `read` | JSON schema | `{"topics": [area, ...], "named": [str, ...]}`, with `"depth": "direct" or "investigate"` when depth is read; under reach well also `scope`, `depth` is one word (`read.DEPTH_WORD`): `direct`, `outside`, or any other word, read as an investigation, and `topics` may be `[]` | `read.read_schema`, `read._reading` |
 | `step_1` | object | `asks`, `points`, `intent`, `focus`, `edits`, `next`, `done`; a later question may add `"reply": "brief" or "full"` | C1 `brief.md`, `replies.read_reply` |
 | `step_k` | object | `focus`, `edits`, `next`, `done` | `replies.read_reply` |
 | look step | object | `{"done": true}`, `{"next": [...], "done": false}`, or `{"depth": "investigate"}` | C5 `direct_step.md`, `graph.look` |

@@ -154,10 +154,12 @@ def clip_thinking(text: str) -> str:
 class Observed:
     """The harness's model client with every call reported to `emit` (an event dict), behaviour unchanged."""
 
-    def __init__(self, inner, emit: Callable[[dict], None], numbers=None, live: Callable[[dict], None] | None = None):
+    def __init__(self, inner, emit: Callable[[dict], None], numbers=None, live: Callable[[dict], None] | None = None,
+                 stop: Callable[[], bool] | None = None):
         self.inner = inner
         self.emit = emit
         self.live = live                            # what the call in flight has said so far (None: not followed)
+        self.stop = stop                            # whether the run's user stopped it (None: it cannot be stopped)
         self.numbers = numbers                      # a shared counter, when one run uses several clients
         self.calls = 0
         self.results: dict = {}                     # id -> (text, digest): the best seen so far
@@ -169,6 +171,9 @@ class Observed:
         return getattr(self.__dict__["inner"], name)
 
     def chat(self, stage: str, messages: list, usage, max_tokens: int, *args, **kwargs) -> str:
+        from petroharness.llm import Stopped
+        if self.stop is not None and self.stop():   # stopped between two calls: the next one is not made
+            raise Stopped(stage)
         self.calls += 1
         n = next(self.numbers) if self.numbers is not None else self.calls
         self._scan(stage, messages)
@@ -184,8 +189,15 @@ class Observed:
         streams = self.live is not None and hasattr(self.inner, "stream_to")     # the harness's LLM streams to it
         if streams:
             self.inner.stream_to = self._listener(n, stage)
+        stops = self.stop is not None and hasattr(self.inner, "stop_if")         # the harness's LLM leaves a call in flight
+        if stops:
+            self.inner.stop_if = self.stop
         try:
             text = self.inner.chat(stage, messages, usage, max_tokens, *args, **kwargs)
+        except Stopped:                             # left where it was: said, then raised unchanged
+            self.emit({"kind": "reply", "stage": stage, "type": kind, "n": n, "seconds": round(time.perf_counter() - t0, 1),
+                       "stopped": True})
+            raise
         except Exception as exc:                    # reported, then raised unchanged
             self.emit({"kind": "reply", "stage": stage, "type": kind, "n": n, "seconds": round(time.perf_counter() - t0, 1),
                        "error": f"{type(exc).__name__}: {str(exc)[:400]}"})
@@ -194,6 +206,8 @@ class Observed:
             if streams:
                 self.inner.stream_to = None
                 self.live({})
+            if stops:
+                self.inner.stop_if = None
         reply = {"kind": "reply", "stage": stage, "type": kind, "n": n, "seconds": round(time.perf_counter() - t0, 1)}
         log = getattr(usage, "log", []) or []
         if len(log) > logged:

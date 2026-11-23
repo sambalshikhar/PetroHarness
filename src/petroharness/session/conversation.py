@@ -46,7 +46,7 @@ class Turn:
     number: int
     question: str
     answer: str
-    status: str                   # ok, unresolved_numbers, error: ...
+    status: str                   # ok, unresolved_numbers, stopped (by its user: no answer), error: ...
     trace: dict
     folder: Path                  # turns/NN (answer.md, trace.json, tape.jsonl, figures/)
     figures: list = field(default_factory=list)   # the figures drawn for it (petroharness.figures): caption, file
@@ -54,7 +54,16 @@ class Turn:
 
     @property
     def ok(self) -> bool:
-        return not self.status.startswith("error")
+        return not unanswered(self.status)
+
+    @property
+    def stopped(self) -> bool:
+        return self.status == "stopped"
+
+
+def unanswered(status) -> bool:
+    """A question with no answer to go on from: one that failed, or one its user stopped."""
+    return str(status or "").startswith("error") or status == "stopped"
 
 
 def _sha(text: str) -> str:
@@ -253,12 +262,15 @@ class Conversation:
         n = len(self.turns) + 1
         path = str(Path(zones).expanduser().resolve()) if zones else None
         before = dict(self.inputs)
+        then = self._zone_rows()
         try:
             said = self._zones(path, sheet, n)
         except Exception:
             self.inputs = before                      # a file that cannot be used leaves the zones in force
             raise
-        self.log.append("zones", n, zones=path, sheet=sheet if path else None, by=by)
+        now = self._zone_rows()
+        self.log.append("zones", n, zones=path, sheet=sheet if path else None, by=by,
+                        **({"zones_before": then, "zones_now": now} if then != now else {}))
         return said
 
     def _zones(self, path: str | None, sheet: str | None, n: int) -> str:
@@ -272,6 +284,7 @@ class Conversation:
         else:
             self.inputs.pop("zones", None)
             self.inputs.pop("zones_sheet", None)
+        then = self._zone_rows()
         self.p = self._prepared(self.p.las, self.key, self.folder, self.inputs, self.on_view)
         said = f"your zones from {Path(path).name}" if path else "the lithology zones (your zones taken away)"
         if self.live is not None:
@@ -279,7 +292,7 @@ class Conversation:
             task, _ = I.task_for(self.p, "(the interval)", n)
             with self._settings():
                 self.live.rewell(task, graph.task_config(task, self.key, 1), f"the zones changed before question {n} "
-                                 f"({said})")
+                                 f"({said})", self._rezoned(then))
         return said
 
     def changes(self) -> list:
@@ -311,11 +324,16 @@ class Conversation:
                              "its own settings. FIX: change only the zone rule, or start a conversation without a "
                              "profile.")
         n = len(self.turns) + 1
+        then = self._zone_rows()
         self._apply(after, n, made)
-        self.log.append("settings", n, changes=made, by=by, interpretation=after, interval=self.p.used,
-                        zones=[{"zone": z.zone_id, "lithology": z.lithology, "top": z.top, "base": z.base}
-                               for z in self.p.view.zones])
+        now = self._zone_rows()
+        self.log.append("settings", n, changes=made, by=by, interpretation=after, interval=self.p.used, zones=now,
+                        **({"zones_before": then} if then != now else {}))    # the change cut the zones anew
         return made
+
+    def _zone_rows(self) -> list:
+        """The zones in force, as the log records them: [{zone, lithology, top, base}]."""
+        return [{"zone": z.zone_id, "lithology": z.lithology, "top": z.top, "base": z.base} for z in self.p.view.zones]
 
     def _apply(self, after: dict, n: int, made: list) -> None:
         """The settings `after` in force from question n: the well interpreted again, the live session moved to it."""
@@ -324,13 +342,19 @@ class Conversation:
             self.inputs["interpretation"] = dict(after)
         else:
             self.inputs.pop("interpretation", None)
+        then = self._zone_rows()
         self.p = self._prepared(self.p.las, self.key, self.folder, self.inputs, self.on_view)
         if self.live is not None:
             from petroharness.agent import graph
             task, _ = I.task_for(self.p, "(the interval)", n)
             with self._settings():
                 self.live.rewell(task, graph.task_config(task, self.key, 1),
-                                 f"the settings change before question {n} ({describe(made)})")
+                                 f"the settings change before question {n} ({describe(made)})", self._rezoned(then))
+
+    def _rezoned(self, then: list) -> bool:
+        """Whether a change just made cut the zones anew (`then`: the zones before it): the live session then keeps,
+        for each result opened before, the zones it was opened under (Ledger.rewell)."""
+        return then != self._zone_rows()
 
     def overview(self) -> Path | None:
         """The interval's log display by Petrophys (petroharness.figures.overview), drawn once per conversation into
@@ -377,8 +401,8 @@ class Conversation:
             with self._settings():
                 task = tasks[rec["turn"]]
                 if self.live is None:
-                    if rec["turn"] not in results and str(rec.get("status", "")).startswith("error"):
-                        continue                          # a question that failed before the well was read
+                    if rec["turn"] not in results and unanswered(rec.get("status")):
+                        continue                          # a question that failed, or was stopped, before the well was read
                     self.live = Session.build(task, graph.task_config(task, self.key, 1))
                 else:
                     self.live.next_turn(task, "")
@@ -409,8 +433,14 @@ class Conversation:
     # --- asking -------------------------------------------------------------------------------------------------------
     def earlier(self) -> str:
         """EARLIER IN THIS SESSION as the next question's prompts will show it ("" before the first question)."""
-        made = self.changes() + [{**{k: e.get(k) for k in ("turn", "by", "scope", "frame", "zones", "interval")}, "kind": kind}
-                                 for kind in ("zones", "scope", "frame") for e in self.log.events(kind)]
+        def cut(e: dict, now: str) -> dict:           # a change that cut the zones anew: the zones then, and now
+            if not (self.p is not None and e.get("zones_before") and e.get(now)):
+                return {}
+            return {"then": e["zones_before"], "now": e[now], "unit": self.p.view.depth_unit, "step": self.p.view.step}
+        made = [{**c, **cut(e, "zones")} for c, e in zip(self.changes(), self.log.events("settings"))]
+        made += [{**{k: e.get(k) for k in ("turn", "by", "scope", "frame", "zones", "interval")}, "kind": kind,
+                  **(cut(e, "zones_now") if kind == "zones" else {})}
+                 for kind in ("zones", "scope", "frame") for e in self.log.events(kind)]
         return block(self.turns, changes=sorted(made, key=lambda e: e["turn"]))
 
     def ask(self, question: str) -> Turn:

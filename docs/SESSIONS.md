@@ -75,6 +75,10 @@ opened eight of its own (E11 to E18), and began:
 
 A later answer is checked as a first answer is: every number in it must come from a result.
 
+A question stopped from the web UI ([Stopping a question](UI.md#stopping-a-question)) stays in the conversation as a
+question with no answer: its `turn_end` in the log has the status `stopped`, the results it had opened keep their
+ids, and the next question is shown it as `(not answered: the user stopped it)`.
+
 ## Figures
 
 An answer carries up to three figures where a plot says it better than text. After the answer is written, one more
@@ -159,8 +163,23 @@ changed before question 3: sw_cutoff the default (0.7) -> 0.6
   from question 1: zone_min_thickness_m the default (2) -> 1 (the well was interpreted again)
   ```
 
-  The `settings` event records the 58 zones the well was interpreted into. Data: Taranaki Basin Curated Well Logs
-  Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.
+  The `settings` event records the 58 zones the well was interpreted into, and the 37 of before. Data: Taranaki
+  Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.
+- **When a change cuts the zones anew, a zone id no longer names the stretch it named before.** A zone rule does
+  it, and so do the lithology domain of a well without a lithology log and zones of your own. The next questions are
+  shown the zones as they were, each with where its depths lie now; a result opened before says that its zone ids
+  are the zones of then; and a zone asked of such a result is found by the zones it was opened under. On KGS Morgan
+  No. 1-17, Lansing-Kansas City, after `/set lithology_domain=carbonate matrix_type=limestone`:
+
+  ```text
+  The zones were cut anew: 4 before, 3 now. A zone id in a result or an answer from before names the zone as it was then, and the same id may name another stretch now:
+    then Z1 SHALE 4010-4021.5 ft: now outside any zone
+    then Z2 SANDSTONE 4031.5-4048.5 ft: now inside Z2 LIMESTONE (4031.5-4051 ft)
+    then Z3 SANDSTONE 4050-4059.5 ft: now Z2 LIMESTONE over 4050-4051 ft; the rest outside any zone
+    then Z4 SHALE 4060-4068 ft: now Z3 NO_LITHOLOGY_DATA (the same depths)
+  ```
+
+  Data: Kansas Geological Survey (kgs.ku.edu).
 </details>
 
 ## Changing the scope, the frame or the zones
@@ -186,7 +205,9 @@ from question 4: your zones from ness_etive.csv
 - **`/frame lithology`** reports every lookup by the lithology zones (where your zones frame the interval); `/frame
   zones` takes it back.
 - **`/zones FILE`** gives your zones from the next question on (the well is not interpreted again; earlier results say
-  they were read under the earlier zones). `/zones none` takes them away. A file that cannot be used changes nothing.
+  they were read under the earlier zones, and the next questions are shown the zones of before with where each lies
+  in yours, as after [a setting that cuts the zones anew](#changing-a-setting)). `/zones none` takes them away. A
+  file that cannot be used changes nothing.
 
 In Python: `c.set_scope(["Dunlin GP."])`, `c.set_frame("lithology")`, `c.adopt_zones("ness_etive.csv")`. Each change
 is logged with the question it takes effect at, the next questions' prompts name it, and a resumed conversation

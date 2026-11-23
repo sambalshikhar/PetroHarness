@@ -156,6 +156,21 @@ Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDL
   Interpretation chip names the notes ([Conversations](SESSIONS.md#field-notes)).
 </details>
 
+### Stopping a question
+
+While a question is waiting or being answered, the button of the box at the bottom is **Stop** (a square), not Ask.
+A click stops that question:
+
+- A question still waiting for a worker is taken off the queue.
+- One being answered ends as soon as the model call in flight is left, usually within a second; the button reads
+  *Stopping* meanwhile. During the first phase, while Petrophys interprets the well, it ends when the well is ready.
+- The run then reads **Stopped**: no answer was written, and nothing is shown as an error. The work it had done stays
+  on the page, and the results it had opened stay in the conversation.
+- The box is free again. The next question continues the same conversation and is told that the stopped one was not
+  answered. A question stopped before it was read leaves no question in the conversation: ask it again, or another.
+
+![The Stop button, and a stopped run](images/ui-stop.png "Top: the box while question 1 is being answered on GeoLink 30/6-5, Brent Group; its button is Stop. Bottom: the run after a click, 44 s in: its status reads stopped, and the bar marks the phase it was stopped in, the first step of the investigation. The box is free for the next question.")
+
 ## A conversation
 
 Once an answer is on screen, the box continues its conversation: the next question runs on the same well, interval
@@ -230,7 +245,7 @@ before you ask.
 
 ## Following a run
 
-The run's header shows the question, its status (queued, running, done, error; *asks you* or *outside* for a run that
+The run's header shows the question, its status (queued, running, done, stopped, error; *asks you* or *outside* for a run that
 ended by asking you back, [below](#when-the-harness-asks-you)), the LAS file, the interval, the time so far and the
 model endpoint, with a bar of its phases: queue, interpret the well, read the question, investigate, settle the
 claims, write, check. A run that asked you back stops after the question is read: its bar is Queue, Interpret the
@@ -417,7 +432,7 @@ BY-SA 4.0.
 
 The **Runs** drawer lists every run, newest first, with its status and rating; filter by any word. *Ask again or
 edit* starts a new conversation with a run's inputs and question in the box. Runs a stopped server left unfinished
-are marked interrupted when it starts again.
+are marked interrupted when it starts again; a question you stopped yourself reads stopped.
 
 **Replay.** A finished run's *Replay* (or the address `#replay=<run id>&speed=8`) plays the run again from its saved
 events, `speed` times faster. Nothing is recomputed and no model is called, so it works with the model servers down.

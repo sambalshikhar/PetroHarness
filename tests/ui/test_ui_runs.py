@@ -232,6 +232,54 @@ def test_the_queue(env, tmp_path):
         srv.server_close()
 
 
+def test_a_question_is_stopped_from_the_page_and_its_conversation_goes_on(env, tmp_path):
+    """The composer's Stop: POST /api/stop/<id>. A question still waiting is taken off the queue. One running is told
+    to stop: the call in flight is left and no other is made, and the run ends "stopped", with no answer and no
+    error, as a question of its conversation. The next question follows it and is shown that it was not answered."""
+    gate, log = threading.Event(), []
+    app = U.App(tmp_path / "runs", workers=1, model_factory=lambda cfg: StubModel(cfg, gate=gate, log=log))
+    srv, c = serve(app)
+    try:
+        ids = [c.json("/api/ask", {"las": str(LAS), "question": QUESTION, "interval": WINDOW})[1]["id"] for _ in range(2)]
+        t0 = time.time()
+        while not any(e["kind"] == "call" for e in app.jobs[ids[0]].events) and time.time() - t0 < 300:
+            time.sleep(0.2)
+        assert c.json(f"/api/stop/{ids[1]}", {}) == (200, {"id": ids[1], "status": "stopped"})     # waiting: off the queue
+        second = c.json(f"/api/job/{ids[1]}")[1]
+        assert second["status"] == "stopped" and not second["error"] and c.json("/api/config")[1]["queued"] == 0
+        assert c.json(f"/api/stop/{ids[0]}", {}) == (200, {"id": ids[0], "status": "stopping"})    # running: told to stop
+        assert c.json(f"/api/job/{ids[0]}")[1]["status"] == "running"
+        gate.set()                                               # the call in flight comes back; the next is not made
+        events, first = wait(c, ids[0])
+        assert first["status"] == "stopped" and first["answer"] == "" and not first["error"]
+        assert [e["name"] for e in events if e["kind"] == "phase"][-2:] == ["stopping", "finished"]
+        assert [e["stage"] for e in events if e["kind"] == "call"] == ["read"]         # no step was asked
+        assert first["conversation"]["turn"] == 1 and first["conversation"]["thread"][0]["status"] == "stopped"
+        assert first["result"]["status"] == "stopped" and not first["result"].get("traceback")
+        session = app.store.folder(ids[0]) / "session"
+        ends = [json.loads(x) for x in (session / "log.jsonl").read_text().splitlines() if '"turn_end"' in x]
+        assert [e["status"] for e in ends] == ["stopped"]
+        listed = {r["id"]: r["status"] for r in c.json("/api/runs")[1]}
+        assert listed[ids[0]] == "stopped" and listed[ids[1]] == "stopped"
+        # a stopped question that entered its conversation is followed by the next one
+        n = len(log)
+        status, got = c.json("/api/ask", {"follow": ids[0], "question": "And how shaly is the lower part?"})
+        assert status == 200, got
+        _, view = wait(c, got["id"])
+        assert view["status"] == "done" and view["conversation"]["turn"] == 2, view.get("error")
+        shown = [x for x in log[n:] if x["stage"] == "step_1"][0]["messages"][-1]["content"]
+        assert f"Question 1: {QUESTION}\n  (not answered: the user stopped it)" in shown
+        # one that never entered a conversation is not; a finished run is not stopped; an unknown run is not found
+        assert c.json("/api/ask", {"follow": ids[1], "question": "And then?"})[0] == 400
+        status, said = c.json(f"/api/stop/{ids[0]}", {})
+        assert status == 400 and "not running" in said["error"]
+        assert c.json("/api/stop/20990101-000000-nosuch", {})[0] == 404
+    finally:
+        gate.set()
+        srv.shutdown()
+        srv.server_close()
+
+
 def _ask_window(llm_factory):
     from petroharness.ask import ask
     return ask(LAS, QUESTION, top=600, base=700, depth_unit="m", formation="test window", llm_factory=llm_factory)
