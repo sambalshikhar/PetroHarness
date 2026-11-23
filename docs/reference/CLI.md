@@ -490,7 +490,7 @@ The start of the report (the LAS path is shortened, the rest cut at […]):
 - **LAS file:** `…/petrophys/datasets/geolink/30_6-5.las`, SHA-256 `5ecf2c53826981f978c2efb47fe016abf94dac62e83dbdb54eee115596f801b9`
 - **Model:** K2-Horizon-7B
 - **Petrophys:** 3.0.0@files-c5de047fe601
-- **PetroHarness:** 2.0.2 commit <commit>, setup `d70dbbf039dd`
+- **PetroHarness:** 1.0.0 commit <commit>, setup `d70dbbf039dd`
 - **Questions:** 2 answered of 2 asked
 
 ![The interval as Petrophys displays it](overview.png)
@@ -540,7 +540,7 @@ The first command prints:
 
 ```text
 setup ae3aa9e6820f
-  harness: 2.0.2
+  harness: 1.0.0
   commit: <commit>
   petrophys: 3.0.0@files-c5de047fe601
   components:

@@ -10,7 +10,7 @@ Every number in the answer traces back to the log.
 
 **Petrophys calculates · the model investigates · the harness records · you decide**
 
-[![Version](https://img.shields.io/badge/version-2.0.2-011e3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.0-011e3f)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.10-011e3f)](#install)
 [![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](docs/MODELS.md)
 [![Default model](https://img.shields.io/badge/default-K2--Horizon--7B-ef6719)](docs/MODELS.md)

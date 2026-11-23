@@ -1,9 +1,9 @@
 # Changelog
 
-## 2.0.2 (2026-11-23)
+## 1.0.0 (2026-11-23)
 
 A stop button in the web UI, and three fixes for conversations and for questions typed freely. A single question on
-one interval is answered as in 2.0.1: its prompts and its replies do not change.
+one interval is answered as in 0.9.1: its prompts and its replies do not change.
 
 - **Web UI: a question that is waiting or running can be stopped.** While a question waits or is being answered,
   the button of the box at the bottom is Stop. A question still waiting is taken off the queue; one running ends as
@@ -33,9 +33,9 @@ one interval is answered as in 2.0.1: its prompts and its replies do not change.
   the question, choosing the figures) are now read as they stream, and a reply that runs 400 characters of
   whitespace on end is ended there and asked again, in seconds.
 
-## 2.0.1 (2026-11-23)
+## 0.9.1 (2026-11-23)
 
-The harness, its prompts and its tools are as in 2.0.0: no answer changes.
+The harness, its prompts and its tools are as in 0.9.0: no answer changes.
 
 - **Web UI: a step shows what it produced beside its reasoning.** On the Interpretation page, each step of the work
   lists its points to settle (step 1), what it looked at, the results it opened and the findings it added or revised,
@@ -57,7 +57,7 @@ The harness, its prompts and its tools are as in 2.0.0: no answer changes.
     lithology log.
   - The web UI's screenshots are retaken on the page as it is, several with numbered callouts.
 
-## 2.0.0 (2026-11-23)
+## 0.9.0 (2026-11-23)
 
 - **Licence.** PetroHarness is released under CC BY 4.0 (`LICENSE`).
 - **The default model card asks the server for `k2-horizon-7b`**, the name docs/MODELS.md serves K2-Horizon-7B
@@ -135,7 +135,7 @@ The harness, its prompts and its tools are as in 2.0.0: no answer changes.
 - **Tests run without data.** Petrophys's sample wells are read from Petrophys, the public mini set must run in CI,
   and only a test marked `data` is skipped without data settings.
 
-## 1.5.0 (2026-11-21)
+## 0.7.0 (2026-11-21)
 
 - **The harness asks back instead of guessing.** A question that names a unit the tops file lists more than once, a
   unit whose row the tops reader cannot use, a name close to several units, or a bare name several units share is
@@ -178,7 +178,7 @@ The harness, its prompts and its tools are as in 2.0.0: no answer changes.
 - **Documentation** checked against the code, with the zones, scope and chat commands, the new statuses and the web
   UI's start page.
 
-## 1.0.0 (2026-11-17)
+## 0.5.0 (2026-11-17)
 
 Questions that need an investigation are answered as 0.2.1 answers them; a direct question now takes a short route
 (below), measured on the whole benchmark with both models. With `--investigate` every request is the 0.2.1 build's,
