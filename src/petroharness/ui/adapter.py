@@ -426,9 +426,9 @@ def view_of(inputs: dict, cache: Path):
 
 def preview(inputs: dict, cache: Path) -> dict:
     """What Petrophys makes of this well under these settings, before any question: the interval, its zones under the
-    zone rule, how the zones were read (the lithology log, or shale-volume bands), and the value each setting took
-    ({setting: {"value", "step"}}: the defaults the data decides, for this well). The interpreted well is kept in
-    `cache` (the runs' shared cache), so the question that follows reuses it."""
+    zone rule, how the zones were read (the lithology log, the solved lithology, or shale-volume bands), and the value
+    each setting took ({setting: {"value", "step"}}: the defaults the data decides, for this well). The interpreted
+    well is kept in `cache` (the runs' shared cache), so the question that follows reuses it."""
     from petroharness import interval as I
     from petroharness.well import settings as T
     kw = arguments({**inputs, "question": "(a preview of the interpretation)"})

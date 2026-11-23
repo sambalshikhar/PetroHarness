@@ -174,25 +174,27 @@ r2 = ask(petrophys.sample("30/6-5"), "Which zone has the best reservoir quality?
   rule (`zone_min_thickness_m`, `zone_vcl_bands`, `zone_layout`) may be set with either.
 
 Three interval errors on the sample wells that have them, as `prepare()` raises them for `ask()` (each says what is
-wrong, why, and the fix; `prepare` and `key` as in [section 4](#4-the-building-blocks-of-ask)):
+wrong, why, and the fix; `prepare`, `Inputs` and `key` as in [section 4](#4-the-building-blocks-of-ask)):
 
 ```python
 s = petrophys.sample
 # a tops file that lists a formation twice (Taranaki tuhua-7)
-prepare(Path(s("tuhua-7")).resolve(), key, tops=s("formations_tuhua-7.csv"), formation="Manganui", cache=Path("cache"))
+prepare(Path(s("tuhua-7")).resolve(), key, Inputs(tops=s("formations_tuhua-7.csv"), formation="Manganui"),
+        cache=Path("cache"))
 # FormationNotFound: WHAT: formation 'Manganui' is listed 2 times in formations_tuhua-7.csv (line 3: top 874.014,
 # base 1250.75; line 10: top 2164.99, base 2347.42). WHY: a repeated name (e.g. a repeated section) does not say
 # which interval is meant. FIX: choose the one you mean by its top: --formation NAME --tops FILE --top D, or give its
 # depths alone: --formation NAME --top D --base D.
 
 # a tops file in feet asked for in metres (KGS 1046123714)
-prepare(Path(s("1046123714")).resolve(), key, tops=s("1046123714_formation_tops.csv"),
-        formation="Lansing-Kansas City", depth_unit="m", cache=Path("cache"))
+prepare(Path(s("1046123714")).resolve(), key, Inputs(tops=s("1046123714_formation_tops.csv"),
+        formation="Lansing-Kansas City", depth_unit="m"), cache=Path("cache"))
 # ValueError: WHAT: the tops file 1046123714_formation_tops.csv states its depths in ft and the depth unit given is
 # m. WHY: one of them is wrong. FIX: drop --depth-unit (the file's unit is used) or correct the file.
 
 # a multi-well tops table that has no rows for this well (the COSTA table, read for GeoLink 30/6-5)
-prepare(Path(s("30/6-5")).resolve(), key, tops=s("formations_costa.csv"), formation="KHARAIB-2", cache=Path("cache"))
+prepare(Path(s("30/6-5")).resolve(), key, Inputs(tops=s("formations_costa.csv"), formation="KHARAIB-2"),
+        cache=Path("cache"))
 # FormationNotFound: WHAT: the tops file formations_costa.csv has no rows for this well (it goes by '30_6-5',
 # '30/6-5', '30/6-5'; the file's well column lists HW-3, HW-4, HW-5, HW-6, HW-7, HW-8, HW-9, HW-10, HW-24, HW-25,
 # HW-26, HW-27, HW-28, HW-29, HW-30, HW-31, HW-32). WHY: a table with a well column is read for this well only. FIX:
@@ -262,12 +264,12 @@ no model: they check an interval, and have Petrophys interpret it, before any qu
 ```python
 from pathlib import Path
 import petrophys
-from petroharness.ask import check, prepare, task_for
+from petroharness.ask import Inputs, check, prepare, task_for
 from petroharness.models import register
 
 las = Path(petrophys.sample("30/6-5")).resolve()
 key = register(["http://localhost:8000/v1"])            # the default card on this endpoint: 'k2-horizon-7b'
-p = prepare(las, key, formation="BRENT GP.", tops=petrophys.sample("formations_30_6-5.csv"), cache=Path("cache"))
+p = prepare(las, key, Inputs(formation="BRENT GP.", tops=petrophys.sample("formations_30_6-5.csv")), cache=Path("cache"))
 print(p.source, p.data["interpret"])                    # built from the LAS {'vcl_cutoff': 0.3, 'sw_cutoff': 0.7}
 task, sent = task_for(p, "Which zone has the best reservoir quality?")
 check(p, task)                                          # Petrophys interprets the well
@@ -281,7 +283,7 @@ mineral solver wrote.
 ```python
 from petroharness.well import settings
 
-p = prepare(Path(petrophys.sample("teapot_17-wx-21")).resolve(), key, cache=Path("cache"))
+p = prepare(Path(petrophys.sample("teapot_17-wx-21")).resolve(), key, Inputs(), cache=Path("cache"))
 task, sent = task_for(p, "Where are the porous intervals in this well, and what do they hold?")
 check(p, task)
 p.used
@@ -303,7 +305,7 @@ Each case on the sample well that has it, through the same three calls:
 
 ```python
 def interval(name, **kw):                     # the interval as ask() would use it, with no model call
-    p = prepare(Path(petrophys.sample(name)).resolve(), key, cache=Path("cache"), **kw)
+    p = prepare(Path(petrophys.sample(name)).resolve(), key, Inputs(**kw), cache=Path("cache"))
     check(p, task_for(p, "(the interval)")[0])
     return p
 
@@ -341,19 +343,21 @@ University, CC BY. GeoLink, CC BY-SA 4.0.
 `prepare()` builds the data settings and the interval for one LAS, with no model call and no interpretation yet.
 
 ```python
-prepare(las: Path, key: str, *, formation=None, tops=None, top=None, base=None, depth_unit=None, lithology_curve=None,
-        formation_lithology=None, profile=None, settings=None, skills=None, interpretation=None, field_notes=None,
-        zones=None, zones_sheet=None, cache: Path) -> Prepared
+prepare(las: Path, key: str, inputs: Inputs, *, cache: Path) -> Prepared
+
+Inputs(formation=None, tops=None, top=None, base=None, depth_unit=None, lithology_curve=None, formation_lithology=None,
+       profile=None, settings=None, skills=None, interpretation=None, field_notes=None, zones=None, zones_sheet=None)
 ```
 
 | Argument | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
 | `las` | Path | required | The LAS file, already resolved to an absolute path. | `interval.prepare` |
 | `key` | str | required | A model registry key (`petroharness.models.register`). | `interval.prepare` |
-| `formation` ... `skills` | as `ask()` | as `ask()` | As in `ask()`. | `interval.prepare` |
-| `interpretation` | dict or None | None | The settings in force, field notes' settings already merged in. | `interval._interpretation` |
-| `field_notes` | dict or None | None | The loaded field notes (`well.notes.load(path)`), not a path. | `interval.prepare` |
-| `zones`, `zones_sheet` | as `ask()` | as `ask()` | Your zones, read into `data.zones` (and the file's name into `data.zones_source`). | `interval.prepare`, `well.user_zones.read_zones` |
+| `inputs` | `Inputs` | required | What the interval is prepared from: the arguments `ask()`, a conversation, the web UI and the setup command share, one field each. `Inputs.of(mapping)` takes the fields a mapping or an argparse namespace holds. | `interval.Inputs` |
+| `inputs.formation` ... `inputs.skills` | as `ask()` | as `ask()` | As in `ask()`. | `interval.prepare` |
+| `inputs.interpretation` | dict or None | None | The settings in force; a field notes file's settings are merged under them. | `interval._interpretation`, `Inputs.loaded` |
+| `inputs.field_notes` | path, dict or None | None | A field notes file, or the notes already read from one (`well.notes.load(path)`). | `Inputs.loaded` |
+| `inputs.zones`, `inputs.zones_sheet` | as `ask()` | as `ask()` | Your zones, read into `data.zones` (and the file's name into `data.zones_source`). | `interval.prepare`, `well.user_zones.read_zones` |
 | `cache` | Path | required | The folder the interpreted well is cached in (`data.cache_dir` unless the settings file sets one). | `interval._settings` |
 
 - The data settings start from `settings` (else `PETROHARNESS_DATA`); `las_dir` defaults to the LAS's folder and
@@ -374,7 +378,7 @@ prepare(las: Path, key: str, *, formation=None, tops=None, top=None, base=None, 
 | `key` | str | required | The model registry key. | `interval.Prepared` |
 | `data` | dict | required | The data settings built for this LAS (the `data:` section, [CONFIGURATION.md](CONFIGURATION.md#4-the-data-section)). | `interval._settings` |
 | `source` | str | required | Where they came from: the settings file's path, or `built from the LAS`. | `interval._settings` |
-| `span` | dict | required | The interval asked about: `name`, `top`, `base`, `closed`, `unit`, `from`, `las_unit`, `report`. | `interval._interval` |
+| `span` | dict | required | The interval asked about: `name`, `top`, `base`, `closed`, `unit`, `from`, `las_unit`, `report`, and `units` (the tops file's units inside the interval) when it lists any. | `interval._interval` |
 | `said` | str | required | The operator's lithology for the formation ("" when not given). | `interval.prepare` |
 | `given` | dict | required | The settings every question runs under, for `config.given_settings`: `{"data", "eval": {}, "skills"?}`. | `interval.prepare` |
 | `skills_given` | str or None | None | The `skills` argument as given. | `interval.prepare` |
@@ -387,8 +391,9 @@ prepare(las: Path, key: str, *, formation=None, tops=None, top=None, base=None, 
 ```python
 p.span          # 30/6-5, Brent Group
 # {'name': 'BRENT GP.', 'top': 2841.0, 'base': 2958.0, 'closed': True, 'unit': 'm',
-#  'from': 'tops file formations_30_6-5.csv, base: stated base', 'las_unit': 'm', 'report': 'm'}
-prepare(Path(petrophys.sample("25/5-1")).resolve(), key, top=2990, base=3290, cache=Path("cache")).span
+#  'from': 'tops file formations_30_6-5.csv, base: stated base',
+#  'units': [['Ness Fm.', 2841.0, 2865.0], ['Etive Fm.', 2865.0, 2958.0]], 'las_unit': 'm', 'report': 'm'}
+prepare(Path(petrophys.sample("25/5-1")).resolve(), key, Inputs(top=2990, base=3290), cache=Path("cache")).span
 # {'name': 'depth interval 2990-3290 m', 'top': 2990.0, 'base': 3290.0, 'closed': True, 'unit': 'm',
 #  'from': 'depths given', 'las_unit': 'm', 'report': 'm'}
 ```
@@ -407,8 +412,8 @@ These three functions turn a `Prepared` into a question the graph can run and re
 | `ask_record(p, question, sent, trace)` | dict | none | The trace's `ask` block ([AskResult](#askresult)). | `ask.ask_record` |
 
 ```python
-p = prepare(las, key, formation="BRENT GP.", tops=petrophys.sample("formations_30_6-5.csv"),
-            formation_lithology="sandstone", cache=Path("cache"))
+p = prepare(las, key, Inputs(formation="BRENT GP.", tops=petrophys.sample("formations_30_6-5.csv"),
+                             formation_lithology="sandstone"), cache=Path("cache"))
 task_for(p, "Which zone has the best reservoir quality?")[1]
 # "Which zone has the best reservoir quality?\n\n(The operator states this formation's lithology: sandstone.)"
 ```

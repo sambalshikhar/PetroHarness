@@ -129,24 +129,34 @@ petroharness --las $(w HW-3) --tops $(w formations_costa.csv) --formation KHARAI
   --question "Interpreted as a carbonate, what are the porosity, water saturation and net pay of KHARAIB-2, and how do they change against a clastic reading with a sandstone matrix?"
 ```
 
-Petrophys interpreted the interval as a carbonate (a calcite–dolomite solve on a 2.71 g/cm³ matrix). The model read
-the record and had Petrophys recompute density porosity on a sandstone matrix (8 steps). The tops table holds several
-COSTA wells; the rows of HW-3 are used, in feet.
+Petrophys interpreted the interval as a carbonate (a calcite–dolomite solve on a 2.71 g/cm³ matrix). The well has no
+lithology log, so the zones are the solver's: nine, limestone with one dolomite. The model read the record,
+summarized pay, and had Petrophys rerun porosity and saturation under a clastic reading (8 steps, 13 results
+opened). The tops table holds several COSTA wells; the rows of HW-3 are used, in feet.
 
-> - **Porosity:** uncalibrated PHIE mean **0.1981 v/v** (median 0.2164, range 0.0324–0.3099); core-calibrated
->   PHIE_CC mean **0.2443** (median 0.29) over the 351 samples where it exists. […]
-> - **Net pay:** **194 ft of NET_PAY (90% of the zoned thickness)**, flagged where NET_ROCK (VCL < 0.3) and NET_RES
->   (PHIE > 0.045) hold and SW < 0.7. […]
-> - **Carbonate support:** VCALC mean **0.7422** (median 0.7719) and VDOLO mean **0.0559** (median 0) with quartz and
->   anhydrite fixed at 0 […]
+> KHARAIB-2 is logged as a 215-ft gross interval (7805–8020 ft, 431 samples at 0.5-ft spacing) split into nine
+> labelled zones (Z1–Z9, 179 ft of zoned thickness). Under a carbonate reading, the available data give:
 >
-> A 2.65 g/cm³ sandstone matrix lowers density porosity from ~0.196 to ~0.169 (mean, pooled) […] What would follow for
-> Archie SW and pay was not run and cannot be stated from this record.
+> - **Porosity** — effective porosity PHIE (uncalibrated model output) pools to **0.2063 v/v** over the 367 zoned
+>   samples (0.1981 over the whole 431-sample interval), while the core-calibrated PHIE_CC pools to **0.233** over
+>   the 287 zoned samples where it exists and **0.2443** over the whole interval (n = 351 of 431). […]
+> - **Water saturation** — the Archie SW (core-calibrated PHIE_CC where present, PHIE fallback where absent) pools
+>   to **0.2103** over the zones and **0.1943** over the whole interval. […]
+> - **Net pay** — the record's flags: NET_ROCK 431 samples / **215.5 ft** (VCL < 0.3), NET_RES **390 samples / 195
+>   ft**, NET_PAY **388 samples / 194 ft** (adds SW < 0.7). […]
+> - **Sandstone/clastic reading** — the available lithology outputs carry **VQUAR = 0** over the entire well […] A
+>   quartz-matrix porosity recomputation was attempted, but the default quartz density and slowness values are not
+>   recorded and the recomputed per-sample porosity is not available in the record text, so the shift on
+>   PHID/PHIT/PHIE cannot be graded numerically. […]
+>
+> The field notes state KHARAIB-2 is a limestone reservoir. The data show limestone-dominant carbonate (VCALC mean
+> 0.7365–0.825) with a dolomite band (Z4), zero quartz volume, and no sandstone-matrix indicator — so the
+> "sandstone/clastic" reading is hypothetical and not supported by the lithology outputs.
 
-The last line is the answer keeping to what was computed: the sandstone what-if covered porosity, so the answer does
-not guess its effect on saturation and pay.
+The answer keeps to what was computed: it reports the pay flags as the record holds them, and where the sandstone
+rerun gave it no porosity it could grade, it says so and does not guess.
 
-![Density against neutron in COSTA HW-3](images/example-carbonate.png "The answer's density-neutron crossplot of KHARAIB-2, 431 samples coloured by gamma ray, with the sandstone, limestone and dolomite lines. Drawn by Petrophys. Data: Costa Gomes, Geiger and Arnold (2022), COSTA model, Heriot-Watt University, CC BY.")
+![Porosity beside the solved lithology in COSTA HW-3](images/example-carbonate.png "The answer's log display of KHARAIB-2 in COSTA HW-3: total, effective and core-calibrated porosity with the density, sonic and neutron porosities, beside the zones' lithology as Petrophys solved it (limestone, with one dolomite zone). Drawn by Petrophys. Data: Costa Gomes, Geiger and Arnold (2022), COSTA model, Heriot-Watt University, CC BY.")
 
 ## 6. A fluid contact
 
@@ -155,17 +165,20 @@ petroharness --las $(w tuhua-7) --tops $(w formations_tuhua-7.csv) --formation M
   --question "Is there a hydrocarbon-water contact in the McKee Formation? If so, at what depth, and how strong is the evidence?"
 ```
 
-The well has no lithology log, so the zones are bands of shale volume. The model read saturation by depth, the
-fluid-contact and hydrocarbon analyzers, invasion and crossover, and overlapped the low-saturation samples with bad
-hole (8 steps, 16 results opened).
+The well has no lithology log, so the zones are runs of the lithology Petrophys's mineral solver gives: 11 zones of
+shale and sandstone. The model read the fluid-contact, hydrocarbon and gas analyzers and saturation by depth (3 steps,
+8 results opened).
 
-> **Answer:** No reliable hydrocarbon–water contact is identified in the McKee Formation of well tuhua-7. Water
-> saturation is high throughout, no pay flag is set anywhere, and the few low-SW samples sit inside clay-rich, largely
-> bad-hole intervals where the hydrocarbon-indicator criteria cannot operate cleanly. […] The strongest signal for any
-> hydrocarbon potential is a marginal LOW_SW sample at 1991.7156 m in Z4; it is too thin, too clay-dominated, and too
-> data-limited to define a contact depth.
+> There is **no supported hydrocarbon-water contact** in the McKee Formation in well **tuhua-7** (1935.0–2017.8 m).
+> The saturation workflow returns water saturations of 0.82–1.0 v/v across all 11 lithological zones, with a pooled
+> zone mean of **0.872 v/v**; every hydrocarbon, gas, and petrophysical indicator classifies the interval as
+> **NO_INDICATION** / **NO_GAS_EFFECT**, the neutron-density crossover flag is set in **zero** samples, and
+> **NET_PAY** is set in **zero** samples. The only fluid-contact detector marks **0.448 m** of transition-zone
+> status (0.77% of the 58.2 m zoned thickness) at ~1958.9 m and ~1992.0–1995.4 m, but these sit in intervals with
+> high bad-hole density and lack any supporting resistivity or core evidence. No depth can be assigned to a
+> hydrocarbon-water contact with confidence.
 
-![Saturation and porosity in the McKee Formation](images/example-contact.png "The answer's log display of the McKee Formation in tuhua-7: deep resistivity, effective porosity and bulk volume water, water saturation, the net-pay flag and the crossover flag; no pay is flagged, and bad hole is shaded. Drawn by Petrophys. Data: Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.")
+![Saturation and porosity in the McKee Formation](images/example-contact.png "The answer's log display of the McKee Formation in tuhua-7, beside the zones' lithology: shale volume, deep resistivity, effective porosity and bulk volume water, water saturation and the crossover flag; no crossover is flagged, and bad hole is shaded. Drawn by Petrophys. Data: Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.")
 
 The wells ship with Petrophys. Data: GeoLink, CC BY-SA 4.0; Taranaki Basin Curated Well Logs Dataset (New Zealand
 Petroleum & Minerals), CDLA-Sharing-1.0; Costa Gomes, Geiger and Arnold (2022), COSTA model, Heriot-Watt University,

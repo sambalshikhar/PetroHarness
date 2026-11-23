@@ -101,7 +101,7 @@ class DataPaths(_Strict):
     lithology_columns: LithologyColumns = Field(default_factory=LithologyColumns)
     # The lithology log's LAS mnemonic, or several (the first a well has with data is used). Null: the LAS's own
     # curve whose mnemonic or description names a lithology or facies log and holds integer codes; a well without
-    # one is zoned by shale-volume bands (formation.find_lithology_curve).
+    # one is zoned by Petrophys's solved lithology, else by shale-volume bands (formation.find_lithology_curve).
     lithology_curve: Optional[Union[str, list[str]]] = None
     # How a formation is split into zones: "lithology_runs" (runs of the lithology log, thin runs dropped) or
     # "formation" (the whole formation interval is one zone, labelled by the log's majority lithology: data whose

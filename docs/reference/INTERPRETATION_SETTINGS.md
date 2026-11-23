@@ -616,7 +616,7 @@ minimum, 31 at 1.0 m.
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
 | `zone_min_thickness_m` | number, metres | policy `zones.min_thickness_m`, 2.0 | becomes `data.zone_min_thickness_m`; a run is a zone when base minus top exceeds it, converted to the reporting unit | `settings.ZONE_FIELDS`, `FormationView.build` |
-| `zone_vcl_bands` | two numbers, v/v | policy `zones.fallback_vcl_bands`, `[0.3, 0.6]` | becomes `data.zone_vcl_bands`; the band edges, used only when the well has no lithology log | `settings.ZONE_FIELDS`, `formation.vcl_band_labels` |
+| `zone_vcl_bands` | two numbers, v/v | policy `zones.fallback_vcl_bands`, `[0.3, 0.6]` | becomes `data.zone_vcl_bands`; the band edges, used only when the well has neither a lithology log nor a solved lithology | `settings.ZONE_FIELDS`, `formation.vcl_band_labels` |
 | `zone_layout` | `lithology_runs` or `formation` | `lithology_runs` | becomes `data.zone_layout`; runs of one label, or the interval as one zone (`formation.formation_zone`) | `settings.ZONE_FIELDS`, `config.DataPaths` |
 
 Example: the same rule in a settings file.

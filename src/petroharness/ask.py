@@ -276,7 +276,8 @@ def interval_options(ap: argparse.ArgumentParser) -> None:
                                             "(default: the tops file's, else the LAS's own)")
     lith = ap.add_argument_group("lithology")
     lith.add_argument("--lithology-curve", help="the lithology log's mnemonic (default: detected; when the LAS has "
-                                                "none, the zones are shale-volume bands)")
+                                                "none, the zones are runs of the lithology Petrophys's mineral "
+                                                "solver wrote, else shale-volume bands)")
     lith.add_argument("--formation-lithology", help="the formation's lithology as you know it, e.g. 'sandstone'")
     ap.add_argument("--field-notes", type=Path, help="a field notes file: the team's standing settings and notes for "
                                                      "this field (YAML: name, settings, notes; docs/SESSIONS.md)")

@@ -235,7 +235,8 @@ def find_lithology_curve(curve: Callable[[str], Optional[np.ndarray]], las_curve
     """The well's lithology log. Named (data.lithology_curve): the first of those mnemonics the well has with data.
     Not named: the LAS's own curve (las_curves: never one the workflow computed) whose mnemonic or description says it
     is a lithology or facies log (LITHOLOGY_LOG) and whose values are integer codes. None: no lithology log, and the
-    zones come from shale-volume bands. Two such curves and none named is an error that names them.
+    zones come from the lithology Petrophys's mineral solver wrote (solver_lithology), else from shale-volume bands.
+    Two such curves and none named is an error that names them.
     `curve` returns a curve's data by mnemonic (None when the well lacks it); `describe` its LAS description."""
     def has(name):
         data = curve(name)
@@ -287,7 +288,7 @@ def solver_lithology(steps: dict, well) -> Optional[dict]:
 
 
 def vcl_band_labels(vcl: np.ndarray, bands=(0.3, 0.6)) -> np.ndarray:
-    """Fallback labels when a well has no lithology curve: shale-volume bands."""
+    """Fallback labels when a well has neither a lithology log nor a solved lithology: shale-volume bands."""
     lo, hi = bands
     out = np.full(vcl.shape, MISSING_LITHOLOGY, dtype=object)
     ok = np.isfinite(vcl)

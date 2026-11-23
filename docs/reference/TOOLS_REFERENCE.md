@@ -1176,20 +1176,20 @@ The lines it writes, as `tools.values_at` builds them (placeholders in angle bra
   ...
   sxo_method: fifth_root_quicklook
   ...
-  record: in this interval SXO is the quicklook SW^(1/5) at 397 samples; 1 where SW is 1 too (water-bearing, either route) at 34 samples (of its 431 samples with SXO and SW); where SXO is the quicklook it is a formula of SW (and MHI = SW^0.8), not a flushed-zone reading: ...
+  in this interval SXO is the quicklook SW^(1/5) at 397 samples; 1 where SW is 1 too (water-bearing, either route) at 34 samples (of its 431 samples with SXO and SW); where SXO is the quicklook it is a formula of SW (and MHI = SW^0.8), not a flushed-zone reading: ...
   ...
-  record: well-wide record: SXO fallback: SXO = SW^(1/5) because RSHA/RXO/RESS and RMF unavailable
+  record (the whole well's run; its counts are the well's): SXO fallback: SXO = SW^(1/5) because RSHA/RXO/RESS and RMF unavailable
 ```
 
 **Notes**
 
 - Parameters whose names end in a bookkeeping suffix (`_source`, `_requested`, `_count`, `_samples`, ...) are left
   out, and nested parameters lose their sample tallies, which count the whole well (`tools._BOOKKEEPING`, `_TALLY`).
-- The first record lines are this interval's routes, counted sample by sample by `record/routes.py`
+- The lines that start `in this interval` are this interval's routes, counted sample by sample by `record/routes.py`
   (`route_lines`): which resistivity pair gives `INVASION_RATIO` (`SHALLOW` = `RXO`, `RSHA`, `RESS`, `RMED`; the
   fallback `RMED`) and where SXO comes from shallow resistivity, where it is the quicklook `SW^(1/5)`, and where both
-  are 1 (water-bearing). A record line about the whole well's routes is labelled `well-wide record:`
-  (`routes.well_wide`).
+  are 1 (water-bearing). The lines the whole well's run recorded are labelled `record (the whole well's run; its
+  counts are the well's):` (`card.RECORD_LABEL`).
 - `routes.contradictions` uses the same counts to flag a claim or a draft that calls this interval's route the
   well-wide fallback ([WRITER_AND_CHECKER.md](WRITER_AND_CHECKER.md)).
 

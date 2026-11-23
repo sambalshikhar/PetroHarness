@@ -1046,7 +1046,9 @@ The head of the map of 30/6-5, Brent Group, whose zones are runs of its litholog
 
 ```text
 WELL 30_6-5, FORMATION BRENT GP.
-Interval: 2841.0193-2957.9102 m (gross 116.8909 m); 768 samples every 0.1523 m
+Well: its log runs 176.61-3556.0803 m, 22176 samples every 0.1523 m; a tool's zones may name a depth range TOP-BASE anywhere in it or a unit of the tops file, computed on that stretch
+Interval (the formation the session opened on, one part of the well): 2841.0193-2957.9102 m (gross 116.8909 m); 768 of the well's samples
+  Units of the tops file: NORDLAND GP. 181-726 m; Utsira Fm. 726-879 m; ...; BRENT GP. 2841-2958 m; Ness Fm. 2841-2865 m; Etive Fm. 2865-2958 m; ...
 Zones: 20, covering 83.3629 m (71% of the interval)
   Z1 SAND_GROUP_1 2841.3242-2845.7439 m (4.4197 m)
   Z2 SILT_GROUP_4 2856.1069-2858.6977 m (2.5908 m)
