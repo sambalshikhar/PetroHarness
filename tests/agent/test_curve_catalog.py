@@ -46,7 +46,7 @@ def test_the_catalog_names_no_dataset():
 
 def test_flags_are_flags_and_swirr_app_is_a_model_output():
     """SWIRR_APP is per sample (Buckles) or one value for the whole well: its kind is read from its values, and it is
-    a parameter only where its step lists that value (tests/test_label_fixes.py)."""
+    a parameter only where its step lists that value (tests/test_labels.py)."""
     reg = load()
     for c in reg.flags:
         assert "; a flag" in CATALOG[c], c
@@ -79,7 +79,7 @@ def test_the_rendered_step_records_read_in_plain_words():
     """On every formation of the configured dataset: no step line of the map shows a fallback input as "X+Y" (or
     "X/Y" in its inputs), each is written "where present, otherwise"; a curve a step wrote that holds one value for the
     whole well is labelled so (one value over the whole well as its step wrote it), on the map and in the step tool."""
-    from test_b2_tools import F
+    from _support.formations import F
     from petroharness.agent.map import render
     from petroharness.agent.toolset import TOOLS
     seen_fallback = seen_parameter = 0

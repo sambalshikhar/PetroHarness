@@ -16,6 +16,9 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterator, Optional, Union
 
 
+
+STRETCHES = ("selection", "whole_well", "focus_only")      # Tool.stretch
+
 @dataclass(frozen=True)
 class Tool:
     """One tool.
@@ -31,6 +34,12 @@ class Tool:
     lead          the argument a one-line listing of a call leads with ("runs NET_PAY (limit 5)"); "" for none
     table         its result is a computed table (header, rows, facts) and is read in that order
     verb          a verb over Petrophys: its calls can search and run every Petrophys function it serves
+    stretch       what its zones reach: "selection" (the stretches the call names, or the question's scope),
+                  "whole_well" (the same for any stretch, such as the well's record of a step: zones do not apply), or
+                  "focus_only" (it rests on what the workflow computed for the focus: a stretch elsewhere is refused)
+    focus_reason  for "focus_only": what it reads, as the refusal says it
+    pair          the two arguments a list of two fills, in order ({"compare": ["PHIE", "PHIE_CC"]} is a and b); ()
+    pair_word     the word that joins the pair in a one-line listing ("compare PHIE vs PHIE_CC"); "" for none
     """
     name: str
     run: Callable
@@ -42,6 +51,10 @@ class Tool:
     lead: str = ""
     table: bool = False
     verb: bool = False
+    stretch: str = "selection"
+    focus_reason: str = ""
+    pair: tuple = ()
+    pair_word: str = ""
 
     def text(self) -> str:
         """The description the model reads."""
@@ -83,6 +96,12 @@ class Toolset:
                                  f"FIX: one of {', '.join(repr(g) for g in self.groups)}.")
             if not callable(t.run):
                 raise ValueError(f"WHAT: the tool {t.name} has nothing to run. FIX: run=the function that computes it.")
+            if t.stretch not in STRETCHES:
+                raise ValueError(f"WHAT: the tool {t.name} has stretch {t.stretch!r}. FIX: one of "
+                                 f"{', '.join(STRETCHES)}.")
+            if (t.stretch == "focus_only") != bool(t.focus_reason):
+                raise ValueError(f"WHAT: the tool {t.name}: a focus_reason goes with stretch 'focus_only', and only "
+                                 "with it. FIX: say what it reads, or drop the reason.")
             if not callable(t.description) and not str(t.description).strip():
                 raise ValueError(f"WHAT: the tool {t.name} has no description. FIX: the text the model reads about it.")
             if not callable(t.arguments):
@@ -94,6 +113,9 @@ class Toolset:
                 if names and t.main not in names:
                     raise ValueError(f"WHAT: a bare value given to the tool {t.name} fills {t.main!r}, which it does "
                                      f"not define. FIX: main=one of {', '.join(names)}.")
+                if t.pair and (len(t.pair) != 2 or any(p not in names for p in t.pair)):
+                    raise ValueError(f"WHAT: the tool {t.name} pairs {t.pair}, which are not two of its arguments. "
+                                     f"FIX: pair=two of {', '.join(names)}, or no pair.")
                 if t.lead and t.lead not in names:
                     raise ValueError(f"WHAT: the tool {t.name} is listed by its argument {t.lead!r}, which it does "
                                      f"not define. FIX: lead=one of {', '.join(names) or 'none'}, or no lead.")
@@ -118,6 +140,11 @@ class Toolset:
 
     def names(self) -> list:
         return list(self._tools)
+
+    def stretch(self, name: str) -> str:
+        """What a tool's zones reach (Tool.stretch); "selection" for a name that is no tool."""
+        t = self._tools.get(name)
+        return t.stretch if t is not None else "selection"
 
     def functions(self) -> dict:
         """name -> the function that runs it."""

@@ -24,6 +24,7 @@ from petroharness.agent import components as C  # noqa: E402
 from petroharness.agent import engine as E  # noqa: E402
 from petroharness.agent.ledger import Item, Ledger, get_lines, grouping  # noqa: E402
 from petroharness.llm import Usage  # noqa: E402
+from _support.model import in_turn  # noqa: E402
 
 
 # --- the budget: guides outside NEW, withheld results first at the next step, a repeat shown whole -------------------
@@ -31,21 +32,22 @@ from petroharness.llm import Usage  # noqa: E402
 def _run(steps: list, max_steps: int, monkeypatch, budget: int = None, guide_chars: int = 0):
     """A short investigation on a real formation with no topics (a guide opens nothing with it); budget: NEW's;
     guide_chars: every guide made this long (a stand-in for the longest researched guides)."""
-    from petroharness.agent import loop as L
-    from petroharness.agent.loop import investigate
-    from test_b5_loop import Script, _session, chose
+
+    from petroharness.agent import state as ST
+    from petroharness.agent.graph import investigate
+    from _support.sessions import pay_session as _session, chose
     s = chose(_session())
     if budget is not None:
-        monkeypatch.setattr(L, "NEW_CHARS", budget)
+        monkeypatch.setattr(ST, "NEW_CHARS", budget)
     if guide_chars:
         real = type(s.library).guide
         monkeypatch.setattr(type(s.library), "guide", lambda lib, name, f=None: (real(lib, name, f) + "\n" + "x" * guide_chars)
                             if name in lib.facets else real(lib, name, f))
     first = {"points": ["Where is net pay?"], "intent": "locate", "focus": "where",
              "edits": [{"op": "add", "point": 1, "text": "Pay likely in the upper zones", "grade": "hypothesis"}], "done": False}
-    llm, trace = Script([{**first, **steps[0]}] + steps[1:]), {}
+    llm, trace = in_turn([{**first, **steps[0]}] + steps[1:]), {}
     investigate(llm, s, Usage(), 4000, trace, max_steps=max_steps)
-    users = {stage: m[-1]["content"] for stage, m in llm.sent}
+    users = {c["stage"]: c["messages"][-1]["content"] for c in llm.sent}
     return s, users, trace
 
 
@@ -66,8 +68,8 @@ def test_two_long_guides_and_five_results_withhold_no_result_that_fits(monkeypat
     """Step 1 reads two guides of 9,000 characters each and opens five results whose texts together fit NEW's budget:
     no result is withheld (the guides' text has its own block, so it never fills NEW's budget). The guides are
     whole in GUIDES at step 2, not in NEW, and short at step 3."""
-    from petroharness.agent.loop import coerce_action
-    from test_b5_loop import _session, chose
+    from petroharness.agent.replies import coerce_action
+    from _support.sessions import pay_session as _session, chose
     probe = chose(_session())
     probe.run(("tool", "stats", {"curves": ["VCL", "PHIE", "SW", "PERM"]}))       # as the first look opens E1
     sizes = [len(probe.run(coerce_action(a))[0]) for a in FIVE]
@@ -91,8 +93,8 @@ def test_two_long_guides_and_five_results_withhold_no_result_that_fits(monkeypat
 
 def _one_at_a_time() -> int:
     """A budget that holds either of FIVE[1:3] with the step's notes, and not both."""
-    from petroharness.agent.loop import coerce_action
-    from test_b5_loop import _session, chose
+    from petroharness.agent.replies import coerce_action
+    from _support.sessions import pay_session as _session, chose
     probe = chose(_session())
     probe.run(("tool", "stats", {"curves": ["VCL", "PHIE", "SW", "PERM"]}))
     a, b = (len(probe.run(coerce_action(x))[0]) for x in FIVE[1:3])
@@ -275,7 +277,7 @@ def test_the_writers_drafting_left_in_its_reply_is_cut_or_sent_back():
 def test_a_flag_whose_input_has_no_value_is_not_computed(monkeypatch):
     """NET_PAY's record line names SW: where SW has no value (here, made missing in the first zone), NET_PAY is not
     computed, in stats, runs and the writer's zone table, whatever the record holds there."""
-    from test_b5_loop import _session, chose
+    from _support.sessions import pay_session as _session, chose
     s = chose(_session())
     f = s.f
     if not E.flag_inputs(f, "NET_PAY"):
@@ -302,7 +304,8 @@ def test_a_flag_whose_input_has_no_value_is_not_computed(monkeypatch):
     assert all(dict(why)[r][np.asarray(z.indices)].any() for r in row.group(1).split("; "))   # the reasons that hold there
     assert "not computed at " in text.split("\n", 1)[0] and "a default, not a reading" in text.split("\n", 1)[0]
     runs = s.run(("tool", "runs", {"condition": "NET_PAY"}))[0]
-    assert "inside the zones (" in runs.split("\n", 1)[0] and "; NET_PAY not computed at " in runs.split("\n", 1)[0]
+    head = runs.split("\n", 1)[0]
+    assert "Intervals where NET_PAY > 0.5 (" in head and f"; NET_PAY not computed at {int(gone.sum())} of {gone.size} " in head
     assert E.uncomputed(f, "SW")[1] == [] and not E.uncomputed(f, "SW")[0].any()             # values: never
     if "PRIME_OIL_TARGET" in f.inv.curves and ["NET_PAY"] in E.flag_inputs(f, "PRIME_OIL_TARGET"):
         assert E.uncomputed(f, "PRIME_OIL_TARGET")[0][np.asarray(z.indices)].all()
@@ -313,7 +316,7 @@ def test_a_section_whose_index_was_not_computed_prints_no_thresholds():
     """On the formations of the configured dataset: a section whose every class says not assessed and whose method
     names a curve with no value here prints why in place of its thresholds; every other section prints them as
     recorded."""
-    from test_b2_tools import F
+    from _support.formations import F
     seen = kept = 0
     for i, (t, f) in enumerate(F()):
         for sec in f.inv.sections:
@@ -383,17 +386,18 @@ def test_the_first_look_takes_each_curves_calibrated_twin():
     whatever topics were chosen."""
     from petroharness.agent.inventory import calibrated_twins
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session, investigate
+    from petroharness.agent.state import Session
+    from petroharness.agent.graph import investigate
     from petroharness.agent.map import render
-    from test_b2_tools import F
-    from test_b5_loop import Script, chose
+    from _support.formations import F
+    from _support.sessions import chose
     hit = next(((t, f) for t, f in F() if calibrated_twins(f.inv)), None)
     if hit is None:
         pytest.skip("no core-calibrated twin in this dataset's formations")
     t, f = hit
     s = chose(Session(t, f, render(f.inv), Ledger(f)), "hydrocarbon_detection")
     trace = {}
-    investigate(Script([{"points": ["p"], "intent": "characterize", "edits": [], "next": [], "done": True}]), s, Usage(),
+    investigate(in_turn([{"points": ["p"], "intent": "characterize", "edits": [], "next": [], "done": True}]), s, Usage(),
                 4000, trace, max_steps=1)
     curves = s.ledger.items[0].args["curves"]
     for base, twin in calibrated_twins(f.inv).items():

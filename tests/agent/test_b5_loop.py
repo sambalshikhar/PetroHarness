@@ -14,9 +14,14 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 from petroharness.llm import Usage  # noqa: E402
-from petroharness.agent.loop import Session, coerce_action, investigate, read_reply, salvage, tools_text  # noqa: E402
+from petroharness.agent.state import Session  # noqa: E402
+from petroharness.agent.replies import coerce_action, read_reply, salvage
+from petroharness.agent.prompts import tools_text
+from petroharness.agent.graph import investigate  # noqa: E402
+from _support.model import ScriptedModel, in_turn  # noqa: E402
+from _support.sessions import MEANS, chose, runs_total, pay_session as _session  # noqa: E402,F401
 
-MAX_ACTIONS = 3            # the action cap these tests run under (the harness's own cap is loop.ACTIONS, 6)
+MAX_ACTIONS = 3            # the action cap these tests run under (the harness's own cap is state.ACTIONS, 6)
 
 
 # --- action shapes --------------------------------------------------------------------------------------------------
@@ -30,6 +35,8 @@ MAX_ACTIONS = 3            # the action cap these tests run under (the harness's
     ({"runs": {"condition": "SW < 0.5", "zones": ["Z1"]}}, ("tool", "runs", {"condition": "SW < 0.5", "zones": ["Z1"]})),
     ({"stats": ["SW", "PHIE"]}, ("tool", "stats", {"curves": ["SW", "PHIE"]})),
     ({"compare": ["PHIE", "PHIE_CC"]}, ("tool", "compare", {"a": "PHIE", "b": "PHIE_CC"})),
+    ({"crossplot": ["RHOB", "NPHI"]}, ("tool", "crossplot", {"y": "RHOB", "x": "NPHI"})),
+    ({"overlap": ["SW < 0.5", "VCL < 0.3"]}, ("tool", "overlap", {"a": "SW < 0.5", "b": "VCL < 0.3"})),
     ({"compare": {"a": "PHIE", "b": "PHIT"}}, ("tool", "compare", {"a": "PHIE", "b": "PHIT"})),
     ({"profile": "SW"}, ("tool", "profile", {"curve": "SW"})),
     ({"section": "hydrocarbon.petrophysical_hydrocarbon_indicators"}, ("tool", "section", {"key": "hydrocarbon.petrophysical_hydrocarbon_indicators"})),
@@ -87,74 +94,32 @@ def test_salvage_keeps_complete_edits_and_actions():
 
 # --- the loop with a scripted model ---------------------------------------------------------------------------------
 
-class Script:
-    """A model that replies from a list; records what it was sent."""
-
-    def __init__(self, replies):
-        self.replies, self.sent = list(replies), []
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, retry=False):
-        self.sent.append((stage, messages))
-        usage.log.append({"stage": stage, "prompt_tokens": sum(len(m["content"]) for m in messages) // 4})
-        r = self.replies.pop(0) if self.replies else '{"edits": [], "next": [], "done": true}'
-        return r if isinstance(r, str) else json.dumps(r)
-
-
-def _session():
-    from test_b2_tools import F
-    t, f = next((t, f) for t, f in F() if "NET_PAY" in f.inv.curves and "SW" in f.inv.curves)
-    from petroharness.agent.ledger import Ledger
-    from petroharness.agent.map import render
-    return chose(Session(t, f, render(f.inv), Ledger(f)), "hydrocarbon_detection")
-
-
-def chose(s, *topics):
-    """The session as a READ call choosing these topics leaves it (the map kept as built)."""
-    from petroharness.agent import direction
-    s.topics, s.families = list(topics), direction.families(topics)
-    return s
-
-
-MEANS = "the zone holds the formation's hydrocarbon-bearing rock"
 
 
 @pytest.mark.data
 def test_loop_runs_tools_edits_and_stops_when_settled(monkeypatch):
-    from petroharness.agent import loop as L
-    monkeypatch.setattr(L, "ACTIONS", MAX_ACTIONS)            # the cap under test: 3 (6 by default)
+    from petroharness.agent import state as ST
+    monkeypatch.setattr(ST, "ACTIONS", MAX_ACTIONS)            # the cap under test: 3 (6 by default)
     s = _session()
-    llm = Script([
-        {"points": ["Where is net pay?", "How thick is it?"], "intent": "locate", "focus": "where",
+    first = {"points": ["Where is net pay?", "How thick is it?"], "intent": "locate", "focus": "where",
          "edits": [{"op": "add", "point": 1, "text": "Pay likely in the upper zones", "grade": "hypothesis"},
                    {"op": "add", "point": 2, "text": "Pay is likely thin", "grade": "hypothesis"}],
          "next": [{"runs": "NET_PAY"}, {"stats": {"curves": ["SW"], "where": "NET_PAY"}}, {"guide": "net_reservoir_pay"},
                   {"profile": "SW"}, {"profile": "PHIE"}],                  # a guide is free; a fourth action is left out
-         "done": False},
-    ])                                                         # step 2 is written below from the ledger; then: done
+         "done": False}
     trace = {}
 
-    def second(stage, messages, usage, max_tokens, retry=False):
+    def second(messages):                                      # step 2, written from the ledger; then: done
         user = messages[-1]["content"]
         assert "Only the first 3 actions ran" in user and "[E2]" in user and "[E3]" in user
         assert "GUIDE net_reservoir_pay" in user.split("\nGUIDES (", 1)[1].split("\nNEW (from step 1)", 1)[0]  # in its block
         runs_item = next(e for e in s.ledger.items if e.tool == "runs")      # E1 is the first look
-        total = __import__("re").search(r"all zones: ([\d.]+)", runs_item.text).group(1)
-        return json.dumps({"focus": "settle", "edits": [
+        total = runs_total(runs_item.text)
+        return {"focus": "settle", "edits": [
             {"op": "revise", "id": "C1", "text": "NET_PAY is set in the zones listed by the runs", "ev": [runs_item.id], "grade": "moderate", "means": MEANS},
-            {"op": "revise", "id": "C2", "text": f"NET_PAY totals {total} {s.f.inv.depth_unit} over all zones", "ev": [runs_item.id], "grade": "moderate", "means": MEANS}],
-            "next": [], "done": True})
-    orig = llm.chat
-
-    def chat(stage, messages, usage, max_tokens, retry=False):
-        if stage == "step_2":
-            llm.sent.append((stage, messages))
-            usage.log.append({"stage": stage})
-            return second(stage, messages, usage, max_tokens)
-        return orig(stage, messages, usage, max_tokens, retry)
-    llm.chat = chat
+            {"op": "revise", "id": "C2", "text": f"NET_PAY totals {total} {s.f.inv.depth_unit} in the interval", "ev": [runs_item.id], "grade": "moderate", "means": MEANS}],
+            "next": [], "done": True}
+    llm = ScriptedModel({"step_1": first, "step_2": second})
     claims = investigate(llm, s, Usage(), 4000, trace)
     calls = [e.call_text().split(" ")[0] for e in s.ledger.items]
     assert calls[:1] == ["stats"] and calls[-3:] == ["runs", "stats", "profile"]   # the first look first (stats only)
@@ -175,40 +140,32 @@ def test_loop_runs_tools_edits_and_stops_when_settled(monkeypatch):
 def test_guides_and_calculations_beyond_a_step_s_caps_are_said_as_actions_are():
     """Three guides and four calculations asked in one step: two guides are read and three calculations run, and the
     next step says what was left out (as for actions beyond the cap), not silently."""
-    from petroharness.agent import loop as L
+    from petroharness.agent import state as ST
     s = _session()
-    llm = Script([
+    llm = in_turn([
         {"points": ["Where is net pay?"], "intent": "locate", "focus": "where",
          "edits": [{"op": "add", "point": 1, "text": "Pay likely in the upper zones", "grade": "hypothesis"}],
          "next": [{"guide": "net_reservoir_pay"}, {"guide": "water_saturation"}, {"guide": "porosity"}]
-                 + [{"calc": f"{i} + 1"} for i in range(L.MAX_CALCS + 1)],
+                 + [{"calc": f"{i} + 1"} for i in range(ST.MAX_CALCS + 1)],
          "done": False},
     ])
-    seen = {}
-    orig = llm.chat
-
-    def chat(stage, messages, usage, max_tokens, retry=False):
-        if stage == "step_2":
-            seen["user"] = messages[-1]["content"]
-        return orig(stage, messages, usage, max_tokens, retry)
-    llm.chat = chat
     investigate(llm, s, Usage(), 4000, {})
-    assert f"Only the first {L.MAX_GUIDES} guides were taken (1 left out)" in seen["user"]
-    assert f"Only the first {L.MAX_CALCS} calculations were taken (1 left out)" in seen["user"]
+    assert f"Only the first {ST.MAX_GUIDES} guides were taken (1 left out)" in llm.prompt("step_2")
+    assert f"Only the first {ST.MAX_CALCS} calculations were taken (1 left out)" in llm.prompt("step_2")
     assert s.guides == ["net_reservoir_pay", "water_saturation"]
 
 
 @pytest.mark.data
 def test_done_is_refused_once_while_points_are_open_then_the_last_step_ends_it():
     s = _session()
-    llm = Script([
+    llm = in_turn([
         {"points": ["Where is net pay?"], "intent": "locate", "edits": [{"op": "add", "point": 1, "text": "Pay in the upper zones", "grade": "hypothesis"}],
          "next": [], "done": True},                                        # done with a hypothesis: refused once
         {"edits": [], "next": [], "done": True},                           # done again: accepted (the refusal is spent)
     ])
     trace = {}
     claims = investigate(llm, s, Usage(), 4000, trace, max_steps=5)
-    assert "NOT DONE" in llm.sent[1][1][-1]["content"]
+    assert "NOT DONE" in llm.sent[1]["messages"][-1]["content"]
     assert len(trace["steps"]) == 2 and trace["done_issues"]
 
 
@@ -216,16 +173,16 @@ def test_done_is_refused_once_while_points_are_open_then_the_last_step_ends_it()
 def test_the_last_step_says_so_and_ends():
     s = _session()
     step = {"edits": [], "next": [{"runs": "NET_PAY"}], "done": False}
-    llm = Script([{"points": ["p"], "intent": "value", "edits": [], "next": [{"runs": "NET_PAY"}], "done": False}, step, step])
+    llm = in_turn([{"points": ["p"], "intent": "value", "edits": [], "next": [{"runs": "NET_PAY"}], "done": False}, step, step])
     trace = {}
     investigate(llm, s, Usage(), 4000, trace, max_steps=3)
-    assert "This is the last step" in llm.sent[-1][1][-1]["content"] and len(trace["steps"]) == 3
+    assert "This is the last step" in llm.sent[-1]["messages"][-1]["content"] and len(trace["steps"]) == 3
 
 
 @pytest.mark.data
 def test_an_unreadable_reply_is_fixed_or_reported():
     s = _session()
-    llm = Script(['{"points": ["p"], "intent": "value", "edits": [], "next": [{"runs": "NET_PAY"}], "done": false}',
+    llm = in_turn(['{"points": ["p"], "intent": "value", "edits": [], "next": [{"runs": "NET_PAY"}], "done": false}',
                   '{"edits": [{"op": "add", "point": 1 "text": "x"}], "next": [], "done": false',   # broken
                   '{"edits": [{"op": "add", "point": 1, "text": "x"}], "next": [], "done": false}',  # the syntax fix
                   '{"edits": [], "next": [], "done": true}'])
@@ -253,7 +210,7 @@ def test_get_find_and_repeated_calls():
 
 @pytest.mark.data
 def test_prompts_stay_bounded_on_the_largest_formation():
-    from test_b2_tools import F
+    from _support.formations import F
     from petroharness.agent.ledger import Ledger
     from petroharness.agent.map import render
     t, f = max(F(), key=lambda tf: tf[1].inv.samples * max(len(tf[1].view.zones), 1))
@@ -261,7 +218,7 @@ def test_prompts_stay_bounded_on_the_largest_formation():
     many = [{"stats": {"curves": [c]}} for c in list(f.inv.curves)[:30]]
     replies = [{"points": ["p"], "intent": "characterize", "edits": [], "next": many[:3], "done": False}]
     replies += [{"edits": [], "next": many[i:i + 3], "done": False} for i in range(3, 30, 3)]
-    llm = Script(replies)
+    llm = in_turn(replies)
     trace = {}
     investigate(llm, s, Usage(), 4000, trace, max_steps=8)
     sizes = [r["prompt_chars"] for r in trace["steps"]]
@@ -275,7 +232,7 @@ def test_prompts_stay_bounded_on_the_largest_formation():
 @pytest.mark.data
 def test_points_are_asked_for_when_the_draft_numbers_points_it_did_not_write():
     s = _session()
-    llm = Script([
+    llm = in_turn([
         {"focus": "f", "edits": [{"op": "add", "point": 1, "text": "h1", "grade": "hypothesis"},
                                  {"op": "add", "point": 2, "text": "h2", "grade": "hypothesis"}], "next": [], "done": False},
         '{"points": ["Where is the pay?", "How thick is it?"], "intent": "locate"}',
@@ -283,7 +240,7 @@ def test_points_are_asked_for_when_the_draft_numbers_points_it_did_not_write():
     trace = {}
     claims = investigate(llm, s, Usage(), 4000, trace, max_steps=3)
     assert s.points == ["Where is the pay?", "How thick is it?"] and len(claims.claims) == 2
-    assert llm.sent[1][0] == "step_1_points" and trace["steps"][0]["points_asked"]
+    assert llm.sent[1]["stage"] == "step_1_points" and trace["steps"][0]["points_asked"]
 
 
 @pytest.mark.data
@@ -361,11 +318,26 @@ def test_working_notes_are_removed_or_the_reply_refused(reply, want):
     assert clean_reply(reply, "## Overview\nx") == want
 
 
+@pytest.mark.parametrize("reply,want", [
+    ("## Overview\nThe user's field notes give Rw 0.05 ohm.m, so SW is 0.2 [E1].", None),
+    ("## Overview\nIn the stretches set by the user (Z1-Z3) SW is 0.2 [E1].", None),
+    ("The user asks for the mean SW.\n\n## Overview\nSW is 0.2 [E1].", "## Overview\nSW is 0.2 [E1]."),
+    ("The user is asking about SW. It is 0.2 [E1].", ""),
+])
+def test_an_answer_that_cites_the_user_is_kept_and_working_notes_still_go(reply, want):
+    """The user's field notes reach every question as "(The user's field notes ...)" and a user's scope as "(set by
+    the user; ...)": an answer that cites them ("the user's field notes give Rw 0.05") was taken for working notes,
+    emptied, and the draft with the flagged numbers kept. Only the working-note forms ("The user asks ...") mark
+    notes."""
+    from petroharness.agent.writer import clean_reply
+    assert clean_reply(reply, "## Overview\nx") == (reply if want is None else want)
+
+
 
 # --- asks: what the question asks is point 1 ---------------------------------------------------------------------------
 
 def test_the_step_1_example_is_json_with_asks_as_point_1():
-    from petroharness.agent.loop import step1
+    from petroharness.agent.prompts import step1
     for text in (step1(), step1(None)):                     # with the plugged library and with none
         ex = json.loads(text[text.index("{\"asks\""):])
         assert ex["asks"] and all(e["point"] in (1, 2, 3) for e in ex["edits"]) and ex["edits"][0]["point"] == 1
@@ -389,7 +361,7 @@ def test_asks_becomes_point_1(reply, want):
     s = _session()
     first = dict(reply, intent="characterize", edits=[{"op": "add", "point": 1, "text": "Pay likely in the upper zones", "grade": "hypothesis"}],
                  next=[], done=False)
-    llm = Script([first, {"edits": [], "next": [], "done": True}])
+    llm = in_turn([first, {"edits": [], "next": [], "done": True}])
     trace = {}
     investigate(llm, s, Usage(), 4000, trace, max_steps=2)
     assert s.points == want and s.claims.claims["C1"].point == 1
@@ -421,15 +393,15 @@ def test_every_first_look_curve_is_a_registry_curve():
 @pytest.mark.data
 def test_the_first_look_is_e1_and_reaches_step_1():
     from petroharness.agent import direction
-    from petroharness.agent import loop as L
+    from petroharness.agent import prompts as PR
     s = _session()
-    llm = Script([{"asks": "Where is the pay?", "points": [], "intent": "locate", "edits": [], "next": [], "done": True}])
+    llm = in_turn([{"asks": "Where is the pay?", "points": [], "intent": "locate", "edits": [], "next": [], "done": True}])
     trace = {}
     investigate(llm, s, Usage(), 4000, trace, max_steps=2)
     own = [c for c in direction.overview(s.topics) if c in s.f.inv.curves][:8]
-    core = [c for c in L.CORE_CURVES if c in s.f.inv.curves]
+    core = [c for c in PR.CORE_CURVES if c in s.f.inv.curves]
     e1 = s.ledger.items[0]
     want = e1.args["curves"]                         # the topics' look plus the reservoir context (core_look)
     assert e1.id == "E1" and e1.tool == "stats" and set(core) <= set(want) and want[0] == own[0]
-    assert "FIRST LOOK" in llm.sent[0][1][-1]["content"] and "[E1]" in llm.sent[0][1][-1]["content"]
+    assert "FIRST LOOK" in llm.sent[0]["messages"][-1]["content"] and "[E1]" in llm.sent[0]["messages"][-1]["content"]
     assert trace["overview"].startswith("stats ") and json.loads(trace["overview"].split(" ", 1)[1])["curves"] == want

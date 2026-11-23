@@ -1,7 +1,7 @@
 # Writer and checker reference
 
-When the investigation closes, one model call writes the answer from the computed results. Code then checks every
-number, word and statement of the draft against the record, sends what it flags back for repair, and delivers the
+When the investigation closes, one model call writes the answer from the computed results. Code then checks the
+draft's numbers, words, statements and curve names against the record, sends what it flags back for repair, and delivers the
 answer with its header, its zone table and, in a conversation, its figures. This page is for developers who change
 the writer and for auditors who want to know exactly what an answer was checked against. Paths are relative to
 `src/petroharness/`.
@@ -14,7 +14,7 @@ flowchart TB
     form -- "full" --> write["write: one writer call"]:::model
     form -- "short" --> brief["write_brief: one writer call"]:::model
     brief -- "INVESTIGATE" --> ask["investigation from step 1"]:::code
-    write --> verify["verify: code checker<br/>numbers, words, contradictions, notes"]:::code
+    write --> verify["verify: code checker<br/>numbers, words, contradictions, notes, names"]:::code
     brief --> verify
     verify -- "findings, rounds left" --> repair["repair: one model call"]:::model
     repair -- "accepted" --> verify
@@ -109,7 +109,7 @@ WELL 30_6-5, FORMATION BRENT GP.
 
 | Part (its first line) | Shown when | Content | Built by |
 |---|---|---|---|
-| `QUESTION:` | always | The question as sent to the model, with the operator's lithology and the field notes appended when given | `ask.py`, `task_for` |
+| `QUESTION:` | always | The question as sent to the model, with the operator's lithology and the field notes appended when given | `interval.py`, `task_for` |
 | `EARLIER IN THIS SESSION (...)` | a later question of a conversation | Each earlier question, how its answer opened, its settled claims with their result ids | `session/earlier.py`, `block` |
 | `Named but not in this well's record: ...` | the question names a measurement with no data here | One line: C10 `absent_note` filled with each name and its curves | `agent/vocabulary.py`, `note` |
 | `THIS DATA'S REPORTING CONVENTIONS (...)` | the data config sets `data.conventions` | One `- ` line per convention | `agent/writer.py`, `conventions_block` |
@@ -137,13 +137,14 @@ WELL 30_6-5, FORMATION BRENT GP.
 
 </details>
 
+<a id="the-provenance-card"></a>
 <details>
 <summary>The provenance card</summary>
 
 `writer.curve_card` finds every curve-like name (`\b[A-Z][A-Z0-9_]{1,}\b`, `writer._MNEMONIC`) in the text of every
 result in the ledger and in the claims block (`writer.claims_block`), keeps the curves of the interval in order of
 first mention, and has `engine.provenance` write one line per curve. The card is stored as `Session.card`, and its
-numbers count as shown for the checker. Each line is built in `agent/engine.py`:
+numbers count as shown for the checker. Each line is built in `agent/engine/`:
 
 | Line part | When | Meaning | Function |
 |---|---|---|---|
@@ -161,6 +162,7 @@ A line of the second Brent question's card, as sent:
 
 </details>
 
+<a id="the-limits-by-point"></a>
 <details>
 <summary>The limits by point</summary>
 
@@ -343,6 +345,7 @@ The rules below are in `agent/writer.py` (`prompt`, `zone_table`) unless named o
 
 </details>
 
+<a id="which-curves-it-holds"></a>
 <details>
 <summary>Which curves it holds</summary>
 
@@ -374,16 +377,16 @@ the other named curves, up to 9 curves.
 | `Geometric mean <CURVE> (<unit>)` | after the mean, for a value curve that `summary.log_shaped` finds log-shaped (positive, more than two orders of magnitude) |
 | `<FLAG> fraction` | a flag's zone mean, the share of samples it covers |
 
-Without a lithology log the zones are shale-volume bands, and the band's name is title-cased like a lithology.
-Taranaki tuhua-7, McKee: `writer.zone_table` for a question naming VCL, PHIE and SW, topics porosity and water
-saturation, no claims (no model run); every zone falls in the shaly band. Data: Taranaki Basin Curated Well Logs
-Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.
+Without a lithology log the zones are runs of the lithology Petrophys's mineral solver gives, and its label is
+title-cased like a logged one. Taranaki tuhua-7, McKee: `writer.zone_table` for a question naming VCL, PHIE and SW,
+topics porosity and water saturation, no claims (no model run); the 11 zones are shale and sandstone. Data: Taranaki
+Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.
 
 ```text
 | Depth Interval (m) | Lithology | Mean VCL (v/v) | Mean PHIE (v/v) | Geometric mean PHIE (v/v) | Mean SW (v/v) | ...
 |---|---|---|---|---|---|
-| 1938.0708-1944.3192 | Shaly (Vcl Band) | 0.4195 | 0.09918 | 0.09742 | 0.9726 | ...
-| 1948.1292-1958.7972 | Shaly (Vcl Band) | 0.4003 | 0.111 | 0.1077 | 0.9283 | ...
+| 1936.3944-1940.3568 | Shale | 0.5482 | 0.05997 | 0.04684 | 0.9995 | ...
+| 1941.576-1944.7764 | Sandstone | 0.3477 | 0.1109 | 0.1097 | 0.9537 | ...
 ...
 ```
 
@@ -437,7 +440,7 @@ table`.
 
 ## 7. The checker
 
-`graph.verify` calls `graph._check(draft, run)` and appends one round record. It runs four rules:
+`graph.verify` calls `graph._check(draft, run)` and appends one round record. It runs five rules:
 
 | Finding list | Flags |
 |---|---|
@@ -445,6 +448,7 @@ table`.
 | `process` | words about the investigation or the display rather than the formation |
 | `contradictions` | statements the record contradicts |
 | `leaks` | working notes left in the text |
+| `names` | curve-like names the record does not hold, close to one it holds (in the round record only when there are some) |
 
 The round records of the first Brent answer, as `trace.verify_rounds` holds them:
 
@@ -464,8 +468,9 @@ themselves. The zone table is not inserted for the check; its numbers count as s
 |---|---|---|
 | `unsupported` | `writer.unsupported(strip_ids(draft), session, w_table)` | `agent/writer.py`, `agent/checks.py` |
 | `process` | `writer.process_words(strip_ids(draft))` | `agent/writer.py` |
-| `contradictions` | `writer.contradictions(draft, session)` | `agent/writer.py`, `agent/checks.py`, `agent/routes.py` |
+| `contradictions` | `writer.contradictions(draft, session)` | `agent/writer.py`, `agent/checks.py`, `record/routes.py` |
 | `leaks` | `writer.leaks(strip_ids(draft))` | `agent/writer.py` |
+| `names` | `writer.unknown_names(strip_ids(draft), session, shown)`: a name shaped like a mnemonic (`_MNEMONIC_NAME`) that the record does not hold and the writer's messages did not show, within `difflib` cutoff 0.85 of a record curve; `[(name, the record's curve)]` | `agent/writer.py` |
 
 </details>
 
@@ -478,19 +483,20 @@ unsupported numbers once each, in order.
 | What counts as shown | From | Defined in |
 |---|---|---|
 | Result values | every ledger item of the conversation: each item's shown values (`ledger.shown_values`), plus the magnitude of each negative value (`writer._Magnitudes`) | `agent/writer.py`, `unsupported` |
-| Result text | every number in each item's `[E<k>] <text>` | `agent/checks.py`, `_allowed_numbers` |
+| Result text | every number in each item's `[E<k>] <text>`, and the negative of a number after a band or minus sign ("PHIN - 0.02" also shows -0.02; `±`, `+/-`) | `agent/checks.py`, `_allowed_numbers`; `agent/numbers.py`, `shown_values` |
 | The card text | every number in what the writer is shown besides the results: the map without its notes (`writer.writer_map`), the zone table, the provenance card, and the points with the limits (`writer.readings`) | `agent/writer.py`, `unsupported` |
 | The question | with `numbers.question: true`, every number of the question; a percentage there also as a fraction | `agent/checks.py`, `_allowed_numbers` |
 
 | Matching rule | Value | Defined in |
 |---|---|---|
-| Number pattern | `_NUM = (?<![A-Za-z_\d.])(-?\d+(?:\.\d+)?)(\s*%\|\s+percent\b)?`, case-insensitive | `agent/checks.py` |
+| Number pattern | `NUM = (?<![A-Za-z_\d.])(-?(?:\d{1,3}(?:,\d{3})+\|\d+)(?:\.\d+)?(?:[eE][-+]?\d+)?)(?!\d\|(?:st\|nd\|rd\|th)\b)(\s*%\|\s+percent\b)?`, case-insensitive: thousands separators (`20,700`) and exponents are read; an ordinal (`25th`) is no number | `agent/numbers.py` |
 | Precision | supported when an allowed value lies within `0.5 x 10^-decimals + 1e-9` of it, decimals as written | `agent/checks.py`, `_supported` |
-| Percent | a percentage also matches a shown fraction x 100, the complement `100 x (1 - f)` of a shown fraction, or `100 - p` of a shown percentage | `agent/checks.py`, `_supported` |
-| Derived | `numbers.derived: true`: also supported when it equals `\|a - b\|`, `a + b`, `a / b`, `b / a`, `100 x \|a - b\| / \|b\|` or `100 x \|b - a\| / \|a\|` of two supported numbers in the same sentence, at its own precision | `agent/checks.py`, `_derived` |
+| Percent | a percentage also matches any shown value x 100, its complement `100 x (1 - v)`, or `100 - v` of a shown value between 0 and 100 | `agent/checks.py`, `_supported` |
+| Derived | `numbers.derived: true`: also supported when it equals, for two supported numbers a and b of the same sentence, `a - b`, `b - a`, `\|a - b\|`, `a + b`, `a x b`, `a / b` or `b / a`, and, for a number written as a percentage, `100 x \|a - b\| / \|b\|`, `100 x \|b - a\| / \|a\|` or `100 x a / b`; or the total of a run of 3 or more, or the mean of a run of 2 or more, consecutive supported numbers of the sentence (without `%` for a number without one); at its own precision | `agent/checks.py`, `_derived` |
+| Counts with their population | "k of N", "k out of N", "k/N" with both whole and at least `skip_integers_below`: passes only when one shown line holds N with k or with N - k, or k is a total of other numbers of the sentence while N is shown; else the whole phrase is flagged (`658 of 848`), and its two numbers are not checked again | `agent/checks.py`, `number_provenance`, `_PAIR` |
 | Small integers | an integer below `numbers.skip_integers_below` (20) without a percent sign is not checked | `agent/checks.py`, `number_provenance` |
-| Sentences | split at `(?<=[.;!?])\s+` and at line breaks | `agent/checks.py`, `number_provenance` |
-| Removed first | every citation (`compose.strip_citations`), the task's well name (`checks.well_name_pattern`) and each `numbers.ignore` pattern | `agent/checks.py`, `number_provenance` |
+| Sentences | split at `(?<=[.!?])\s+` and at line breaks (clauses joined by `;` are one sentence) | `agent/checks.py`, `SENTENCE` |
+| Read first | every citation removed (`compose.strip_citations`), the task's well name removed from the draft and the question (`checks.well_name_pattern`), each `numbers.ignore` pattern removed; numbers written in words read as digits where 20 or more or with a decimal (`numbers.spelled_as_digits`); thousands grouped by spaces ("3 114.1112") read as one number where that number is shown (`checks._regrouped`) | `agent/checks.py`, `_prepared` |
 | Minus signs | U+2212, U+FE63 and U+FF0D read as `-` (`checks.ascii_minus`); an en or em dash right before a digit, not after a word character, `.`, `%`, `)` or `]`, reads as `-` (`writer._DASH_MINUS`) | `agent/checks.py`, `agent/writer.py` |
 
 Real results on 30/6-5 Brent, against one result (`stats` of PHIE and SW: SW means 0.2265 in Z7 and 0.314 in Z5),
@@ -501,7 +507,7 @@ number_provenance("SW is 23% in Z7 and 77% elsewhere.", ...)         # ([], 2)  
 number_provenance("Z5 SW 0.314 exceeds Z7 0.2265 by 0.0875.", ...)   # ([], 3)         a difference in the sentence
 number_provenance("Z5 SW 0.314 exceeds Z7 by 0.0875.", ...)          # (['0.0875'], 2)
 number_provenance("Z7 is 30/6-5's thickest sand.", ...)              # ([], 0)         the well's name is no number
-number_provenance("SW 0.42 at the 25th percentile.", ...)            # (['0.42'], 2)   25 is the question's
+number_provenance("SW 0.42 at the 25th percentile.", ...)            # (['0.42'], 1)   25th is an ordinal, no number
 ```
 
 The settings, in `resources/rules/checks.yaml`: `numbers: {skip_integers_below: 20, derived: true, question: true,
@@ -512,7 +518,8 @@ ignore: []}`.
 <details>
 <summary>Words about the process</summary>
 
-`writer.process_words` returns each match of two patterns of `agent/writer.py`, in order, once each. On the first
+`writer.process_words` returns the matches of two patterns of `agent/writer.py`, once each: every `PROCESS` match in
+the order of the text, then every `DISPLAY` match. On the first
 Brent draft it found `not opened` and `the MAP`.
 
 | Name | Flags | Matches |
@@ -540,7 +547,7 @@ DISPLAY = \bleft out to keep (?:this|it) short\b|\b(?:display|view|output)(?:'s)
 | Core calibration said absent (V4) | `checks.availability_issues` | `PHIE_CC` or `PERM_CC` has data, and a clause denies core-calibrated porosity or permeability (`availability.denial` and `about_poroperm`, not `hypothetical`) where those curves exist (the curves and zones it names) | the Brent message below |
 | Core calibration used where absent (V4) | `checks.availability_issues` | neither curve has data, and a clause names `PHIE_CC` or `PERM_CC` without a negation | `WHAT: the answer cites PHIE_CC/PERM_CC. WHY: no core-calibrated curves exist in this interval. FIX: ...` |
 | Data said missing (V9) | `checks.data_denials` | a `data_denials` pattern matches and one of its curves has data | `WHAT: the answer says '<match>', but this interval has <curves>. WHY: ... FIX: ...` |
-| Well-wide route read as this interval's | `routes.contradictions` | a sentence says `INVASION_RATIO` uses the RMED/RDEP fallback where no sample does, or that `SXO` is the quicklook where none is | `WHAT: the answer says ... FIX: state the route this interval uses.` |
+| Well-wide route read as this interval's | `routes.contradictions` | a sentence with no negation (not, no, never, rather than, instead of ...) says `INVASION_RATIO` uses the RMED/RDEP fallback where every sample here has a recorded pair, or that `SXO` is the quicklook where some samples are measured; at most one message per route | `WHAT: the answer says ... FIX: state the route this interval uses.` |
 
 The V4 message on the second Brent answer, in full (30/6-5 has core, so PHIE_CC and PERM_CC exist):
 
@@ -588,7 +595,7 @@ from its last occurrence is kept when that part has no notes; else `""`.
 `META`, flags `re.I | re.M`:
 
 ```text
-\bThe user\b|\bLet me\b|\bI need to\b|\bI will (?:now )?(?:rewrite|check|fix|remove|go)|\b(?:my|the) previous (?:answer|draft|version|reply)\b|\bActually,|\brewrite the answer\b|\bthese need to go\b|^\s*-\s*"[^"]{3,}"\s*[—-]
+\bthe user (?:asks|asked|wants|is asking|is pointing|points|said|says|wrote)\b|\bLet me\b|\bI need to\b|\bI will (?:now )?(?:rewrite|check|fix|remove|go)|\b(?:my|the) previous (?:answer|draft|version|reply)\b|\bActually,|\brewrite the answer\b|\bthese need to go\b|^\s*-\s*"[^"]{3,}"\s*[—-]
 ```
 
 When the writer's first reply was cleaned, the trace records `draft_notes_removed`: `true` when an answer was found
@@ -601,7 +608,7 @@ after the notes, `false` when the writer had to be asked again. Neither Brent an
 The first Brent answer's repair request, as sent:
 
 ```text
-These numbers are not shown by any result, the map or the question: 4.86, 0.055, 0.060, 0.756. Take each exactly as a claim or a result shows it (with its id in brackets), or remove it. These words talk about the investigation, not the formation: 'not opened', 'the MAP'. Say each as a fact about this well's data (what it shows, or which data it lacks), or remove it. Keep everything else as it is. Reply with the whole corrected answer only, starting with its first heading: no notes about what you changed.
+These numbers are not shown by any result, the map or the question: 4.86 (in "<its clause>"); 0.055 (in "<its clause>"); 0.060 (in "<its clause>"); 0.756 (in "<its clause>"). A total, a difference or a share you worked out passes when the shown numbers it comes from stand beside it in the same sentence, and only when it is right: where one is named after a number above, keep the number and write those beside it. Any other: take it exactly as a claim or a result shows it (with its id in brackets), or remove it. These words talk about the investigation, not the formation: 'not opened', 'the MAP'. Say each as a fact about this well's data (what it shows, or which data it lacks), or remove it. Keep everything else as it is. Reply with the whole corrected answer only, starting with its first heading: no notes about what you changed.
 ```
 
 The repaired draft passed round 1 clean. The rules below are in `agent/graph.py` (`after_verify`, `repair`,
@@ -616,14 +623,15 @@ The repaired draft passed round 1 clean. The rules below are in `agent/graph.py`
 | Part | Text entry | Items shown | Template |
 |---|---|---|---|
 | Contradictions | `repair_contradictions` | first 4 messages, joined by spaces | `These statements contradict this interval's data; correct each: ` |
-| Numbers | `repair_numbers` | first 12 numbers | `These numbers are not shown by any result, the map or the question: {numbers}. Take each exactly as a claim or a result shows it (with its id in brackets), or remove it.` |
+| Numbers | `repair_numbers` | first 12 numbers, joined by `; `, each with the clause it stands in (`x (in "<clause>")`, `where_said`, up to `WHERE_CHARS` = 180 characters around it); where the answer's other numbers give it (`writer.derived`), ` = <arithmetic>, numbers the answer states elsewhere: keep it and write them beside it`, and where arithmetic the answer writes out gives another value, `: <expression> is <v>, write <v>` | `These numbers are not shown by any result, the map or the question: {numbers}. A total, a difference or a share you worked out passes when the shown numbers it comes from stand beside it in the same sentence, and only when it is right: where one is named after a number above, keep the number and write those beside it. Any other: take it exactly as a claim or a result shows it (with its id in brackets), or remove it.` |
 | Process words | `repair_words` | first 8, each quoted with `repr` | `These words talk about the investigation, not the formation: {words}. Say each as a fact about this well's data (what it shows, or which data it lacks), or remove it.` |
 | Working notes | `repair_leaks` | first 4, each quoted with `repr` | `These are working notes, not part of the answer: {leaks}. Write each passage as its final text only.` |
+| Names | `repair_names` | first 6, each `NAME (the record holds CURVE)`, joined by `; ` | `These names are not curves of this record: {names}. Use the record's name, or drop the name.` |
 | Closing | `repair_keep` | always | ` Keep everything else as it is. Reply with the whole corrected answer only, starting with its first heading: no notes about what you changed.` |
 
 The call's messages: the writer's system message, the writer's user message, the current draft as an assistant turn
-(`llm.assistant_turn`: with an empty reasoning field for a reasoning model, or after any call that returned
-reasoning), then the repair request.
+(`llm.assistant_turn`: with an empty reasoning field for a reasoning model, the card's `replay_reasoning_field` when
+set, else its `reasoning`, or when the last call logged returned reasoning), then the repair request.
 
 </details>
 
@@ -675,7 +683,7 @@ drafts and the delivered answers:
 | Step | Function | Effect | Defined in |
 |---|---|---|---|
 | 1 | regex `[ \t]*\{\{ZONE_TABLE\}\}[ \t]*` | the token on lines of its own | `agent/graph.py`, `delivered` |
-| 2 | `compose.compose(draft, table)` | the zone table placed (section 6); a heading with no text left out; a table of the draft's own that repeats the zone table (every zone's interval, and no column the zone table lacks: no other curve, count, thickness or role) left out, with a bold label naming it alone | `agent/compose.py`, `_without_repeats` |
+| 2 | `compose.compose(draft, table)` | the zone table placed (section 6); a heading with no text left out; a table of the draft's own that repeats the zone table (every zone's interval, and every other column headed as one of the zone table's, bold, case and units aside: a median, a count, a thickness or a role is the writer's own) left out, with a bold label naming it alone | `agent/compose.py`, `_without_repeats` |
 | 3 | `writer.strip_ids` | claim ids, `[MAP]` and every evidence id taken out ([How ids are removed](#how-ids-are-removed)) | `agent/writer.py` |
 | 4 | `writer.report_numbers` | numbers as written (no rounding in code; the function returns its input) | `agent/writer.py` |
 | 5 | regex `\n{3,}` to `\n\n` | blank lines collapsed | `agent/graph.py`, `delivered` |
@@ -687,6 +695,7 @@ delivered("## A\nSee {{ZONE_TABLE}} here [E2].", "| a |\n|---|")   # '## A\nSee\
 
 </details>
 
+<a id="how-ids-are-removed"></a>
 <details>
 <summary>How ids are removed</summary>
 
@@ -768,7 +777,7 @@ CDLA-Sharing-1.0.
 
 - **Question:** What are the VCL, PHIE and SW of the McKee Formation, and which zones are clean?
 - **Interval:** 1935.02-2017.78 m (544 samples; tops file formations_tuhua-7.csv, base: stated base)
-- **Lithology:** no lithology log: zones from shale-volume bands (VCL below 0.3, 0.3-0.6, above 0.6)
+- **Lithology:** no lithology log: lithology zones from Petrophys's mineral solver (LITHO, clastic domain, canonical multi mineral solver)
 ...
 ```
 
@@ -783,7 +792,7 @@ Built in `ask.py` (`_answer_md`, `_interval_text`, `_lithology_text`, `_model_la
 | `# <LAS stem>: <interval name>` | always | the well and the interval |
 | `- **Question:**` | always | the question as asked (without appended notes) |
 | `- **Interval:**` | always | `<top>-<base> <unit> (<samples> samples; <source>)`, depths with `:g` |
-| `- **Lithology:**` | always | the zoning source: lithology log (named or detected), shale-volume bands, or `no lithology log and no shale volume: the interval is not zoned by lithology` |
+| `- **Lithology:**` | always | the zoning source: lithology log (named or detected), Petrophys's mineral solver (its curve, domain and method), shale-volume bands, or `no lithology log and no shale volume: the interval is not zoned by lithology` |
 | `- **Model:**` | always | the model's name as people read it (`--model`, else the card's label) |
 | `- **Skill library:**` | always | `<name> (version <v>)`, or `none (no guides)` |
 | `- **Status:**` | always | `<status>, <route>`: `a direct answer, N look step(s)`, `an investigation after a first look, N steps`, or `N investigation step(s)` |
@@ -853,7 +862,8 @@ trace.
 | A reasoning model's writer reply is cut at the token cap | the client returns `""` and logs `discarded` in the usage entry; the retry rules apply | `llm.py`, `LLM.chat` |
 | The final draft is empty | no repair; answer `""`, status `error: empty answer (the writer's last draft was empty)`, `trace.error` `the writer's last draft was empty`; `answer.md` shows `(no answer: the writer's last draft was empty)`; a conversation draws no figures for it | `agent/graph.py`, `after_verify`, `finalize`, `answer_status` |
 | `RESULTS` exceeds 60,000 characters | cut with `... (cut)`; the checker still accepts numbers from every result (section 3) | `agent/writer.py`, `prompt` |
-| A number survives the last round; a repair reply is empty, notes or at most 60% of the draft | status `unresolved_numbers`; the draft kept and the loop ended (section 8) | `agent/graph.py`, `finalize`, `repair` |
+| A number survives the last round | status `unresolved_numbers` (only numbers change the status) | `agent/graph.py`, `answer_status` |
+| A repair reply is empty, notes or at most 60% of the draft | the draft kept and the loop ended (section 8); the status follows the findings repeated | `agent/graph.py`, `repair` |
 | An id survives stripping | delivered; listed in `trace.render_leftovers` (section 9) | `agent/graph.py`, `finalize` |
 | The report style file named by the policy is missing | `FileNotFoundError` with WHAT and FIX (section 5) | `profile.py`, `profile` |
 | A direct question's writer replies `INVESTIGATE` | an investigation from step 1 (section 4) | `agent/graph.py`, `write_brief` |
@@ -865,8 +875,8 @@ trace.
 ## 13. Related pages
 
 - [RECORDS.md](RECORDS.md): every record a run or conversation writes, field by field.
-- [../GRAPH.md](../GRAPH.md): the question graph, its nodes and routes.
-- [../SESSION_GRAPH.md](../SESSION_GRAPH.md): the session graph that runs `project` and `figures`.
+- [../GRAPH.md](../GRAPH.md): the question graph, its nodes and routes, and the session graph that runs `project` and
+  `figures`.
 - [../ARCHITECTURE.md](../ARCHITECTURE.md): the parts of the harness and how a question flows through them.
 - [../EVIDENCE.md](../EVIDENCE.md): the number links the checker's matching produces.
 - [agent/writer.py](../../src/petroharness/agent/writer.py), [agent/compose.py](../../src/petroharness/agent/compose.py),

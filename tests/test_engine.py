@@ -14,7 +14,8 @@ from _reference import CFG
 V2 = REPO_ROOT / "src" / "petroharness" / "resources" / "policy" / "reference_v2.yaml"
 
 
-def test_no_engine_means_the_installed_library(tmp_path):
+def test_no_engine_named_means_no_engine_directory(tmp_path):
+    """No engine, or "installed": petrophys.interpret interprets (test_interpret_option)."""
     assert engine_dir({"name": "p"}, tmp_path) is None
     assert engine_dir({"name": "p", "engine": "installed"}, None) is None
 
@@ -32,12 +33,13 @@ def test_a_named_engine_must_exist_and_describe_itself(tmp_path):
     assert engine_dir({"engine": "e1"}, tmp_path) == tmp_path / "e1"
 
 
-def test_an_engine_interprets_the_whole_well(tmp_path):
+def test_every_route_interprets_the_whole_well(tmp_path):
     (tmp_path / "e1").mkdir()
     (tmp_path / "e1" / "ENGINE.json").write_text(json.dumps({"name": "e1"}))
-    policy = {"name": "p", "engine": "e1", "interpretation_scope": "formation"}
-    with pytest.raises(ValueError, match="interprets the whole well"):
-        prepare_well(tmp_path / "w.las", policy, None, None, tmp_path)
+    for policy in ({"name": "p", "engine": "e1", "interpretation_scope": "formation"},
+                   {"name": "p", "interpretation_scope": "formation"}):
+        with pytest.raises(ValueError, match="interprets the whole well"):
+            prepare_well(tmp_path / "w.las", policy, None, tmp_path)
 
 
 def test_policy_cutoffs_must_be_the_engines():
@@ -56,19 +58,19 @@ def test_engine_output_and_cache(tmp_path):
     """The engine's curves, step record and identity reach the prepared well; the cache returns the same well."""
     policy = load_policy(V2)
     las = CFG.data.las_dir / "15_9-2.las"
-    prep = prepare_well(las, policy, None, tmp_path, CFG.data.engines_dir)
+    prep = prepare_well(las, policy, tmp_path, CFG.data.engines_dir)
     assert prep.policy_adjustments["engine"]["name"] == policy["engine"]
     assert {"VCL", "PHIE", "SW", "PERM", "SWIRR_APP", "NET_PAY"} <= set(prep.derived_curves)
     assert prep.steps["permeability"]["method"] and prep.steps["net_pay"]["parameters"]["sw_cutoff"] == 0.7
     perm = prep.curve("PERM")
     ok = np.isfinite(perm)
     assert ok.any() and perm[ok].min() >= 1e-4 and perm[ok].max() <= 2e4    # the exporter's value-range QC
-    again = prepare_well(las, policy, None, tmp_path, CFG.data.engines_dir)
+    again = prepare_well(las, policy, tmp_path, CFG.data.engines_dir)
     np.testing.assert_array_equal(again.curve("PERM"), perm)
     edited = copy.deepcopy(policy)
     edited["cutoffs"]["sw_max"] = 0.5                               # the engine's cutoffs are not inputs
     with pytest.raises(RuntimeError, match="sw_cutoff"):
-        prepare_well(las, edited, None, tmp_path / "other", CFG.data.engines_dir)
+        prepare_well(las, edited, tmp_path / "other", CFG.data.engines_dir)
 
 
 def _well(**curves):
@@ -112,7 +114,7 @@ def test_engine_porosity_cutoff_is_checked_on_the_curves():
 @pytest.mark.data
 @pytest.mark.skipif(CFG.data.engines_dir is None, reason="needs a built engine (data.engines_dir)")
 def test_engine_qc_record_reaches_the_prepared_well():
-    prep = prepare_well(CFG.data.las_dir / "15_9-2.las", load_policy(V2), None, CFG.data.cache_dir, CFG.data.engines_dir)
+    prep = prepare_well(CFG.data.las_dir / "15_9-2.las", load_policy(V2), CFG.data.cache_dir, CFG.data.engines_dir)
     assert prep.value_qc and "PERM" in prep.value_qc["rules"]
     assert prep.value_qc["rules"]["PERM"]["low"] == 1e-4
     assert prep.value_qc["changed"]["PERM"].shape == prep.depth.shape

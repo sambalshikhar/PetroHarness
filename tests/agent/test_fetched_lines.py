@@ -5,13 +5,13 @@ the lines a get or find showed beyond it (a list's kept lines, a class line aske
 
     .venv/bin/python -m pytest tests/agent/test_fetched_lines.py -q
 """
-import json
 import re
 
 import numpy as np
 import pytest
 
 from _wells import sample
+from _support.model import ScriptedModel  # noqa: E402
 
 pytestmark = pytest.mark.data
 
@@ -47,36 +47,23 @@ def _intervals(las, curve: str, below: float) -> int:
     return int(on[0]) + int(np.sum(on[1:] & ~on[:-1]))
 
 
-class Model:
+def _get_the_cut_line(messages):
+    eid, find = re.search(r'get (E\d+) with find "([^"]+)"', messages[-1]["content"]).groups()
+    return {"next": [{"get": eid, "find": find}], "done": False}
+
+
+class Model(ScriptedModel):
     """A direct question: READ says the whole well; look step 1 lists GR < 60 cut at 3; step 2 gets the others with the
-    find the cut line names; the writer states no number. Keeps every call's messages."""
+    find the cut line names; the writer states no number."""
 
     def __init__(self):
-        self.sent = []
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
-        usage.log.append({"stage": stage, "prompt_tokens": 10, "completion_tokens": 5, "seconds": 0.0})
-        last = messages[-1]["content"]
-        if stage.startswith("read"):
-            r = {"topics": ["statistics_data_analysis"], "named": ["GR"], "depth": "direct", "scope": ["the whole well"]}
-        elif stage == "step_1":
-            r = {"next": [{"runs": {"condition": "GR < 60", "limit": 3}}], "done": False}
-        elif stage == "step_2":
-            eid, find = re.search(r'get (E\d+) with find "([^"]+)"', last).groups()
-            r = {"next": [{"get": eid, "find": find}], "done": False}
-        elif stage.startswith(("step_", "settle")):
-            r = {"done": True}
-        else:
-            r = "The intervals are listed in the results."
-        return r if isinstance(r, str) else json.dumps(r)
-
-    def last(self, stage):
-        return next(c for c in reversed(self.sent) if c["stage"] == stage)["messages"][-1]["content"]
-
+        super().__init__({
+            "read*": {"topics": ["statistics_data_analysis"], "named": ["GR"], "depth": "direct",
+                      "scope": ["the whole well"]},
+            "step_1": {"next": [{"runs": {"condition": "GR < 60", "limit": 3}}], "done": False},
+            "step_2": _get_the_cut_line,
+            "step_*": {"done": True}, "settle*": {"done": True}},
+            default="The intervals are listed in the results.")
 
 @pytest.fixture(scope="module")
 def asked(tmp_path_factory):
@@ -141,7 +128,7 @@ def test_settle_reads_the_fetched_lines_too(asked):
 
 def test_find_keeps_the_lines_it_shows_beyond_their_result():
     """find runs get over every result: the lines it shows beyond a result's text are kept for that result too."""
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.config import given_settings
     from _wells import CASES, task_cfg
     task, cfg, data = task_cfg(CASES["brent"], "s")
@@ -170,17 +157,10 @@ class WholeModel(Model):
     """A direct question whose one lookup lists every GR < 60 run of the well (no limit): its text is cut at the size
     limit; no get follows."""
 
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        if stage == "step_1":
-            self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
-            usage.log.append({"stage": stage, "prompt_tokens": 10, "completion_tokens": 5, "seconds": 0.0})
-            return json.dumps({"next": [{"runs": {"condition": "GR < 60"}}], "done": False})
-        if stage == "step_2":
-            self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
-            usage.log.append({"stage": stage, "prompt_tokens": 10, "completion_tokens": 5, "seconds": 0.0})
-            return json.dumps({"done": True})
-        return super().chat(stage, messages, usage, max_tokens, json_schema, temperature, retry)
-
+    def __init__(self):
+        super().__init__()
+        self.replies.update({"step_1": {"next": [{"runs": {"condition": "GR < 60"}}], "done": False},
+                             "step_2": {"done": True}})
 
 def test_a_direct_questions_writer_reads_a_list_cut_at_the_size_limit_whole(tmp_path, monkeypatch):
     """Live (Xg): the whole-well list was cut at the size limit, the look step said 'the answer's writer reads it

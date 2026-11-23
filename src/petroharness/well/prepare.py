@@ -1,5 +1,6 @@
-"""Well preparation: read the raw LAS and interpret it with Petrophys under the policy (a context profile, the
-installed library with the policy's corrections, or a pinned engine); the prepared well is cached by content."""
+"""Well preparation: read the raw LAS and interpret it with Petrophys (petrophys.interpret with the library's settings
+and the policy's cutoffs, or with a context profile; the data's own interpreter; or a pinned engine the policy names);
+the prepared well is cached by content."""
 
 from __future__ import annotations
 
@@ -25,9 +26,10 @@ def read_depth(path: Path) -> np.ndarray:
 def depth_order(path: Path, depth: Optional[np.ndarray] = None) -> str:
     """What is wrong with the order of a LAS file's depths, as a WHAT / WHY / FIX message naming where, else "": a depth
     that goes back against the file's direction (spliced runs, a repeated section: the stretch between is logged twice
-    and would be counted twice in every result), or a depth given twice in a row. Petrophys warns of both ("depth
-    changes direction", "duplicate depth values") without saying where; which samples to keep is the user's to say,
-    so the file is refused, not reordered (question suite L7)."""
+    and would be counted twice in every result), a depth given twice in a row, or depths that decrease down the whole
+    file (logged bottom up: zones and every depth-ordered result read a log top down, and its zones would come out
+    empty). Petrophys warns of the first two ("depth changes direction", "duplicate depth values") without saying where;
+    which samples to keep, and the file's order, are the user's to fix, so the file is refused, not reordered."""
     d = np.asarray(read_depth(path) if depth is None else depth, dtype=float)
     rows = np.where(np.isfinite(d))[0]
     if rows.size < 2:
@@ -36,7 +38,7 @@ def depth_order(path: Path, depth: Optional[np.ndarray] = None) -> str:
     moving = step[step != 0]
     sign = 1.0 if not moving.size or np.median(moving) > 0 else -1.0
     back, same = np.where(step * sign < 0)[0], np.where(step == 0)[0]
-    if not back.size and not same.size:
+    if not back.size and not same.size and sign > 0:
         return ""
     name, unit, lines = Path(path).name, _depth_unit(path), _data_lines(path, d.size)
     g = lambda x: f"{round(float(x), 4):.10g}"              # a depth as the file writes it, to 4 decimals
@@ -49,6 +51,11 @@ def depth_order(path: Path, depth: Optional[np.ndarray] = None) -> str:
                 f"{g(min(hi, lo))}-{g(max(hi, lo))}{unit} is logged twice (spliced runs or a repeated section). WHY: each "
                 "depth is one sample; a stretch logged twice would be counted twice in every result. FIX: keep one run "
                 "over the overlap so the depths run one way down the file, and load it again.")
+    if not same.size:                                       # one way, but bottom up
+        return (f"WHAT: the depth in {name} decreases down the file, from {g(d[rows[0]])} at {at(0)} to "
+                f"{g(d[rows[-1]])}{unit} at {at(rows.size - 1)} (logged bottom up). WHY: zones and every depth-ordered "
+                "result read a log top down; read bottom up, the interval would hold no zone. FIX: write the file with "
+                "depth increasing down the file, and load it again.")
     i = same[0]
     return (f"WHAT: the depth {g(d[rows[i]])}{unit} is given twice in {name}, at {at(i)} and {at(i + 1)}"
             f"{more(same.size - 1)}. WHY: each depth is one sample; a depth given twice would be counted twice. FIX: "
@@ -90,8 +97,6 @@ def _data_lines(path: Path, n: int) -> list:
 # Policy-driven interpretation
 # ---------------------------------------------------------------------------
 
-import copy
-import dataclasses
 import functools
 import hashlib
 import json
@@ -104,7 +109,7 @@ from typing import Any
 
 import yaml
 
-from petroharness.well.formation import Interval, find_lithology_curve
+from petroharness.core.files import write_atomic
 
 
 def lithology_domain(net_pay_parameters: dict) -> str:
@@ -116,6 +121,23 @@ def lithology_domain(net_pay_parameters: dict) -> str:
 
 def load_policy(path: Path) -> dict:
     return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+
+# The policy's net-pay cutoffs (cutoffs.<key>) as petrophys.interpret's options (DynamicWorkflowConfig): the harness
+# checks that the interpretation used the policy's cutoffs, and the library's own defaults for these differ.
+POLICY_CUTOFFS = {"vcl_cutoff": "vcl_max", "sw_cutoff": "sw_max"}
+
+
+def default_interpret(policy: dict, options: Optional[dict] = None) -> dict:
+    """petrophys.interpret's options for a LAS: the given ones over the policy's net-pay cutoffs; a context profile
+    fixes its own settings, so options naming one are returned as given."""
+    options = dict(options or {})
+    if not options.get("context_profile"):
+        cutoffs = policy.get("cutoffs") or {}
+        for option, key in POLICY_CUTOFFS.items():
+            if cutoffs.get(key) is not None:
+                options.setdefault(option, cutoffs[key])
+    return options
 
 
 @dataclass
@@ -157,88 +179,6 @@ class PreparedWell:
         return "" if c is None else str(getattr(c, "unit", "") or "")
 
 
-def _rwa_p5_fix(w, rule: dict, lith_curve: Optional[str]) -> dict:
-    """Workflow-of-record apparent-Rw rule, referenced to the clean-wet median temperature."""
-    from petrophys.workflow.dynamic_workflow import GROUND_TRUTH_CODE_TO_GROUP, _group_array_from_numeric_codes
-
-    temp = np.asarray(w.get("TEMP").data, float)
-    rdep = np.asarray(w.get("RDEP").data, float)
-    phi_curve = w.get("PHIE_CC") if w.get("PHIE_CC") is not None else w.get("PHIE")
-    phie = np.asarray(phi_curve.data, float)
-    vcl = np.asarray(w.get("VCL").data, float)
-    a = np.full_like(rdep, rule["a_other"])
-    litho = w.get(lith_curve) if lith_curve else None
-    if litho is not None:
-        groups = _group_array_from_numeric_codes(np.asarray(litho.data, float), GROUND_TRUTH_CODE_TO_GROUP)
-        a = np.where(np.char.upper(np.asarray(groups, dtype=str)) == "SANDSTONE", rule["a_sandstone"], rule["a_other"])
-    with np.errstate(all="ignore"):
-        rwa = rdep * phie ** rule["m"] / a
-    ok = (np.isfinite(rdep) & np.isfinite(phie) & np.isfinite(vcl) & (vcl < rule["vcl_max"])
-          & (phie > rule["phie_min"]) & np.isfinite(rwa) & (rwa > 0))
-    if not ok.any():
-        return {}
-    tref = float(np.nanmedian(temp[ok]))
-    rwa_ref = rwa[ok] * (temp[ok] + 6.77) / (tref + 6.77)  # Arps, to the reference temperature
-    return {"rw": float(np.percentile(rwa_ref, rule["percentile"])), "rw_meas_temp_f": tref}
-
-
-def _interpret(well, policy: dict, lithology_curve=None):
-    from petrophys.reporting.reference_export import _context_workflow_config
-    from petrophys.workflow.zoned_batch import _finalize_export_curves, run_dynamic_workflow_with_zones
-
-    input_curves = set(well.curves)
-    cfg = _context_workflow_config(well=well)
-    if policy.get("gr_endpoints") == "auto":
-        cfg = dataclasses.replace(cfg, gr_min=None, gr_max=None)
-    cut = policy.get("cutoffs", {})
-    explicit = {k: cut[p] for k, p in (("vcl_cutoff", "vcl_max"), ("sw_cutoff", "sw_max")) if cut.get(p) is not None}
-    cfg = dataclasses.replace(cfg, **explicit)          # the policy's cutoffs, not the library's defaults
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        first = run_dynamic_workflow_with_zones(copy.deepcopy(well), cfg)
-    steps = {s.step: s for s in first.base_result.steps_executed}
-    rw_method = steps["rw"].method if "rw" in steps else None
-
-    adjust: dict[str, Any] = {}
-    rw_rule = policy.get("rw", {})
-    if rw_method in ("user_provided_assumed_reference_temperature", "las_metadata_assumed_reference_temperature") \
-            and rw_rule.get("header_rw_without_rwt") == "median_formation_temperature":
-        adjust = {"rw_meas_temp_f": float(np.nanmedian(np.asarray(first.well.get("TEMP").data, float)))}
-    elif rw_method and rw_method.startswith("rwa_clean_wet") and rw_rule.get("rwa_fallback"):
-        lith = find_lithology_curve(lambda n: None if first.well.get(n) is None else first.well.get(n).data,
-                                    sorted(input_curves), lambda n: str(getattr(well.get(n), "description", "") or ""),
-                                    lithology_curve)
-        adjust = _rwa_p5_fix(first.well, rw_rule["rwa_fallback"], lith)
-
-    # The library picks the PHIE cutoff per lithology domain; the policy sets one per domain.
-    np_params = (steps["net_pay"].to_dict().get("parameters") or {}) if "net_pay" in steps else {}
-    domain = lithology_domain(np_params)
-    phie_policy = cut.get("phie_min_carbonate" if domain == "carbonate" else "phie_min_clastic")
-    if phie_policy is not None and isinstance(np_params.get("phie_cutoff"), (int, float)) \
-            and abs(float(np_params["phie_cutoff"]) - float(phie_policy)) > 1e-12:
-        adjust["phie_cutoff"] = float(phie_policy)
-
-    result = first
-    if adjust:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            result = run_dynamic_workflow_with_zones(copy.deepcopy(well), dataclasses.replace(cfg, **adjust))
-    _check_cutoffs(result, cut)
-    _finalize_export_curves(result.well, input_curves)
-    step_dicts = {}
-    for s in result.base_result.steps_executed:
-        d = s.to_dict()
-        step_dicts[s.step] = step_entry(d)
-    if "bad_hole" in step_dicts:
-        from petrophys.preprocessing.quality.bad_hole.flag_generator import generate_bad_hole_flags
-
-        from petroharness.well.runner import bad_hole_thresholds
-        step_dicts["bad_hole"]["parameters"] = bad_hole_thresholds(generate_bad_hole_flags) | (
-            step_dicts["bad_hole"].get("parameters") or {})
-    return result.well, input_curves, step_dicts, {"first_pass_rw_method": rw_method, **adjust}
-
-
 class _Subset:
     """A view of some curves of a well (for applying QC to those only)."""
 
@@ -278,7 +218,8 @@ def _sync_after_qc(well) -> None:
 
 
 def engine_dir(policy: dict, engines_dir: Optional[Path]) -> Optional[Path]:
-    """The source tree of the engine the policy names (None: the installed library with the policy's corrections)."""
+    """The source tree of the engine the policy names (None when it names none, or "installed": petrophys.interpret
+    interprets with the library's settings, default_interpret)."""
     name = policy.get("engine")
     if not name or name == "installed":
         return None
@@ -511,7 +452,7 @@ def _check_cutoffs(result, cut: dict) -> None:
 
 
 # Bump when the interpretation code changes what it computes, so cached wells are not reused across versions.
-INTERPRETATION_VERSION = 17                # 13: data.interpret; each step's stage; 14: the steps' parameter notes; 15: the Rw check both ways, class labels in category_labels; 16: LAS descriptions (curve_description); 17: written_by
+INTERPRETATION_VERSION = 18                # 13: data.interpret; each step's stage; 14: the steps' parameter notes; 15: the Rw check both ways, class labels in category_labels; 16: LAS descriptions (curve_description); 17: written_by; 18: no engine = petrophys.interpret (the installed-library route removed)
 
 
 def step_entry(d: dict) -> dict:
@@ -547,7 +488,7 @@ def step_entry(d: dict) -> dict:
     if isinstance(d.get("written_by"), dict) and d["written_by"]:   # the outputs an analysis the step ran wrote: which
         entry["written_by"] = {str(k): str(v) for k, v in d["written_by"].items()}
     return entry
-INTERPRETATION_KEYS = ("name", "engine", "interpretation_scope", "gr_endpoints", "rw", "cutoffs", "value_range_qc")
+INTERPRETATION_KEYS = ("name", "engine", "cutoffs", "value_range_qc")
 
 
 @functools.lru_cache(maxsize=1)
@@ -599,15 +540,12 @@ def _las_digest(path: str, size: int, mtime_ns: int) -> str:
 
 
 def _cache_path(cache_dir: Path, policy: dict, las_path: Path, scope: str, engine: Optional[Path] = None,
-                lithology_curve=None, interpreter: Optional[str] = None, interpret: Optional[dict] = None) -> Path:
+                interpreter: Optional[str] = None, interpret: Optional[dict] = None) -> Path:
     # Only interpretation settings and the LAS content key the cache; display/zone/confidence rules do not change
-    # curves. The lithology log the user names can (the installed library's Rwa correction reads it). The content is
-    # in the key, so a revised LAS under the same name (core curves removed, a bit size added) never reuses a cached
-    # well.
+    # curves. The content is in the key, so a revised LAS under the same name (core curves removed, a bit size added)
+    # never reuses a cached well.
     relevant = {k: policy.get(k) for k in INTERPRETATION_KEYS} | {"_version": INTERPRETATION_VERSION,
                                                                   "_library": library_identity()}
-    if lithology_curve is not None:
-        relevant["_lithology_curve"] = lithology_curve
     if engine is not None:
         relevant["_engine"] = (engine / "ENGINE.json").read_text(encoding="utf-8")      # identity of the pinned engine
     if interpreter:
@@ -627,25 +565,43 @@ def _cache_path(cache_dir: Path, policy: dict, las_path: Path, scope: str, engin
     return Path(cache_dir) / f"{policy['name']}_{digest}" / f"{stem}.pkl"
 
 
-def prepare_well(
+_LOCKS: dict = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def prepare_well(las_path: Path, policy: dict, cache_dir: Optional[Path] = None, *args, **kwargs):
+    """The prepared well (_prepare_well), one preparation of a LAS at a time per cache folder: questions on the same
+    well in other threads (a benchmark's workers, the web UI) wait and read the cached result instead of interpreting
+    the same well again."""
+    if cache_dir is None:
+        return _prepare_well(las_path, policy, cache_dir, *args, **kwargs)
+    key = (str(Path(las_path).resolve()), str(Path(cache_dir).resolve()))
+    with _LOCKS_GUARD:
+        lock = _LOCKS.setdefault(key, threading.Lock())
+    with lock:
+        return _prepare_well(las_path, policy, cache_dir, *args, **kwargs)
+
+
+def _owned(path: Path) -> bool:
+    """A cache file this user wrote: a pickle from a folder others can write could run their code (POSIX only)."""
+    return not hasattr(os, "getuid") or path.stat().st_uid == os.getuid()
+
+
+def _prepare_well(
     las_path: Path,
     policy: dict,
-    interval: Optional[Interval] = None,
     cache_dir: Optional[Path] = None,
     engines_dir: Optional[Path] = None,
-    lithology_curve=None,
     interpreter: Optional[str] = None,
     interpret: Optional[dict] = None,
 ) -> PreparedWell:
-    """Read and standardize the raw LAS, interpret it under the policy, cache the result.
+    """Read and standardize the raw LAS, interpret the whole log once, cache the result.
 
-    With interpretation_scope == "formation", `interval` selects the depth slice that is
-    interpreted on its own; with "full_well" the whole log is interpreted once. `interpret`
-    (data.interpret) has petrophys.interpret interpret the whole LAS with those options, and
-    `interpreter` (data.interpreter) the data's own batch interpreter; otherwise, when the policy
-    names an engine (its workflow of record, a pinned library under `engines_dir`), that engine
-    interprets the raw LAS unchanged, else the installed library runs with the policy's
-    corrections.
+    `interpreter` (data.interpreter) has the data's own batch interpreter interpret it, `interpret`
+    (data.interpret) petrophys.interpret with those options; otherwise the engine the policy names
+    (its workflow of record, a pinned library under `engines_dir`) interprets the raw LAS unchanged,
+    and with no engine named petrophys.interpret runs with the library's settings and the policy's
+    cutoffs (default_interpret), as `petroharness ask` does.
     """
     from petrophys.preprocessing.standardization import standardize_curves
 
@@ -653,20 +609,16 @@ def prepare_well(
         raise ValueError("WHAT: both data.interpreter and data.interpret are set. FIX: keep the one that interprets "
                          "this data.")
     engine = None if interpreter or interpret is not None else engine_dir(policy, engines_dir)
-    scope_kind = policy.get("interpretation_scope", "full_well")
-    if engine is not None and scope_kind != "full_well":
-        raise ValueError("WHAT: an engine interprets the whole well. FIX: use interpretation_scope: full_well.")
-    if scope_kind == "formation":
-        if interval is None:
-            raise ValueError("policy interpretation_scope=formation needs an interval")
-        scope = f"formation:{interval.formation}"
-    else:
-        scope = "full_well"
+    if not interpreter and interpret is None and engine is None:
+        interpret = default_interpret(policy)
+    if policy.get("interpretation_scope", "full_well") != "full_well":
+        raise ValueError(f"WHAT: the policy's interpretation_scope is {policy['interpretation_scope']!r}. WHY: every "
+                         "route interprets the whole well. FIX: leave interpretation_scope out (or write full_well).")
+    scope = "full_well"
 
     if cache_dir is not None:
-        path = _cache_path(cache_dir, policy, las_path, scope, engine, None if engine is not None else lithology_curve,
-                           interpreter, interpret)
-        if path.exists():
+        path = _cache_path(cache_dir, policy, las_path, scope, engine, interpreter, interpret)
+        if path.exists() and _owned(path):
             with path.open("rb") as fh:
                 return pickle.load(fh)
 
@@ -710,54 +662,28 @@ def prepare_well(
             _write_cache(path, prepared)
         return prepared
 
-    if engine is not None:
-        interpreted, input_curves, steps, _, identity, qc = _interpret_with_engine(
-            Path(las_path), engine, bool(policy.get("value_range_qc", False)))
-        _check_engine_cutoffs(steps, policy.get("cutoffs", {}), interpreted)
-        raw_depth = np.asarray(well.depth, dtype=float)
-        if raw_depth.shape == interpreted.depth.shape and np.allclose(raw_depth, interpreted.depth, equal_nan=True):
-            added = sorted(set(well.curves) - set(interpreted.curves))     # LAS curves the engine's reader dropped
-            for name in added:
-                c = well.get(name)
-                interpreted.add_curve(name, np.asarray(c.data, dtype=float), str(getattr(c, "unit", "") or ""), name)
-                input_curves.add(name)
-            if added and policy.get("value_range_qc", False):              # same QC as the engine's own curves
-                extra = _apply_value_qc(_Subset(interpreted, added))
-                for key in ("rules", "changed"):
-                    qc.setdefault(key, {}).update(extra.get(key, {}))
-        if policy.get("value_range_qc", False):
-            _sync_after_qc(interpreted)
-        prepared = PreparedWell(name=Path(las_path).stem, policy=policy["name"], scope=scope, well=interpreted,
-                                input_curves=sorted(input_curves),
-                                derived_curves=sorted(set(interpreted.curves) - set(input_curves)),
-                                steps=steps, header_parameters=header, policy_adjustments={"engine": identity},
-                                value_qc=qc)
-        if cache_dir is not None:
-            _write_cache(path, prepared)
-        return prepared
-
-    if scope_kind == "formation":
-        depth = np.asarray(well.depth, float)
-        top = max(interval.top, float(np.nanmin(depth)))
-        base = float(np.nanmax(depth)) if interval.base is None else float(np.nextafter(min(interval.base, np.nanmax(depth)), -np.inf))
-        well = well.depth_slice(top, base)
-
-    interpreted, input_curves, steps, adjust = _interpret(well, policy, lithology_curve)
-    qc = _apply_value_qc(interpreted) if policy.get("value_range_qc", False) else {}
+    # a pinned engine: the policy's workflow of record
+    interpreted, input_curves, steps, _, identity, qc = _interpret_with_engine(
+        Path(las_path), engine, bool(policy.get("value_range_qc", False)))
+    _check_engine_cutoffs(steps, policy.get("cutoffs", {}), interpreted)
+    raw_depth = np.asarray(well.depth, dtype=float)
+    if raw_depth.shape == interpreted.depth.shape and np.allclose(raw_depth, interpreted.depth, equal_nan=True):
+        added = sorted(set(well.curves) - set(interpreted.curves))     # LAS curves the engine's reader dropped
+        for name in added:
+            c = well.get(name)
+            interpreted.add_curve(name, np.asarray(c.data, dtype=float), str(getattr(c, "unit", "") or ""), name)
+            input_curves.add(name)
+        if added and policy.get("value_range_qc", False):              # same QC as the engine's own curves
+            extra = _apply_value_qc(_Subset(interpreted, added))
+            for key in ("rules", "changed"):
+                qc.setdefault(key, {}).update(extra.get(key, {}))
     if policy.get("value_range_qc", False):
         _sync_after_qc(interpreted)
-    prepared = PreparedWell(
-        name=Path(las_path).stem,
-        policy=policy["name"],
-        scope=scope,
-        well=interpreted,
-        input_curves=sorted(input_curves),
-        derived_curves=sorted(set(interpreted.curves) - set(input_curves)),
-        steps=steps,
-        header_parameters=header,
-        policy_adjustments=adjust,
-        value_qc=qc,
-    )
+    prepared = PreparedWell(name=Path(las_path).stem, policy=policy["name"], scope=scope, well=interpreted,
+                            input_curves=sorted(input_curves),
+                            derived_curves=sorted(set(interpreted.curves) - set(input_curves)),
+                            steps=steps, header_parameters=header, policy_adjustments={"engine": identity},
+                            value_qc=qc)
     if cache_dir is not None:
         _write_cache(path, prepared)
     return prepared
@@ -765,7 +691,4 @@ def prepare_well(
 
 def _write_cache(path: Path, prepared: PreparedWell) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
-    with tmp.open("wb") as fh:
-        pickle.dump(prepared, fh)
-    os.replace(tmp, path)                              # atomic: readers never see a partial file
+    write_atomic(path, pickle.dumps(prepared))         # readers never see a partial file

@@ -1,4 +1,4 @@
-"""Brick 5 of docs/designs/zones-and-intervals.md (4.4): `zones` read at the call door for every tool, `where` for a
+"""`zones` read at the call door for every tool, `where` for a
 verb's `run` (reach "well"; under "focus" every call is today's: the golden tapes).
 
 - A tool that does not take zones (calculate, what_if, formation_summary, vertical_sequence, pay_summary), or a verb's
@@ -17,7 +17,7 @@ import re
 import numpy as np
 import pytest
 
-from _wells import CASES, formation_of
+from _wells import CASES, formation_of, task_cfg
 from test_selection import SELECTIONS, TOOL_ARGS, _DEPTHS
 
 OTHER_ARGS = {"calculate": {"property": "porosity", "method": "density"},
@@ -61,18 +61,18 @@ def _inside(text, top, base, step=0.16):
 def test_a_tool_without_zones_computes_on_a_selection_or_says_why_not(brent, tool, what):
     from petroharness.agent import schemas
     from petroharness.agent.engine import ToolError
-    from petroharness.agent.selection import FOCUS_ONLY
+    from petroharness.agent.toolset import TOOLSET
+    stretch = TOOLSET.stretch(tool)
     zones, top, base = SELECTIONS[what]
     try:
         r = schemas.call(brent, tool, {**_args(brent, tool), "zones": zones})
     except ToolError as e:
-        assert tool in FOCUS_ONLY and "computed for the focus" in str(e), (tool, what, str(e)[:300])
+        assert stretch == "focus_only" and "computed for the focus" in str(e), (tool, what, str(e)[:300])
         return
-    from petroharness.agent.selection import WHOLE_WELL
-    if tool in WHOLE_WELL:                                   # the same for any stretch: zones dropped with the note
+    if stretch == "whole_well":                              # the same for any stretch: zones dropped with the note
         assert r.text.startswith(f"(ignored zones: {tool} takes "), r.text[:200]
         return
-    assert tool not in FOCUS_ONLY, (tool, "computed although it reads the focus's results")
+    assert stretch != "focus_only", (tool, "computed although it reads the focus's results")
     assert r.text.startswith("Selection: "), (tool, what, r.text[:200])
     assert not _inside(r.text, top, base), (tool, what, _inside(r.text, top, base)[:4], r.text[:500])
     if what.startswith("Dunlin"):
@@ -156,10 +156,10 @@ def test_text_sent_as_a_list_of_one_is_that_text():
     several stays refused."""
     from petroharness.agent import schemas
     from petroharness.agent.engine import ToolError
-    assert schemas.arguments({"where": ["NET_PAY"]})["where"] == "NET_PAY"
-    assert schemas.arguments({"curves": "PHIE"})["curves"] == ["PHIE"]
+    assert schemas.arguments({"where": ["NET_PAY"]}, "stats")["where"] == "NET_PAY"
+    assert schemas.arguments({"curves": "PHIE"}, "stats")["curves"] == ["PHIE"]
     with pytest.raises(ToolError, match="where must be text"):
-        schemas.arguments({"where": ["NET_PAY", "SW < 0.5"]})
+        schemas.arguments({"where": ["NET_PAY", "SW < 0.5"]}, "stats")
 
 
 def test_under_reach_focus_run_takes_no_where_and_zones_are_todays():
@@ -178,8 +178,14 @@ def test_calls_that_differ_only_at_the_door_are_two_results():
     """The ledger serves an identical call's item again; zones given to a tool that does not take them, and where on
     a run, change what is computed (reach well), so they are part of the call: two results, never one for the other."""
     from petroharness.agent.ledger import Ledger
+    from petroharness.config import given_settings
     f = formation_of(CASES["brent"])
     led = Ledger(f)
+    with given_settings({"data": task_cfg(CASES["brent"], "s")[2], "eval": {}}):   # as a question runs its calls
+        _calls_at_the_door(led)
+
+
+def _calls_at_the_door(led):
     a, _ = led.open("calculate", {"property": "porosity", "method": "density", "zones": ["Z7"]})
     b, new = led.open("calculate", {"property": "porosity", "method": "density", "zones": ["Dunlin GP."]})
     assert new and a.id != b.id and "DUNLIN GP." in b.text and "DUNLIN GP." not in a.text
@@ -238,3 +244,41 @@ def test_zones_written_inside_args_are_refused_with_the_call_to_send(brent):
                      "zones": ["Etive Fm."], "where": "SW > 0.95"}
     t = schemas.call(brent, "estimate", fixed).text
     assert t.startswith("Selection: the samples where SW > 0.95 in Etive Fm.: "), t[:160]
+
+
+def test_a_flag_a_run_writes_is_a_condition():
+    """A 0/1 curve a verb's run writes is a flag by summary.kind_of, the rule every lookup uses, so a condition naming
+    it reads 'NAME > 0.5' (the samples where it is set), not 'has a value' (the whole interval)."""
+    from petroharness.agent import schemas
+    f = formation_of(CASES["brent"])                         # a fresh formation: the curves a run writes stay on it
+    r = schemas.call(f, "classify", {"run": "detect_gas_effect", "args": {"nphi": "NPHI", "phi_d": "PHID"},
+                                     "label": "GASFX"})
+    name = next(c for c in f.view.calculated if c.startswith("GASFX"))
+    assert "share set (%)" in r.text and f.view.is_flag(name) is True
+    head = schemas.call(f, "runs", {"condition": name}).text.splitlines()[0]
+    assert head.startswith(f"Intervals where {name} > 0.5")
+
+
+def test_classify_reads_the_samples_outside_every_zone():
+    """With no zone named, classify reads every sample of the selection, those outside every zone too, and labels the
+    line as every lookup does (the whole interval, with its samples outside any zone); with a zone named it reads that
+    zone's samples."""
+    from petroharness.agent import schemas
+    from petroharness.agent.library import classify as K
+    f = formation_of(CASES["brent"])
+    assert K._picked(f, None)[1].size == f.depth.size and K._picked(f, ["Z1"])[1].size < f.depth.size
+    line = next(ln for ln in schemas.call(f, "classify", {"what": "gas"}).text.splitlines() if "share of" in ln)
+    assert "; whole interval (201 samples outside any zone) " in line and "; pooled " not in line
+
+
+def test_the_benchmarks_reach_lists_the_runs_users_get(monkeypatch):
+    """Under every reach runs lists the intervals where the condition holds anywhere in the interval, uncut by the
+    zone boundaries: reach focus (the benchmark's) gets the head line reach well (users) gets."""
+    from petroharness.agent import schemas
+    f = formation_of(CASES["brent"])
+    head = lambda: schemas.call(f, "runs", {"condition": "NET_PAY"}).text.splitlines()[0]
+    monkeypatch.setattr(f.view, "reach", "well")
+    users = head()
+    monkeypatch.setattr(f.view, "reach", "focus")
+    assert head().startswith("Intervals where NET_PAY > 0.5") and head() == users
+    assert "inside the zones" not in schemas.call(f, "runs", {"condition": "NET_PAY"}).text

@@ -5,9 +5,11 @@ header, the formations a tops file names, the checks on the inputs, the model en
     python -m pytest tests/ui -q
 """
 import json
+import os
 import re
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -242,6 +244,43 @@ def test_bad_uploads_are_refused(ui, name, body, says):
     assert not list(app.store.uploads.glob("w*.las"))                    # a file that is no LAS is not kept
 
 
+def test_the_same_upload_again_leaves_the_kept_file_as_it_is(tmp_path):
+    """A file uploaded again with the same bytes is the file already kept (a running question may be reading it): its
+    path, the file not written again."""
+    store = U.Store(tmp_path / "runs")
+    first = store.upload("las", "my well.las", LAS.encode())
+    os.utime(first, ns=(10 ** 18, 10 ** 18))                             # a write now would change the time
+    before = first.stat()
+    again = store.upload("las", "my well.las", LAS.encode())
+    after = again.stat()
+    assert again == first and (after.st_ino, after.st_mtime_ns) == (before.st_ino, before.st_mtime_ns)
+
+
+def test_two_files_of_one_name_uploaded_at_once_are_both_kept(tmp_path, monkeypatch):
+    """Different files of one name uploaded at the same time each keep their own path and bytes (a slow disk widens
+    the moment between choosing the name and writing the file)."""
+    store = U.Store(tmp_path / "runs")
+    write = Path.write_bytes
+
+    def slow(self, data):
+        time.sleep(0.05)
+        return write(self, data)
+    monkeypatch.setattr(Path, "write_bytes", slow)
+    bodies = [LAS.replace("50 1", f"{50 + i} 1").encode() for i in range(4)]
+    start, got = threading.Barrier(len(bodies)), {}
+
+    def upload(i):
+        start.wait()
+        got[i] = store.upload("las", "my well.las", bodies[i])
+    threads = [threading.Thread(target=upload, args=(i,)) for i in range(len(bodies))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len({got[i] for i in got}) == len(bodies)
+    assert all(got[i].read_bytes() == bodies[i] for i in got)
+
+
 def test_the_tops_listing(ui, files):
     _, c = ui
     las, tops = files
@@ -381,7 +420,7 @@ def test_endpoint_health_and_choice():
 
 
 def test_the_model_is_the_harness_model_card():
-    assert U.served_model() == "k2-horizon-7b-grpo200"
+    assert U.served_model() == "k2-horizon-7b"
     assert U.served_model("Qwen/Qwen3-32B") == "Qwen/Qwen3-32B"            # any chat model, by its served name
 
 
@@ -452,6 +491,60 @@ def test_a_conversation_keeps_every_question_however_many_runs_came_after(tmp_pa
     assert root not in [r["id"] for r in app.runs()]                    # the run list: the newest 500
     assert [(t["turn"], t["question"]) for t in app.conversation(follow)["turns"]] == [(1, "first"), (2, "second")]
     assert [b["id"] for b in app.store.conversation(root)] == [root, follow]
+
+
+def test_the_run_list_is_read_while_questions_come_and_go(tmp_path):
+    """The run list is read while other threads add questions to the job table (submit) and drop finished ones
+    (_forget): it is read from a copy taken under the table's lock, so it never fails mid-read."""
+    from petroharness.ui import adapter as A
+    app = U.App(tmp_path / "runs", workers=1, model_factory=lambda cfg: StubModel(cfg))
+    for n in range(300):                                                 # questions still running: listed
+        app.jobs[f"live{n}"] = A.Job(f"live{n}", {}, {})
+    stop, errors = threading.Event(), []
+
+    def come_and_go():
+        n = 0
+        while not stop.is_set():
+            job = A.Job(f"done{n}", {}, {})
+            job.finished = time.time()
+            with app._lock:
+                app.jobs[job.id] = job
+            app._forget(keep=0)
+            n += 1
+    old = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)                                          # the threads take turns often
+    t = threading.Thread(target=come_and_go)
+    t.start()
+    try:
+        t0 = time.time()
+        while time.time() - t0 < 1.0 and not errors:
+            try:
+                assert len(app.runs()) == 300
+            except RuntimeError as exc:                                  # dictionary changed size during iteration
+                errors.append(exc)
+    finally:
+        stop.set()
+        t.join()
+        sys.setswitchinterval(old)
+    assert not errors, errors[0]
+
+
+def test_a_follow_up_of_a_question_forgotten_meanwhile_is_read_from_its_record(tmp_path):
+    """A follow-up's question may be dropped from the job table (a worker's _forget) between being looked up and
+    being read: the job table is read once, and a job not there is read from its saved record."""
+    from petroharness.ui import adapter as A
+
+    class Forgetting(dict):                                              # forgets a job right after saying it has it
+        def __contains__(self, key):
+            found = dict.__contains__(self, key)
+            self.pop(key, None)
+            return found
+    app = U.App(tmp_path / "runs", workers=1, model_factory=lambda cfg: StubModel(cfg))
+    job = A.Job(app.store.new_id(), {"question": "q", "las": "/x/w.las"}, {})
+    app.store.save(job.record())                                         # still queued: no answer to follow up yet
+    app.jobs = Forgetting({job.id: job})
+    with pytest.raises(A.InputError, match="that question has no answer yet"):
+        app.submit({"follow": job.id, "question": "and then?"})
 
 
 # --- requests another site's page could send through the user's browser -------------------------------------------
@@ -654,3 +747,19 @@ def test_the_start_page_offers_wells_questions_drops_and_progress_in_words():
     words = _js_function(page, "nowWords")
     assert "Petrophys is interpreting the well" in words and "of at most" in words and "timeLeft(j, m)" in words
     assert "S.cfg.typical" in _js_function(page, "timeLeft")
+
+
+def test_a_job_shows_its_call_in_flight_only_while_it_runs():
+    """Job.live (the model call as it streams) is in the page's view while the run goes on, never in its record."""
+    import time
+
+    from petroharness.ui import adapter as A
+    job = A.Job("j1", {"question": "q"}, {})
+    assert "live" not in job.view()
+    job.set_live({"n": 3, "thinking": "First PHIE."})
+    assert job.view()["live"] == {"n": 3, "thinking": "First PHIE."}
+    job.set_live({})
+    assert "live" not in job.view()
+    job.set_live({"n": 4, "thinking": "x"})
+    job.finished = time.time()
+    assert "live" not in job.view() and "live" not in job.record()

@@ -1,4 +1,4 @@
-"""classify (docs/TOOLS_DESIGN.md, stage 2): what the rock or its fluid is, by Petrophys, as classes or flags per
+"""classify (docs/TOOLS.md): what the rock or its fluid is, by Petrophys, as classes or flags per
 sample: gas effect, mineral volumes, flow units from FZI, electrofacies, moveable hydrocarbons. Each result is
 written as curves of the question (GAS_FLAG, V_<MINERAL>, FLOW_UNIT, EFACIES, MOS, SOR) that runs, stats and
 conditions read, and is shown zone by zone and pooled."""
@@ -7,6 +7,7 @@ from __future__ import annotations
 import numpy as np
 
 from petroharness.agent import engine as E
+from petroharness.well import summary as S
 from petroharness.agent.engine import Formation, Out, Result, ToolError
 from petroharness.agent.library import _method, register, scratch_well
 
@@ -42,16 +43,21 @@ def _full(f: Formation, values: np.ndarray) -> np.ndarray:
     return full
 
 
-def _name(f: Formation, name: str) -> str:
-    """The curve's name, kept clear of the record's own curves."""
-    return name if name not in f.inv.curves or f.inv.curves[name].step and "on request" in f.inv.curves[name].step \
-        else f"{name}_LIB"
-
-
 def _picked(f: Formation, zones) -> tuple:
     picked = E.zones(f, zones)
     idx = np.unique(np.concatenate([np.asarray(z.indices) for z in picked])) if picked else np.arange(f.depth.size)
+    from petroharness.agent.state import _all
+    if not zones or _all(zones):                                    # no zone named: the whole selection, as lookups
+        idx = np.arange(f.depth.size)
     return picked, idx
+
+
+def _pooled(f: Formation, idx: np.ndarray, row: Out) -> str:
+    """The label of the samples idx taken as one: 'pooled' (the zones'), or, where they reach outside every zone,
+    the whole selection's label as every lookup writes it."""
+    if S.outside_mask(f.view)[idx].any():
+        return S.whole_label_of(f.view, row.i)
+    return "pooled"
 
 
 MANY = 12                       # past this many zones, a per-zone list keeps the zones that matter and counts the rest
@@ -84,7 +90,7 @@ def _share(out: Out, f: Formation, flag: np.ndarray, picked: list, idx: np.ndarr
     ok = np.isfinite(flag[idx])
     pooled = 100 * float(np.mean(flag[idx][ok] > 0.5)) if ok.any() else float("nan")
     out.add(f"  {what} share of samples: " + _per_zone(row, items, pct=True, keep_zero=False)
-            + f"; pooled {row.pct(pooled)}", row)
+            + f"; {_pooled(f, idx, row)} {row.pct(pooled)}", row)
     on = np.zeros(f.depth.size)
     on[idx] = np.nan_to_num(flag[idx]) > 0.5
     runs = flag_intervals(on, f.depth)
@@ -105,9 +111,8 @@ def _gas(f: Formation, picked, idx) -> Result:
     nn, phin = _curve(f, "PHIN", "NPHI")
     ok = np.isfinite(phid) & np.isfinite(phin)
     flag = np.where(ok, np.asarray(detect_gas_effect(phin, phid), dtype=float), np.nan)
-    name = _name(f, "GAS_FLAG")
-    register(f, name, _full(f, flag), f"gas effect: {dn} above {nn} by more than 0.05 (Petrophys detect_gas_effect)",
-             "flag", "classify gas (on request)")
+    name = register(f, "GAS_FLAG", _full(f, flag), f"gas effect: {dn} above {nn} by more than 0.05 (Petrophys "
+                    "detect_gas_effect)", "flag", "classify gas (on request)")
     out = Out(f)
     row = out.child()
     out.add(f"gas effect by Petrophys detect_gas_effect: {dn} > {nn} + {row.v(0.05)} (density porosity above neutron "
@@ -165,18 +170,17 @@ def _minerals(f: Formation, method: str | None, picked, idx) -> Result:
         v = np.where(solved, v, np.nan)
         if not np.isfinite(v[idx]).any():
             continue
-        name = _name(f, f"V_{m.upper()}")
-        register(f, name, _full(f, v), f"{m} bulk volume (Petrophys {meth})", "v/v", f"classify minerals {meth} (on request)")
+        name = register(f, f"V_{m.upper()}", _full(f, v), f"{m} bulk volume (Petrophys {meth})", "v/v",
+                        f"classify minerals {meth} (on request)")
         written.append(name)
         row = out.child()
         items = [(z.zone_id, float(np.nanmean(v[np.asarray(z.indices)]))) for z in picked
                  if np.isfinite(v[np.asarray(z.indices)]).any()]
         out.add(f"  {m} mean volume over solved samples: " + _per_zone(row, items)
-                + f"; pooled {row.v(float(np.nanmean(v[idx])))}", row)
+                + f"; {_pooled(f, idx, row)} {row.v(float(np.nanmean(v[idx])))}", row)
     if poor is not None:
-        name = _name(f, "MM_POOR_FIT")
-        register(f, name, _full(f, poor), "the solver's poor-fit flag (Petrophys MultiMineralSolver qc_flag)", "flag",
-                 "classify minerals solver (on request)")
+        name = register(f, "MM_POOR_FIT", _full(f, poor), "the solver's poor-fit flag (Petrophys MultiMineralSolver "
+                        "qc_flag)", "flag", "classify minerals solver (on request)")
         written.append(name)
     out.add(f"  written: {', '.join(written) or 'nothing'} (curves of this question)")
     return out.result()
@@ -196,9 +200,8 @@ def _flow_units(f: Formation, method: str | None, k: int | None, picked, idx) ->
         raise ToolError(f"Petrophys calculate_flow_units: {type(e).__name__}: {str(e)[:300]}") from None
     labels = np.full(f.depth.size, np.nan)
     labels[idx] = np.where(np.asarray(res.hfu) > 0, np.asarray(res.hfu, dtype=float), np.nan)
-    name = _name(f, "FLOW_UNIT")
-    register(f, name, _full(f, labels), "hydraulic flow unit from FZI (Petrophys calculate_flow_units)", "",
-             "classify flow_units (on request)")
+    name = register(f, "FLOW_UNIT", _full(f, labels), "hydraulic flow unit from FZI (Petrophys calculate_flow_units)",
+                    "", "classify flow_units (on request)")
     out = Out(f)
     row = out.child()
     out.add(f"flow units by Petrophys calculate_flow_units (FZI from {pn} and {fn}, k-means on log FZI): "
@@ -236,9 +239,8 @@ def _electrofacies(f: Formation, k: int | None, curves, picked, idx) -> Result:
         raise ToolError("electrofacies needs at least two of RHOB, NPHI, GR and RDEP with data here")
     full = full + 1                                                  # classes 1..n, as the other class curves
     vals = full[f.view.mask]
-    name = _name(f, "EFACIES")
-    register(f, name, full, "electrofacies (Petrophys k-means on RHOB, NPHI, GR and RDEP over the well)", "",
-             "classify electrofacies (on request)")
+    name = register(f, "EFACIES", full, "electrofacies (Petrophys k-means on RHOB, NPHI, GR and RDEP over the well)",
+                    "", "classify electrofacies (on request)")
     classes = sorted(int(c) for c in np.unique(vals[idx][np.isfinite(vals[idx])]))
     out = Out(f)
     row = out.child()
@@ -281,13 +283,12 @@ def _moveable(f: Formation, picked, idx) -> Result:
             f"1 - SXO (residual_oil_saturation); SXO by {how}")
     written = []
     for nm, v, what in (("MOS", mos, "moveable oil saturation"), ("SOR", sor, "residual oil saturation")):
-        name = _name(f, nm)
-        register(f, name, _full(f, v), f"{what} (Petrophys)", "v/v", "classify moveable_hydrocarbons (on request)")
+        name = register(f, nm, _full(f, v), f"{what} (Petrophys)", "v/v", "classify moveable_hydrocarbons (on request)")
         written.append(name)
         r = out.child()
         items = [(z.zone_id, float(np.nanmean(v[np.asarray(z.indices)]))) for z in picked
                  if np.isfinite(v[np.asarray(z.indices)]).any()]
-        out.add(f"  {nm} mean: " + _per_zone(r, items) + f"; pooled {r.v(float(np.nanmean(v[idx])))}", r)
+        out.add(f"  {nm} mean: " + _per_zone(r, items) + f"; {_pooled(f, idx, r)} {r.v(float(np.nanmean(v[idx])))}", r)
     out.add(f"  written: {', '.join(written)} (curves of this question; the record's MHI = SW / SXO stays as it is)")
     return out.result()
 

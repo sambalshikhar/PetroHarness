@@ -18,6 +18,7 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
 from petroharness.agent.engine import Formation  # noqa: E402
 from petroharness.agent.schemas import call  # noqa: E402
 from petroharness.well import summary as S  # noqa: E402
+from _support.model import in_turn  # noqa: E402
 
 DEFAULT = ["n", "mean", "median", "p10", "p90", "min", "max"]
 
@@ -57,7 +58,7 @@ def test_a_threshold_says_where_it_came_from():
 
 @lru_cache(maxsize=1)
 def formation():
-    from test_b2_tools import F
+    from _support.formations import F
     need = ("PHIE", "PERM", "GR", "VCL", "DTC")
     hit = [(t, f) for t, f in F() if len(f.view.zones) >= 3 and S.outside(f.view) > 0
            and all(c in f.inv.curves for c in need)]
@@ -67,14 +68,14 @@ def formation():
 
 
 ZONE = re.compile(r"\bZ\d+\b")
-POOLED = re.compile(r"(?:^|, )(?:these )?zones pooled[:|, ]|^all zones:|^zones asked:")
+POOLED = re.compile(r"(?:^|, )(?:these )?zones pooled[:|, ]")
 WHOLE = re.compile(r"(?:^|, )(?:whole interval \(\d+ samples outside any zone\)|every sample where .+ \(\d+ samples, \d+ of "
                    r"them outside any zone\))")                  # under a where: the samples it covers (summary)
 
 SUMMARISING = [("stats", {"curves": ["PHIE"]}), ("stats", {"curves": ["PHIE", "PERM", "GR", "VCL"]}),
                ("stats", {"curves": ["PHIE"], "where": "VCL < 0.3"}), ("profile", {"curve": "PERM"}),
                ("compare", {"a": "PHIE", "b": "VCL"}), ("crossplot", {"y": "PERM", "x": "PHIE", "log_y": True}),
-               ("runs", {"condition": "VCL < 0.3"}), ("lithology_stats", {"curves": ["PHIE"]}),
+               ("lithology_stats", {"curves": ["PHIE"]}),
                ("threshold_exceedance", {"curve": "VCL", "threshold": 0.3}),
                ("spike_flags", {"curves": ["GR"]}), ("spike_flags", {"curves": ["GR"], "baseline": "interval"}),
                ("adjacent_jumps", {"curve": "DTC", "threshold": 5})]
@@ -105,15 +106,33 @@ def test_every_summarising_tool_shows_each_zone_the_zones_pooled_and_the_whole_i
         assert f"whole interval ({k} samples outside any zone)" in text
 
 
-ON_THE_BASIS = ("stats", "profile", "compare", "crossplot", "runs")       # the tools the data's basis setting applies to
+ON_THE_BASIS = ("stats", "profile", "compare", "crossplot")       # the tools the data's basis setting applies to
+
+
+@pytest.mark.data
+def test_runs_lists_the_intervals_anywhere_then_each_zone_on_either_basis(monkeypatch):
+    """runs has its own layout: the intervals where the condition holds over the whole interval, zone boundaries
+    aside, with their thickness as a share of the gross; then each zone's thickness of them. It has no pooled line,
+    and the data's basis setting does not change its text."""
+    t, f = formation()
+    text = call(f, "runs", {"condition": "VCL < 0.3"}).text
+    lines = text.splitlines()
+    assert re.match(r"^Intervals where VCL < 0\.3 \(\d+ intervals?, [\d.]+ \S+, [\d.]+% of the gross\)", lines[0]), lines[0]
+    by = next(i for i, ln in enumerate(lines) if ln.startswith("  by zone: "))
+    rows = [i for i, ln in enumerate(lines) if re.match(r"^    (?:at )?[\d.]+", ln)]
+    assert rows and 0 < rows[0] and rows[-1] < by                          # the intervals, then the zones
+    assert set(ZONE.findall(lines[by])) == {z.zone_id for z in f.view.zones}        # every zone, with or without any
+    assert not any(POOLED.search(ln.strip()) for ln in lines)
+    monkeypatch.setattr(f.view, "basis", "zones")
+    assert call(f, "runs", {"condition": "VCL < 0.3"}).text == text
 
 
 @pytest.mark.data
 @pytest.mark.parametrize("tool,args", SUMMARISING, ids=[f"{t}-{i}" for i, (t, _) in enumerate(SUMMARISING)])
 def test_on_the_zones_basis_the_tools_leave_the_whole_interval_out_and_the_record_s_computations_keep_it(tool, args, monkeypatch):
-    """data.basis "zones" (a data file's setting, a benchmark's): stats, profile, compare, crossplot and runs show each
+    """data.basis "zones" (a data file's setting, a benchmark's): stats, profile, compare and crossplot show each
     zone and the zones pooled, with no whole-interval line and no line of the samples outside the zones; the tools
-    over the record's own computations give the same text on either basis."""
+    over the record's own computations give the same text on either basis (runs too: the test above)."""
     f = formation()[1]
     assert f.view.basis == "all"                                # the shared formations: the default basis
     full = call(f, tool, args).text
@@ -274,16 +293,16 @@ def test_the_workflow_s_flow_roles_pass_through_as_the_workflow_s():
 
 @pytest.mark.data
 def test_the_first_look_takes_the_default_statistics_and_no_formation_summary():
-    from test_b5_loop import Script, chose
+    from _support.sessions import chose
     from petroharness.agent.graph import investigate
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.agent.map import render
     from petroharness.llm import Usage
     t, f = formation()
     s = chose(Session(t, f, render(f.inv), Ledger(f)), "porosity")
-    llm = Script([{"asks": "a", "points": [], "intent": "value", "edits": [], "next": [], "done": True}])
+    llm = in_turn([{"asks": "a", "points": [], "intent": "value", "edits": [], "next": [], "done": True}])
     investigate(llm, s, Usage(), 2000, {}, max_steps=1)
     assert s.ledger.items[0].tool == "stats" and "statistics" not in s.ledger.items[0].args
     assert all(e.tool != "formation_summary" for e in s.ledger.items)
-    assert "FORMATION SUMMARY" not in llm.sent[0][1][-1]["content"]
+    assert "FORMATION SUMMARY" not in llm.sent[0]["messages"][-1]["content"]

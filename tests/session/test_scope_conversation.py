@@ -1,4 +1,4 @@
-"""Brick 4b of docs/designs/zones-and-intervals.md: the scope adapts during a conversation (reach "well").
+"""The scope adapts during a conversation (reach "well").
 
 - Each question's READ says the stretches it is about; they are that question's default selection, and the next
   question reads its own (a question that names none is about the interval).
@@ -13,7 +13,6 @@ A scripted model on Petrophys's sample well 30/6-5, Brent Group with its tops fi
 
     .venv/bin/python -m pytest tests/session/test_scope_conversation.py -q
 """
-import json
 import re
 
 import pytest
@@ -21,47 +20,36 @@ import pytest
 from _wells import sample
 from petroharness.session import Conversation
 from petroharness.session import chat as CH
+from _support.model import DONE, ScriptedModel, newest_result  # noqa: E402
 
 pytestmark = pytest.mark.data
 NESS_ETIVE = "zone,top,bottom\nNess,2841,2865\nEtive,2865,2958\n"
 
 
-class Model:
+class Model(ScriptedModel):
     """READ: the next scope of its queue (None: a reply without scope); step 1 opens PHIE's statistics and adds a
-    claim; step 2 settles it; the writer states no number. Keeps every call's messages."""
+    claim; step 2 settles it; the writer states no number."""
 
     def __init__(self):
-        self.scopes, self.sent = [], []
+        super().__init__({
+            "step_1": {"points": ["What is the porosity?"], "intent": "characterize", "focus": "porosity",
+                       "edits": [{"op": "add", "point": 1, "text": "Porosity is read from the results",
+                                  "grade": "hypothesis"}],
+                       "next": [{"stats": {"curves": ["PHIE"]}}], "done": False},
+            "step_2": lambda m: {"edits": [{"op": "revise", "id": "C1", "ev": [newest_result(m)], "grade": "moderate",
+                                            "means": "the porosity as computed"}], "next": [], "done": True},
+            "step_*": DONE, "settle*": DONE},
+            default="## Porosity\nPorosity is read from the results.\n")
+        self.scopes = []
 
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
-        usage.log.append({"stage": stage, "prompt_tokens": 10, "completion_tokens": 5, "seconds": 0.0})
+    def reply(self, stage, messages):
         if stage.startswith("read"):
             r = {"topics": ["porosity"], "named": ["PHIE"]}
             scope = self.scopes.pop(0) if self.scopes else []
             if scope is not None:
                 r["scope"] = scope
-        elif stage == "step_1":
-            r = {"points": ["What is the porosity?"], "intent": "characterize", "focus": "porosity",
-                 "edits": [{"op": "add", "point": 1, "text": "Porosity is read from the results", "grade": "hypothesis"}],
-                 "next": [{"stats": {"curves": ["PHIE"]}}], "done": False}
-        elif stage == "step_2":
-            ids = re.findall(r"\[(E\d+)\]", messages[-1]["content"])
-            newest = max(ids, key=lambda x: int(x[1:])) if ids else "E1"
-            r = {"edits": [{"op": "revise", "id": "C1", "ev": [newest], "grade": "moderate",
-                            "means": "the porosity as computed"}], "next": [], "done": True}
-        elif stage.startswith(("step_", "settle")):
-            r = {"edits": [], "next": [], "done": True}
-        else:
-            r = "## Porosity\nPorosity is read from the results.\n"
-        return r if isinstance(r, str) else json.dumps(r)
-
-    def last(self, stage):
-        return next(c for c in reversed(self.sent) if c["stage"] == stage)["messages"][-1]["content"]
-
+            return r
+        return super().reply(stage, messages)
 
 @pytest.fixture(scope="module")
 def env():

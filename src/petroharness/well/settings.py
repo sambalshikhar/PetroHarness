@@ -88,7 +88,8 @@ ZONE_FIELDS = [
      "more": "Thin-bedded intervals (a few feet per bed) keep few zones at the default; a smaller value keeps more, and "
              "each zone then rests on fewer samples."},
     {"key": "zone_vcl_bands", "label": "Shale-volume bands", "kind": "bands", "unit": "v/v",
-     "help": "For a well without a lithology log: the VCL edges of the clean, shaly and shale-prone bands that zone it.",
+     "help": "For a well with neither a lithology log nor a solved lithology: the VCL edges of the clean, shaly and "
+             "shale-prone bands that zone it.",
      "more": "Below the first edge a sample is clean, between the edges shaly, above the second shale-prone."},
     {"key": "zone_layout", "label": "Zone layout", "kind": "choice", "choices": ["lithology_runs", "formation"],
      "choice_labels": {"lithology_runs": "Runs of one lithology", "formation": "The whole interval as one zone"},

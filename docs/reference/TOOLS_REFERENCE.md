@@ -6,8 +6,10 @@ and runs a call. Every example that shows well data is a real call on the Brent 
 30/6-5, the interval of [Evaluate a formation](../USAGE.md). Where a tool reads differently on another well, its
 block adds that well's real output: COSTA HW-3, a carbonate logged in feet with no lithology log, caliper, PEF or
 shallow resistivity (Data: Costa Gomes, Geiger and Arnold (2022), COSTA model, Heriot-Watt University, CC BY.), and
-GeoLink 16/7-1, a halite section with no neutron or PEF log (Data: GeoLink, CC BY-SA 4.0.). The guide-level overview
-is [Tools](../TOOLS.md); how the tools reach Petrophys is in [Petrophys integration](PETROPHYS_INTEGRATION.md).
+GeoLink 16/7-1, a halite section with no neutron or PEF log (Data: GeoLink, CC BY-SA 4.0.). The HW-3 examples run at
+the default settings unless they say otherwise: Petrophys's lithology domain is then clastic, and its mineral solver
+labels the well's lithology zones sandstone and dolomite. The guide-level overview is [Tools](../TOOLS.md); how the
+tools reach Petrophys is in [Petrophys integration](PETROPHYS_INTEGRATION.md).
 
 ## 1. At a glance
 
@@ -22,7 +24,7 @@ flowchart LR
     reply --> S["SUMMARIZE<br/>summarize* · pay_summary"]:::code
     reply --> B["CALIBRATE<br/>calibrate* · core_vs_log"]:::code
     reply --> O["Ledger operations<br/>get · find · calc"]:::record
-    K & A & L & S & B --> PP["Petrophys<br/>* the 7 verbs: workflow steps<br/>and 305 public functions"]:::petrophys
+    K & A & L & S & B --> PP["Petrophys<br/>* the 7 verbs: workflow steps<br/>and 304 public functions"]:::petrophys
 
     classDef model fill:#e6ecf4,stroke:#011e3f,color:#011e3f
     classDef code fill:#ffffff,stroke:#9aa0aa,color:#1c2433
@@ -34,12 +36,12 @@ flowchart LR
 |---|---|---|
 | Tools the model is shown | 30, in 7 groups | `src/petroharness/agent/toolset.py`, `TOOLSET` |
 | Verbs over Petrophys | 7: `check`, `calculate`, `what_if`, `estimate`, `classify`, `summarize`, `calibrate` | `Tool.verb` is `True` |
-| Petrophys functions reachable by `search` and `run` | 305 | `src/petroharness/agent/library_api.py`, `registry()` |
-| Ledger operations | `get`, `find`, `calc` (and `guide` when a skill library is plugged) | `src/petroharness/agent/loop.py`, `coerce_action` |
-| Actions per investigation step | 6 tool, `get` and `find` actions (`ACTIONS`); up to 3 `calc` (`MAX_CALCS`) and 2 `guide` (`MAX_GUIDES`) beside them | `src/petroharness/agent/loop.py`, `graph.decide` |
-| Actions per look step of a direct question | 4 of any kind (`DIRECT_ACTIONS`) | `src/petroharness/agent/loop.py`, `graph.look` |
-| Result text cap | 9,000 characters (`WIDE_CHARS`); every line stays in the ledger | `src/petroharness/agent/engine.py` |
-| NEW and OPENED budgets per step prompt | 12,000 (`NEW_CHARS`) and 6,000 (`OPENED_CHARS`) characters | `src/petroharness/agent/loop.py` |
+| Petrophys functions reachable by `search` and `run` | 304 | `src/petroharness/agent/library/api.py`, `registry()` |
+| Ledger operations | `get`, `find`, `calc` (and `guide` when a skill library is plugged) | `src/petroharness/agent/replies.py`, `coerce_action` |
+| Actions per investigation step | 6 tool, `get` and `find` actions (`ACTIONS`); up to 3 `calc` (`MAX_CALCS`) and 2 `guide` (`MAX_GUIDES`) beside them | `src/petroharness/agent/state.py`, `graph.decide` |
+| Actions per look step of a direct question | 4 of any kind (`DIRECT_ACTIONS`) | `src/petroharness/agent/state.py`, `graph.look` |
+| Result text cap | 9,000 characters (`WIDE_CHARS`); every line stays in the ledger | `src/petroharness/agent/engine/` |
+| NEW and OPENED budgets per step prompt | 12,000 (`NEW_CHARS`) and 6,000 (`OPENED_CHARS`) characters | `src/petroharness/agent/state.py` |
 
 ## 2. How it works
 
@@ -48,7 +50,7 @@ item (`E1`, `E2`, ...). An identical call returns the item it opened before.
 
 ```mermaid
 flowchart TD
-    reply["Step reply<br/>next: [actions]"]:::model --> coerce["loop.coerce_action"]:::code
+    reply["Step reply<br/>next: [actions]"]:::model --> coerce["replies.coerce_action"]:::code
     coerce --> decide["graph.decide<br/>caps 6 / 3 / 2"]:::code
     decide --> run["Session.run"]:::code
     run -- "tool" --> open["Ledger.open<br/>arguments, fit, normalize"]:::code
@@ -69,12 +71,13 @@ flowchart TD
     classDef petrophys fill:#e3f2ee,stroke:#197e6f,color:#0f4f45
 ```
 
+<a id="the-call-path-step-by-step"></a>
 <details>
 <summary>The call path, step by step</summary>
 
-1. `loop.tools_text` writes the brief's tool block from `schemas.named()` (`Toolset.schemas`), one line per tool under
-   the headings of `Toolset.by_group`; `loop.brief` puts it in place of `{TOOLS}` in the C1 system text.
-2. The model writes its actions in the `next` list of a step reply; `loop.coerce_action` reads each one
+1. `prompts.tools_text` writes the brief's tool block from `schemas.named()` (`Toolset.schemas`), one line per tool under
+   the headings of `Toolset.by_group`; `prompts.brief` puts it in place of `{TOOLS}` in the C1 system text.
+2. The model writes its actions in the `next` list of a step reply; `replies.coerce_action` reads each one
    ([coerce_action](#coerce_action)).
 3. `graph.decide` keeps at most 2 guides, 3 calcs and 6 other actions; what it cuts or cannot read is said back in
    the next prompt (C8 `actions_left_out`, `extra_left_out`, `not_run`).
@@ -89,43 +92,45 @@ flowchart TD
 
 ## 3. The master table
 
-Generated from the definitions (`TOOLSET`: each tool's `verb`, `table`, `main`, `lead` and `run`). "Bare value fills" is `Tool.main`, the argument a call such as
+Generated from the definitions (`TOOLSET`: each tool's `verb`, `table`, `main`, `lead`, `stretch`, `pair` and `run`) by `tests/docs_tables.py`. "Bare value fills" is `Tool.main`, the argument a call such as
 `{"runs": "NET_PAY"}` fills; "Listing leads with" is `Tool.lead`, the argument a one-line listing starts with. For the
 verbs also take `search`, `run`, `args` and `label` ([Search and run](#search-and-run)). Each tool's name opens
 its block below, with every argument, its type and default.
 
-| # | Tool | Kind | Bare value fills | Listing leads with | Runs |
-|---|---|---|---|---|---|
-| 1 | [`stats`](#stats) | lookup | `curves` | `curves` | `tools.stats` |
-| 2 | [`profile`](#profile) | lookup | `curve` | `curve` | `tools.profile` |
-| 3 | [`runs`](#runs) | lookup | `condition` | `condition` | `tools.runs` |
-| 4 | [`values_at`](#values_at) | lookup | `curves` | `curves` | `tools.values_at` |
-| 5 | [`section`](#section) | lookup | `key` | `key` | `tools.section` |
-| 6 | [`step`](#step) | lookup | `name` | `name` | `tools.step` |
-| 7 | [`formation_summary`](#formation_summary) | computed table | `curves` | `curves` | `compute.formation_summary` |
-| 8 | [`compare`](#compare) | lookup | `a` | `a` | `tools.compare` |
-| 9 | [`crossplot`](#crossplot) | lookup | `y` | `y` | `tools.crossplot` |
-| 10 | [`overlap`](#overlap) | lookup | `a` | - | `tools.overlap` |
-| 11 | [`lithology_stats`](#lithology_stats) | computed table | `curves` | `curves` | `compute.lithology_stats` |
-| 12 | [`zone_contrast`](#zone_contrast) | computed table | `curve` | `curve` | `compute.zone_contrast` |
-| 13 | [`curve_order`](#curve_order) | computed table | `curves` | `curves` | `compute.curve_order` |
-| 14 | [`vertical_sequence`](#vertical_sequence) | computed table | `curves` | `curves` | `compute.vertical_sequence` |
-| 15 | [`check`](#check) | verb over Petrophys | `what` | - | `library_api.verb_tool` over `library_check.check` |
-| 16 | [`spike_flags`](#spike_flags) | computed table | `curves` | `curves` | `compute.spike_flags` |
-| 17 | [`adjacent_jumps`](#adjacent_jumps) | computed table | `curve` | `curve` | `compute.adjacent_jumps` |
-| 18 | [`threshold_exceedance`](#threshold_exceedance) | computed table | `curve` | `curve` | `compute.threshold_exceedance` |
-| 19 | [`data_record`](#data_record) | computed table | `zones` | - | `compute.data_record` |
-| 20 | [`lag_correlation`](#lag_correlation) | computed table | `curves` | `curves` | `compute.lag_correlation` |
-| 21 | [`calculate`](#calculate) | verb over Petrophys | `property` | - | `library_api.verb_tool` over `library.calculate` |
-| 22 | [`what_if`](#what_if) | verb over Petrophys | `property` | - | `library_api.verb_tool` over `library.what_if` |
-| 23 | [`estimate`](#estimate) | verb over Petrophys | `parameter` | - | `library_api.verb_tool` over `library.estimate` |
-| 24 | [`classify`](#classify) | verb over Petrophys | `what` | - | `library_api.verb_tool` over `library_classify.classify` |
-| 25 | [`zone_classes`](#zone_classes) | computed table | `topic` | `topic` | `compute.zone_classes` |
-| 26 | [`unit_roles`](#unit_roles) | computed table | `zones` | - | `compute.unit_roles` |
-| 27 | [`summarize`](#summarize) | verb over Petrophys | `what` | - | `library_api.verb_tool` over `library_summarize.summarize` |
-| 28 | [`pay_summary`](#pay_summary) | computed table | `curves` | - | `compute.pay_summary` |
-| 29 | [`calibrate`](#calibrate) | verb over Petrophys | `what` | - | `library_api.verb_tool` over `library_calibrate.calibrate` |
-| 30 | [`core_vs_log`](#core_vs_log) | computed table | `zones` | - | `compute.core_vs_log` |
+<!-- generated: tools (tests/docs_tables.py) -->
+| # | Tool | Kind | Bare value fills | Listing leads with | Its zones reach | Pair | Runs |
+|---|---|---|---|---|---|---|---|
+| 1 | [`stats`](#stats) | lookup | `curves` | `curves` | the selection | - | `tools.stats` |
+| 2 | [`profile`](#profile) | lookup | `curve` | `curve` | the selection | - | `tools.profile` |
+| 3 | [`runs`](#runs) | lookup | `condition` | `condition` | the selection | - | `tools.runs` |
+| 4 | [`values_at`](#values_at) | lookup | `curves` | `curves` | the whole well (zones do not apply) | - | `tools.values_at` |
+| 5 | [`section`](#section) | lookup | `key` | `key` | the focus only | - | `tools.section` |
+| 6 | [`step`](#step) | lookup | `name` | `name` | the whole well (zones do not apply) | - | `tools.step` |
+| 7 | [`formation_summary`](#formation_summary) | computed table | `curves` | `curves` | the selection | - | `compute.formation_summary` |
+| 8 | [`compare`](#compare) | lookup | `a` | `a` | the selection | `a`, `b` | `tools.compare` |
+| 9 | [`crossplot`](#crossplot) | lookup | `y` | `y` | the selection | `y`, `x` | `tools.crossplot` |
+| 10 | [`overlap`](#overlap) | lookup | `a` | - | the selection | `a`, `b` | `tools.overlap` |
+| 11 | [`lithology_stats`](#lithology_stats) | computed table | `curves` | `curves` | the selection | - | `compute.lithology_stats` |
+| 12 | [`zone_contrast`](#zone_contrast) | computed table | `curve` | `curve` | the selection | - | `compute.zone_contrast` |
+| 13 | [`curve_order`](#curve_order) | computed table | `curves` | `curves` | the selection | - | `compute.curve_order` |
+| 14 | [`vertical_sequence`](#vertical_sequence) | computed table | `curves` | `curves` | the selection | - | `compute.vertical_sequence` |
+| 15 | [`check`](#check) | verb over Petrophys | `what` | - | the selection | - | `library.api.verb_tool` over `library.check.check` |
+| 16 | [`spike_flags`](#spike_flags) | computed table | `curves` | `curves` | the selection | - | `compute.spike_flags` |
+| 17 | [`adjacent_jumps`](#adjacent_jumps) | computed table | `curve` | `curve` | the selection | - | `compute.adjacent_jumps` |
+| 18 | [`threshold_exceedance`](#threshold_exceedance) | computed table | `curve` | `curve` | the selection | - | `compute.threshold_exceedance` |
+| 19 | [`data_record`](#data_record) | computed table | `zones` | - | the selection | - | `compute.data_record` |
+| 20 | [`lag_correlation`](#lag_correlation) | computed table | `curves` | `curves` | the selection | - | `compute.lag_correlation` |
+| 21 | [`calculate`](#calculate) | verb over Petrophys | `property` | - | the selection | - | `library.api.verb_tool` over `library.calculate.calculate` |
+| 22 | [`what_if`](#what_if) | verb over Petrophys | `property` | - | the selection | - | `library.api.verb_tool` over `library.calculate.what_if` |
+| 23 | [`estimate`](#estimate) | verb over Petrophys | `parameter` | - | the selection | - | `library.api.verb_tool` over `library.estimate.estimate` |
+| 24 | [`classify`](#classify) | verb over Petrophys | `what` | - | the selection | - | `library.api.verb_tool` over `library.classify.classify` |
+| 25 | [`zone_classes`](#zone_classes) | computed table | `topic` | `topic` | the focus only | - | `compute.zone_classes` |
+| 26 | [`unit_roles`](#unit_roles) | computed table | `zones` | - | the selection | - | `compute.unit_roles` |
+| 27 | [`summarize`](#summarize) | verb over Petrophys | `what` | - | the selection | - | `library.api.verb_tool` over `library.summarize.summarize` |
+| 28 | [`pay_summary`](#pay_summary) | computed table | `curves` | - | the selection | - | `compute.pay_summary` |
+| 29 | [`calibrate`](#calibrate) | verb over Petrophys | `what` | - | the selection | - | `library.api.verb_tool` over `library.calibrate.calibrate` |
+| 30 | [`core_vs_log`](#core_vs_log) | computed table | `zones` | - | the selection | - | `compute.core_vs_log` |
+<!-- end generated: tools -->
 
 <details>
 <summary>The groups, as the brief heads them</summary>
@@ -165,6 +170,10 @@ which every list of tools is read (the brief, the reply parser, the web UI).
 | `lead` | `str` | `""` | The argument a one-line listing of a call leads with; `""` for none | `tools/spec.py`, `Tool` |
 | `table` | `bool` | `False` | The result is a computed table (title, rows, facts) and its digest reads it in order | `tools/spec.py`, `Tool` |
 | `verb` | `bool` | `False` | A verb over Petrophys: it also takes `search`, `run`, `args` and `label` | `tools/spec.py`, `Tool` |
+| `stretch` | `str` | `"selection"` | What its zones reach: `selection` (the stretches the call names, or the question's scope), `whole_well` (the same for any stretch: zones do not apply, and the scope is not added), or `focus_only` (it rests on what the workflow computed for the focus: a stretch elsewhere is refused) | `tools/spec.py`, `Tool` |
+| `focus_reason` | `str` | `""` | For `focus_only`: what it reads, as the refusal says it | `tools/spec.py`, `Tool` |
+| `pair` | `tuple` | `()` | The two arguments a list of two fills, in order: `{"compare": ["PHIE", "PHIE_CC"]}` is `a` and `b`, as is a list under `curves` or `conditions` | `tools/spec.py`, `Tool`; `agent/replies.py`, `coerce_action`; `agent/schemas.py`, `fit` |
+| `pair_word` | `str` | `""` | The word that joins the pair in a one-line listing (`compare PHIE vs PHIE_CC`, `crossplot RHOB on NPHI`) | `tools/spec.py`, `Tool`; `agent/ledger.py`, `Item.call_text` |
 
 | Method | Returns |
 |---|---|
@@ -183,7 +192,7 @@ Tool("adjacent_jumps", K.adjacent_jumps, CHECK, _text("adjacent_jumps"),
 
 **Notes**
 
-- The schemas are used to write the brief's text (`loop.tools_text`); requests are not sent with native tool-calling
+- The schemas are used to write the brief's text (`prompts.tools_text`); requests are not sent with native tool-calling
   schemas.
 - The web UI reads the same definitions: `ui/server.py` groups tools by `Toolset.by_group` and lists the verbs by
   `Tool.verb`.
@@ -247,7 +256,7 @@ The texts come from component C4, `src/petroharness/agent/components/C4_tools/`.
 The verbs' descriptions are built when asked, so the method lists follow the installed Petrophys:
 
 ```text
-calculate  _TEXTS["calculate"] + library.menu_text() + library_api.menu_line("calculate")
+calculate  _TEXTS["calculate"] + library.menu_text() + library.api.menu_line("calculate")
 what_if    _TEXTS["what_if"] + menu_line("what_if")
 estimate   _TEXTS["estimate"] + one line per library.ESTIMATES entry + menu_line("estimate")
 check, classify, summarize, calibrate
@@ -269,10 +278,11 @@ An action in the reply becomes a tuple (`coerce_action`); its arguments are pars
 to the tool (`schemas.fit`); the ledger builds the call's key (`normalize`) and runs a call it has not seen
 (`schemas.call`); `Session.run` returns the text for NEW.
 
+<a id="coerce_action"></a>
 <details>
 <summary>coerce_action</summary>
 
-`src/petroharness/agent/loop.py`, `coerce_action(a, guides=True)`: one action of the reply's `next` list as a tuple.
+`src/petroharness/agent/replies.py`, `coerce_action(a, guides=True)`: one action of the reply's `next` list as a tuple.
 
 | Model writes | Read as |
 |---|---|
@@ -291,32 +301,31 @@ to the tool (`schemas.fit`); the ledger builds the call's key (`normalize`) and 
 **Notes**
 
 A `get` whose id does not match `E<digits>` is `None`. The reply parser knows only the names in `TOOLSET` and `get`,
-`find`, `guide`, `calc`, `tool` and `action` (`loop._ACT_KEY`).
+`find`, `guide`, `calc`, `tool` and `action` (`replies._ACT_KEY`).
 
 </details>
 
+<a id="schemasarguments"></a>
 <details>
 <summary>schemas.arguments</summary>
 
-`src/petroharness/agent/schemas.py`, `arguments(raw)`: the arguments as a dict.
+`src/petroharness/agent/schemas.py`, `arguments(raw, tool)`: the arguments as a dict, each read as the tool's own
+schema types it (`kinds(tool)`: its `Tool.arguments`, and the call door's `zones`, `where`, `by` and `label` for any
+tool).
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
 | JSON text | str | - | Parsed; text that is not JSON raises `ToolError` | `arguments` |
 | Empty values | any | - | `None`, `[]`, `""`, `"null"`, `"none"` are dropped | `arguments` |
-| Numbers as text | str | - | Read as numbers for the keys in `_NUMERIC` | `_NUMERIC` |
+| `integer`, `number` | str | - | A number sent as text is read as one (an int for `integer`): `k` is classify's integer and spike_flags' number | `kinds` |
 | `zones` | bool, int | - | `true` or `false` means every zone; an int is one zone number | `arguments` |
 | `statistics` | `true`, `"all"`, `"*"` | - | The default set (the argument is dropped) | `arguments` |
-| List keys | str | - | `curves`, `zones`, `statistics`, `inputs`: one name, a comma list or JSON text becomes a list | `_LISTS` |
+| An array of strings | str | - | One name, a comma list or JSON text becomes a list (`curves`, `zones`, `statistics`, `inputs`) | `kinds` |
 | `curve` | list | - | Kept as a list here; `fit` reads it per tool | `arguments` |
-| Text keys | non-text | - | `ToolError` quoting an example from `argument_texts.json` | `_TEXTS` |
-| Number keys | non-number | - | `ToolError`: "<key> must be a number" | `_NUMERIC` |
-
-**Notes**
-
-`_NUMERIC` holds `limit`, `window` (int) and `min_thickness`, `max_thickness`, `tolerance`, `threshold`, `k`,
-`min_change`, `max_lag`, `vcl_max`, `phie_min`, `vcl_cutoff`, `phie_cutoff`, `sw_cutoff`, `rmf`, `rmf_temp_f`, `bht_f`,
-`td` (float).
+| `string` | list of one | - | That text (`scale: ["log10"]` is `log10`) | `kinds` |
+| `string` | non-text | - | `ToolError` quoting an example from `argument_texts.json`, for the arguments it lists | `_TEXTS` |
+| `boolean` | str | - | `"true"`, `"yes"`, `"1"` and `"false"`, `"no"`, `"0"` as flags; any other value: `ToolError` "<key> must be true or false" | `kinds`, `_FLAGS` |
+| `integer`, `number` | non-number | - | `ToolError`: "<key> must be a number" | `kinds` |
 
 </details>
 
@@ -356,6 +365,7 @@ schemas.fit("stats", {"curves": ["PHIE"], "where": "Z2 zones pooled"})   # {'cur
 
 </details>
 
+<a id="schemascall"></a>
 <details>
 <summary>schemas.call</summary>
 
@@ -409,10 +419,11 @@ name not in `TOOLSET` raises `ToolError`; every rejected call is appended to `Le
 
 </details>
 
+<a id="sessionrun"></a>
 <details>
 <summary>Session.run</summary>
 
-`src/petroharness/agent/loop.py`, `Session.run(act)`: one action, returning the text for NEW and the item it shows.
+`src/petroharness/agent/state.py`, `Session.run(act)`: one action, returning the text for NEW and the item it shows.
 
 | Action | Text returned |
 |---|---|
@@ -441,7 +452,7 @@ which says what the curve is and the cautions the record knows.
 <details>
 <summary>Curves</summary>
 
-`src/petroharness/agent/engine.py`, `curve(f, name)` and `curves(f, names)`: a name as a curve with data in the
+`src/petroharness/agent/engine/curves.py`, `curve(f, name)` and `curves(f, names)`: a name as a curve with data in the
 interval.
 
 | Situation | What happens |
@@ -467,6 +478,7 @@ interval for: ..." or "No curve named ... (did you mean ...?)"). Curves written 
 
 </details>
 
+<a id="zones"></a>
 <details>
 <summary>Zones</summary>
 
@@ -496,6 +508,7 @@ interval for: ..." or "No curve named ... (did you mean ...?)"). Curves written 
 
 </details>
 
+<a id="conditions"></a>
 <details>
 <summary>Conditions</summary>
 
@@ -518,10 +531,10 @@ interval for: ..." or "No curve named ... (did you mean ...?)"). Curves written 
 
 ```text
 {"runs": {"condition": "porosity.total_porosity_quality_distribution:EXCELLENT_POROSITY"}}
-[E3] Runs where EXCELLENT_POROSITY (porosity.total_porosity_quality_distribution), inside the zones (12 runs)
+[E1] Intervals where EXCELLENT_POROSITY (porosity.total_porosity_quality_distribution) (11 intervals, 20.0906 m, 17.2% of the gross)
 
 {"runs": {"condition": "Z8 and VCL < 0.3", "max_thickness": 0.5, "limit": 3}}
-[E4] Runs where Z8 and VCL < 0.3, runs at most 0.5 m thick, inside the zones (3 runs)
+[E2] Intervals where Z8 and VCL < 0.3, intervals at most 0.5 m thick (3 intervals, 0.761 m, 0.7% of the gross)
 ```
 
 **Notes**
@@ -545,10 +558,10 @@ some samples says so on that line (`engine.uncomputed_said`).
 
 | Name | Meaning | Defined in |
 |---|---|---|
-| `restricted(f, c, sel)` | A curve's interval values, empty outside the selection and where a flag is not computed | `engine.py` |
-| `flag_inputs(f, c)` | What a flag or class the workflow wrote is computed from, read from its step's record lines and catalog line | `engine.py` |
-| `uncomputed(f, c)` | The samples where such a flag is not computed (an input has no value there), with the reasons | `engine.py` |
-| `no_codes(f, tool, *cs)` | Refuses class-code curves for tools that average, fit or screen values | `engine.py` |
+| `restricted(f, c, sel)` | A curve's interval values, empty outside the selection and where a flag is not computed | `engine/` |
+| `flag_inputs(f, c)` | What a flag or class the workflow wrote is computed from, read from its step's record lines and catalog line | `engine/` |
+| `uncomputed(f, c)` | The samples where such a flag is not computed (an input has no value there), with the reasons | `engine/` |
+| `no_codes(f, tool, *cs)` | Refuses class-code curves for tools that average, fit or screen values | `engine/` |
 
 **Example**
 
@@ -641,6 +654,7 @@ labelled gap, not a zone.
 
 </details>
 
+<a id="statistics"></a>
 <details>
 <summary>Statistics</summary>
 
@@ -693,6 +707,7 @@ result: [E1] PERM_CC [mD] = core-calibrated permeability, mD (model output of th
 
 </details>
 
+<a id="what-the-values-are"></a>
 <details>
 <summary>What the values are</summary>
 
@@ -775,6 +790,7 @@ The lithology log's codes carry the labels of the code table the zones are read 
 A result is text the model reads plus every line with its numbers. The ledger keeps it whole as an `Item`; the prompt
 shows it in full once (NEW), then as a digest (OPENED), and `get` reads any of its lines again.
 
+<a id="result-and-out"></a>
 <details>
 <summary>Result and Out</summary>
 
@@ -786,7 +802,7 @@ shows it in full once (NEW), then as a digest (OPENED), and `get` reads any of i
 | `Out.v`, `Out.i`, `Out.pct`, `Out.depth`, `Out.span`, `Out.zone` | method | - | Write a value, count, share (one decimal), depth, depth span or zone, keeping the number with its line | `engine.Out` |
 | `Out.fit(rows, budget, what, label)` | method | `budget = max_chars()` | Rows shown while they fit (260 characters kept for the cut line), the rest held | `engine.Out` |
 | `Out.hold` / `Out.keep` | method | - | A line kept in the result but not shown; `keep` when a shown line already names its `get` | `engine.Out` |
-| `WIDE_CHARS` | int | 9000 | `max_chars()`: the cap of one result's text | `engine.py` |
+| `WIDE_CHARS` | int | 9000 | `max_chars()`: the cap of one result's text | `engine/` |
 
 **Example**
 
@@ -862,6 +878,7 @@ The listing the model sees under OPENED (`Ledger.listing`), for the ledger most 
 
 </details>
 
+<a id="how-results-reach-the-prompt"></a>
 <details>
 <summary>How results reach the prompt</summary>
 
@@ -900,12 +917,13 @@ What the interpreted interval holds, read without recomputing it.
 |---|---|
 | [`stats`](#stats) | Statistics of one or more curves over each zone, the zones pooled and the whole interval, from the summary layer |
 | [`profile`](#profile) | One curve zone by zone from the top, with the zones ranked by each statistic and each statistic's trend with depth |
-| [`runs`](#runs) | Where a condition holds, zone by zone: thickness and share of each zone, the total, and the runs top to base |
+| [`runs`](#runs) | Where a condition holds: the intervals top to base (uncut by zone boundaries), their total and share of the gross, and each zone's thickness and share |
 | [`values_at`](#values_at) | Curves read at depths: each depth's nearest sample, where it lies and each curve's value there; a range lists its samples |
 | [`section`](#section) | One analyzer section as recorded, its classes as located runs, then its classes both ways |
 | [`step`](#step) | One workflow step as recorded: method, inputs, the curves it wrote, equations, parameters and the record's lines |
 | [`formation_summary`](#formation_summary) | The formation in brief: each statistic with the zones ranked high to low, the lithology shares and the zones in bad hole |
 
+<a id="stats"></a>
 <details>
 <summary>stats</summary>
 
@@ -957,6 +975,7 @@ RDEP [ohm.m] = Resistivity - Deep (model output of the normalization step); posi
 
 </details>
 
+<a id="profile"></a>
 <details>
 <summary>profile</summary>
 
@@ -990,16 +1009,17 @@ RDEP [ohm.m] = Resistivity - Deep (model output of the normalization step); posi
 
 </details>
 
+<a id="runs"></a>
 <details>
 <summary>runs</summary>
 
 | Argument | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
 | `condition` | string | required | A condition ([Conditions](#conditions)) | `engine.select` |
-| `zones` | array of string | every zone | The zones whose runs count | `engine.zones` |
-| `limit` | integer | 20 | How many runs to list; more are cut to the longest, the rest kept for `get` | `tools.runs` |
-| `min_thickness` | number | none | Only runs at least this thick, in the depth unit | `tools.runs` |
-| `max_thickness` | number | none | Only runs at most this thick (thin beds) | `tools.runs` |
+| `zones` | array of string | every zone | The zones asked: only the intervals inside them count | `engine.zones` |
+| `limit` | integer | 20 | How many intervals to list; more are cut to the thickest, the rest kept for `get` | `tools.runs` |
+| `min_thickness` | number | none | Only intervals at least this thick, in the depth unit | `tools.runs` |
+| `max_thickness` | number | none | Only intervals at most this thick (thin beds) | `tools.runs` |
 
 **Example**
 
@@ -1008,30 +1028,29 @@ RDEP [ohm.m] = Resistivity - Deep (model output of the normalization step); posi
 ```
 
 ```text
-[E3] Runs where SW < 0.6 and PHIE > 0.1, inside the zones (12 runs)
-  Z7 SAND 2877.5955-2890.8542 m: 13.2587 m (100.0% of the zone)
-  ...
-  zones whose means meet it (on PHIE, SW; each zone by its mean values): Z4-Z5, Z7 (3 of 20 zones, 26.0% of their thickness)
-  all zones: 24.6631 m (29.6% of the zoned thickness)
-  whole interval (201 samples outside any zone): 28.9183 m (24.7% of the gross)
-  outside any zone (201 samples, ...): 3.6528 m in 8 runs: 2848.6394, 2852.9067-2853.0591, ...
-  shallowest top 2842.5435 m (Z1); deepest base 2896.1882 m (Z9)
-  longest runs (top-base, thickness, zone; the other runs: get E3 with find "other runs"), top to base, 5 of 12:
-    2842.5435-2843.4578 m, 1.0313 m, Z1
+[E1] Intervals where SW < 0.6 and PHIE > 0.1 (17 intervals, 28.9183 m, 24.7% of the gross)
+  thickest intervals, top to base (top-base, thickness, zones; the other intervals: get E1 with find "other intervals"), 5 of 17:
+    2842.5435-2843.4578 m, 1.0654 m, Z1
+    2861.7458-2862.3555 m, 0.761 m, Z3 and outside any zone
     ...
-    2877.5955-2890.8542 m, 13.2587 m, Z7
+    2876.6811-2890.8542 m, 14.307 m, Z6, Z7
+  by zone: Z1 1.0313 m (23.3% of the zone); ...; Z7 13.2587 m (100.0% of the zone); ...; none in Z10, Z11, Z12, Z13, Z14, Z15, Z16, Z17, Z18, Z19, Z20
+  zones whose means meet it (on PHIE, SW; each zone by its mean values): Z4-Z5, Z7 (3 of 20 zones, 26.0% of their thickness)
 ```
 
 **Notes**
 
-- Runs are consecutive selected samples inside one zone (`engine.extent`); a run's thickness is the zone's thickness
-  times its sample share.
-- The runs a cut list does not show are kept as `other runs` lines for `get`, up to `KEPT_CHARS` = 4500 characters,
-  thickest first; any further runs are counted with their largest thickness.
+- An interval is a stretch of consecutive selected samples. A zone boundary does not end it: its line names the zones
+  it touches, and says `and outside any zone` where it leaves them. Its thickness is the gross times its share of the
+  interval's samples; the `by zone` line gives each zone's thickness of the selected samples (the zone's thickness
+  times their share of its samples).
+- The intervals a cut list does not show are kept as `other intervals` lines for `get`, up to `KEPT_CHARS` = 4500
+  characters, thickest first; any further ones are counted with their largest thickness.
 - Errors: a negative thickness, `max_thickness` of 0, or `limit` below 1 raise `ToolError`.
 
 </details>
 
+<a id="values_at"></a>
 <details>
 <summary>values_at</summary>
 
@@ -1075,6 +1094,7 @@ The lines it writes, as `tools.values_at` builds them (placeholders in angle bra
 
 </details>
 
+<a id="section"></a>
 <details>
 <summary>section</summary>
 
@@ -1102,8 +1122,8 @@ The lines it writes, as `tools.values_at` builds them (placeholders in angle bra
 
 **Notes**
 
-- Computation: Petrophys's analyzers, run on each lithology zone (`record/catalog.zone_results`); the zone-mean class
-  is the analyzer run on zone means (`catalog.zone_classes_raw`) for the families in `ZONE_MEAN_FAMILIES` (porosity,
+- Computation: Petrophys's analyzers, run on each lithology zone (`record/analyzers.zone_results`); the zone-mean class
+  is the analyzer run on zone means (`analyzers.zone_classes_raw`) for the families in `ZONE_MEAN_FAMILIES` (porosity,
   permeability, saturation, lithology, hydrocarbon).
 - A class with at most `FULL_RUNS` = 12 runs is listed in full; a longer one is cut to its thickest within
   `RUNS_ROOM` = 700 characters and ends with `(every run: condition <key>:<class>)`. A section with at most
@@ -1114,6 +1134,7 @@ The lines it writes, as `tools.values_at` builds them (placeholders in angle bra
 
 </details>
 
+<a id="step"></a>
 <details>
 <summary>step</summary>
 
@@ -1164,7 +1185,7 @@ The lines it writes, as `tools.values_at` builds them (placeholders in angle bra
 
 - Parameters whose names end in a bookkeeping suffix (`_source`, `_requested`, `_count`, `_samples`, ...) are left
   out, and nested parameters lose their sample tallies, which count the whole well (`tools._BOOKKEEPING`, `_TALLY`).
-- The first record lines are this interval's routes, counted sample by sample by `agent/routes.py`
+- The first record lines are this interval's routes, counted sample by sample by `record/routes.py`
   (`route_lines`): which resistivity pair gives `INVASION_RATIO` (`SHALLOW` = `RXO`, `RSHA`, `RESS`, `RMED`; the
   fallback `RMED`) and where SXO comes from shallow resistivity, where it is the quicklook `SW^(1/5)`, and where both
   are 1 (water-bearing). A record line about the whole well's routes is labelled `well-wide record:`
@@ -1174,6 +1195,7 @@ The lines it writes, as `tools.values_at` builds them (placeholders in angle bra
 
 </details>
 
+<a id="formation_summary"></a>
 <details>
 <summary>formation_summary</summary>
 
@@ -1224,6 +1246,7 @@ Curves and conditions against each other, and the zones grouped.
 | [`curve_order`](#curve_order) | Whether curves keep an order (for example resistivities shallow to deep), zone by zone and then sample by sample, in both directions |
 | [`vertical_sequence`](#vertical_sequence) | Zones from base to top with the change of a curve's zone mean from the zone below, grouped into packages of steps in one direction (cleaning- or dirtying-up) |
 
+<a id="compare"></a>
 <details>
 <summary>compare</summary>
 
@@ -1272,6 +1295,7 @@ compare not run: 'PHIN' has no data in this interval; did you mean PHIT, PHIE, P
 
 </details>
 
+<a id="crossplot"></a>
 <details>
 <summary>crossplot</summary>
 
@@ -1310,6 +1334,7 @@ compare not run: 'PHIN' has no data in this interval; did you mean PHIT, PHIE, P
 
 </details>
 
+<a id="overlap"></a>
 <details>
 <summary>overlap</summary>
 
@@ -1344,6 +1369,7 @@ compare not run: 'PHIN' has no data in this interval; did you mean PHIT, PHIE, P
 
 </details>
 
+<a id="lithology_stats"></a>
 <details>
 <summary>lithology_stats</summary>
 
@@ -1368,15 +1394,27 @@ compare not run: 'PHIN' has no data in this interval; did you mean PHIT, PHIE, P
 - outside any zone (...): SILT 75 samples (11.42 m), ..., SHALE 25 samples (3.805 m; no zone of this rock type), ...
 ```
 
-**COSTA HW-3**, Kharaib-2, 7805–8020 ft (COSTA data, CC BY). The rock types are shale-volume bands, here one clean zone:
+**COSTA HW-3**, Kharaib-2, 7805–8020 ft (COSTA data, CC BY). With no lithology log, the rock types are those Petrophys's
+mineral solver gives. At the default settings its domain is clastic, and it labels this carbonate sandstone and dolomite:
 
 ```json
 {"lithology_stats": {"curves": ["PHIE"]}}
 ```
 
 ```text
-[E5] By lithology, then the zones pooled and the whole interval: thickness, shares and statistics of PHIE
-  CLEAN (VCL BAND) | zones: Z1 | zoned thickness (ft): 215 | share of zoned (%): 100 | ... | n PHIE: 431 | mean PHIE: 0.1721 | ...
+[E2] By lithology, then the zones pooled and the whole interval: thickness, shares and statistics of PHIE
+  SANDSTONE | zones: Z1, Z2, Z3, Z5, Z6, Z7, Z8 | zoned thickness (ft): 174.5 | share of zoned (%): 93.3 | ... | n PHIE: 356 | mean PHIE: 0.1873 | ...
+  DOLOMITE | zones: Z4 | zoned thickness (ft): 12.5 | share of zoned (%): 6.7 | ... | n PHIE: 26 | mean PHIE: 0.05383 | ...
+  ...
+```
+
+The same call with the interpretation settings `lithology_domain: carbonate` and `matrix_type: limestone`, which give
+limestone and dolomite:
+
+```text
+[E2] By lithology, then the zones pooled and the whole interval: thickness, shares and statistics of PHIE
+  LIMESTONE | zones: Z1, Z2, Z3, Z5, Z6, Z7, Z8, Z9 | zoned thickness (ft): 167.5 | share of zoned (%): 93.6 | ... | n PHIE: 343 | mean PHIE: 0.2175 | ...
+  DOLOMITE | zones: Z4 | zoned thickness (ft): 11.5 | share of zoned (%): 6.4 | ... | n PHIE: 24 | mean PHIE: 0.0463 | ...
   ...
 ```
 
@@ -1387,6 +1425,7 @@ compare not run: 'PHIN' has no data in this interval; did you mean PHIT, PHIE, P
 
 </details>
 
+<a id="zone_contrast"></a>
 <details>
 <summary>zone_contrast</summary>
 
@@ -1420,6 +1459,7 @@ compare not run: 'PHIN' has no data in this interval; did you mean PHIT, PHIE, P
 
 </details>
 
+<a id="curve_order"></a>
 <details>
 <summary>curve_order</summary>
 
@@ -1451,6 +1491,7 @@ compare not run: 'PHIN' has no data in this interval; did you mean PHIT, PHIE, P
 
 </details>
 
+<a id="vertical_sequence"></a>
 <details>
 <summary>vertical_sequence</summary>
 
@@ -1499,16 +1540,17 @@ Data quality, from Petrophys's checks to generic screens.
 | [`data_record`](#data_record) | The workflow's data-completeness record per zone: primary logs missing, each measured log's coverage and gaps, and the derived curves with no value with the inputs they lack |
 | [`lag_correlation`](#lag_correlation) | Depth matching by cross-correlation: for each pair of the curves, the correlation at zero lag and its strongest value within plus or minus `max_lag` |
 
+<a id="check"></a>
 <details>
 <summary>check</summary>
 
 | Argument | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `what` | string | required unless `search` or `run` | `held_readings`, `bad_hole` or `depth_shift` | `library_check.OBJECTS` |
+| `what` | string | required unless `search` or `run` | `held_readings`, `bad_hole` or `depth_shift` | `library.check.OBJECTS` |
 | `curves` | array of string | the object's own | `held_readings`: the logs (every measured input log); `depth_shift`: one log (PHIE, PERM or SW by the core property) | `library_check` |
-| `zones` | array of string | every zone | Zones for the per-zone shares | `library_check._zone_shares` |
+| `zones` | array of string | every zone | Zones for the per-zone shares | `library.check._zone_shares` |
 | `threshold` | number | the object's | `held_readings`: repeat tolerance (0); `bad_hole`: washout limit CALI - BS in inches (1.5); `depth_shift`: largest shift to scan, in depth units (Petrophys's default) | `library_check` |
-| `search`, `run`, `args`, `label` | - | - | Every Petrophys `check` function ([Search and run](#search-and-run)) | `library_api.verb_tool` |
+| `search`, `run`, `args`, `label` | - | - | Every Petrophys `check` function ([Search and run](#search-and-run)) | `library.api.verb_tool` |
 
 **Example**
 
@@ -1545,6 +1587,7 @@ check not run: bad_hole needs a caliper (CALI); this well has none (the record's
 
 </details>
 
+<a id="spike_flags"></a>
 <details>
 <summary>spike_flags</summary>
 
@@ -1593,6 +1636,7 @@ RHOB [g/cm3] = Bulk Density (measurement)
 
 </details>
 
+<a id="adjacent_jumps"></a>
 <details>
 <summary>adjacent_jumps</summary>
 
@@ -1624,6 +1668,7 @@ RHOB [g/cm3] = Bulk Density (measurement)
 
 </details>
 
+<a id="threshold_exceedance"></a>
 <details>
 <summary>threshold_exceedance</summary>
 
@@ -1657,6 +1702,7 @@ RHOB [g/cm3] = Bulk Density (measurement)
 
 </details>
 
+<a id="data_record"></a>
 <details>
 <summary>data_record</summary>
 
@@ -1685,6 +1731,7 @@ RHOB [g/cm3] = Bulk Density (measurement)
 
 </details>
 
+<a id="lag_correlation"></a>
 <details>
 <summary>lag_correlation</summary>
 
@@ -1727,6 +1774,7 @@ that every lookup and condition reads. The binder, the registry and the outputs 
 | [`estimate`](#estimate) | Estimate a parameter from the well's own logs with Petrophys, set against the record's value of the same parameter |
 | [Search and run](#search-and-run) | Any of Petrophys's public functions, through every verb |
 
+<a id="calculate"></a>
 <details>
 <summary>calculate</summary>
 
@@ -1787,6 +1835,7 @@ With the property alone (`{"calculate": {"property": "saturation"}}`), the resul
 
 </details>
 
+<a id="what_if"></a>
 <details>
 <summary>what_if</summary>
 
@@ -1836,6 +1885,7 @@ The cementation exponent the same way:
 
 </details>
 
+<a id="estimate"></a>
 <details>
 <summary>estimate</summary>
 
@@ -1868,7 +1918,7 @@ Formation-water resistivity from the clean, porous samples of the Brent Group:
 ```
 
 ```text
-[E2] apparent matrix by Petrophys (...): RHOmaa per zone (median) Z1 2.6074 (n 431); zones pooled 2.6074 g/cc. Written: RHOMAA.
+[E3] apparent matrix by Petrophys (...): RHOmaa (median, g/cc) whole interval (49 samples outside any zone) 2.6074 (n 431); zones pooled 2.5996 (n 382); Z1 2.5558 (n 17); ...; Z4 2.8388 (n 26); ...; Z8 2.5267 (n 102). Written: RHOMAA.
   no PEF here: Umaa (the RHOmaa-Umaa lithology plot) needs it
   ...
 ```
@@ -1887,6 +1937,7 @@ estimate not run: needs one of NPHI; none has data here
 
 </details>
 
+<a id="search-and-run"></a>
 <details>
 <summary>Search and run</summary>
 
@@ -1895,10 +1946,10 @@ Every verb also takes `search` and `run`, which reach every public Petrophys fun
 
 | Argument | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `search` | string | none | Words; lists up to `MAX_FOUND` = 8 matching functions, this verb's first | `library_api.find` |
-| `run` | string | none | A function's name as `search` lists it | `library_api.run` |
-| `args` | object | none | The function's inputs, each as Petrophys declares it: a curve name, a condition (`VCL > 0.6`), a number or a choice; inputs left out keep Petrophys's defaults | `library_api.bind` |
-| `label` | string | the function's name | Prefix of the curves it writes: `<LABEL>_<PART>` | `library_api._label` |
+| `search` | string | none | Words; lists up to `MAX_FOUND` = 8 matching functions, this verb's first | `library.api.find` |
+| `run` | string | none | A function's name as `search` lists it | `library.api.run` |
+| `args` | object | none | The function's inputs, each as Petrophys declares it: a curve name, a condition (`VCL > 0.6`), a number or a choice; inputs left out keep Petrophys's defaults | `library.api.bind` |
+| `label` | string | the function's name | Prefix of the curves it writes: `<LABEL>_<PART>` | `library.api._label` |
 
 **Example**
 
@@ -1940,16 +1991,17 @@ Classes of the rock, its fluids and its flow.
 | [`zone_classes`](#zone_classes) | A classification topic both ways: each zone's class from its mean values and the share of its samples in each class, then the zones pooled and the whole interval |
 | [`unit_roles`](#unit_roles) | The workflow's flow roles by permeability: its strongest zone, the largest flow capacity and possible baffles |
 
+<a id="classify"></a>
 <details>
 <summary>classify</summary>
 
 | Argument | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `what` | string | required unless `search` or `run` | `gas`, `minerals`, `flow_units`, `electrofacies`, `moveable_hydrocarbons` | `library_classify.OBJECTS` |
+| `what` | string | required unless `search` or `run` | `gas`, `minerals`, `flow_units`, `electrofacies`, `moveable_hydrocarbons` | `library.classify.OBJECTS` |
 | `method` | string | `solver` for minerals; `kmeans` for flow_units | minerals: `solver` or `calcite_dolomite`; flow_units: `kmeans` | `library_classify` |
 | `curves` | array of string | the object's | Not applied by electrofacies (the library fixes the curves) | `library_classify` |
-| `zones` | array of string | every zone | Zones shown and pooled | `library_classify._picked` |
-| `k` | integer | chosen by the library | flow_units: 1 to 6 units; not applied by electrofacies | `library_classify._flow_units` |
+| `zones` | array of string | every zone | Zones shown and pooled | `library.classify._picked` |
+| `k` | integer | chosen by the library | flow_units: 1 to 6 units; not applied by electrofacies | `library.classify._flow_units` |
 
 **Example**
 
@@ -1974,12 +2026,13 @@ classify not run: needs NPHI; it has no data here
 **Notes**
 
 - Written curves: `GAS_FLAG`, `V_<MINERAL>` and `MM_POOR_FIT`, `FLOW_UNIT`, `EFACIES`, `MOS` and `SOR`. A name the
-  record already holds (not one this question computed) gets `_LIB` added (`library_classify._name`).
+  record already holds (not one computed on request) gets `_LIB` added (`library.free_name`, as for every verb).
 - Past `MANY` = 12 zones, per-zone lists keep the highest 12 and count the rest.
 - `moveable_hydrocarbons` is refused where SXO is the quicklook transform of SW, with the record's reason.
 
 </details>
 
+<a id="zone_classes"></a>
 <details>
 <summary>zone_classes</summary>
 
@@ -2003,12 +2056,13 @@ classify not run: needs NPHI; it has no data here
 
 **Notes**
 
-- Computation: Petrophys's analyzers run on zone means and on the samples (`catalog.zone_classes_raw`,
-  `catalog.sample_labels`).
+- Computation: Petrophys's analyzers run on zone means and on the samples (`analyzers.zone_classes_raw`,
+  `analyzers.sample_labels`).
 - An unknown topic lists every topic, with close names first (`did you mean porosity_quality, porosity_verdict?`).
 
 </details>
 
+<a id="unit_roles"></a>
 <details>
 <summary>unit_roles</summary>
 
@@ -2047,16 +2101,17 @@ Net rock, reservoir and pay.
 | [`summarize`](#summarize) | Net rock, reservoir and pay, net-to-gross, pay averages and hydrocarbon pore thickness per zone and pooled, with the cutoffs given, by Petrophys `summarize_pay` |
 | [`pay_summary`](#pay_summary) | The record's own net flags summarised: net rock, net reservoir and net pay thickness and fraction, the pay averages, the screening confidence and the cutoffs |
 
+<a id="summarize"></a>
 <details>
 <summary>summarize</summary>
 
 | Argument | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `what` | string | `pay` | The one object, `pay` | `library_summarize.OBJECTS` |
-| `zones` | array of string | every zone | Zones; with several, the zones pooled come first | `library_summarize.summarize` |
-| `vcl_cutoff` | number | the record's, else the library standard | A fraction from 0 to 1 | `library_summarize.summarize` |
-| `phie_cutoff` | number | the record's, else the library standard | A fraction from 0 to 1 | `library_summarize.summarize` |
-| `sw_cutoff` | number | the record's, else the library standard | A fraction from 0 to 1 | `library_summarize.summarize` |
+| `what` | string | `pay` | The one object, `pay` | `library.summarize.OBJECTS` |
+| `zones` | array of string | every zone | Zones; with several, the zones pooled come first | `library.summarize.summarize` |
+| `vcl_cutoff` | number | the record's, else the library standard | A fraction from 0 to 1 | `library.summarize.summarize` |
+| `phie_cutoff` | number | the record's, else the library standard | A fraction from 0 to 1 | `library.summarize.summarize` |
+| `sw_cutoff` | number | the record's, else the library standard | A fraction from 0 to 1 | `library.summarize.summarize` |
 
 **Example**
 
@@ -2079,6 +2134,7 @@ Net rock, reservoir and pay.
 
 </details>
 
+<a id="pay_summary"></a>
 <details>
 <summary>pay_summary</summary>
 
@@ -2120,14 +2176,15 @@ its own core.
 | [`calibrate`](#calibrate) | Set logs against core, or derive elastic properties, with Petrophys |
 | [`core_vs_log`](#core_vs_log) | Core plug statistics against the log values at the core depths, in each zone with core samples, the zones pooled and the whole interval |
 
+<a id="calibrate"></a>
 <details>
 <summary>calibrate</summary>
 
 | Argument | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `what` | string | required unless `search` or `run` | `porosity`, `permeability`, `saturation`, `poro_perm`, `shear`, `elastic` | `library_calibrate.OBJECTS` |
-| `curves` | array of string | the object's (`PHIE`, `PERM`, `SW`) | One log curve for the core fits | `library_calibrate._one` |
-| `zones` | array of string | every zone | Zones; scopes are the zones pooled, then each zone | `library_calibrate._scopes` |
+| `what` | string | required unless `search` or `run` | `porosity`, `permeability`, `saturation`, `poro_perm`, `shear`, `elastic` | `library.calibrate.OBJECTS` |
+| `curves` | array of string | the object's (`PHIE`, `PERM`, `SW`) | One log curve for the core fits | `library.calibrate._one` |
+| `zones` | array of string | every zone | Zones; scopes are the zones pooled, then each zone | `library.calibrate._scopes` |
 
 **Example**
 
@@ -2159,7 +2216,8 @@ its own core.
 **Notes**
 
 - Written curves: `PERM_PP` (poro_perm), `DTS_GC` (shear), and for elastic `VP`, `AI`, and with a shear slowness
-  `VS`, `POISSON`, `SHEAR_MOD`, `BULK_MOD`, `YOUNG_MOD` (`_EL` added where the record already holds the name).
+  `VS`, `POISSON`, `SHEAR_MOD`, `BULK_MOD`, `YOUNG_MOD` (`_LIB` added where the record already holds the name,
+  `library.free_name`).
 - The core fits need at least 3 plugs with log values in a scope; without them the call is refused naming the core
   curves it needs (`PHIC or CPOR`, `KH_CORE or CPERM`, `SWC or CSW`). Without core plugs, `poro_perm` is fitted on
   the log's own PHIE and PERM, and its first line says so.
@@ -2168,6 +2226,7 @@ its own core.
 
 </details>
 
+<a id="core_vs_log"></a>
 <details>
 <summary>core_vs_log</summary>
 
@@ -2194,9 +2253,9 @@ its own core.
 **COSTA HW-3**, Kharaib-2, 7805–8020 ft (COSTA data, CC BY). The LAS has no plugs but supplies core-corrected curves, and they are the reference:
 
 ```text
-[E9] Core vs log comparison: each zone with core samples, the zones pooled and the whole interval
+[E5] Core vs log comparison: each zone with core samples, the zones pooled and the whole interval
 - PHIC: no core plug samples in the interval; PHIE_CC, the core-corrected curve the LAS supplies, is the core reference
-- PHIE against PHIE_CC by zone, then the zones pooled and the whole interval (PHIE_CC mean vs PHIE mean): Z1 CLEAN (VCL BAND) n=351 0.2443 vs 0.1677, difference mean -0.0766 sd 0.1227, beyond 0.03 in 92%; ...
+- PHIE against PHIE_CC by zone, then the zones pooled and the whole interval (PHIE_CC mean vs PHIE mean): Z1 SANDSTONE n=8 0.03 vs 0.2091, difference mean 0.1791 sd 0.02725, beyond 0.03 in 100%; ...; zones pooled n=306 0.242 vs 0.1756, difference mean -0.06638 sd 0.1191, beyond 0.03 in 91%; whole interval (49 samples outside any zone) n=351 0.2443 vs 0.1677, difference mean -0.0766 sd 0.1227, beyond 0.03 in 92%
 ...
 ```
 
@@ -2220,6 +2279,7 @@ and `calc` and `guide` do not count toward the 6 actions of a step.
 | [`find`](#find) | `get` over every opened item: which items match, then each item's lines while they fit |
 | [`calc`](#calc) | Arithmetic on numbers the opened results show, kept as an item of its own so the computed number can be cited |
 
+<a id="get"></a>
 <details>
 <summary>get</summary>
 
@@ -2258,6 +2318,7 @@ SW [v/v] = water saturation in the uninvaded zone, v/v (model output of the satu
 
 </details>
 
+<a id="find"></a>
 <details>
 <summary>find</summary>
 
@@ -2283,6 +2344,7 @@ Overlap of A = NET_PAY > 0.5 and B = VCL < 0.3: each zone from the top, the thic
 
 </details>
 
+<a id="calc"></a>
 <details>
 <summary>calc</summary>
 
@@ -2290,7 +2352,7 @@ Overlap of A = NET_PAY > 0.5 and B = VCL < 0.3: each zone from the top, the thic
 |---|---|---|---|---|
 | `calc` | string | required | `+ - * / **` and brackets, with `sqrt`, `ln`, `log10`, `exp`, `abs`, `min`, `max`, `sum`, `mean`; `%` is dropped, `^`, `×`, `÷` read as operators | `ledger.evaluate` |
 | Inputs | numbers | - | Each a number an opened item, the map or the question shows at its stated precision, or a whole number up to 100 (a constant); at least one shown | `Ledger.calc` |
-| `MAX_CALCS` | int | 3 | Calcs per step, beside the 6 actions | `loop.py` |
+| `MAX_CALCS` | int | 3 | Calcs per step, beside the 6 actions | `state.py` |
 
 **Example**
 
@@ -2327,7 +2389,7 @@ and class codes in [section 6](#6-selecting-curves-zones-and-samples); statistic
 | Situation | What happens | Where |
 |---|---|---|
 | An item read again after a later question recomputed its curve, or after the settings changed | Its text with a note that these are the earlier values | `Ledger.show`, `Ledger._supersede`, `Ledger.rewell` |
-| Petrophys refuses a call | `ToolError` with Petrophys's own message | `library*.py` ([PETROPHYS_INTEGRATION.md](PETROPHYS_INTEGRATION.md#10-refusals)) |
+| Petrophys refuses a call | `ToolError` with Petrophys's own message | `agent/library/` ([PETROPHYS_INTEGRATION.md](PETROPHYS_INTEGRATION.md#10-refusals)) |
 
 ## 18. Related pages
 

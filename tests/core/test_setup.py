@@ -131,9 +131,9 @@ def test_a_conversation_logs_its_setup_once_and_every_trace_and_trail_names_it(t
 
 def _build(T):
     """The session tests' formation, without the fixture machinery: (task) with Session.build patched for this run."""
-    from test_b2_tools import F
+    from _support.formations import F
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.agent.map import render
     got = next(((t, f) for t, f in F() if {"PHIE", "VCL"} <= set(f.inv.curves) and len(f.view.zones) >= 2), None)
     if got is None:
@@ -204,3 +204,27 @@ def test_the_commit_is_the_harness_s_own_not_a_surrounding_repository_s(tmp_path
     assert commit_of_copy() == git("rev-parse", "--short", "HEAD").stdout.strip()
     from petroharness import cli
     assert cli.COMMIT == S.harness_commit()
+
+
+@pytest.mark.data
+def test_the_setup_of_a_well_with_your_zones_is_the_one_its_conversation_logs(tmp_path, monkeypatch, capsys):
+    """--zones reaches the setup's data settings as it reaches a conversation's: the same hash, and not the hash
+    without them."""
+    from test_adopt import LAS, Q1, WINDOW, Model
+    from petroharness.session import Conversation
+    if not LAS.exists():
+        pytest.skip("no sample wells (PETROHARNESS_SAMPLE_LAS)")
+    for key in ("PETROHARNESS_DATA", "PETROHARNESS_SKILLS"):
+        monkeypatch.delenv(key, raising=False)
+    zones = tmp_path / "zones.csv"
+    zones.write_text("zone,top,bottom\nUpper,600,650\nLower,650,700\n")
+    c = Conversation.start(LAS, tmp_path / "s", **WINDOW, llm_factory=lambda cfg: Model(), figures=False,
+                           direct=False, zones=zones)
+    c.ask(Q1)
+    logged = c.log.events("setup")[-1]
+    window = ["--top", "600", "--base", "700", "--depth-unit", "m", "--formation", WINDOW["formation"]]
+    assert S.main(["--json", "--las", str(LAS), *window, "--zones", str(zones), "--investigate"]) == 0
+    got = json.loads(capsys.readouterr().out)
+    assert got["hash"] == logged["hash"], S.differences(got, logged)
+    assert S.main(["--json", "--las", str(LAS), *window, "--investigate"]) == 0
+    assert json.loads(capsys.readouterr().out)["data"] != logged["data"]           # the zones are in the data part

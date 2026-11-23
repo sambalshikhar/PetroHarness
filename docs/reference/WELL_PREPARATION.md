@@ -40,7 +40,7 @@ The Brent Group of 30/6-5, prepared as `petroharness` does before the first mode
 |---|---|---|
 | Entry points | `ask.ask`, `Conversation.start` (and `/set`), the web UI's question and preview; benchmark tasks through `FormationView.build` | [ask.py](../../src/petroharness/ask.py), [session/conversation.py](../../src/petroharness/session/conversation.py), [ui/adapter.py](../../src/petroharness/ui/adapter.py) |
 | Interpretation (`petroharness`, `chat`, the UI) | `petrophys.interpret(las_path, **data.interpret)` on the whole LAS | `prepare._interpret_with_petrophys` |
-| Default Petrophys options | `{vcl_cutoff: 0.3, sw_cutoff: 0.7}` (the policy's cutoffs), or `{context_profile: NAME}` with `--profile` | `ask._settings`, `ask.POLICY_CUTOFFS` |
+| Default Petrophys options | `{vcl_cutoff: 0.3, sw_cutoff: 0.7}` (the policy's cutoffs), or `{context_profile: NAME}` with `--profile` | `interval._settings`, `prepare.default_interpret` |
 
 ## 2. How it works
 
@@ -49,10 +49,10 @@ The path of `petroharness`, `petroharness chat` and the web UI, function by func
 
 ```mermaid
 flowchart TD
-    A["ask.prepare<br/>data settings, interval"] --> B["ask.task_for<br/>Task"]
+    A["interval.prepare<br/>data settings, interval"] --> B["interval.task_for<br/>Task"]
     B --> C["ask.check<br/>FormationView.build"]
     C --> D["view.user_cutoffs<br/>policy cutoffs follow data.interpret"]
-    D --> E["view._prepare_in_metres<br/>interval in the LAS unit"]
+    D --> E["view._prepare_in_metres<br/>depth units checked"]
     E --> F{"prepare_well<br/>cache file exists?"}
     F -- yes --> G["PreparedWell<br/>from the pickle"]
     F -- no --> H["read_las + standardize_curves<br/>header parameters"]
@@ -60,17 +60,19 @@ flowchart TD
     I -- "data.interpreter" --> I1["batch interpreter"]
     I -- "data.interpret" --> I2["petrophys.interpret"]
     I -- "policy engine" --> I3["runner.py subprocess"]
-    I -- "otherwise" --> I4["installed library<br/>with policy corrections"]
+    I -- "otherwise" --> I2
     I1 --> J["cutoff check<br/>write cache"]
     I2 --> J
     I3 --> J
-    I4 --> J
     J --> G
     G --> K["depth unit check<br/>reporting unit, mask"]
     K --> L{"lithology log?"}
     L -- yes --> M["decode codes"]
-    L -- "no; VCL present" --> N["shale-volume bands"]
+    L -- no --> S{"Petrophys solved<br/>a lithology?"}
+    S -- "yes: LITHO" --> M2["decode by Petrophys's labels"]
+    S -- "no; VCL present" --> N["shale-volume bands"]
     M --> O{"zone_layout"}
+    M2 --> O
     N --> O
     O -- lithology_runs --> P["segment_zones"]
     O -- formation --> Q["formation_zone"]
@@ -83,7 +85,7 @@ flowchart TD
 
 ## 3. Data settings
 
-`ask._settings` builds the data settings from the LAS, or starts from a settings file (`--settings`, else
+`interval._settings` builds the data settings from the LAS, or starts from a settings file (`--settings`, else
 `PETROHARNESS_DATA`). For 30/6-5 with no settings file (paths shortened):
 
 ```json
@@ -104,32 +106,10 @@ After `ask.check`, `used` says what was asked about and `litho` how it was zoned
 
 The data settings every preparation runs under; a misspelt key is an error (`extra="forbid"`). `petroharness` builds
 them from the LAS; benchmark mode reads them from a data config ([DEVELOPMENT.md](../DEVELOPMENT.md#the-data-config)).
-Every field is defined in `config.DataPaths` unless noted.
+Every key, its type, default and meaning: [CONFIGURATION.md](CONFIGURATION.md#4-the-data-section) (`config.DataPaths`).
 
-| Name | Type | Default | Meaning |
-|---|---|---|---|
-| `las_dir` | path | required (`ask` sets the LAS's folder) | folder of the data's LAS files |
-| `tops_csv` | path | `null` | the data config's tops table, read by `formation.resolve_interval` when a formation is named without depths or `--tops` |
-| `interpreter` | text | `null` | a Petrophys batch interpreter, `"module:function"` or `"/path/adapter.py:function"` |
-| `interpret` | table | `null` (`ask` always sets it) | options for `petrophys.interpret` |
-| `depth_unit` | text | `null`: the policy's `depth_unit` (`m`) | the reporting unit: `m`, `ft`, or `las` for the LAS's own |
-| `lithology_nomenclature` | path | `null` | a workbook of lithology codes and labels, over the library's code table |
-| `lithology_columns` | table | `{code: code, label: lithology}` | the workbook's code and label columns (`config.LithologyColumns`) |
-| `lithology_curve` | text or list | `null`: detected | the lithology log's mnemonic, or several (the first with data is used) |
-| `zone_layout` | `lithology_runs` or `formation` | `lithology_runs` | runs of one lithology, or the interval as one zone |
-| `zone_min_thickness_m` | number | `null`: policy `zones.min_thickness_m` (2.0) | minimum zone thickness, metres |
-| `zone_vcl_bands` | two numbers | `null`: policy `zones.fallback_vcl_bands` (`[0.3, 0.6]`) | VCL edges of the bands for a well without a lithology log |
-| `basis` | `all` or `zones` | `all` | statistics bases; `zones` leaves out the whole-interval lines |
-| `analyzer_class_tables` | text | `null`: policy `analyzers.class_tables` (`current`) | the class-table set the analyzers classify with: a set a Petrophys context package ships, for data its context interprets |
-| `conventions` | list of text | `[]` | the data's reporting conventions |
-| `cache_dir` | path | `<repository>/.cache/wells` (`ask`: `<out>/.cache`) | the interpreted-well cache |
-| `engines_dir` | path | `null` | folder of pinned engines, one per engine name |
-| `tops_columns` | table | `{well: uwi, name: form, top: top}` | column names of `tops_csv` |
-| `top_name_pattern` | regex | `null` (every top counts) | which upper-cased top names of `tops_csv` count |
-| `tops_depth_unit` | `m` or `ft` | `null`: the LAS's own unit | the depth unit of `tops_csv` |
-
-- `ask._settings` uses `setdefault` for `las_dir`, `cache_dir` and the cutoffs, so a settings file's own values win;
-  `--lithology-curve` and `--profile` overwrite the file's. `ask._interpretation` then checks the interpretation
+- `interval._settings` uses `setdefault` for `las_dir`, `cache_dir` and the cutoffs, so a settings file's own values win;
+  `--lithology-curve` and `--profile` overwrite the file's. `interval._interpretation` then checks the interpretation
   settings (`settings.validate`), puts Petrophys's into `data.interpret` and the zone rule into `data.zone_*`.
 - A settings file holds `data` and optionally `eval` sections only (`config._read_settings`); the keys are those of
   [configs/data.example.yaml](../../configs/data.example.yaml).
@@ -141,7 +121,7 @@ Every field is defined in `config.DataPaths` unless noted.
 <details>
 <summary><code>Prepared</code></summary>
 
-One interval of one LAS, ready for questions: what `ask.prepare` returns and `ask.check` completes (`ask.Prepared`).
+One interval of one LAS, ready for questions: what `interval.prepare` returns and `ask.check` completes (`interval.Prepared`).
 
 | Name | Type | Default | Meaning |
 |---|---|---|---|
@@ -149,7 +129,7 @@ One interval of one LAS, ready for questions: what `ask.prepare` returns and `as
 | `key` | text | required | the model registry key |
 | `data` | table | required | the data settings built for this LAS |
 | `source` | text | required | the settings file's path, or `built from the LAS` |
-| `span` | table | required | the interval asked about (`ask._interval`) |
+| `span` | table | required | the interval asked about (`interval._interval`) |
 | `said` | text | required | the operator's lithology (`--formation-lithology`) |
 | `given` | table | required | `{"data": ..., "eval": {}}`, with `skills` when a library is given: the settings every question runs under |
 | `view` | `FormationView` | `None` until `check` | the interval view |
@@ -157,8 +137,11 @@ One interval of one LAS, ready for questions: what `ask.prepare` returns and `as
 | `litho` | table | `{}` until `check` | how the interval was zoned |
 | `notes` | table | `{}` | the field notes in force (`well.notes.load`) |
 
-- `litho.source` is `lithology log` (with `curve` and `how`: `named` or `detected`), `shale-volume bands` (with
-  `bands`) or `none` (no lithology log and no VCL).
+- `litho.source` is `lithology log` (with `curve` and `how`: `named` or `detected`), `mineral solver` (no lithology
+  log: the lithology code curve Petrophys's lithology step wrote, read with the labels Petrophys keeps on it, and how
+  the step made it: `curve`, `method`, `domain`, `inputs`, `decisions`, `solved` and `samples`; never called a
+  lithology log), `shale-volume bands` (with `bands`; neither a log nor a solved lithology) or `none` (none of them
+  and no VCL). A sample the solver could not call (Petrophys's `unknown`) has no lithology.
 - The answer header and the stderr record print `used` and `litho` through `ask._interval_text` and
   `ask._lithology_text`.
 
@@ -172,7 +155,6 @@ holds the cutoffs, the zone rule, the depth unit and the code table every route 
 preparation, as packaged:
 
 ```yaml
-interpretation_scope: full_well
 value_range_qc: true
 cutoffs: {vcl_max: 0.30, phie_min_clastic: 0.08, phie_min_carbonate: 0.045, sw_max: 0.70}
 depth_unit: m
@@ -188,9 +170,8 @@ Every key is read from the policy file unless noted.
 | Name | Type | Default | Meaning |
 |---|---|---|---|
 | `name` | text | `reference_v2` | names the cache folder |
-| `engine` | text | a pinned engine's name | the engine of the data-config route when neither `data.interpret` nor `data.interpreter` is set; `installed` or absent: the installed library |
-| `interpretation_scope` | `full_well` or `formation` | `full_well` | interpret the whole log once, or the interval's slice (installed-library route only) |
-| `value_range_qc` | yes/no | `true` | apply Petrophys's value-range QC after the engine and installed-library routes |
+| `engine` | text | a pinned engine's name | the engine of the data-config route when neither `data.interpret` nor `data.interpreter` is set; `installed` or absent: `petrophys.interpret` with the library's settings and the policy's cutoffs (`prepare.default_interpret`) |
+| `value_range_qc` | yes/no | `true` | apply Petrophys's value-range QC after the engine route |
 | `cutoffs.vcl_max` | number | `0.30` | NET_ROCK clay cutoff |
 | `cutoffs.phie_min_clastic` | number | `0.08` | NET_RES porosity cutoff, clastic |
 | `cutoffs.phie_min_carbonate` | number | `0.045` | NET_RES porosity cutoff, carbonate |
@@ -200,15 +181,13 @@ Every key is read from the policy file unless noted.
 | `lithology.codes` | text | `library` | the code table: `library` (Petrophys's table, overridden code by code by the nomenclature workbook) or a YAML file of code to label |
 | `analyzers.class_tables` | text | `current` (the library's own tables) | the class tables the analyzers are built with, where they accept the argument; `data.analyzer_class_tables` replaces it for a view (`FormationView.build`) |
 | `zones.min_thickness_m` | number | `2.0` | minimum zone thickness, metres |
-| `zones.fallback_vcl_bands` | two numbers | `[0.3, 0.6]` | VCL band edges for a well without a lithology log |
-| `gr_endpoints` | text | not set | `auto` lets the installed-library route pick GR endpoints (`prepare._interpret`) |
-| `rw.header_rw_without_rwt`, `rw.rwa_fallback` | text, table | not set | Rw corrections of the installed-library route (`prepare._interpret`) |
+| `zones.fallback_vcl_bands` | two numbers | `[0.3, 0.6]` | VCL band edges for a well with neither a lithology log nor a solved lithology |
 
 - The policy may not name the lithology curve: `lithology.curve` in it stops `FormationView.build` with an error;
   the curve is the data's (`data.lithology_curve`).
 - The policy's `confidence`, `flow_roles` and `qc_thresholds` blocks are read by the evidence catalog, not by
   preparation.
-- `engine`, `gr_endpoints`, `rw` and `value_range_qc` act only in the data-config routes; `petroharness`, `chat` and
+- `engine` and `value_range_qc` act only in the data-config routes; `petroharness`, `chat` and
   the UI always set `data.interpret` ([section 9](#9-the-petrophys-interpretation)).
 
 </details>
@@ -255,7 +234,7 @@ stats:           Z4 HALITE 2154.6799-2568.446 m, RDEP: n 2716 of 2716, mean 3481
 | `read_depth(path)` |  | the LAS depth index as floats | `prepare.read_depth` |
 | `las_curve_descriptions(path)` | cached, 256 files | `{MNEMONIC: description}` from the LAS header (lasio, without data) | `view.las_curve_descriptions` |
 | `las_depth_unit(path)` | `""` when none | the index curve's unit from the LAS header | `view.las_depth_unit` |
-| `_las_header(las)` |  | the depth unit as `m`/`ft` and the names the well goes by: file stem, `WELL`, `UWI`, `API`, `APIN` | `ask._las_header` |
+| `_las_header(las)` |  | the depth unit as `m`/`ft` and the names the well goes by: file stem, `WELL`, `UWI`, `API`, `APIN` | `interval._las_header` |
 
 </details>
 
@@ -314,8 +293,8 @@ The depth window holds one sample more: it includes its base, while a base taken
 |---|---|---|---|---|
 | tops unit column | column | none | `depth_unit`, `depth_units`, `units`, or `unit` when every value is m or ft; per row, first in order | `tops.read_tops` |
 | unit in the top column's header | header | none | `Top (ft)`, `TOP [M]`, `top_md_m`; applies to rows without a unit cell | `tops._header` |
-| `--depth-unit` / `depth_unit=` | `m` or `ft` | none | unit of `--top`/`--base` and of a tops file that states none; the reporting unit | `ask._interval` |
-| LAS index unit | LAS header | none | `DEPT.M`, `DEPT.FT`, `DEPT.F`; used for everything not stated otherwise | `ask._las_header` |
+| `--depth-unit` / `depth_unit=` | `m` or `ft` | none | unit of `--top`/`--base` and of a tops file that states none; the reporting unit | `interval._interval` |
+| LAS index unit | LAS header | none | `DEPT.M`, `DEPT.FT`, `DEPT.F`; used for everything not stated otherwise | `interval._las_header` |
 | `FEET_PER_METRE` | constant | `1 / 0.3048` | conversion factor | `tops.FEET_PER_METRE` |
 | `metres_per(unit, source)` | function | | metres per unit via `petrophys.model.units` (`normalize_depth_unit`, `UnitRegistry.DEPTH_TO_M`); refuses any unit but m and ft | `view.metres_per` |
 
@@ -338,10 +317,10 @@ given is m. WHY: one of them is wrong. FIX: drop --depth-unit (the file's unit i
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `span["unit"]` | `m`, `ft` or `None` | the tops row's unit, the stated unit, else the LAS's | the unit the interval's depths are written in | `ask._interval` |
-| `span["report"]` | text | `--depth-unit`, else `span["unit"]`, else the LAS's | the unit the answer's depths are shown in | `ask._interval` |
-| `data.depth_unit` | text | `las` when the reporting unit is the LAS's own, else `m` or `ft` | passed to the view | `ask.prepare` |
-| `Task.depth_unit` | text | `las` or `m`/`ft`; `None` for the data-config tops route | the unit of `Task.top`/`Task.base` | `ask.task_for` |
+| `span["unit"]` | `m`, `ft` or `None` | the tops row's unit, the stated unit, else the LAS's | the unit the interval's depths are written in | `interval._interval` |
+| `span["report"]` | text | `--depth-unit`, else `span["unit"]`, else the LAS's | the unit the answer's depths are shown in | `interval._interval` |
+| `data.depth_unit` | text | `las` when the reporting unit is the LAS's own, else `m` or `ft` | passed to the view | `interval.prepare` |
+| `Task.depth_unit` | text | `las` or `m`/`ft`; `None` for the data-config tops route | the unit of `Task.top`/`Task.base` | `interval.task_for` |
 | `reporting_unit(wanted, prep)` | function | `data.depth_unit`, else policy `depth_unit` | `(label, metres per unit)`; `las` reads the prepared well's own unit | `view.reporting_unit` |
 | `check_depth_unit(prep, policy)` | function | a well without a unit: the policy's (`m`) | metres per LAS depth unit | `view.check_depth_unit` |
 | `FormationView.depth_scale` | number | `1.0` | reporting units per LAS unit (0.3048 for a feet LAS shown in metres) | `view.FormationView` |
@@ -349,8 +328,8 @@ given is m. WHY: one of them is wrong. FIX: drop --depth-unit (the file's unit i
 
 - Mixed units work: a tops file's rows may each state their own unit, and the next deeper top is converted to the
   named row's unit (`tops._in_unit`).
-- `view._prepare_in_metres` converts the interval to the LAS's unit before `prepare_well` (which slices in that
-  unit), then to the reporting unit for the view.
+- `view._prepare_in_metres` checks the interval's and the LAS's depth units before `prepare_well` (which interprets
+  the whole log), then converts the interval to the reporting unit for the view.
 - A LAS that states no depth unit is read by Petrophys as feet; the view then stops, since a unit it would apply is
   not one the file states (`view._converted_depths` allows a well another route converted on purpose).
 
@@ -457,7 +436,7 @@ data:
 
 ## 8. The interval
 
-`ask._interval` resolves the interval asked about into one table, `span`, in one of four modes:
+`interval._interval` resolves the interval asked about into one table, `span`, in one of four modes:
 
 | Mode | Given | Top | Base | `closed` | `from` |
 |---|---|---|---|---|---|
@@ -474,7 +453,7 @@ petroharness: 30_6-5.las, BRENT GP.: 2841-2958 m (768 samples; tops file formati
 ```
 
 <details>
-<summary><code>ask._interval</code></summary>
+<summary><code>interval._interval</code></summary>
 
 | Name | Type | Default | Meaning |
 |---|---|---|---|
@@ -498,12 +477,12 @@ petroharness: 30_6-5.las, BRENT GP.: 2841-2958 m (768 samples; tops file formati
 <details>
 <summary><code>Task</code></summary>
 
-What one question runs on; `ask.task_for` builds it from the span.
+What one question runs on; `interval.task_for` builds it from the span.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `task_id` | text | `a` + 10 hex of SHA-256 of LAS, question and span | opaque id | `ask.task_for` |
-| `question` | text | | the question, with `(The operator states this formation's lithology: ...)` unless `zone_layout` is `formation`, the tops file's units inside the interval, and the field notes statement | `ask.task_for` |
+| `task_id` | text | `a` + 10 hex of SHA-256 of LAS, question and span | opaque id | `interval.task_for` |
+| `question` | text | | the question, with `(The operator states this formation's lithology: ...)` unless `zone_layout` is `formation`, the tops file's units inside the interval, and the field notes statement | `interval.task_for` |
 | `well` | text | | the LAS stem | `tasks.Task` |
 | `formation` | text | | `span["name"]` | `tasks.Task` |
 | `top`, `base` | number | `None` | the interval's depths | `tasks.Task` |
@@ -549,7 +528,7 @@ and Arnold (2022), COSTA model, Heriot-Watt University, CC BY):
 | net-pay porosity cutoff | 0.08 clastic, 0.045 carbonate, by lithology family | 0.08 (clastic) | 0.045 (carbonate) |
 | NET_RES, NET_PAY | 413, 185 samples | 380, 380 samples (190.0 ft each) | 390, 388 samples (195.0, 194.0 ft) |
 
-### The four routes
+### The three routes
 
 Setting both `data.interpreter` and `data.interpret` is an error.
 
@@ -558,7 +537,9 @@ Setting both `data.interpreter` and `data.interpret` is an error.
 | `data.interpret` | set; always for `petroharness`, `chat` and the UI | `petrophys.interpret(las_path, **options)` on the whole LAS | `prepare._interpret_with_petrophys` |
 | `data.interpreter` | set (a data config) | `module:function(source_dir, out_dir, well_names=[stem])` on a temporary folder holding a link to the LAS; one result expected | `prepare._interpret_with_interpreter` |
 | pinned engine | neither set; policy `engine` names one other than `installed` | the engine's own Petrophys in a subprocess, on the raw LAS | `prepare._interpret_with_engine`, `well/runner.py` |
-| installed library | neither set; no engine, or `installed` | `run_dynamic_workflow_with_zones` with the policy's cutoffs and corrections, at most twice | `prepare._interpret` |
+
+With neither set and no engine named (or `installed`), the `data.interpret` route runs with the library's settings
+and the policy's net-pay cutoffs (`prepare.default_interpret`), the options a question gets.
 
 The two data-config keys that choose a route (keep one of them):
 
@@ -575,10 +556,10 @@ What `data.interpret` holds on the `petroharness` route.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `vcl_cutoff`, `sw_cutoff` | number | policy `vcl_max` 0.30, `sw_max` 0.70 | the net-pay cutoffs, set because the library's own defaults differ | `ask.POLICY_CUTOFFS` |
-| `context_profile` | text | not set | a Petrophys context profile (`--profile`); no cutoffs are added and Petrophys settings are refused | `ask._settings` |
-| any interpretation setting | value | not set | `m`, `rw`, `sw_model`, ... from `interpretation=`, the UI or field notes | `ask._interpretation` |
-| `curve_aliases` | table or path | not set | a curve-name mapping (settings file only) | `ask._settings` |
+| `vcl_cutoff`, `sw_cutoff` | number | policy `vcl_max` 0.30, `sw_max` 0.70 | the net-pay cutoffs, set because the library's own defaults differ | `interval.POLICY_CUTOFFS` |
+| `context_profile` | text | not set | a Petrophys context profile (`--profile`); no cutoffs are added and Petrophys settings are refused | `interval._settings` |
+| any interpretation setting | value | not set | `m`, `rw`, `sw_model`, ... from `interpretation=`, the UI or field notes | `interval._interpretation` |
+| `curve_aliases` | table or path | not set | a curve-name mapping (settings file only) | `interval._settings` |
 
 - Petrophys decides which steps run from the curves present; the record holds the steps it executed
   (`result.steps_executed`). A step that could not run is recorded by Petrophys, not fatal; a result with errors or no
@@ -627,7 +608,7 @@ Net pay must follow the policy's cutoffs, as `view.user_cutoffs` set them for th
 |---|---|---|---|
 | `_check_engine_cutoffs(steps, cut, well=None)` | tolerance `1e-12` | compares the net-pay step's recorded `vcl_cutoff`, `sw_cutoff`, `phie_cutoff` with `vcl_max`, `sw_max` and `phie_min_clastic` or `phie_min_carbonate`; `data.interpret` and engine routes | `prepare._check_engine_cutoffs` |
 | `_check_porosity_cutoff_on_curves` |  | engine route without one recorded porosity cutoff: no NET_RES sample at or below the lowest policy cutoff, no net-rock sample above the highest left out | `prepare._check_porosity_cutoff_on_curves` |
-| `_check_cutoffs(result, cut)` |  | the same comparison on a workflow result; installed-library and interpreter routes | `prepare._check_cutoffs` |
+| `_check_cutoffs(result, cut)` |  | the same comparison on a workflow result; interpreter route | `prepare._check_cutoffs` |
 | domain | `clastic` | read from the net-pay parameters: `lithology_domain`, else `lithology` (as Petrophys records it); `carbonate` compares `phie_min_carbonate`, any other domain `phie_min_clastic` | `prepare.lithology_domain` |
 | `user_cutoffs(policy, interpret)` | unchanged without user cutoffs | `vcl_cutoff` -> `vcl_max`, `sw_cutoff` -> `sw_max`, `phie_cutoff` -> both porosity cutoffs | `view.user_cutoffs` |
 
@@ -657,7 +638,6 @@ A Petrophys source tree pinned as a policy's workflow of record, run in its own 
 | engine folder | `<data.engines_dir>/<engine>` | holds `ENGINE.json` whose `name` is the engine's | `prepare.engine_dir` |
 | command |  | `python runner.py <engine_dir> <las> <out_prefix> '{"value_range_qc": <policy>}'` | `prepare._interpret_with_engine` |
 | outputs |  | `<prefix>.npz` (curves, `__depth__`, `__qc__<curve>` masks) and `<prefix>.json` (units, input curves, header, steps, warnings, engine, QC report) | `runner.main` |
-| scope |  | `interpretation_scope` must be `full_well` | `prepare.prepare_well` |
 | dropped curves |  | LAS curves the engine's reader dropped are added back when the depths match, and QC'd as the engine's own | `prepare.prepare_well` |
 | after QC | when `value_range_qc` | BVW, PHI_NORM, RQI and FZI recomputed from the cleaned curves | `prepare._sync_after_qc` |
 
@@ -665,27 +645,6 @@ A Petrophys source tree pinned as a policy's workflow of record, run in its own 
 <engines_dir>/<engine name>/ENGINE.json      {"name": "<engine name>", ...}
 <engines_dir>/<engine name>/src/petrophys/   the engine's Petrophys (or petrophys/ at the folder's root)
 ```
-
-</details>
-
-<details>
-<summary>Installed library with the policy's corrections (<code>_interpret</code>)</summary>
-
-The data-config route when the policy names no engine.
-
-Defined in `prepare._interpret` unless noted.
-
-| Name | Default | Meaning |
-|---|---|---|
-| configuration |  | Petrophys's context workflow configuration, with the policy's `vcl_max` and `sw_max` as `vcl_cutoff` and `sw_cutoff` |
-| `gr_endpoints: auto` | not set | `gr_min` and `gr_max` left to the library |
-| `rw.header_rw_without_rwt` | not set | `median_formation_temperature`: a header Rw without its temperature is referenced to the median TEMP |
-| `rw.rwa_fallback` | not set | `{a_sandstone, a_other, m, vcl_max, phie_min, percentile}`: an Rwa clean-wet Rw recomputed at the clean-wet median temperature (Arps) (`prepare._rwa_p5_fix`) |
-| porosity cutoff |  | the policy's cutoff of the net-pay domain where the library's differs |
-| second pass |  | the workflow runs again with the adjustments when there are any |
-| `formation` scope |  | the well is sliced to the interval before interpreting (`prepare.prepare_well`) |
-
-The packaged policy sets none of these corrections.
 
 </details>
 
@@ -747,10 +706,9 @@ Defined in `prepare._cache_path` unless noted.
 
 | Name | Default | Meaning |
 |---|---|---|
-| policy keys |  | `name`, `engine`, `interpretation_scope`, `gr_endpoints`, `rw`, `cutoffs`, `value_range_qc` (`prepare.INTERPRETATION_KEYS`) |
-| `_version` | `13` | the interpretation code's version (`prepare.INTERPRETATION_VERSION`) |
+| policy keys |  | `name`, `engine`, `cutoffs`, `value_range_qc` (`prepare.INTERPRETATION_KEYS`) |
+| `_version` | `18` | the interpretation code's version (`prepare.INTERPRETATION_VERSION`) |
 | `_library` |  | `<version>@<commit>[+dirty]` for a source checkout, else `<version>@<pip commit>`, `<version>@files-<12 hex>` or `<version>@no-git` (`prepare.library_identity`) |
-| `_lithology_curve` |  | the named lithology curve (not with an engine) |
 | `_engine` |  | the engine's `ENGINE.json` text |
 | `_interpreter`, `_interpreter_file` |  | the spec, and 16 hex of an adapter file's SHA-256 |
 | `_interpret`, `_interpret_files` |  | each option as text, and 16 hex of the SHA-256 of any option value that is a file |
@@ -769,11 +727,11 @@ Defined in `prepare._cache_path` unless noted.
 
 ## 11. Zones
 
-Every answer reports zone by zone. With a lithology log the zones are its runs; without one, runs of one shale-volume
-band (VCL below 0.3, 0.3 to 0.6, above 0.6). Either way a run must be thicker than 2.0 m to be a zone
-(`formation.segment_zones`, policy `zones`).
+Every answer reports zone by zone. With a lithology log the zones are its runs; without one, runs of the lithology
+Petrophys's mineral solver wrote; with neither, runs of one shale-volume band (VCL below 0.3, 0.3 to 0.6, above 0.6).
+In each case a run must be thicker than 2.0 m to be a zone (`formation.segment_zones`, policy `zones`).
 
-![Zones from a lithology log](../images/zones-lithology-log.png "With a lithology log: GeoLink 30/6-5, Brent Group, zoned by the runs of LITHOLOGY_GEOLINK. The white gaps are runs no thicker than 2 m, left outside any zone. Data: GeoLink, CC BY-SA 4.0.") ![Zones from shale-volume bands](../images/zones-shale-volume-bands.png "Without one: Taranaki tuhua-7, McKee Formation. The zones are runs of one shale-volume band. Data: Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.")
+![Zones from a lithology log](../images/zones-lithology-log.png "With a lithology log: GeoLink 30/6-5, Brent Group, zoned by the runs of LITHOLOGY_GEOLINK. The white gaps are runs no thicker than 2 m, left outside any zone. Data: GeoLink, CC BY-SA 4.0.") ![Zones from a solved lithology](../images/zones-solved-lithology.png "Without one: Taranaki tuhua-7, McKee Formation. The zones are runs of the lithology Petrophys's mineral solver gives, here shale and sandstone. Data: Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.")
 
 The Brent Group's lithology log reads 51 runs; 20 are thicker than 2 m and become zones, which hold 567 of the 768
 samples (real output, abridged):
@@ -820,10 +778,47 @@ data:
 </details>
 
 <details>
+<summary>The solved lithology</summary>
+
+The labels of a well without a lithology log, when Petrophys's lithology step wrote a lithology
+(`formation.solver_lithology`, read in `FormationView.build`).
+
+| Name | Meaning |
+|---|---|
+| when | no lithology log is named or detected, and the lithology step's record says it wrote a lithology curve (`lithology_curve_written`) |
+| curve | the step's output that carries Petrophys's category labels and has a value (`LITHO` on the sample wells): the mineral solver's lithology code per sample |
+| labels | the labels Petrophys keeps on the curve, in upper case; its `unknown`, a sample the solver could not call, reads `NO_LITHOLOGY_DATA` |
+| record | `curve`, `method`, `domain` (the lithology step's, else the net-pay step's), `inputs`, `decisions`, and the samples solved of the well's (`solved`, `samples`): `FormationView.solver_record`, and `Prepared.litho` under `source: mineral solver` |
+| kept apart | `FormationView.solver_curve`, never `lithology_curve`: the solved lithology is not called a lithology log |
+
+Taranaki tuhua-7, McKee Formation: the solved lithology reads 42 runs; 11 are thicker than 2 m and become zones, which
+hold 393 of the 544 samples (real output, abridged; Data: Taranaki Basin Curated Well Logs Dataset (New Zealand
+Petroleum & Minerals), CDLA-Sharing-1.0.):
+
+```text
+Z1  SHALE_GROUP_1      1936.3944-1940.3568 m  27 samples
+Z2  SANDSTONE_GROUP_3  1941.576-1944.7764 m   22 samples
+...
+Z11 SHALE_GROUP_21     2011.68-2017.776 m     41 samples
+```
+
+The answer header says `no lithology log: lithology zones from Petrophys's mineral solver (LITHO, clastic domain,
+canonical multi mineral solver)` (`ask._lithology_text`).
+
+- The domain is Petrophys's `lithology_domain` setting, clastic unless set
+  ([INTERPRETATION_SETTINGS.md](INTERPRETATION_SETTINGS.md)). COSTA HW-3 (Kharaib-2) is a carbonate: at the defaults
+  the solver labels it sandstone and dolomite (8 zones); with `lithology_domain: carbonate` and `matrix_type:
+  limestone` set, limestone and dolomite (9 zones) (real runs; data: Costa Gomes, Geiger and Arnold (2022), COSTA
+  model, Heriot-Watt University, CC BY).
+
+</details>
+
+<details>
 <summary>Shale-volume bands</summary>
 
-The labels of a well without a lithology log (`formation.vcl_band_labels`), when it has VCL. The edges are
-`data.zone_vcl_bands`, else policy `zones.fallback_vcl_bands` (`[0.3, 0.6]`), set in `FormationView.build`.
+The labels of a well with neither a lithology log nor a solved lithology (`formation.vcl_band_labels`), when it has
+VCL. The edges are `data.zone_vcl_bands`, else policy `zones.fallback_vcl_bands` (`[0.3, 0.6]`), set in
+`FormationView.build`.
 
 | Label | When |
 |---|---|
@@ -832,11 +827,14 @@ The labels of a well without a lithology log (`formation.vcl_band_labels`), when
 | `SHALE-PRONE (VCL BAND)` | VCL >= 0.6 |
 | `NO_LITHOLOGY_DATA` | VCL missing |
 
-Taranaki tuhua-7, Mount Messenger Formation, which has no lithology log (real output; `SHALE-PRONE (VCL
-BAND)_GROUP_5` was no thicker than 2 m and dropped):
+The sample wells without a lithology log that these pages use (Taranaki tuhua-7 and cheal-1, KGS 1046123714, Teapot
+17-WX-21, COSTA HW-3) each have a solved lithology, so none of them is zoned by bands. The labels as the two functions
+give them when called directly: `formation.vcl_band_labels` on the VCL of Taranaki tuhua-7's Mount Messenger
+Formation, then `formation.segment_zones` on those labels with the 2 m minimum (real output; `SHALE-PRONE (VCL
+BAND)_GROUP_5` was no thicker than 2 m and dropped). The harness itself zones that formation by its solved lithology,
+into 3 zones.
 
 ```text
-lithology: no lithology log: zones from shale-volume bands (VCL below 0.3, 0.3-0.6, above 0.6); 6 zones
 Z1 NO_LITHOLOGY_DATA_GROUP_1       590.55-604.4184 m    92 samples
 Z2 SHALE-PRONE (VCL BAND)_GROUP_1  604.5708-625.7544 m  140 samples
 ...
@@ -845,7 +843,7 @@ Z6 SHALE-PRONE (VCL BAND)_GROUP_6  859.6884-873.8616 m  94 samples
 
 - VCL is Petrophys's clay volume, so the bands follow its GR endpoints; state endpoints you know with `gr_min` and
   `gr_max` ([INTERPRETATION_SETTINGS.md](INTERPRETATION_SETTINGS.md)).
-- A well with neither a lithology log nor VCL has every sample labelled `NO_LITHOLOGY_DATA`.
+- A well with no lithology log, no solved lithology and no VCL has every sample labelled `NO_LITHOLOGY_DATA`.
 
 </details>
 
@@ -869,10 +867,11 @@ Defined in `formation.segment_zones` unless noted.
 rounded to 4 decimals), `n_samples`, `indices` (interval sample indices), `stated`, and the property `thickness`
 (`base - top`).
 
-- A run of `NO_LITHOLOGY_DATA` thicker than the minimum is a zone too (Z1 of tuhua-7 above, where VCL has no value).
+- A run of `NO_LITHOLOGY_DATA` thicker than the minimum is a zone too: Z1 of tuhua-7's Mount Messenger Formation
+  (590.55-604.4184 m, 92 samples), where the solved lithology has no label and VCL no value.
 - Samples outside every zone stay in the interval: the whole-interval statistics include them and say how many
   ([section 14](#14-statistics-and-the-summary-layer)); on the Brent Group, 201 samples.
-- With one zone the map says how to read it; on COSTA HW-3 (Kharaib-2, every sample in one clean band): `One zone:
+- With one zone the map says how to read it; on COSTA HW-3 (Kharaib-2) with `zone_layout: formation`: `One zone:
   its variation is read by depth (runs of a condition, profile's upper, middle and lower thirds, crossplot with x
   DEPTH), not zone by zone`.
 
@@ -902,6 +901,7 @@ Every member is defined in `view.FormationView`.
 | `mask` | bool array | | the interval's samples among the well's |
 | `zones`, `labels` | list, array | | the zones, and the label of each interval sample |
 | `lithology_curve` | text | `None` | the lithology log the zones come from |
+| `solver_curve`, `solver_record` | text, table | `None`, `{}` | without a lithology log: the lithology curve Petrophys's mineral solver wrote, which the zones come from, and how it was made (`formation.solver_lithology`) |
 | `vcl_bands` | two numbers | `None` | set when the zones are shale-volume bands |
 | `code_table` | table | `{}` | code -> label |
 | `report_unit`, `depth_scale`, `m_per_unit` | text, numbers | `m`, `1.0`, `1.0` | [section 6](#6-depth-units) |
@@ -924,8 +924,8 @@ writes a nonzero share that rounds to zero as `<1%`.
 
 ## 13. Analyzer sections and derived curves
 
-The question graph's `build` node (`agent.loop.Session.build`) builds the view again (a cache hit) and has
-`catalog.zone_results` run each of six Petrophys analyzer families on exactly each zone's samples, once per view;
+The question graph's `build` node (`agent.state.Session.build`) builds the view again (a cache hit) and has
+`analyzers.zone_results` run each of six Petrophys analyzer families on exactly each zone's samples, once per view;
 their classes become sections of located depth runs, and the curves they derive join the record. The sections of the
 Brent Group, as the map lists them (real output, 37 sections):
 
@@ -942,7 +942,7 @@ Analyzer sections
 <details>
 <summary>The analyzers</summary>
 
-Defined in `catalog._ANALYZERS` unless noted.
+Defined in `analyzers._ANALYZERS` unless noted.
 
 | Name | Meaning |
 |---|---|
@@ -952,9 +952,9 @@ Defined in `catalog._ANALYZERS` unless noted.
 | `porosity` | `...porosity_analysis.PorosityAnalysis` |
 | `lithology` | `...lithology_analysis.LithologyAnalysis` |
 | `numerical` | `...numerical_statistical_analysis.NumericalStatisticalAnalysis` |
-| class tables | policy `analyzers.class_tables` (`current`), or `data.analyzer_class_tables` when set; passed where the analyzer's constructor takes `class_tables` (`catalog.make_analyzer`, `FormationView.build`) |
+| class tables | policy `analyzers.class_tables` (`current`), or `data.analyzer_class_tables` when set; passed where the analyzer's constructor takes `class_tables` (`analyzers.make_analyzer`, `FormationView.build`) |
 | calculations | run inside `calculations(context_profile)`: a context profile's package calculations, else the library's (`well.calculations.calculations`) |
-| call | `analyzer.analyze(view.zone_well(z), add_curves=False)` (`catalog.zone_results`) |
+| call | `analyzer.analyze(view.zone_well(z), add_curves=False)` (`analyzers.zone_results`) |
 
 One family's results, zone by zone, on a checked interval `p` ([section 8](#8-the-interval)):
 
@@ -976,7 +976,7 @@ How the analyzers' results become sections and curves (`record.sections.analyzer
 |---|---|---|---|
 | `Section` |  | `family`, `name`, `description`, `methodology`, `thresholds`, `classes` (label -> runs), `values` (per-zone summaries); key `family.name` | `sections.Section` |
 | `Run` |  | `zone`, `top`, `base`, `thickness` (the zone's thickness times the share of its samples in the run) | `sections.Run` |
-| class runs |  | each section's per-sample labels (`raw_labels`) as depth runs (`catalog.label_runs`, Petrophys `flag_intervals`), sorted top down | `sections.analyzer_sections` |
+| class runs |  | each section's per-sample labels (`raw_labels`) as depth runs (`analyzers.label_runs`, Petrophys `flag_intervals`), sorted top down | `sections.analyzer_sections` |
 | value sections |  | the result's scalar metadata per zone (lists and tables left out) | `sections.analyzer_sections` |
 | derived curves |  | a curve the analyzer derived that the well lacks becomes `view.analyzer_curves`; one the workflow left empty in a zone becomes `view.analyzer_fills` | `well.derived.DerivedCurves` |
 | `PHI_NORM` |  | added when neither the workflow nor the analyzers made it: `calculate_phi_z` on PHIE_CC, PHIE, PHIT depth-wise | `store.phi_norm` |
@@ -1180,8 +1180,8 @@ Before step 1, code opens one `stats` result for the model (`agent.graph.first_l
 |---|---|---|---|
 | topic curves | at most 8 | the `overview` curves of the topics the model chose (`topics.yaml`) | `agent.direction.overview` |
 | named curves | up to 12 with the above | the curves the READ reply names | `agent.graph.first_look` |
-| reservoir curves | `CORE_CURVES = (VCL, PHIE, SW, PERM)` | always added where present; `MINERAL_VOLUMES` (VCL, VQUAR, VCALC, VDOLO, VANHY, VSAND, VSILT, VSHALE, VCOAL) too when the topic `lithology_mineralogy` is chosen | `agent.loop` |
-| cap | `CORE_LOOK_CAP = 14` | the other curves are cut to 14 less the reservoir curves, and never below 8 | `agent.loop.CORE_LOOK_CAP` |
+| reservoir curves | `CORE_CURVES = (VCL, PHIE, SW, PERM)` | always added where present; `MINERAL_VOLUMES` (VCL, VQUAR, VCALC, VDOLO, VANHY, VSAND, VSILT, VSHALE, VCOAL) too when the topic `lithology_mineralogy` is chosen | `agent.prompts` |
+| cap | `CORE_LOOK_CAP = 14` | the other curves are cut to 14 less the reservoir curves, and never below 8 | `agent.prompts.CORE_LOOK_CAP` |
 | twins |  | each curve's core-calibrated twin beside it (X and X_CC) | `agent.inventory.calibrated_twins` |
 
 The first look of the Brent conversation's first question opened `stats` on PHIT, PHIE, PHIE_CC, PHID, PHIN, PHIS,
@@ -1321,17 +1321,17 @@ and the FIX.
 | Situation | What happens | Where |
 |---|---|---|
 | No LAS file | `FileNotFoundError`; exit status 2 | `ask.ask` |
-| Depth unit other than m or ft | `ValueError: depth unit 'yd' is not m or ft` | `ask._interval`, `tops.read_tops` |
-| Tops file and `--top`/`--base` both given | `ValueError`: keep one | `ask._interval` |
-| Tops file without `--formation` | `ValueError` listing the file's names | `ask._interval` |
+| Depth unit other than m or ft | `ValueError: depth unit 'yd' is not m or ft` | `interval._interval`, `tops.read_tops` |
+| Tops file and `--top`/`--base` both given | `ValueError`: keep one | `interval._interval` |
+| Tops file without `--formation` | `ValueError` listing the file's names | `interval._interval` |
 | Formation not in the tops file | `FormationNotFound` with close names and every name | `tops.TopsTable.interval` |
 | Formation listed twice | `FormationNotFound` with each line; give its depths | `tops.TopsTable.interval` |
 | Tops file with no name or top column | `ValueError` listing the accepted header names | `tops.read_tops` |
 | Tops unit differs from `--depth-unit` | `ValueError`: drop `--depth-unit` or correct the file | `tops.read_tops` |
 | Tops file with a well column but no row for this well | `FormationNotFound` naming the well's names and the column's values | `tops.read_tops` |
 | Tops file that cannot be read as a table (header-less with uneven rows, a row with an extra field, empty) | `ValueError` naming the file and what pandas reports (the line, for uneven rows), with the FIX; exit status 2 | `tops._read_frame`, `formation._tops_table` |
-| `--formation` without depths or a tops table | `ValueError`: add `--tops` or depths | `ask._interval` |
-| Base at or above the top | `ValueError` | `ask._interval` |
+| `--formation` without depths or a tops table | `ValueError`: add `--tops` or depths | `interval._interval` |
+| Base at or above the top | `ValueError` | `interval._interval` |
 | Interval outside the log | `ValueError` naming the log's range | `ask.check` |
 | Named lithology curve without data | `ValueError` listing the input curves | `ask.check` |
 | Two lithology logs detected | `ValueError` naming both | `formation.find_lithology_curve` |
@@ -1342,9 +1342,9 @@ and the FIX.
 | Invalid value in a settings file's `data.interpret` | Petrophys's `ValueError` (exit status 2) | `petrophys.interpret` |
 | Unknown option name in a settings file's `data.interpret` | `ValueError: WHAT: data.interpret names settings Petrophys does not have: <names>. ...` (exit status 2): neither a parameter of `petrophys.interpret` nor a field of `DynamicWorkflowConfig` | `prepare._interpret_with_petrophys`, `prepare.unknown_interpret_options` |
 | Both `data.interpreter` and `data.interpret` | `ValueError` | `prepare.prepare_well` |
-| `--profile` with Petrophys settings | `ValueError`: a profile fixes its own settings | `ask._interpretation` |
+| `--profile` with Petrophys settings | `ValueError`: a profile fixes its own settings | `interval._interpretation` |
 | Engine named, no `engines_dir` or no `ENGINE.json` | `ValueError` or `FileNotFoundError` | `prepare.engine_dir` |
-| Engine with `interpretation_scope: formation` | `ValueError` | `prepare.prepare_well` |
+| Policy `interpretation_scope` other than `full_well` | `ValueError`: every route interprets the whole well | `prepare.prepare_well` |
 | Engine subprocess fails | `RuntimeError` with the last 1,200 characters of its output | `prepare._interpret_with_engine` |
 
 </details>

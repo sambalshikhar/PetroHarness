@@ -16,15 +16,16 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(ROOT / "tests" / "agent")]
 from petroharness import figures as F  # noqa: E402
 from petroharness.agent import components as C  # noqa: E402
+from _support.model import ScriptedModel, in_turn  # noqa: E402
 
 PNG = b"\x89PNG\r\n\x1a\n"
 
 
 @pytest.fixture(scope="module")
 def session():
-    from test_b2_tools import F as formations
+    from _support.formations import F as formations
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.agent.map import render
     got = next(((t, f) for t, f in formations() if {"PHIE", "VCL", "SW"} <= set(f.inv.curves) and len(f.view.zones) >= 2),
                None)
@@ -164,43 +165,40 @@ def test_the_choice_is_read_in_order_and_ids_not_offered_are_dropped():
     assert pick("I would show F2 and F4 {broken") == ["F2", "F4"]
 
 
-class OneReply:
-    def __init__(self, *replies, cap=None):
-        self.replies, self.sent, self.asked = list(replies), [], []
-        if cap:
-            self.cfg = NS(model=NS(max_tokens_spec=cap))
-
-    def chat(self, stage, messages, usage, max_tokens, **kw):
-        self.sent.append((stage, messages))
-        self.asked.append((stage, max_tokens, kw))
-        return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+def one_reply(*replies, cap=None) -> ScriptedModel:
+    """The replies in turn, the last one for every call after; cap: the card's spec allowance."""
+    llm = in_turn(list(replies), then=replies[-1])
+    if cap:
+        llm.cfg = NS(model=NS(max_tokens_spec=cap))
+    return llm
 
 
 def test_the_choice_is_asked_on_a_steps_allowance_with_the_offered_ids_and_once_more_when_empty():
     cands = [F.Candidate(f"F{i}", "histogram", "E1", f"t{i}") for i in range(1, 3)] \
         + [F.Candidate("F3", "pickett", "interval", "t3", {"function": "create_pickett_plot"})]
-    llm = OneReply("", '{"figures": ["F3"]}', cap=32768)
+    llm = one_reply("", '{"figures": ["F3"]}', cap=32768)
     assert [c.id for c in F.pick(llm, None, "q", "a", cands)] == ["F3"]
-    (s1, cap1, kw1), (s2, cap2, kw2) = llm.asked
-    assert (s1, s2) == ("figures", "figures_retry") and cap1 == cap2 == 32768 and kw2["retry"] is True
-    assert kw1["json_schema"] == {"type": "object", "required": ["figures"], "properties": {"figures": {
+    c1, c2 = llm.sent
+    assert llm.stages() == ["figures", "figures_retry"] and c1["max_tokens"] == c2["max_tokens"] == 32768 and c2["retry"] is True
+    assert c1["schema"] == {"type": "object", "required": ["figures"], "properties": {"figures": {
         "type": "array", "items": {"enum": ["F1", "F2", "F3"]}, "maxItems": F.MAX_FIGURES}}}
-    listing = llm.sent[0][1][1]["content"].split("CANDIDATE FIGURES:\n")[1]
+    listing = llm.sent[0]["messages"][1]["content"].split("CANDIDATE FIGURES:\n")[1]
     assert listing == "F1: t1 (from result E1)\nF2: t2 (from result E1)\nF3: t3 (a standard display of the interval)"
     assert C.owners("figures_retry", 2) == C.owners("figures", 2) == ["C9", "C9"]
-    silent = OneReply("")                                          # a model that never replies: None, said by attach
-    assert F.pick(silent, None, "q", "a", cands) is None and [a[1] for a in silent.asked] == [3000, 3000]
-    assert F.pick(OneReply('{"figures": []}'), None, "q", "a", cands) == [] and F.pick(silent, None, "q", "a", []) == []
+    silent = one_reply("")                                          # a model that never replies: None, said by attach
+    assert F.pick(silent, None, "q", "a", cands) is None and [c["max_tokens"] for c in silent.sent] == [3000, 3000]
+    assert F.pick(one_reply('{"figures": []}'), None, "q", "a", cands) == [] and F.pick(silent, None, "q", "a", []) == []
 
 
 @pytest.mark.data
 def test_attach_asks_once_petrophys_draws_the_chosen_and_the_captions_say_so(session, tmp_path):
     cands = F.candidates(session, ["E1", "E2"])
     buckles = next(c.id for c in cands if c.kind == "buckles")
-    llm = OneReply(json_reply := f'{{"figures": ["F4", "F1", "{buckles}"]}}')
+    llm = one_reply(json_reply := f'{{"figures": ["F4", "F1", "{buckles}"]}}')
     rec = F.attach(session, "How does SW relate to PHIE?", "SW falls as PHIE rises.", ["E1", "E2"], llm, None,
                    tmp_path / "figures")
-    (stage, messages), = llm.sent
+    (call,) = llm.sent
+    stage, messages = call["stage"], call["messages"]
     assert stage == "figures" and messages[0]["content"] == C.text("C9", "figures") and json_reply
     user = messages[1]["content"]
     assert user.startswith("QUESTION:\nHow does SW relate to PHIE?\n\nTHE ANSWER:\nSW falls as PHIE rises.\n\nCANDIDATE FIGURES:\n")
@@ -219,7 +217,7 @@ def test_attach_asks_once_petrophys_draws_the_chosen_and_the_captions_say_so(ses
     md = F.markdown(rec["figures"])
     assert md.startswith("\n\n## Figures\n\n![Figure 1. Crossplot of SW") and "(figures/figure_1_crossplot.png)" in md
     assert F.markdown([]) == ""
-    none = F.attach(session, "q", "a", [], OneReply("{}"), None, tmp_path / "none")
+    none = F.attach(session, "q", "a", [], one_reply("{}"), None, tmp_path / "none")
     assert none["candidates"] == [] and none["figures"] == [] and not (tmp_path / "none").exists()
-    unread = F.attach(session, "q", "a", ["E1"], OneReply(""), None, tmp_path / "unread")
+    unread = F.attach(session, "q", "a", ["E1"], one_reply(""), None, tmp_path / "unread")
     assert unread["figures"] == [] and unread["errors"] == ["the model gave no readable choice of figures"]

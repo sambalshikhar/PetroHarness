@@ -11,8 +11,9 @@ import pytest
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
-from test_b2_tools import F  # noqa: E402
+from _support.formations import F  # noqa: E402
 from petroharness.agent.engine import ToolError  # noqa: E402
+from _support.model import in_turn  # noqa: E402
 
 
 def _with(*curves, n=200):
@@ -99,7 +100,7 @@ def test_the_tool_is_offered_and_its_skill_is_generic():
 def test_every_tool_the_model_can_be_shown_is_one_the_loop_reads():
     """Every tool the model can be shown (crossplot, lag_correlation included) is in the parser's names: a call to a
     tool missing from them would be dropped without a word."""
-    from petroharness.agent.loop import coerce_action
+    from petroharness.agent.replies import coerce_action
     from petroharness.agent.schemas import named
     for t in named():
         name = t["function"]["name"]
@@ -110,14 +111,14 @@ def test_every_tool_the_model_can_be_shown_is_one_the_loop_reads():
 @pytest.mark.parametrize('flex', [True])
 def test_an_action_the_loop_cannot_read_is_said_back(flex):
     from petroharness.llm import Usage
-    from test_b5_loop import Script, _session
-    from petroharness.agent.loop import investigate
+    from _support.sessions import pay_session as _session
+    from petroharness.agent.graph import investigate
     s = _session()
     first = {"points": ["What is the mean GR?"], "intent": "value", "edits": [],
              "next": [{"no_such_tool": {"curves": ["GR"]}}, {"stats": {"curves": ["GR"]}}], "done": False}
     last = {"edits": [], "next": [], "done": True}
     trace = {}
-    investigate(Script([first, last, last]), s, Usage(), 4000, trace, max_steps=2)
+    investigate(in_turn([first, last, last]), s, Usage(), 4000, trace, max_steps=2)
     rec = trace["steps"][0]
     assert ("unread" in rec) == flex and rec["actions"], rec
     if flex:

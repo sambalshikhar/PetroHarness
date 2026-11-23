@@ -1,10 +1,9 @@
-"""classify (src/petroharness/agent/library_classify.py): what the rock or its fluid is, by Petrophys, written as
+"""classify (src/petroharness/agent/library/classify.py): what the rock or its fluid is, by Petrophys, written as
 curves of the question: gas effect, mineral volumes, flow units, electrofacies, moveable hydrocarbons; on sample wells
 (data).
 
-    .venv/bin/python -m pytest tests/agent/test_library_classify.py -q
+    .venv/bin/python -m pytest tests/agent/test_library.classify.py -q
 """
-import os
 import sys
 from pathlib import Path
 
@@ -15,9 +14,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(Path(__file__).resolve().parent)]
 from petroharness.agent import schemas
 from petroharness.agent.engine import Out, ToolError
-from petroharness.agent.library_classify import MANY, OBJECTS, _per_zone, classify
+from petroharness.agent.library.classify import MANY, OBJECTS, _per_zone, classify
 
-SAMPLES = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "sample_las"))   # a folder of sample wells; tests skip without it
+from _wells import SAMPLES  # noqa: E402  (Petrophys's sample files; PETROHARNESS_SAMPLE_LAS for a folder of them)
 
 
 def test_the_objects_say_what_they_need():

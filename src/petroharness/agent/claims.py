@@ -117,8 +117,8 @@ def coerce_edit(raw) -> Optional[dict]:
 
 def _share(raw: str, text: str) -> bool:
     """raw% = 100 * a / b for two numbers a, b in the same sentence."""
-    x, dec = number(raw), N.decimals(raw)
-    tol = 0.5 * 10 ** (-dec) + 1e-9
+    x = number(raw)
+    tol = N.tolerance(N.half_unit(raw), x)
     for sent in re.split(r"(?<=[.!?])\s+(?=[A-Z(])|\n", text):
         if not re.search(rf"(?<![\d.]){re.escape(raw)}\s*%", sent):
             continue
@@ -246,7 +246,7 @@ class Claims:
                 def holders(x) -> list:
                     """The results, not cited, that hold number x as written (for any number flagged, before or
                     after the citations added below: the check is redone on the cited set, which can flag a number
-                    the first pass passed; benchmark N2 KeyError)."""
+                    the first pass passed)."""
                     if x not in where:
                         where[x] = [e.id for e in items.values() if e.id not in c.ev
                                     and not number_provenance(x, "", [_Item(e)], self.checks, self.wells, "")[0]]
@@ -302,7 +302,7 @@ class Claims:
                 out.append(_flag("K7_absent"))
                 break
         # a well-wide route record read as this interval's route
-        from petroharness.agent.routes import contradictions as route_contradictions
+        from petroharness.record.routes import contradictions as route_contradictions
         out += [_flag("K5_route", said=m) for m in route_contradictions(text, view)]
         scoped = claim_text is not None
         out += self._before_claim(claim_text if scoped else text)  # the finding, not its caveats

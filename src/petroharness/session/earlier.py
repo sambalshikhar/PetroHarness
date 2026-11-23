@@ -57,7 +57,7 @@ def changed(change: dict, turns: list) -> str:
     from petroharness.well.settings import describe
     n = change["turn"]
     who = change.get("by") or "user"
-    if change.get("kind") == "scope":                  # the user's scope (agent.loop.apply_scope)
+    if change.get("kind") == "scope":                  # the user's scope (agent.read.apply_scope)
         return (f"Scope set before question {n} (by the {who}): "
                 + (f"{', '.join(change['scope'])}, every lookup's default stretch until the {who} changes it; a "
                    "question that names other stretches is computed on those." if change["scope"]

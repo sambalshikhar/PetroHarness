@@ -171,7 +171,7 @@ TRAPS = {
 
 
 def scenarios(per: int, only=None) -> list:
-    from test_b2_tools import F
+    from _support.formations import F
     out = {k: [] for k in TRAPS}
     for t, f in F():
         for name, (cat, detect, question, _) in TRAPS.items():
@@ -196,7 +196,9 @@ def run_one(k_case, urls):
     from petroharness.llm import LLM, Usage
     from petroharness.models import MODELS
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session, investigate, read_question
+    from petroharness.agent.state import Session
+    from petroharness.agent.read import read_question
+    from petroharness.agent.graph import investigate
     from petroharness.agent.map import render
     k, (name, t, f, ctx) = k_case
     _, _, question, check = TRAPS[name]                     # the trap's subject is not a run input: the model reads it

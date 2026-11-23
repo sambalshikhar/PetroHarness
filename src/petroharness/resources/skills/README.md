@@ -131,7 +131,7 @@ The format is strict:
 **Skills are generic.** A skill reads as plain domain guidance, with no switches in it (`test_skills_are_generic`).
 While a new line, or a new skill, is measured against the current one, it may carry a switch: `[option] text` at the
 start of the line (`[!option] text` for the line it replaces), or `option: <name>` in the frontmatter. The tag names
-a live switch in src/petroharness/agent/options.py; a library whose tag names no switch does not load. Once the
+a live switch in src/petroharness/options.py; a library whose tag names no switch does not load. Once the
 measurement decides, the switch goes with its tags: an adopted line keeps its text, and a rejected one is deleted.
 
 ## Provenance

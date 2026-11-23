@@ -53,15 +53,13 @@ def test_the_record_is_walked_from_a_curve_back_through_the_steps_it_rests_on():
 class Stated(Model):
     """The scripted model, with a writer that states the first decimal number of its last result."""
 
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
+    def reply(self, stage, messages):
         if stage.startswith("writer"):
-            self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
-            usage.log.append({"stage": stage, "prompt_tokens": 1})
             results = messages[-1]["content"].split("RESULTS (everything", 1)[1].split("WHAT THE CURVES ARE", 1)[0]
             last = results.rsplit("\n[E", 1)[-1]
             self.number = re.search(r"(?<![\w.])\d+\.\d{3,}(?![\w.])", last).group(0)
             return f"The zones are alike: the value {self.number} stands for them.\n"
-        return super().chat(stage, messages, usage, max_tokens, json_schema, temperature, retry)
+        return super().reply(stage, messages)
 
 
 @pytest.fixture

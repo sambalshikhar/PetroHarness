@@ -77,6 +77,84 @@ def test_a_failed_call_is_reported_and_raised():
     assert events[-1]["kind"] == "reply" and events[-1]["error"] == "TimeoutError: no answer"
 
 
+class Thinker(Echo):
+    """An inner client that leaves its call's reasoning as petroharness.llm.LLM does (last_reasoning)."""
+
+    def __init__(self, reply="{}", reasoning=""):
+        super().__init__(reply)
+        self.reasoning = reasoning
+
+    def chat(self, *args, **kwargs):
+        self.last_reasoning = self.reasoning
+        return super().chat(*args, **kwargs)
+
+
+def test_a_reply_carries_the_calls_reasoning():
+    events = []
+    text = "  The question asks for the mean PHIE.\nnext: stats on PHIE.  "
+    out = P.Observed(Thinker(reply="done", reasoning=text), events.append).chat("step_1", [{"role": "user", "content": "x"}], Usage(), 10)
+    assert out == "done"                                          # the reply itself is unchanged
+    assert events[-1]["thinking"] == text.strip() and events[-1]["thinking_chars"] == len(text)
+
+
+@pytest.mark.parametrize("inner", [Echo(), Thinker(reasoning=""), Thinker(reasoning="  \n ")])
+def test_no_reasoning_no_thinking(inner):
+    events = []
+    P.Observed(inner, events.append).chat("read", [{"role": "user", "content": "x"}], Usage(), 10)
+    assert "thinking" not in events[-1] and "thinking_chars" not in events[-1]
+
+
+def test_a_long_reasoning_keeps_its_start_and_its_end():
+    text = "a" * 5000 + "MIDDLE" + "b" * 9000
+    out = P.clip_thinking(text)
+    assert out.startswith("a" * P.THINK_HEAD) and out.endswith("b" * P.THINK_TAIL) and "MIDDLE" not in out
+    assert f"[… {len(text) - P.THINK_HEAD - P.THINK_TAIL:,} characters left out …]" in out
+    assert P.clip_thinking(" short ") == "short"
+
+
+class Streamer(Echo):
+    """An inner client that streams as petroharness.llm.LLM does: to stream_to, while it is set."""
+
+    stream_to = None
+
+    def __init__(self, pieces, fail=None):
+        super().__init__(reply="{}", fail=fail)
+        self.pieces, self.listeners = pieces, []
+
+    def chat(self, *args, **kwargs):
+        self.listeners.append(self.stream_to)
+        for kind, text in self.pieces:
+            self.stream_to(kind, text)
+        return super().chat(*args, **kwargs)
+
+
+def test_a_call_in_flight_goes_to_live_as_it_streams(monkeypatch):
+    monkeypatch.setattr(P, "LIVE_EVERY", 0.0)                   # every piece
+    inner, events, live = Streamer([("reasoning", "First "), ("reasoning", "PHIE."), ("content", "{}")]), [], []
+    P.Observed(inner, events.append, live=live.append).chat("step_2", [{"role": "user", "content": "x"}], Usage(), 10)
+    assert [(x.get("thinking"), x.get("thinking_chars"), x.get("reply_chars")) for x in live] == [
+        ("First ", 6, 0), ("First PHIE.", 11, 0), ("First PHIE.", 11, 2), (None, None, None)]   # then cleared
+    assert live[0]["n"] == 1 and live[0]["stage"] == "step_2"
+    assert inner.listeners[0] is not None and inner.stream_to is None                   # set for the call only
+    assert all(e["kind"] != "live" for e in events)                                       # not an event: never saved
+
+
+def test_live_keeps_the_last_of_a_long_reasoning_and_is_cleared_after_a_failure(monkeypatch):
+    monkeypatch.setattr(P, "LIVE_EVERY", 0.0)
+    live = []
+    inner = Streamer([("reasoning", "a" * (P.LIVE_CHARS + 50) + "END")], fail=TimeoutError("no answer"))
+    with pytest.raises(TimeoutError):
+        P.Observed(inner, [].append, live=live.append).chat("writer", [{"role": "user", "content": "x"}], Usage(), 10)
+    assert len(live[0]["thinking"]) == P.LIVE_CHARS and live[0]["thinking"].endswith("END")
+    assert live[-1] == {} and inner.stream_to is None
+
+
+def test_a_client_that_cannot_stream_is_not_followed():
+    live = []
+    P.Observed(Echo(), [].append, live=live.append).chat("read", [{"role": "user", "content": "x"}], Usage(), 10)
+    assert live == []
+
+
 def test_step_replies_are_read_with_the_harness_parser():
     text = json.dumps({"focus": "where is net pay", "points": ["Where?", "How thick?"], "asks": "Where is pay?",
                        "intent": "locate", "edits": [{"op": "add", "point": 1, "text": "Pay in Z2", "grade": "low",
@@ -100,10 +178,10 @@ def test_step_replies_are_read_with_the_harness_parser():
 def test_a_reply_the_loop_salvages_is_shown_as_salvaged_not_unreadable():
     """A step reply cut off before its last brace: the loop reads the edits and actions it holds (salvage), so the
     page shows them, marked salvaged, rather than "could not be read; the harness asks the model to fix it"."""
-    from petroharness.agent import loop as L
+    from petroharness.agent import replies as RP
     cut = ('{"focus": "pay by zone", "edits": [{"op": "add", "point": 1, "grade": "low", "text": "Pay in Z2", '
            '"ev": ["E1"]}], "next": [{"runs": {"condition": "NET_PAY"}}], "done": false')
-    assert L.complete_salvage(cut) is not None
+    assert RP.complete_salvage(cut) is not None
     got = P.read_reply_of("step_2", cut)
     assert got.get("salvaged") is True and "unreadable" not in got
     assert got["edits"] == [{"op": "add", "point": 1, "grade": "low", "text": "Pay in Z2", "ev": ["E1"]}]

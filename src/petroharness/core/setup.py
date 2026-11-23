@@ -71,7 +71,7 @@ def functions_hash() -> str:
     """The Petrophys functions the tools offer, as one hash: each function's name, verb and parameters. The list is
     part of the investigation's brief, so a Petrophys release that adds a function changes it. The same in every
     process (stable_repr)."""
-    from petroharness.agent import library_api as A
+    from petroharness.agent.library import api as A
     return _sha([[fn.qualified, fn.verb, [[p, str(a), stable_repr(d)] for p, (a, d, _) in fn.params.items()]]
                  for fn in A.registry()])
 
@@ -107,7 +107,7 @@ def of(cfg, *, writer: str = "open", fmt: str = "profile", max_steps: int | None
     from petroharness import __version__
     from petroharness.agent import components as C
     from petroharness.agent import direction
-    from petroharness.agent.loop import MAX_STEPS
+    from petroharness.agent.state import MAX_STEPS
     from petroharness.well.prepare import library_identity
     model = cfg.model.model_dump()
     data = {k: v for k, v in cfg.data.model_dump().items() if k not in _PLACES}
@@ -126,7 +126,7 @@ def config_for(model: str | None = None, model_card: str | None = None, settings
     none) and the skill library."""
     import yaml
 
-    from petroharness.ask import library_given
+    from petroharness.interval import library_given
     from petroharness.config import DATA_FILE_ENV, RESOURCES, HarnessConfig, given_settings
     from petroharness.models import MODELS, register
     cfg_file, _, *named = MODELS[register(["http://setup/v1"], model_card, model)]
@@ -174,16 +174,16 @@ def text(s: Setup) -> str:
 
 # the options that describe a well's interval: they need --las
 _INTERVAL = ("formation", "tops", "top", "base", "depth_unit", "lithology_curve", "formation_lithology", "field_notes",
-             "profile")
+             "profile", "zones", "zones_sheet")
 
 
 def for_well(args) -> Setup:
     """The setup a question about the interval of `args.las` answers under: the data settings built from the LAS as
-    ask() and a conversation build them (petroharness.ask.prepare), the configuration as each question's
+    ask() and a conversation build them (petroharness.interval.prepare), the configuration as each question's
     (agent.graph.task_config)."""
     import tempfile
 
-    from petroharness import ask as A
+    from petroharness import interval as I
     from petroharness.agent.graph import task_config
     from petroharness.config import given_settings
     from petroharness.models import register
@@ -191,17 +191,9 @@ def for_well(args) -> Setup:
     if not las.is_file():
         raise FileNotFoundError(f"WHAT: no LAS file at {las}. FIX: give the path of the well's LAS file.")
     key = register(["http://setup/v1"], args.model_card, args.model)
-    notes = interpretation = None
-    if args.field_notes:
-        from petroharness.well.notes import load
-        notes = load(args.field_notes)
-        interpretation = dict(notes["settings"])
     with tempfile.TemporaryDirectory(prefix="petroharness-setup-") as tmp:
-        p = A.prepare(las, key, formation=args.formation, tops=args.tops, top=args.top, base=args.base,
-                      depth_unit=args.depth_unit, lithology_curve=args.lithology_curve,
-                      formation_lithology=args.formation_lithology, profile=args.profile, settings=args.settings,
-                      skills=args.skills, interpretation=interpretation, field_notes=notes, cache=Path(tmp))
-        task, _ = A.task_for(p, "(the setup)")
+        p = I.prepare(las, key, I.Inputs.of(args), cache=Path(tmp))         # your zones too (--zones)
+        task, _ = I.task_for(p, "(the setup)")
         with given_settings(p.given):
             return of(task_config(task, key, 1), max_steps=args.max_steps, mode="interactive",
                       depth=not args.investigate)

@@ -19,6 +19,4 @@ data:
 eval:
   questions: null                  # the question file
   reference_context_dir: null
-  category_context_dir: null
   gt_dir: null
-  v0_repo: null

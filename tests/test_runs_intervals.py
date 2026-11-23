@@ -1,7 +1,7 @@
-"""Brick 2b of docs/designs/zones-and-intervals.md: `runs` under reach "well" opens with the intervals where the
-condition holds over the whole interval or selection, uncut by zones, each with the zones it touches (or "outside any
-zone"); a one-sample interval reads "at D (one sample)"; then each zone's thickness. Under reach "focus" (the
-benchmark) the layout is today's.
+"""`runs` opens with the intervals where the condition holds over the whole interval or selection, uncut by zones,
+each with the zones it touches (or "outside any zone"); a one-sample interval reads "at D (one sample)"; then each
+zone's thickness. The layout is the same under every reach; reach "focus" (the benchmark) lists the 20 thickest when
+the call gives no limit, reach "well" every interval.
 
 A synthetic well with GR written by hand gives the intervals of GR < 70 exactly; on GeoLink 30/6-5 the intervals of
 NET_PAY = 1 are compared with the runs of the raw flag computed here.
@@ -109,12 +109,12 @@ def test_no_interval_says_so_with_where_it_looked(synth):
     assert "No interval where GR < 70" in t and t.startswith("Selection: LOWER FM. 1050-1100 m")
 
 
-def test_under_reach_focus_the_layout_is_todays(tmp_path):
+def test_under_reach_focus_the_layout_is_the_same(synth, tmp_path):
     from petroharness.agent import schemas
     f = _well(tmp_path, reach="focus")
     t = schemas.call(f, "runs", {"condition": "GR < 70"}).text
-    assert t.startswith("Runs where GR < 70, inside the zones (") and "every run, top to base" in t
-    assert not t.startswith("Intervals where")
+    assert t.startswith("Intervals where GR < 70 (4 intervals, ") and "inside the zones" not in t
+    assert t == schemas.call(synth, "runs", {"condition": "GR < 70"}).text       # line for line what reach well gives
 
 
 @pytest.fixture(scope="module")
@@ -162,7 +162,7 @@ def test_an_interval_across_zones_names_each_it_touches(brent):
 def test_every_interval_is_listed_unless_a_limit_is_given():
     """Live (tuhua, "list every interval in the whole well where GR is below 60"): 28 intervals, 20 listed by the
     default limit and the other 8 out of the answer's reach. Under reach well the list is whole; a limit given is kept;
-    under reach focus the default is today's 20."""
+    under reach focus the default is the 20 thickest."""
     from dataclasses import replace
     from petroharness.agent import schemas
     from _wells import CASES, formation_of

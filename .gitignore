@@ -9,3 +9,7 @@ runs/
 *.egg-info/
 petroharness-out/
 petroharness-ui-runs/
+
+# your own data settings and wells (docs/reference/CONFIGURATION.md): never committed
+configs/data.local.yaml
+sample_las/

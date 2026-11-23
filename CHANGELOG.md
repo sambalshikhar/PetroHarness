@@ -1,5 +1,83 @@
 # Changelog
 
+## 2.0.0 (2026-11-23)
+
+- **Licence.** PetroHarness is released under CC BY 4.0 (`LICENSE`).
+- **The default model card asks the server for `k2-horizon-7b`**, the name docs/MODELS.md serves K2-Horizon-7B
+  under. A server that serves it under another name adds this one (vLLM: `--served-model-name OTHER k2-horizon-7b`).
+- **No Petrophys function that reads or writes a file is offered.** The verbs reach 304 functions; CSV and LAS
+  readers are left out, and an optional output path is not offered.
+- **Fixes to answers.**
+  - A curve recomputed under the same name with other values is no longer served stale.
+  - `where: "Z1-Z5"` covers every zone of the range, and a range written deeper first ("Z5-Z2") no longer selects
+    every zone.
+  - A curve a verb writes never takes a name the record holds (it gets `_LIB`).
+  - Two parts of one result that start alike are both written.
+  - An answer that cites your field notes or your scope is no longer taken for the model's working notes.
+  - A table of your own (medians, NET_PAY runs) is no longer removed as a repeat of the zone table.
+  - The repair request reads arithmetic written before a number whole.
+- **Inputs.** A LAS logged bottom up is refused where it is read, with the fix. `petroharness setup --las ... --zones
+  FILE` includes your zones in the data settings it prints, so its hash is the one your conversation logs.
+- **Conversations.** A later question starts with no scope of its own when its reading fails.
+- **A well without a lithology log is zoned by the lithology Petrophys's mineral solver gives** (the code curve its
+  lithology step writes, read with Petrophys's own labels), and only with neither by shale-volume bands. The record
+  says so (`lithology.source` `mineral solver`, with the solver's domain, method, inputs and decisions); the solved
+  curve is never called a lithology log. Wells with a lithology log, every benchmark well among them, are zoned as
+  before.
+- **Web UI.**
+  - A full-screen log viewer (Well logs, and under the Interpretation page's plot): zoom and move along depth with
+    the curves drawn at the window's own detail, the interval or the whole well, every curve of the well to add as a
+    track, a linear or log scale and edge values per track, and each curve marked measured (LAS) or computed by
+    Petrophys, with a filter for either. Two reads serve it: `/api/run/<id>/logview` and `/logdata`.
+  - Under the well plot: how the lithology zones were made (Petrophys's run, its steps, the flow from the curves to
+    the zones) and a question about the lithology, whose buttons ask the question again with the solver's domain
+    changed. The start page says Petrophys runs its default dynamic workflow and where to change it. Zones read from
+    a lithology are called lithology zones.
+  - The Interpretation page is one column: the well (the zone table and a lithology summary fold under the plot),
+    then the work as it happens, one line per model call with the last lines of the model's reasoning, then the
+    answer. The "Writing the answer…" placeholder is gone; the work folds to one line once the answer is in.
+  - The model's reasoning streams into the page as the model writes it: the web UI's client streams each call
+    (`LLM.stream_to`; every other run sends its requests as before) and the call in flight is the job's `live` state.
+    Each call's reasoning is kept for the page (`LLM.last_reasoning`, the `reply` event's `thinking`); no check reads
+    it, and traces are unchanged. A conversation's tape records a streamed call as a whole one.
+  - Uploads are never rewritten in place.
+  - The run list and follow-ups no longer fail while other questions start or finish.
+- **Running many questions at once.**
+  - The well cache prepares a well once and reads only the pickles you wrote.
+  - A benchmark killed while writing resumes.
+- **Leaner code.** About 1,100 lines no run reaches are gone (ten catalog computations and their helpers, dead
+  configuration keys, pass-through functions), and seven fallbacks that could only hide a broken Petrophys import.
+- **One default interpretation.** A data settings file that names no `interpret`, no `interpreter` and no engine
+  now has Petrophys interpret each LAS (`petrophys.interpret` with the library's settings and the policy's cutoffs),
+  as a question always did. The installed-library route, which applied an Rw rule of its own, is gone, and with it
+  the policy keys `gr_endpoints`, `rw` and `interpretation_scope: formation`. Wells cached before are interpreted
+  again once.
+- **Ten more fixes to answers.**
+  - Over the writer's budget, the results the claims cite and the newest ones stay whole and the oldest uncited ones
+    become digests; before, the text was cut at the budget and the newest results were lost.
+  - A later question's settle step and its listing of opened results read that question's results and the earlier
+    ones it cites; before, every result of the conversation, so that after about 35 none of its own was whole.
+  - The writer's checker counts as shown the prompt the writer got; before, a rebuilt subset without the data's
+    conventions, the stretch or the earlier questions.
+  - `pay_summary` names each average as Petrophys took it: the core-corrected curve read for PHIE and PERM, and a
+    geometric mean for every permeability.
+  - `runs` lists every interval where its condition holds, uncut by zone boundaries, under every reach.
+  - A curve a verb writes is read as a flag or as class codes by the rule every lookup uses.
+  - `classify` with no zone named reads every sample of the interval and labels it as the lookups do.
+  - The reasoning a server leaves in a reply before the card's `reasoning_end` is taken off every reply, a retry's
+    too.
+  - The map's analyzer notes count Petrophys's own per-sample labels and quote its recorded rules.
+  - A name the settings' tops table lists more than once for the well is refused, as `--tops` reads it; before, its
+    shallowest row was taken without a word.
+- **Two switches stay off**, each waiting on a fix: `tight_numbers` (a stricter number check) and `cell_thickness` (n
+  samples counted as n steps of thickness). Turn one on with `PETROHARNESS_SET=<name>=true`
+  (docs/reference/EXTENDING.md, section 12).
+- **Docs.** The settings sheet's tables and the prompt components' table are generated from the code, like the tool
+  tables, and a test checks that every file a page names exists. EXTENDING has recipes for a dataset config and a
+  component text.
+- **Tests run without data.** Petrophys's sample wells are read from Petrophys, the public mini set must run in CI,
+  and only a test marked `data` is skipped without data settings.
+
 ## 1.5.0 (2026-11-21)
 
 - **The harness asks back instead of guessing.** A question that names a unit the tops file lists more than once, a

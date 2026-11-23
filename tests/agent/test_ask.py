@@ -6,7 +6,6 @@ sample well (data).
     .venv/bin/python -m pytest tests/agent/test_ask.py -q
 """
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -18,7 +17,7 @@ from petroharness import ask as A
 from petroharness.well.formation import FormationNotFound
 from petroharness.well.tops import read_tops
 
-SAMPLES = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "sample_las"))   # a folder of sample wells; tests skip without it
+from _wells import SAMPLES  # noqa: E402  (Petrophys's sample files; PETROHARNESS_SAMPLE_LAS for a folder of them)
 
 # shaped like a state survey's tops export: tops only, a unit column, extra columns
 KS = """formation,top,depth_unit,depth_ref,source_file
@@ -475,6 +474,40 @@ def test_the_older_arm_form_reaches_the_batch_runner(monkeypatch, capsys):
     assert ex.value.code == 2 and err.startswith("usage: petroharness benchmark") and "--ids" in err
 
 
+def test_a_trace_cut_short_by_a_killed_benchmark_is_run_again(tmp_path, monkeypatch):
+    """A benchmark killed while writing a trace leaves it cut short: the next run of the arm takes it as absent (the
+    question is answered again and its trace written whole), and a whole trace of the same commit is kept."""
+    from types import SimpleNamespace
+
+    from petroharness import cli
+    tasks = [SimpleNamespace(task_id=f"t{i}", question="q") for i in (1, 2)]
+    index = {t.task_id: {"qa_id": t.task_id, "category": "porosity"} for t in tasks}
+    asked = []
+
+    def answer(t, *a, **k):
+        asked.append(t.task_id)
+        return {"answer": f"answer {t.task_id}", "status": "ok", "trace": {"commit": cli.COMMIT, "status": "ok"}}
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    monkeypatch.setattr(cli, "HarnessConfig", lambda: SimpleNamespace(eval=SimpleNamespace(questions=None),
+                                                                      data=SimpleNamespace(las_dir=None)))
+    monkeypatch.setattr(cli.direction, "plugged", lambda cfg: None)
+    monkeypatch.setattr(cli, "load_tasks", lambda questions, las_dir: (tasks, index))
+    monkeypatch.setattr(cli, "save", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "answer", answer)
+    traces = tmp_path / "runs" / "A1_m_porosity" / "traces"
+    traces.mkdir(parents=True)
+    whole = json.dumps({"commit": cli.COMMIT, "status": "ok", "answer": "kept"})
+    (traces / "t1.json").write_text(whole, encoding="utf-8")
+    (traces / "t2.json").write_text(whole[:20], encoding="utf-8")                # the run was killed here
+    ids = tmp_path / "ids.json"
+    ids.write_text(json.dumps({"qa_ids": ["t1", "t2"]}), encoding="utf-8")
+    cli.benchmark(["--arm", "A1", "--models", "m", "--cats", "porosity", "--ids", str(ids), "--gt-dir", str(tmp_path),
+                   "--workers", "1"])
+    assert asked == ["t2"]
+    assert json.loads((traces / "t2.json").read_text(encoding="utf-8"))["answer"] == "answer t2"
+    assert sorted(p.name for p in traces.iterdir()) == ["t1.json", "t2.json"]   # nothing left aside
+
+
 def test_the_help_shows_the_own_well_usage_and_names_benchmark_mode(monkeypatch, capsys):
     from petroharness import cli
     for argv, want in ((["--help"], ["usage: petroharness [-h] --las LAS", "petroharness benchmark", "petroharness chat",
@@ -497,13 +530,13 @@ def test_the_help_shows_the_own_well_usage_and_names_benchmark_mode(monkeypatch,
 @pytest.mark.data
 @pytest.mark.parametrize("skills", [None, "none"])
 def test_a_question_about_a_sample_well_end_to_end(tmp_path, monkeypatch, capsys, skills):
-    from test_read import Stub
+    from test_read import read_model
     las, tops = SAMPLES / "tuhua-7.las", SAMPLES / "formations_tuhua-7.csv"
     if not las.exists() or not tops.exists():
         pytest.skip(f"no sample wells at {SAMPLES} (PETROHARNESS_SAMPLE_LAS)")
     monkeypatch.delenv("PETROHARNESS_DATA", raising=False)
     monkeypatch.delenv("PETROHARNESS_SKILLS", raising=False)
-    llm = Stub([{"topics": ["porosity", "water_saturation"], "named": ["RDEP"]}])
+    llm = read_model([{"topics": ["porosity", "water_saturation"], "named": ["RDEP"]}])
     r = A.ask(las, "What are the porosity and water saturation in this formation?", formation="mount messenger",
               tops=tops, out=tmp_path / "out", skills=skills, llm_factory=lambda cfg: llm)
     assert r.ok and r.status == "ok", r.trace.get("traceback")
@@ -511,7 +544,9 @@ def test_a_question_about_a_sample_well_end_to_end(tmp_path, monkeypatch, capsys
                           "samples": r.interval["samples"], "from": "tops file formations_tuhua-7.csv, base: stated base"}
     assert r.interval["samples"] > 1000
     a = r.trace["ask"]
-    assert a["lithology"]["source"] == "shale-volume bands" and a["zones"]           # no lithology log in this LAS
+    # no lithology log in this LAS: the lithology zones are Petrophys's solved lithology, said as such
+    assert a["lithology"]["source"] == "mineral solver" and a["zones"]
+    assert a["lithology"]["curve"] == "LITHO" and a["lithology"]["domain"] == "clastic" and a["lithology"]["inputs"]
     assert a["interpret"] == {"vcl_cutoff": 0.3, "sw_cutoff": 0.7} and a["settings"] == "built from the LAS"
     assert r.trace["formation"] == "Mount Messenger" and r.trace["well"] == "tuhua-7"
     library = "none" if skills == "none" else "researched"
@@ -542,8 +577,8 @@ def test_a_card_that_leaves_out_the_model_names_none(tmp_path):
 
 def test_a_name_the_tops_file_lists_twice_is_chosen_by_its_top(las, tmp_path):
     """A repeated name (a repeated section) is refused alone, and chosen by the top of the row meant: the interval is
-    that row's, and the tops file stays for the other units (the web UI lists each listing; user, 2026-11-20: ask the
-    user to select one, or to fix the file)."""
+    that row's, and the tops file stays for the other units (the web UI lists each listing and asks the user
+    to select one, or to fix the file)."""
     tops = _file(tmp_path, "tops.csv", "formation,top,base\nRepeat,1000.5,1001.5\nOther,1001.5,1002\nRepeat,1002,1003\n")
     with pytest.raises(LookupError, match="listed 2 times.*by its top: --formation NAME --tops FILE --top D"):
         A._interval(las, "Repeat", tops, None, None, None, {})

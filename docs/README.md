@@ -39,10 +39,8 @@ How the parts fit together and why they are built this way.
 | Page | What it covers |
 |---|---|
 | [ARCHITECTURE](ARCHITECTURE.md) | The parts, and how a question flows through them |
-| [GRAPH](GRAPH.md) | The question graph, node by node, and the direct route |
-| [SESSION_GRAPH](SESSION_GRAPH.md) | The session graph and the later-question graph |
-| [EVIDENCE](EVIDENCE.md) | The evidence graph and the audit trail |
-| [SETUP](SETUP.md) | The setup record: what answers a question, under one hash |
+| [GRAPH](GRAPH.md) | The three graphs: the question graph node by node with the direct route, the later-question graph and the session graph |
+| [EVIDENCE](EVIDENCE.md) | Auditing an answer: the evidence graph, the audit trail, the report, and the setup record under one hash |
 | [DESIGN](DESIGN.md) | The design rules and the generality contract |
 
 ## 4. Reference
@@ -105,7 +103,7 @@ The examples run on wells that ship with Petrophys, each chosen for the case it 
 | Core against the logs, the interval given by depth | GeoLink 25/5-1 | GeoLink, CC BY-SA 4.0 |
 | Missing logs (no neutron, no PEF) and an evaporite section | GeoLink 16/7-1 | GeoLink, CC BY-SA 4.0 |
 | A mineral solve with a vendor lithology log | GeoLink 15/9-14 | GeoLink, CC BY-SA 4.0 |
-| No lithology log: zones from shale-volume bands | Taranaki tuhua-7, cheal-1 | Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0 |
+| No lithology log: zones from the lithology Petrophys's mineral solver gives | Taranaki tuhua-7, cheal-1 | Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0 |
 | A carbonate logged in feet, one tops table for many wells | COSTA HW-3 to HW-32 | Costa Gomes, Geiger and Arnold (2022), COSTA model, Heriot-Watt University, CC BY |
 | Bad curve units and a generic tops file | KGS 1046123714 (Morgan No. 1-17) | Kansas Geological Survey (kgs.ku.edu) |
 | Old wells in feet, a whole-log question | Teapot 17-WX-21, 44-MDX-10 | Teapot Dome (NPR-3), RMOTC, U.S. Department of Energy |

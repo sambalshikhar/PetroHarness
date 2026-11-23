@@ -16,7 +16,7 @@ sys.path[:0] = [str(ROOT / "src")]
 from petroharness.config import DataPaths, ResourcePaths  # noqa: E402
 from petroharness.well.prepare import load_policy  # noqa: E402
 
-SAMPLES = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "sample_las"))
+from _wells import SAMPLES  # noqa: E402  (Petrophys's sample files; PETROHARNESS_SAMPLE_LAS for a folder of them)
 
 
 def test_the_packaged_policy_uses_the_librarys_current_tables():
@@ -30,7 +30,7 @@ def test_the_data_settings_may_name_a_set():
 
 def _view(extra: dict):
     import petroharness.ask as A
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.config import HarnessConfig, given_settings
     from petroharness.tasks import Task
     las, tops = SAMPLES / "tuhua-7.las", SAMPLES / "formations_tuhua-7.csv"
@@ -75,9 +75,8 @@ def test_the_commands_depth_unit_wins_over_a_settings_files(tmp_path):
     settings.write_text("data:\n  depth_unit: ft\n")
     held = os.environ.pop("PETROHARNESS_DATA", None)
     try:
-        p = A.prepare(las, "k2-horizon-7b", formation="Mount Messenger", tops=tops, depth_unit="m", settings=settings,
-                      cache=tmp_path / "cache")
-        q = A.prepare(las, "k2-horizon-7b", formation="Mount Messenger", tops=tops, settings=settings, cache=tmp_path / "cache")
+        p = A.prepare(las, "k2-horizon-7b", A.Inputs(formation="Mount Messenger", tops=tops, depth_unit="m", settings=settings), cache=tmp_path / "cache")
+        q = A.prepare(las, "k2-horizon-7b", A.Inputs(formation="Mount Messenger", tops=tops, settings=settings), cache=tmp_path / "cache")
     finally:
         if held is not None:
             os.environ["PETROHARNESS_DATA"] = held

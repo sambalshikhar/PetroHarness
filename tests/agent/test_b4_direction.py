@@ -230,7 +230,7 @@ def test_d2_each_compare_line_has_a_plain_note_on_what_it_shows():
 
 @pytest.mark.data
 def test_d2_sources_run_where_their_data_is_and_say_what_exists_elsewhere():
-    from test_b2_tools import F
+    from _support.formations import F
     from petroharness.agent.toolset import TOOLS
     ran, bad = Counter(), []
     for t, f in F():
@@ -268,7 +268,7 @@ def test_d2_sources_run_where_their_data_is_and_say_what_exists_elsewhere():
 
 @pytest.mark.data
 def test_d2_a_guide_for_a_formation_lists_only_what_runs_there():
-    from test_b2_tools import F
+    from _support.formations import F
     from petroharness.agent.toolset import TOOLS
     from petroharness.agent.direction import gated
     bad, dropped = [], 0
@@ -364,7 +364,7 @@ def _rendered(f, name: str) -> list:
 def test_the_index_renders_and_each_guide_it_names_renders_for_a_formation():
     """The step prompt's DIRECTION for a formation: one line per guide, and each guide it names renders for that
     formation (its Compare lines those that run there)."""
-    from test_b2_tools import F
+    from _support.formations import F
     t, f = F()[0]
     text = LIB.index(["porosity"])
     named = [ln.strip().split(":", 1)[0] for ln in text.splitlines()[1:] if not ln.strip().endswith(":")]

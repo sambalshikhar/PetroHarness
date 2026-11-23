@@ -97,7 +97,7 @@ def main():
     out, prefixes = sys.argv[1], sys.argv[2:]
     from petroharness.config import HarnessConfig
     from petroharness.tasks import load_tasks
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     cfg = HarnessConfig()
     tasks, _ = load_tasks(cfg.eval.questions, cfg.data.las_dir)
     by_id = {t.task_id: t for t in tasks}

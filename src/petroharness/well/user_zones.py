@@ -1,5 +1,5 @@
 """The user's zones: a table of zone tops and bottoms (CSV, TSV or Excel) that frames a question in place of the
-lithology zones (docs/designs/zones-and-intervals.md, brick 3). Petrophys reads it as it reads formation tops
+lithology zones (docs/ARCHITECTURE.md). Petrophys reads it as it reads formation tops
 (petrophys.io.geology_reader.read_formations: the name column zone, zone_name, name or formation; top or from; bottom,
 base or to; an optional well column, filtered to this well, and depth_unit column); each sample of the question is
 labelled by Petrophys (petrophys.model.formation_tops.label_depths: top <= depth < bottom; overlapping rows refused).

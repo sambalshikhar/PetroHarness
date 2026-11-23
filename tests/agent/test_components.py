@@ -40,9 +40,9 @@ def test_no_text_is_in_two_components():
 
 
 def test_the_former_constants_are_the_entries():
-    from petroharness.agent import loop, writer
-    assert loop.STEP1 == C.text("C5", "step1") and loop.SETTLE_WEAKNESSES == C.text("C10", "settle_weaknesses")
-    assert writer.TABLE_RULE == C.text("C9", "table_rule") and loop.ASPECTS_RULE == C.text("C9", "aspects_rule")
+    from petroharness.agent import writer, prompts as PR, settle as SE
+    assert PR.STEP1 == C.text("C5", "step1") and SE.SETTLE_WEAKNESSES == C.text("C10", "settle_weaknesses")
+    assert writer.TABLE_RULE == C.text("C9", "table_rule") and SE.ASPECTS_RULE == C.text("C9", "aspects_rule")
 
 
 @pytest.mark.parametrize("template, values, want", [
@@ -161,3 +161,14 @@ def test_the_writer_s_sections_and_a_short_header_entry_are_attributed_to_their_
     assert (who("Point 1: porosity"), who("Point 1: one zone"), who("[E1] stats PHIE"), who("PHIE: effective")) == \
         ("C3", "C3", "C7", "C9")
     assert who("Edits not applied") == "C8" and who("- C1 cites E9") == "C2"
+
+
+def test_the_components_page_lists_every_entry_with_its_file():
+    """Each component's table in PROMPT_COMPONENTS names exactly the entries its component.yaml holds, each with its
+    file (the Holds and Used-by columns are written by hand; a new entry must be added there)."""
+    import re
+    doc = (Path(__file__).resolve().parents[2] / "docs" / "reference" / "PROMPT_COMPONENTS.md").read_text()
+    for cid in C.COMPONENTS:
+        section = re.search(rf"<summary>{cid} \w+</summary>(.*?)</details>", doc, re.S).group(1)
+        listed = dict(re.findall(r"^\| `([^`]+)` \| `([^`]+)` \|", section, re.M))
+        assert listed == (C.meta(cid).get("texts") or {}), cid

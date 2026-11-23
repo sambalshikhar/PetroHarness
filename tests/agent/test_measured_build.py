@@ -10,7 +10,6 @@ fresh_doubts), each asserted as the code has it:
 
     .venv/bin/python -m pytest tests/agent/test_measured_build.py -q   (PETROHARNESS_DATA selects the dataset for the data tests)
 """
-import json
 import sys
 from itertools import pairwise
 from pathlib import Path
@@ -18,10 +17,12 @@ from pathlib import Path
 import pytest
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parent)]
-from petroharness.agent import components as C, loop as L, writer as W  # noqa: E402
-from petroharness.agent.loop import brief, investigate  # noqa: E402
+from petroharness.agent import components as C, writer as W, replies as RP, state as ST  # noqa: E402
+from petroharness.agent.prompts import brief  # noqa: E402
+from petroharness.agent.graph import investigate, write_answer  # noqa: E402
 from petroharness.llm import Usage  # noqa: E402
 from petroharness.well import summary as S  # noqa: E402
+from _support.model import ScriptedModel, in_turn  # noqa: E402
 
 TOO_FEW = "{k} zones: too few to tell an order from chance; at least 5 are needed"
 
@@ -71,24 +72,19 @@ def test_the_brief_stops_on_settled_points_with_nothing_left_on_its_list():
 def _settled_run(max_steps):
     """Step 1 opens NET_PAY runs with a hypothesis on point 1, step 2 settles the claim on them (done false, one more
     action), step 3 ends: the user prompts of steps 2 and 3."""
-    from test_b5_loop import MEANS, Script, _session
+    from _support.sessions import MEANS, pay_session as _session
     s = _session()
-    llm = Script([{"points": ["Where is net pay?"], "intent": "locate", "done": False, "next": [{"runs": "NET_PAY"}],
-                   "edits": [{"op": "add", "point": 1, "text": "Pay likely in the upper zones", "grade": "hypothesis"}]}])
-    orig = llm.chat                                            # step 2 is written below from the ledger; then: done
-
-    def chat(stage, messages, usage, max_tokens, retry=False):
-        if stage == "step_2":
-            llm.sent.append((stage, messages))
-            usage.log.append({"stage": stage})
-            runs_item = next(e for e in s.ledger.items if e.tool == "runs")
-            return json.dumps({"edits": [{"op": "revise", "id": "C1", "text": "NET_PAY is set in the zones listed by the runs",
-                                          "ev": [runs_item.id], "grade": "moderate", "means": MEANS}],
-                               "next": [{"stats": {"curves": ["SW"]}}], "done": False})
-        return orig(stage, messages, usage, max_tokens, retry)
-    llm.chat = chat
+    def settle(messages):                                      # step 2, written from the ledger; then: done
+        runs_item = next(e for e in s.ledger.items if e.tool == "runs")
+        return {"edits": [{"op": "revise", "id": "C1", "text": "NET_PAY is set in the zones listed by the runs",
+                           "ev": [runs_item.id], "grade": "moderate", "means": MEANS}],
+                "next": [{"stats": {"curves": ["SW"]}}], "done": False}
+    llm = ScriptedModel({
+        "step_1": {"points": ["Where is net pay?"], "intent": "locate", "done": False, "next": [{"runs": "NET_PAY"}],
+                   "edits": [{"op": "add", "point": 1, "text": "Pay likely in the upper zones", "grade": "hypothesis"}]},
+        "step_2": settle})
     investigate(llm, s, Usage(), 4000, {}, max_steps=max_steps)
-    return [next(m[-1]["content"] for st, m in llm.sent if st == f"step_{k}") for k in (2, 3)]
+    return [llm.prompt(f"step_{k}") for k in (2, 3)]
 
 
 @pytest.mark.data
@@ -116,12 +112,12 @@ ACTIONS = [{"runs": "NET_PAY"}, {"stats": {"curves": ["SW"]}}, {"stats": {"curve
 def _withheld_run(monkeypatch, max_steps=6):
     """Step 1 opens three results under a NEW budget that fits the largest of them alone (so some are withheld and
     each comes within a step or two); every later reply sets done."""
-    from test_b5_loop import Script, _session
-    sizes = [len(_session().run(L.coerce_action(a))[0]) for a in ACTIONS]      # each result as NEW shows it
-    monkeypatch.setattr(L, "NEW_CHARS", max(sizes) + 400)      # the largest fits (with the notes before it), not all three
-    assert sum(sizes) > L.new_chars()
+    from _support.sessions import pay_session as _session
+    sizes = [len(_session().run(RP.coerce_action(a))[0]) for a in ACTIONS]      # each result as NEW shows it
+    monkeypatch.setattr(ST, "NEW_CHARS", max(sizes) + 400)      # the largest fits (with the notes before it), not all three
+    assert sum(sizes) > ST.NEW_CHARS
     s = _session()
-    llm = Script([{"points": ["Where is net pay?"], "intent": "locate", "edits": [], "done": False, "next": ACTIONS}])
+    llm = in_turn([{"points": ["Where is net pay?"], "intent": "locate", "edits": [], "done": False, "next": ACTIONS}])
     trace = {}                                                 # the script's later replies: no edits, done true
     investigate(llm, s, Usage(), 4000, trace, max_steps=max_steps)
     return s, llm, trace
@@ -135,7 +131,7 @@ def test_a_done_waits_while_opened_results_are_withheld_and_they_are_shown_first
     assert held and set(held) < {e.id for e in s.ledger.items}                   # opened at step 1, not shown yet
     assert steps[1]["done"] is True and steps[1]["held_done"] == held and steps[1]["actions"] == []
     assert "done_issues" not in steps[1]                       # the done is not weighed yet: it waits
-    nxt = llm.sent[2][1][-1]["content"].split("\nNEW (from step 2):\n", 1)[1]    # step 3's NEW
+    nxt = llm.sent[2]["messages"][-1]["content"].split("\nNEW (from step 2):\n", 1)[1]    # step 3's NEW
     assert nxt.startswith(C.fill("C8", "done_waits", items=", ".join(held)))
     first = s.ledger.by_id(held[0])
     assert s.ledger.show(first) in nxt and held[0] in steps[1]["carried"]        # the first withheld result, whole
@@ -155,21 +151,6 @@ def test_a_done_is_weighed_only_when_nothing_is_withheld_or_at_the_last_step(mon
 
 
 # --- the writer (writer_points, writer_fresh, fresh_doubts) ------------------------------------------------------------
-
-class _StageWriter:
-    """A writer model that replies by stage; records each call's stage, messages and retry flag."""
-
-    def __init__(self, replies):
-        self.replies, self.sent = dict(replies), []
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, retry=False):
-        self.sent.append((stage, messages, retry))
-        usage.log.append({"stage": stage})
-        return self.replies.get(stage, "")
-
 
 def _wcfg():
     from types import SimpleNamespace
@@ -253,12 +234,12 @@ def test_the_limits_the_investigation_found_follow_the_points_by_point_with_noth
 @pytest.mark.data
 def test_the_answer_is_one_writer_call():
     s = _wreal()
-    llm = _StageWriter({"writer": "## Answer\nNet pay is in the listed zones.\n\n## Limitations\nok"})
+    llm = ScriptedModel(default="", replies={"writer": "## Answer\nNet pay is in the listed zones.\n\n## Limitations\nok"})
     trace = {}
-    text, status = W.write(llm, s, _wcfg(), Usage(), trace)
-    assert [st for st, _, _ in llm.sent] == ["writer"] and status == "ok"       # no deciding call, no parts, no frame
+    text, status = write_answer(llm, s, _wcfg(), Usage(), trace)
+    assert llm.stages() == ["writer"] and status == "ok"       # no deciding call, no parts, no frame
     system, user, _, _ = W.prompt(s, "profile")
-    assert [m["content"] for m in llm.sent[0][1]] == [system, user]
+    assert [m["content"] for m in llm.sent[0]["messages"]] == [system, user]
     assert "## Answer" in text and trace["draft_chars"] > 0
 
 
@@ -267,33 +248,23 @@ def test_the_answer_is_one_writer_call():
 def test_fix_call_reformats_with_the_retry_settings():
     """A step reply that is not JSON is reformatted by a fix call made with the card's retry settings (no or low
     reasoning): a reasoning model otherwise spends the fix budget thinking and the reply's edits are lost."""
-    calls = []
-
-    class Fake:
-        def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-            calls.append((stage, retry))
-            return '{"edits": [], "next": [], "done": true}'
+    llm = ScriptedModel()
     broken = ('{"focus": "x", "edits": [{"op": "add", "point": 1, "text": "t", "grade": "low"}, '
               '{"op": "add", "point": 2, "text": "cut off')       # the second edit is lost: salvage is incomplete
-    out = L.parse(Fake(), 3, broken, Usage(), 16384, {})
-    assert calls == [("step_3_fix", True)] and out == {"edits": [], "next": [], "done": True}
+    out = RP.parse(llm, 3, broken, Usage(), 16384, {})
+    assert [(c["stage"], c["retry"]) for c in llm.sent] == [("step_3_fix", True)] and out == {"edits": [], "next": [], "done": True}
 
 
 def test_the_settle_reply_is_salvaged_or_fixed_under_its_own_stage():
     """The settle step's reply: one salvaged whole is taken as a later step's is (the points are step 1's to set); one
     that cannot be is reformatted by a fix call staged 'settle_fix'."""
-    calls = []
-
-    class Fake:
-        def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-            calls.append(stage)
-            return '{"edits": [], "next": [], "done": true}'
+    llm = ScriptedModel()
     whole = '{"edits": [{"op": "revise", "id": "C1", "grade": "moderate", "ev": ["E2"]}] "next": [], "done": true}'
     # a comma missing between the keys: not JSON, and every edit salvageable
-    out = L.parse(Fake(), 0, whole, Usage(), 16384, rec := {}, stage="settle")
-    assert calls == [] and rec["repaired"]["by"] == "salvage" and out["edits"][0]["id"] == "C1"
+    out = RP.parse(llm, 0, whole, Usage(), 16384, rec := {}, stage="settle")
+    assert llm.stages() == [] and rec["repaired"]["by"] == "salvage" and out["edits"][0]["id"] == "C1"
     cut = '{"edits": [{"op": "revise", "id": "C1", "grade": "moderate"}, {"op": "revise", "id": "C2", "text": "cut'
-    L.parse(Fake(), 0, cut, Usage(), 16384, {}, stage="settle")
-    assert calls == ["settle_fix"]
+    RP.parse(llm, 0, cut, Usage(), 16384, {}, stage="settle")
+    assert llm.stages() == ["settle_fix"]
     from petroharness.agent import components as C
     assert C.owners("settle_fix", 1) == ["C2"]

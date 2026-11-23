@@ -13,4 +13,8 @@ frames:
 - agent/schemas.py
 - agent/toolset.py
 - tools/spec.py
-- agent/engine.py
+- agent/engine/base.py
+- agent/engine/curves.py
+- agent/engine/conditions.py
+- agent/engine/output.py
+- agent/engine/measures.py

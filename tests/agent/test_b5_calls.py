@@ -16,8 +16,10 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
                 str(Path(__file__).resolve().parent)]
 from petroharness.agent.engine import ToolError  # noqa: E402
 from petroharness.agent.ledger import evaluate  # noqa: E402
-from petroharness.agent.loop import coerce_action  # noqa: E402
+from petroharness.agent.replies import coerce_action  # noqa: E402
 from petroharness.agent.schemas import arguments, fit  # noqa: E402
+from _support.model import ScriptedModel  # noqa: E402
+from _support.sessions import runs_total  # noqa: E402
 
 
 # --- fit: what the shapes mean (hand-written, from the traced failures) ----------------------------------------------
@@ -30,6 +32,12 @@ from petroharness.agent.schemas import arguments, fit  # noqa: E402
     ("stats", {"curves": ["SW"], "zones": [1, 3]}, {"curves": ["SW"], "zones": ["Z1", "Z3"]}),
     ("stats", {"curves": ["SW"], "zones": ["Z1-Z3"]}, {"curves": ["SW"], "zones": ["Z1", "Z2", "Z3"]}),
     ("stats", {"curves": ["SW"], "zones": ["Z2 to Z4"]}, {"curves": ["SW"], "zones": ["Z2", "Z3", "Z4"]}),
+    ("stats", {"curves": ["SW"], "zones": ["Z4-Z2"]}, {"curves": ["SW"], "zones": ["Z2", "Z3", "Z4"]}),   # ends either way
+    ("stats", {"curves": ["SW"], "where": "Z1-Z4"}, {"curves": ["SW"], "zones": ["Z1", "Z2", "Z3", "Z4"]}),  # not Z1, Z4
+    ("compare", {"curves": ["PHIE", "PHIE_CC"]}, {"a": "PHIE", "b": "PHIE_CC"}),   # a pair as a list (Tool.pair)
+    ("crossplot", {"curves": ["RHOB", "NPHI"]}, {"y": "RHOB", "x": "NPHI"}),
+    ("overlap", {"conditions": ["SW < 0.5", "VCL < 0.3"]}, {"a": "SW < 0.5", "b": "VCL < 0.3"}),
+    ("stats", {"curves": ["SW"], "where": "all zones Z3-Z2 and Z5"}, {"curves": ["SW"], "zones": ["Z2", "Z3", "Z5"]}),
     ("stats", {"curves": ["SW"], "zones": ["Z1 LIMESTONE", "Z2 DOLOMITE"]}, {"curves": ["SW"], "zones": ["Z1", "Z2"]}),
     ("stats", {"curves": ["SW"], "zones": ["Z1 (7805-7867.5 ft)"]}, {"curves": ["SW"], "zones": ["Z1"]}),
     ("stats", {"curves": ["SW"], "zones": ["MICRO_PORES"]}, {"curves": ["SW"], "zones": ["MICRO_PORES"]}),   # stays: an error names the zones
@@ -55,13 +63,46 @@ from petroharness.agent.schemas import arguments, fit  # noqa: E402
     ("runs", {"condition": "NET_PAY", "limit": 0.7}, {"condition": "NET_PAY", "limit": 0.7}),      # a threshold: runs says so
 ])
 def test_fit_reads_what_the_shape_means(name, raw, want):
-    assert fit(name, arguments(raw)) == want
+    assert fit(name, arguments(raw, name)) == want
+
+
+@pytest.mark.parametrize("name,raw,want", [
+    ("classify", {"what": "flow_units", "k": "3"}, {"what": "flow_units", "k": 3}),          # classify's k is an integer
+    ("spike_flags", {"curves": ["GR"], "k": "3"}, {"curves": ["GR"], "k": 3.0}),            # spike_flags' a number
+    ("spike_flags", {"curves": ["GR"], "scale": ["log10"]}, {"curves": ["GR"], "scale": "log10"}),   # text as a list
+    ("threshold_exceedance", {"curve": "SW", "threshold": 0.5, "absolute": "false"},
+     {"curve": "SW", "threshold": 0.5, "absolute": False}),                                  # "false" is false
+    ("crossplot", {"y": "RHOB", "x": "NPHI", "log_y": "true"}, {"y": "RHOB", "x": "NPHI", "log_y": True}),
+    ("step", {"name": "rw", "zones": "Z1"}, {"name": "rw", "zones": ["Z1"]}),               # the door's own, any tool
+])
+def test_each_argument_is_read_as_its_tools_schema_says(name, raw, want):
+    """The types come from the tool's own schema (schemas.kinds), not from tables keyed by argument name alone: k
+    is classify's integer and spike_flags' number; scale is text like baseline; a flag written "false" is false (it
+    was read as true, a non-empty text)."""
+    assert arguments(raw, name) == want
+
+
+def test_a_flag_that_is_neither_true_nor_false_is_refused():
+    with pytest.raises(ToolError, match="absolute must be true or false"):
+        arguments({"curve": "SW", "threshold": 0.5, "absolute": "maybe"}, "threshold_exceedance")
+
+
+def test_a_count_asked_of_a_table_is_dropped_and_the_same_call():
+    """A computed table shows n anyway (formation_summary as lithology_stats): n asked of it is no other call."""
+    assert fit("formation_summary", arguments({"curves": ["PHIE"], "statistics": ["n", "mean"]}, "formation_summary")) \
+        == {"curves": ["PHIE"], "statistics": ["mean"]}
+
+
+def test_overlaps_conditions_are_one_key_however_they_are_spaced():
+    from petroharness.agent.ledger import normalize
+    assert normalize("overlap", {"a": "SW<0.5", "b": "vcl < 0.3"}) == normalize("overlap", {"a": "SW < 0.5", "b": "VCL<0.3"})
+    assert normalize("compare", {"a": "phie", "b": "PHIE_CC"}) == normalize("compare", {"a": "PHIE", "b": "phie_cc"})
 
 
 def test_fit_is_idempotent():
     for name, raw in [("stats", {"curves": ["SW"], "zones": ["Z1-Z3"], "statistics": ["P10"]}),
                       ("runs", {"condition": "NET_PAY", "where": "VCL < 0.3", "limit": 0})]:
-        once = fit(name, arguments(raw))
+        once = fit(name, arguments(raw, name))
         assert fit(name, dict(once)) == once
 
 
@@ -111,7 +152,7 @@ def test_calc_actions_as_models_write_them(raw, want):
 # --- on real formations ---------------------------------------------------------------------------------------------
 
 def _f():
-    from test_b2_tools import F
+    from _support.formations import F
     return next(f for t, f in F() if {"NET_PAY", "SW", "PHIE"} <= set(f.inv.curves) and len(f.view.zones) >= 3)
 
 
@@ -156,6 +197,8 @@ def test_a_zone_term_selects_the_zone_and_a_window_its_depths():
     assert m.sum() == len(z2.indices) and m[np.asarray(z2.indices)].all()
     m = select(f, "Z1-Z2").mask
     assert m.sum() == len(z1.indices) + len(z2.indices)
+    r = select(f, "Z2-Z1")                            # the ends either way: the same two zones, never every zone
+    assert (r.mask == m).all() and r.read == "in Z1-Z2"
     top, base = z2.top, z2.base                       # the zone's limits as written, rounded to 4 decimals
     w = select(f, f"{top}-{base} {f.inv.depth_unit}").mask
     assert w.sum() == len(z2.indices) and w[np.asarray(z2.indices)].all()   # a range's limits: the samples they
@@ -210,8 +253,8 @@ def test_calc_on_shown_numbers_is_an_item_a_claim_can_cite():
     from petroharness.agent.claims import Claims
     led = _ledger()
     e1, _ = led.open("runs", {"condition": "NET_PAY"})
-    total = re.search(r"all zones: ([\d.]+)", e1.text).group(1)
-    zt = re.search(r"\(([\d.]+)% of the zoned thickness\)", e1.text).group(1)
+    total = runs_total(e1.text)
+    zt = re.search(r", ([\d.]+)% of the gross\)", e1.text).group(1)
     item, new = led.calc(f"{total} * 2")
     assert new and item.id == "E2" and item.tool == "calc" and f"{total} (E1)" in item.text
     again, new2 = led.calc(f" {total}*2 ")
@@ -225,7 +268,7 @@ def test_calc_on_shown_numbers_is_an_item_a_claim_can_cite():
     c.apply([{"op": "add", "point": 1, "text": f"Pay is {num(doubled + 7.77)} ft", "ev": ["E2"], "grade": "low",
               "means": "so the pay is thick enough to matter here"}])
     assert [f for f in c.claims["C2"].flags if f.startswith("K3") and "calc" in f]
-    assert float(zt) >= 0
+    assert 0 <= float(zt) <= 100
 
 
 @pytest.mark.data
@@ -248,7 +291,7 @@ def test_calc_needs_a_shown_number_and_small_whole_numbers_are_constants():
     with pytest.raises(ToolError, match="at least one number"):
         led.calc("40 + 2")                                  # nothing opened: constants only
     led.open("runs", {"condition": "NET_PAY"})
-    total = re.search(r"all zones: ([\d.]+)", led.items[0].text).group(1)
+    total = runs_total(led.items[0].text)
     item, _ = led.calc(f"100 * {total} / 97")
     assert f"{total} (E1)" in item.text and re.search(r"\b(100|97) \((constant|E1)\)", item.text)
 
@@ -262,30 +305,21 @@ def test_calc_takes_numbers_from_the_map_and_question():
 
 @pytest.mark.data
 def test_calcs_run_beside_the_three_actions():
-    import json
     from petroharness.llm import Usage
-    from test_b5_loop import Script, _session
-    from petroharness.agent.loop import investigate
+    from _support.sessions import pay_session as _session
+    from petroharness.agent.graph import investigate
     s = _session()
-    llm = Script([
-        {"points": ["How thick is the pay?"], "intent": "value", "edits": [{"op": "add", "point": 1, "text": "Pay is thin", "grade": "hypothesis"}],
-         "next": [{"runs": "NET_PAY"}], "done": False},
-        None, {"edits": [], "next": [], "done": True}])
+    def calcs(messages):                     # step 2: four calcs on the pay's total, beside the three lookups
+        total = runs_total(next(e for e in s.ledger.items if e.tool == "runs").text)
+        return {"edits": [], "next": [{"calc": f"{total} * 2"}, {"calc": f"{total} / 2"}, {"calc": f"{total} + 1"},
+                                      {"calc": f"{total} - 1"}, {"stats": ["SW"]}, {"stats": ["PHIE"]},
+                                      {"profile": "SW"}], "done": False}
+    llm = ScriptedModel({
+        "step_1": {"points": ["How thick is the pay?"], "intent": "value",
+                   "edits": [{"op": "add", "point": 1, "text": "Pay is thin", "grade": "hypothesis"}],
+                   "next": [{"runs": "NET_PAY"}], "done": False},
+        "step_2": calcs})                    # then done
     trace = {}
-
-    def chat(stage, messages, usage, max_tokens, retry=False):
-        llm.sent.append((stage, messages))
-        usage.log.append({"stage": stage})
-        if stage == "step_2":
-            total = re.search(r"all zones: ([\d.]+)", next(e for e in s.ledger.items if e.tool == "runs").text).group(1)
-            return json.dumps({"edits": [], "next": [{"calc": f"{total} * 2"}, {"calc": f"{total} / 2"}, {"calc": f"{total} + 1"},
-                                                     {"calc": f"{total} - 1"}, {"stats": ["SW"]}, {"stats": ["PHIE"]},
-                                                     {"profile": "SW"}], "done": False})
-        r = llm.replies.pop(0) if llm.replies else '{"edits": [], "next": [], "done": true}'
-        if r is None:
-            r = llm.replies.pop(0)
-        return r if isinstance(r, str) else json.dumps(r)
-    llm.chat = chat
     investigate(llm, s, Usage(), 4000, trace, max_steps=4)
     tools = [e.tool for e in s.ledger.items]
     assert tools.count("calc") == 3 and tools.count("stats") == 3 and tools.count("profile") == 1     # + the first look
@@ -311,7 +345,7 @@ def test_calcs_run_beside_the_three_actions():
     ("stats", {"curves": ["SW"], "zones": ["Z2…Z3"]}, {"curves": ["SW"], "zones": ["Z2", "Z3"]}),
 ])
 def test_more_shapes_are_read_as_meant(name, raw, want):
-    assert fit(name, arguments(raw)) == want
+    assert fit(name, arguments(raw, name)) == want
 
 
 @pytest.mark.data
@@ -364,7 +398,7 @@ def test_absolute_value_in_a_condition():
 
 def test_two_curves_for_a_one_curve_view_is_a_message():
     with pytest.raises(ToolError, match="profile takes one curve, not 2"):
-        fit("profile", arguments({"curves": ["SW", "PHIE"]}))
+        fit("profile", arguments({"curves": ["SW", "PHIE"]}, "profile"))
 
 
 @pytest.mark.parametrize("name,raw,want", [
@@ -375,7 +409,7 @@ def test_two_curves_for_a_one_curve_view_is_a_message():
     ("runs", {"where": "NET_PAY", "condition": "SW < 0.5"}, {"condition": "SW < 0.5 and NET_PAY"}),
 ])
 def test_still_more_shapes(name, raw, want):
-    assert fit(name, arguments(raw)) == want
+    assert fit(name, arguments(raw, name)) == want
 
 
 @pytest.mark.data

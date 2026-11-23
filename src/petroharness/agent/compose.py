@@ -218,32 +218,31 @@ def _spans(rows: list) -> set:
     return out
 
 
-def _names(text: str) -> set:
-    """The curve mnemonics a table names (units in brackets aside)."""
-    return set(re.findall(r"\b[A-Z][A-Z0-9_]+\b", re.sub(r"\([^)]*\)", "", text)))
+def _header_key(cell: str) -> str:
+    """A column header as compared: bold, italics, case and a unit in brackets aside."""
+    return " ".join(re.sub(r"\([^)]*\)", "", cell.replace("*", "").replace("_", " ")).lower().split())
+
+
+def _headers(header: str) -> list:
+    return [_header_key(c) for c in header.strip().strip("|").split("|")]
 
 
 _ID_COLUMN = re.compile(r"(?:zone|depth(?: interval)?|interval|lithology|top|base|formation)\b", re.I)
 
 
 def _adds(header: str, has: set) -> bool:
-    """Whether a table's header has a column the zone table lacks: a curve it does not show, or a column of the
-    writer's own (a count, a thickness, a role). The zone, depth and lithology columns identify the rows."""
-    for cell in header.strip().strip("|").split("|"):
-        c = cell.strip().strip("*_ ")
-        if not c or _ID_COLUMN.match(c):
-            continue
-        names = _names(c)
-        if not names or not names <= has:
-            return True
-    return False
+    """Whether a table's header has a column the zone table lacks: any column not headed as one of the zone table's
+    (a median beside a mean, NET_PAY runs beside a NET_PAY fraction, a count, a role). The zone, depth and lithology
+    columns identify the rows."""
+    return any(c and not _ID_COLUMN.match(c) and c not in has for c in _headers(header))
 
 
 def _without_repeats(draft: str, table: str) -> str:
     """The draft without a table of its own that repeats the zone table: the same zones (every zone's depth interval)
-    and no curve the zone table lacks. The zone table is the answer's table of the zones, once; a table of some zones,
-    or one with a curve of its own, stays."""
-    zones, has = _spans(table.splitlines()), _names(table)
+    under the zone table's own column headers. The zone table is the answer's table of the zones, once; a table of
+    some zones, or one with a column of its own, stays."""
+    zones = _spans(table.splitlines())
+    has = set(_headers(next((ln for ln in table.splitlines() if ln.lstrip().startswith("|")), "")))
     if len(zones) < 2:
         return draft
     lines, out, i = draft.split("\n"), [], 0

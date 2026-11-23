@@ -1,6 +1,7 @@
 """What a user sees and types for the default model carries its public name: its registry key (the benchmark command's
---models), its packaged card's file name; and the endpoints come from one variable, PETROHARNESS_MODEL_URL. The served
-model's name (the card's `model`, what the server answers to) is the server's and stays as served.
+--models), its packaged card's file name, and the name the card asks the server for (the card's `model`; a server that
+serves the checkpoint under another name adds this one, e.g. vLLM --served-model-name OTHER k2-horizon-7b); and the
+endpoints come from one variable, PETROHARNESS_MODEL_URL.
 
     .venv/bin/python -m pytest tests/test_model_names.py -q
 """
@@ -8,7 +9,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-INTERNAL = re.compile(r"\bk200[a-z]\b|_grpo200\b|\bK2H_TOOL_URLS\b")     # a checkpoint's working name, a cluster variable
+INTERNAL = re.compile(r"\bk200[a-z]\b|[-_]grpo200\b|\bK2H_TOOL_URLS\b")     # a checkpoint's working name, a cluster variable
 
 
 def test_the_default_model_key_and_card_carry_the_public_name():
@@ -16,6 +17,10 @@ def test_the_default_model_key_and_card_carry_the_public_name():
     assert models.DEFAULT_KEY == "k2-horizon-7b" and models.DEFAULT_KEY in models.MODELS
     assert Path(models.DEFAULT_CARD).name == "k2_horizon_7b.yaml"
     assert models.label(models.MODELS[models.DEFAULT_KEY][0]) == "K2-Horizon-7B"
+    import yaml
+    from petroharness.config import RESOURCES
+    card = yaml.safe_load((RESOURCES / models.DEFAULT_CARD).read_text(encoding="utf-8"))
+    assert card["model"]["model"] == "k2-horizon-7b"                      # the served name the card asks for
 
 
 def test_the_endpoints_come_from_petroharness_model_url_alone(monkeypatch):
@@ -36,7 +41,7 @@ def test_no_working_names_in_the_package_or_its_docs():
                 hits += [f"{p.relative_to(ROOT)}:{i}" for i, line in
                          enumerate(p.read_text(encoding="utf-8", errors="replace").splitlines(), 1) if INTERNAL.search(line)]
         hits += [str(p.relative_to(ROOT)) for p in (ROOT / base).rglob("*") if INTERNAL.search(p.name)]
-    for p in (ROOT / "README.md",):
-        hits += [f"README.md:{i}" for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+    for p in (ROOT / "README.md", ROOT / "tests" / "gate" / "mini" / "brent" / "set.json"):
+        hits += [f"{p.name}:{i}" for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
                  if INTERNAL.search(line)]
     assert not hits, "working names in shipped files: " + ", ".join(hits[:20])

@@ -104,7 +104,7 @@ by a rule on the shape of the data that holds for any curve, and the tool output
 | G4 | No rule is keyed to question wording | `test_no_question_patterns`, `test_the_zone_table_follows_no_question_wording`, `test_no_question_form_or_scope_rules` |
 | G5 | No evaluation text or words in what the model reads | `test_no_benchmark_words`, `test_no_benchmark_overlap`, `tests/test_lint.py` |
 | G6 | Where several bases or conventions are valid, the tools show them and the model chooses | `test_no_preference_phrases`, `test_the_one_guideline_reaches_the_settle_step`, `tests/agent/test_summary.py` |
-| G7 | Lithology zones are the unit of analysis | `tests/test_zones.py`, `tests/test_formation_zone_layout.py`, `tests/agent/test_section_zones.py` |
+| G7 | The zones in force are the unit of analysis: yours when given, else lithology zones | `tests/test_zones.py`, `tests/test_formation_zone_layout.py`, `tests/agent/test_section_zones.py` |
 | G8 | The model decides; code never decides for it or corrects its decisions | `test_no_overrides`, `test_the_checks_are_the_approved_fact_checks`, `tests/agent/test_b6_claims.py` |
 
 <details>
@@ -123,6 +123,7 @@ group to the run. Benchmark mode uses its question file's groups only to name ou
 
 </details>
 
+<a id="g2-every-line-the-model-reads-has-a-stated-provenance"></a>
 <details>
 <summary>G2. Every line the model reads has a stated provenance</summary>
 
@@ -210,13 +211,16 @@ the best; each threshold named with its source; the shape rule the same whatever
 
 </details>
 
+<a id="g7-the-zones-in-force-are-the-unit-of-analysis"></a>
 <details>
-<summary>G7. Lithology zones are the unit of analysis</summary>
+<summary>G7. The zones in force are the unit of analysis</summary>
 
-The interval is split into zones by its lithology log (shale-volume bands without one). Every tool can report per
-zone, and the analyzers run per zone. In the Brent Group of GeoLink 30/6-5, the lithology log `LITHOLOGY_GEOLINK`
-gives 20 zones of sand, silt, coal and cross-bedded sand. Taranaki cheal-1 has no lithology log, and its Moki Formation
-is split into 50 zones of shale-volume bands ([Evaluate a formation](USAGE.md)).
+The interval is split into zones: your own when you give them (`--zones`), else by its lithology log; without one, by
+the lithology Petrophys's mineral solver gives; with neither, by shale-volume bands. Every tool can report per zone,
+and the analyzers run per zone; the model may also report by any stretch of the well a question names. In the Brent
+Group of GeoLink 30/6-5, the lithology log `LITHOLOGY_GEOLINK` gives 20 zones of sand, silt, coal and cross-bedded
+sand. Taranaki cheal-1 has no lithology log, and its Moki Formation is split into 37 zones of the solved lithology,
+shale and sandstone ([Evaluate a formation](USAGE.md)).
 
 **Why.** Petrophysical properties change with rock type, and a value pooled over different rocks describes none of
 them.

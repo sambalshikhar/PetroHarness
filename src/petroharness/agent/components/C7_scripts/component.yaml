@@ -1,6 +1,6 @@
 id: C7
 name: scripts
-purpose: 'the tool outputs and the map: computed by Petrophys and the harness''s code'
+purpose: 'the tool outputs and the map: text computed by Petrophys and the harness''s code'
 texts:
   one_value: one_value.md      # a step curve that holds one value over the whole well (its record says how)
 frames:
@@ -9,4 +9,4 @@ frames:
 - agent/map.py
 - agent/inventory.py
 - agent/notes.py
-- agent/routes.py
+- record/routes.py

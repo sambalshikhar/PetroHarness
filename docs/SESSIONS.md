@@ -144,21 +144,22 @@ changed before question 3: sw_cutoff the default (0.7) -> 0.6
 - **The ledger goes on**, its ids continuing. An earlier result says, when read again, that it rests on the earlier
   settings; the same call asked again is computed anew.
 - **The change is recorded:** in the answer's header, in its methods and parameters, as a `settings` event in the log
-  (replayed in its place on resume), and in the audit trail ([Evidence and audit](EVIDENCE.md)).
+  (replayed in its place on resume), and in the audit trail ([Audit an answer](EVIDENCE.md)).
 - **Only you change settings.** A question such as "what if m were 1.8?" is answered as a comparison and changes
   nothing; with no change, no request differs.
 - **A setting that cannot be used is refused**, and nothing changes:
   `not changed: WHAT: interpretation settings that cannot be used: q: not a setting this panel knows. FIX: correct or reset them.`
 - **A context profile fixes its own settings:** with `--profile`, only the zone rule can change.
 - **A zone rule change re-zones the interval.** Taranaki cheal-1 has no lithology log, so its Moki Formation
-  (2336–2848 m) is zoned by shale-volume bands: 50 zones at the default edges. Narrower bands give 45:
+  (2336–2848 m) is zoned by the lithology Petrophys's mineral solver gives: 37 zones at the default minimum
+  thickness of 2 m. A 1 m minimum gives 58:
 
   ```text
-  question> /set zone_vcl_bands=0.25,0.5
-  from question 1: zone_vcl_bands the default (0.3 / 0.6) -> 0.25 / 0.5 (the well was interpreted again)
+  question> /set zone_min_thickness_m=1
+  from question 1: zone_min_thickness_m the default (2) -> 1 (the well was interpreted again)
   ```
 
-  The `settings` event records the 45 zones the well was interpreted into. Data: Taranaki Basin Curated Well Logs
+  The `settings` event records the 58 zones the well was interpreted into. Data: Taranaki Basin Curated Well Logs
   Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.
 </details>
 
@@ -287,7 +288,7 @@ flowchart TB
 
 The report holds the interval, the model and the Petrophys build, the interval's display, each question with its
 answer, figures, methods and parameters, then each answer's audit trail. What the trail lists:
-[Evidence and audit](EVIDENCE.md).
+[Audit an answer](EVIDENCE.md#get-an-audit-trail).
 
 ## More
 
@@ -328,7 +329,7 @@ print(later.settings, later.sources(), later.changes())
 - **The first question is unchanged.** With no earlier question the block is empty, and every request is the one a
   single `petroharness` run sends; the request gate checks this on recorded runs.
 
-The graph a later question runs: [Session graph](SESSION_GRAPH.md).
+The graph a later question runs: [The later-question graph](GRAPH.md#the-later-question-graph).
 </details>
 
 <details>

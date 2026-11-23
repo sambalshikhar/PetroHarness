@@ -1,9 +1,8 @@
-"""summarize (src/petroharness/agent/library_summarize.py): net pay and HCPT per zone with the cutoffs the model
+"""summarize (src/petroharness/agent/library/summarize.py): net pay and HCPT per zone with the cutoffs the model
 gives, by Petrophys summarize_pay; on a sample well (data).
 
-    .venv/bin/python -m pytest tests/agent/test_library_summarize.py -q
+    .venv/bin/python -m pytest tests/agent/test_library.summarize.py -q
 """
-import os
 import re
 import sys
 from pathlib import Path
@@ -15,9 +14,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(Path(__file__).resolve().parent)]
 from petroharness.agent import schemas
 from petroharness.agent.engine import ToolError
-from petroharness.agent.library_summarize import OBJECTS, summarize
+from petroharness.agent.library.summarize import OBJECTS, summarize
 
-SAMPLES = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "sample_las"))   # a folder of sample wells; tests skip without it
+from _wells import SAMPLES  # noqa: E402  (Petrophys's sample files; PETROHARNESS_SAMPLE_LAS for a folder of them)
 
 
 def test_only_what_pay_summary_lacks():

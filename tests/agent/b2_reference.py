@@ -1,5 +1,5 @@
 """The tool reference: what each tool should return, written apart from src/petroharness/agent/tools.py (its own condition parser on Python's
-ast, its own run finder and statistics), and parsers that read a tool's text back into numbers.
+ast, its own interval finder, thickness rule and statistics), and parsers that read a tool's text back into numbers.
 
 Nothing here imports petroharness.agent.tools; the tests compare the two.
 """
@@ -56,29 +56,39 @@ def _number(node) -> float:
     raise ValueError("not a number")
 
 
-def zone_runs(mask: np.ndarray, zones) -> list:
-    """(top index, base index, zone position) for each stretch of consecutive True samples inside one zone."""
-    out = []
-    for k, z in enumerate(zones):
-        idx = np.asarray(z.indices)
-        start = None
-        for j in range(idx.size):
-            if mask[idx[j]]:
-                if start is not None and idx[j] != idx[j - 1] + 1:
-                    out.append((idx[start], idx[j - 1], k))
-                    start = None
-                if start is None:
-                    start = j
-            elif start is not None:
-                out.append((idx[start], idx[j - 1], k))
-                start = None
-        if start is not None:
-            out.append((idx[start], idx[-1], k))
+def interval_runs(mask) -> list:
+    """(top index, base index) for each stretch of consecutive True samples of the interval. A zone boundary does not
+    end a stretch: only a sample where the mask is False does."""
+    out, start = [], None
+    on = [bool(v) for v in np.asarray(mask).tolist()]
+    for i, v in enumerate(on):
+        if v and start is None:
+            start = i
+        elif not v and start is not None:
+            out.append((start, i - 1))
+            start = None
+    if start is not None:
+        out.append((start, len(on) - 1))
     return out
 
 
+def span(top: float, base: float, n: int) -> float:
+    """The thickness of n regularly spaced samples, the first at top and the last at base: base - top. Under the
+    cell_thickness switch each sample is its own cell, so n samples are n steps thick, one step more; one sample alone
+    gives no step to count."""
+    from petroharness import options
+    return (base - top) * n / (n - 1) if n > 1 and options.get().cell_thickness else base - top
+
+
+def gross(depth) -> float:
+    """The interval's thickness: the span of its samples."""
+    d = np.asarray(depth, dtype=float)
+    return span(float(d.min()), float(d.max()), int(d.size))
+
+
 def thickness(z, n: int) -> float:
-    return (z.base - z.top) * n / z.n_samples
+    """n samples of zone z as thickness: the zone's span x their share of its samples."""
+    return span(z.top, z.base, z.n_samples) * n / z.n_samples
 
 
 # --- statistics -----------------------------------------------------------------------------------------------------
@@ -257,26 +267,38 @@ def left_out(text: str) -> list:
 
 
 def runs_output(text: str) -> dict:
+    """A runs text read back. count, total, share: the intervals, their thickness and its share of the gross (0 where
+    the text says there is none). whole: (count, thickness, share, left out) of the line the whole interval gets when
+    the zones asked leave intervals out. listed: (top, base, thickness, [zone ids], outside any zone) for each interval
+    of the list, a one-sample interval with top = base. of: (listed, all). zones: zone id -> (thickness, share of the
+    zone), 0 for a zone the text names as holding none. zoned: the zones' thicknesses added."""
     lines = text.splitlines()
-    head = re.search(r"\((\d+) runs\)", lines[0])
-    out = {"count": int(head.group(1)), "zones": {}, "total": None, "share": None, "listed": [], "of": None,
-           "whole": None}
-    for ln in lines[1:]:
-        m = re.match(rf"^  whole interval(?: \(\d+ samples outside any zone\))?: ({NUM}) \S+ \(({NUM})% of the gross\)$", ln)
+    out = {"count": 0, "total": 0.0, "share": None, "whole": None, "listed": [], "of": None, "zones": {}, "zoned": 0.0,
+           "none": any(ln.startswith("No interval where ") for ln in lines)}
+    for ln in lines:
+        if ln.startswith("Intervals where "):
+            m = re.search(rf"\((\d+) intervals?, ({NUM}) \S+, ({NUM})% of the gross\)", ln)
+            out["count"], out["total"], out["share"] = int(m.group(1)), float(m.group(2)), float(m.group(3))
+        m = re.match(rf"^  whole interval \(\d+ samples outside any zone\): (\d+) intervals?, ({NUM}) \S+, ({NUM})% of the "
+                     rf"gross; the zones asked leave out ({NUM}) \S+ outside them$", ln)
         if m:
-            out["whole"] = (float(m.group(1)), float(m.group(2)))
-        m = re.match(rf"^  (Z\d+) .*: ({NUM}) \S+ \(({NUM})% of the zone\)$", ln)
+            out["whole"] = (int(m.group(1)), float(m.group(2)), float(m.group(3)), float(m.group(4)))
+        m = re.match(rf"^    (?:at ({NUM}) \S+ \(one sample\)|({NUM})-({NUM}) \S+), ({NUM}) \S+, (.+)$", ln)
         if m:
-            out["zones"][m.group(1)] = (float(m.group(2)), float(m.group(3)))
-        m = re.match(rf"^  (?:all zones|zones asked): ({NUM}) \S+ \(({NUM})% of (?:the zoned|their) thickness\)$", ln)
-        if m:
-            out["total"], out["share"] = float(m.group(1)), float(m.group(2))
-        m = re.match(rf"^    ({NUM})-({NUM}) \S+, ({NUM}) \S+, (Z\d+)$", ln)
-        if m:
-            out["listed"].append((float(m.group(1)), float(m.group(2)), float(m.group(3)), m.group(4)))
-        m = re.search(r"longest runs .*?, (\d+) of (\d+):", ln)
+            top, base = (m.group(1), m.group(1)) if m.group(1) else (m.group(2), m.group(3))
+            out["listed"].append((float(top), float(base), float(m.group(4)), re.findall(r"Z\d+", m.group(5)),
+                                  m.group(5).endswith("outside any zone")))
+        m = re.match(r"^  (?:thickest intervals|every interval), top to base \(.*\), (\d+) of (\d+):$", ln)
         if m:
             out["of"] = (int(m.group(1)), int(m.group(2)))
+        if ln.startswith("  by zone: "):
+            for part in ln[len("  by zone: "):].split("; "):
+                m = re.match(rf"^(Z\d+) ({NUM}) \S+ \(({NUM})% of the zone\)$", part)
+                if m:
+                    out["zones"][m.group(1)] = (float(m.group(2)), float(m.group(3)))
+                elif part.startswith("none in "):
+                    out["zones"].update({z: (0.0, 0.0) for z in part[len("none in "):].split(", ")})
+    out["zoned"] = math.fsum(th for th, _ in out["zones"].values())
     return out
 
 

@@ -6,10 +6,7 @@ later change is the user's. A scripted model on the public sample well (no serve
 
     PETROHARNESS_SAMPLE_LAS=<folder of tuhua-7.las> .venv/bin/python -m pytest tests/session/test_field_notes.py -q
 """
-import json
-import os
 import shutil
-from pathlib import Path
 
 import pytest
 
@@ -18,8 +15,9 @@ from petroharness.session import Conversation
 from petroharness.ui import adapter as AD
 from petroharness.well import notes as N
 from petroharness.well import settings as T
+from _support.model import DONE, ScriptedModel  # noqa: E402
 
-SAMPLES = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "sample_las"))
+from _wells import SAMPLES  # noqa: E402  (Petrophys's sample files; PETROHARNESS_SAMPLE_LAS for a folder of them)
 LAS = SAMPLES / "tuhua-7.las"
 WINDOW = dict(top=600.0, base=700.0, depth_unit="m", formation="test window")
 NOTES = """name: Test field study
@@ -32,27 +30,14 @@ notes:
 """
 
 
-class Model:
+class Model(ScriptedModel):
     def __init__(self):
-        self.sent = []
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
-        usage.log.append({"stage": stage, "prompt_tokens": 10, "completion_tokens": 5, "seconds": 0.0})
-        if stage.startswith("read"):
-            r = {"topics": ["saturation"], "named": ["SW"]}
-        elif stage == "step_1":
-            r = {"points": ["What is the mean SW?"], "intent": "characterize", "focus": "water saturation",
-                 "edits": [], "next": [{"stats": {"curves": ["SW"]}}], "done": False}
-        elif stage.startswith(("step_", "settle")):
-            r = {"edits": [], "next": [], "done": True}
-        else:
-            r = "## Water saturation\nWater saturation is read from the results.\n"
-        return r if isinstance(r, str) else json.dumps(r)
-
+        super().__init__({
+            "read*": {"topics": ["saturation"], "named": ["SW"]},
+            "step_1": {"points": ["What is the mean SW?"], "intent": "characterize", "focus": "water saturation",
+                       "edits": [], "next": [{"stats": {"curves": ["SW"]}}], "done": False},
+            "step_*": DONE, "settle*": DONE},
+            default="## Water saturation\nWater saturation is read from the results.\n")
 
 def _write(tmp_path, text, name="notes.yaml"):
     p = tmp_path / name

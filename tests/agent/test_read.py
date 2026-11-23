@@ -16,8 +16,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(Path(__file__).resolve().parent)]
 from petroharness.agent import components as C  # noqa: E402
 from petroharness.agent import direction  # noqa: E402
-from petroharness.agent.loop import CORE_CURVES, MINERAL_VOLUMES, read_schema  # noqa: E402
+from petroharness.agent.prompts import CORE_CURVES, MINERAL_VOLUMES  # noqa: E402
+from petroharness.agent.read import read_schema
 from petroharness.llm import Usage  # noqa: E402
+from _support.model import ScriptedModel  # noqa: E402
 
 TOPICS = ROOT / "src" / "petroharness" / "resources" / "topics.yaml"
 DONE = {"edits": [], "next": [], "done": True}
@@ -27,35 +29,14 @@ STEP1 = {"asks": "How porous is the formation?", "points": ["How does porosity v
 VALID = {"topics": ["porosity", "shale_clay"], "named": ["RDEP"]}
 
 
-class Stub:
-    """A model by stage: the READ replies from a list, step 1's object, then done; the settle step plain JSON, the
-    writer a short answer. Every call is recorded."""
-
-    def __init__(self, reads):
-        self.reads, self.sent = list(reads), []
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        self.sent.append({"stage": stage, "messages": messages, "schema": json_schema})
-        usage.log.append({"stage": stage, "prompt_tokens": sum(len(m["content"]) for m in messages) // 4})
-        if stage.startswith("read"):
-            r = self.reads.pop(0)
-        elif stage == "step_1":
-            r = STEP1
-        elif stage.startswith(("step_", "settle")):
-            r = DONE
-        else:                                                   # the writer and its repairs
-            r = "## Porosity\nThe porosity is read zone by zone.\n\n{{ZONE_TABLE}}"
-        return r if isinstance(r, str) else json.dumps(r)
-
-    def prompt(self, stage):
-        return next(c["messages"][-1]["content"] for c in self.sent if c["stage"] == stage)
+def read_model(reads, cls=ScriptedModel) -> ScriptedModel:
+    """The READ replies from a list, step 1's object, then done; the writer (and its repairs) a short answer."""
+    return cls({"read*": list(reads), "step_1": STEP1, "step_*": DONE, "settle*": DONE},
+                         default="## Porosity\nThe porosity is read zone by zone.\n\n{{ZONE_TABLE}}")
 
 
 def _formation(pred):
-    from test_b2_tools import F
+    from _support.formations import F
     got = next(((t, f) for t, f in F() if pred(f)), None)
     if got is None:
         pytest.skip("no formation of that kind in this dataset")
@@ -64,7 +45,7 @@ def _formation(pred):
 
 def _session(t, f):
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.agent.map import render
     return Session(t, f, render(f.inv), Ledger(f))
 
@@ -73,11 +54,11 @@ def _run(monkeypatch, reads, pred=lambda f: "PHIE" in f.inv.curves and "RDEP" in
     """One question through the question graph on a built session, the model stubbed. depth: graph.answer's (False:
     every question investigated, --investigate)."""
     from petroharness.agent import graph
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     t, f = _formation(pred)
     s = _session(t, f)
     monkeypatch.setattr(Session, "build", classmethod(lambda cls, task, cfg: s))
-    llm = Stub(reads)
+    llm = read_model(reads)
     out = graph.answer(t, "k2-horizon-7b", 1, 2, "open", "profile", llm_factory=lambda cfg: llm, depth=depth)
     assert not out["trace"].get("error"), out["trace"].get("traceback")
     return s, llm, out
@@ -142,7 +123,8 @@ def test_families_and_overview_follow_the_topics_in_order():
 @pytest.mark.data
 @pytest.mark.parametrize("depth", [True, False], ids=["the route read", "investigate"])
 def test_a_valid_reading_sets_the_topics_the_first_look_and_the_index(monkeypatch, depth):
-    from petroharness.agent.loop import READ, brief
+    from petroharness.agent.read import READ
+    from petroharness.agent.prompts import brief
     from petroharness.agent.map import render
     s, llm, out = _run(monkeypatch, [VALID], depth=depth)
     tr = out["trace"]
@@ -201,7 +183,7 @@ def test_two_unreadable_replies_fail_the_reading_and_the_run_goes_on(monkeypatch
     ('```json\n{"topics": ["porosity"]}\n```', None),
 ])
 def test_what_counts_as_a_readable_reply(reply, topics):
-    from petroharness.agent.loop import _reading
+    from petroharness.agent.read import _reading
     got = _reading(reply)
     if topics is None:
         assert got is None
@@ -212,9 +194,10 @@ def test_what_counts_as_a_readable_reply(reply, topics):
 # --- the first look: the named curves, the mineral volumes -----------------------------------------------------------
 
 def _look(t, f, topics, named):
-    from petroharness.agent.loop import investigate, read_question
+    from petroharness.agent.read import read_question
+    from petroharness.agent.graph import investigate
     s = _session(t, f)
-    llm = Stub([{"topics": topics, "named": named}])
+    llm = read_model([{"topics": topics, "named": named}])
     trace = {}
     read_question(llm, s, Usage(), 4000, trace)
     investigate(llm, s, Usage(), 4000, trace, max_steps=1)
@@ -226,7 +209,7 @@ OTHER = ("RDEP", "DTC", "PEF", "CALI")
 
 @pytest.mark.data
 def test_a_named_mnemonic_the_formation_has_is_in_the_first_look():
-    from petroharness.agent.loop import named_curves
+    from petroharness.agent.prompts import named_curves
     t, f = _formation(lambda f: "PHIE" in f.inv.curves and any(c in f.inv.curves for c in OTHER))
     extra = next(c for c in OTHER if c in f.inv.curves)
     assert extra not in direction.overview(["porosity"]) + list(CORE_CURVES)
@@ -245,7 +228,7 @@ def test_a_named_mnemonic_the_formation_has_is_in_the_first_look():
 
 @pytest.mark.data
 def test_a_named_mnemonic_the_formation_lacks_is_not():
-    from petroharness.agent.loop import named_curves
+    from petroharness.agent.prompts import named_curves
     t, f = _formation(lambda f: "PHIE" in f.inv.curves)
     reg = f.view.reg.curves["inventory"]
     absent = next(c for c in reg["raw"] + reg["derived"] if c not in f.inv.curves)
@@ -271,7 +254,7 @@ AMBIGUITY = ("If the question can be read in more than one way, say in point 1 w
 
 
 def test_the_read_text_asks_for_topics_and_named_only():
-    from petroharness.agent.loop import READ
+    from petroharness.agent.read import READ
     assert "- topics:" in READ and "- named:" in READ and "in its own words" in READ
     assert "readings" not in READ.lower() and "asks" not in READ.lower()
     assert READ.rstrip().endswith('{"topics": ["<area>"], "named": ["..."]}')
@@ -279,7 +262,7 @@ def test_the_read_text_asks_for_topics_and_named_only():
 
 @pytest.mark.parametrize("plugged", [True, False])
 def test_step_1_holds_the_ambiguity_sentence(plugged):
-    from petroharness.agent.loop import step1
+    from petroharness.agent.prompts import step1
     text = step1() if plugged else step1(None)
     assert AMBIGUITY in text and text.index("(point 1)") < text.index(AMBIGUITY) < text.index("For example")
 
@@ -309,24 +292,23 @@ def test_no_prompt_carries_readings_and_step_1_shows_the_topics(monkeypatch, dep
 @pytest.mark.data
 def test_a_step_records_its_own_prompt_tokens_not_a_fix_calls(monkeypatch):
     """Step 1's reply cannot be read and a fix call reformats it: the step's prompt_tokens are the step call's."""
-    class Broken(Stub):
+    class Broken(ScriptedModel):
         def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
+            out = super().chat(stage, messages, usage, max_tokens, json_schema, temperature, retry)
             if stage == "step_1":
-                self.sent.append({"stage": stage, "messages": messages, "schema": json_schema})
-                usage.log.append({"stage": stage, "prompt_tokens": 18309})
+                usage.log[-1]["prompt_tokens"] = 18309
                 return "{points: [How does porosity vary by zone?], edits: none"          # not JSON, not salvageable
             if stage == "step_1_fix":
-                self.sent.append({"stage": stage, "messages": messages, "schema": json_schema})
-                usage.log.append({"stage": stage, "prompt_tokens": 400})
+                usage.log[-1]["prompt_tokens"] = 400
                 return json.dumps(STEP1)
-            return super().chat(stage, messages, usage, max_tokens, json_schema, temperature, retry)
+            return out
 
     from petroharness.agent import graph
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     t, f = _formation(lambda f: "PHIE" in f.inv.curves and "RDEP" in f.inv.curves)
     s = _session(t, f)
     monkeypatch.setattr(Session, "build", classmethod(lambda cls, task, cfg: s))
-    llm = Broken([VALID])
+    llm = read_model([VALID], Broken)
     out = graph.answer(t, "k2-horizon-7b", 1, 2, "open", "profile", llm_factory=lambda cfg: llm, depth=False)
     step = out["trace"]["steps"][0]
     assert [c["stage"] for c in llm.sent][:3] == ["read", "step_1", "step_1_fix"]

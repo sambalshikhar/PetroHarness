@@ -1,5 +1,5 @@
 """The lookups the model calls (stats, runs, compare, profile, crossplot, section, step): which samples, grouped
-how, measured how, on the framework in agent/engine.py."""
+how, measured how, on the framework in agent/engine/."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ from typing import Optional
 import numpy as np
 
 from petroharness.agent import engine as E
-from petroharness.agent.engine import STATISTICS, Formation, Out, Result, ToolError, num  # noqa: F401
+from petroharness.agent.engine import STATISTICS, Formation, Out, Result, ToolError  # noqa: F401
+from petroharness.agent.map import num  # noqa: F401
 from petroharness.well import summary as S
 
 
@@ -262,7 +263,7 @@ def _short_row(f: Formation, b, z, stats_: list, out: Out) -> tuple:
 def _basis_label(out: Out, b, sel=None) -> str:
     """A pooled basis by its name; the whole interval with the count of samples outside any zone (its extremes can sit
     there); under a where, the samples it covers: every sample where the condition holds, how many, and how many of
-    them lie outside any zone (question suite B01: 'whole interval (201 samples outside any zone)' over the 158 samples
+    them lie outside any zone ('whole interval (201 samples outside any zone)' over the 158 samples
     of the condition was read as the whole interval, and its mean as unavailable)."""
     if b.kind == "whole":
         return S.whole_label_of(out.f.view, out.i, None if sel is None else sel.mask, "" if sel is None else sel.read)
@@ -329,7 +330,7 @@ def _runs_defaults(f: Formation) -> dict:
 def _count_limit(limit, default: int) -> tuple:
     """A list's limit as a count of intervals: (the count, a note). A limit that is no count (a fraction, 0 or below, a
     word) is left out and said, the default listed: models wrote the condition's threshold there ("SW < 0.9" with
-    limit 0.9, benchmark N6: 10 calls refused, each a lost action), whose meaning for the list is plain."""
+    limit 0.9, 10 calls refused, each a lost action), whose meaning for the list is plain."""
     if isinstance(limit, float) and limit.is_integer():
         limit = int(limit)
     if isinstance(limit, int) and not isinstance(limit, bool) and limit >= 1:
@@ -354,79 +355,21 @@ def runs(f: Formation, condition: str, zones=None, limit: Optional[int] = None, 
 
 
 def _runs(f: Formation, condition: str, zones, limit: int, min_thickness, max_thickness) -> Result:
-    sel = E.select(f, condition)
-    zs, u = E.zones(f, zones), f.inv.depth_unit
-    if getattr(f.view, "reach", "focus") == "well":            # intervals anywhere: listed first, uncut by zones
-        return _runs_intervals(f, sel, zs, zones, condition, limit, min_thickness, max_thickness)
-    found = E.extent(f, sel.mask, zs)
-    read = sel.read
-    if min_thickness is not None or max_thickness is not None:      # thin beds, or only the thick ones
-        lo, hi = min_thickness or 0.0, np.inf if max_thickness is None else max_thickness
-        found = [r for r in found if lo <= E.thickness(r[3], r[2]) <= hi]
-        read += "".join([f", runs at least {num(float(min_thickness))} {u} thick" if min_thickness is not None else "",
-                         f", runs at most {num(float(max_thickness))} {u} thick" if max_thickness is not None else ""])
-    out = Out(f)
-    out.add(f"Runs where {read}, inside the zones ({out.i(len(found))} runs)" + E.uncomputed_said(f, condition))
-    total = 0.0
-    for z in zs:                                                  # each zone
-        n = sum(r[2] for r in found if r[3] is z)
-        t = E.thickness(z, n)
-        total += t
-        out.add(f"  {out.zone(z)}: {out.v(t)} {u} ({out.pct(100 * n / max(z.n_samples, 1))} of the zone)")
-    verdict = zone_mean_verdict(f, condition, zs)                 # each zone by its mean values
-    if verdict:
-        out.add(*verdict)
-    if zones:                                                     # the zones pooled
-        whole = sum(z.thickness for z in zs)
-        out.add(f"  zones asked: {out.v(total)} {u} ({out.pct(100 * total / whole if whole else 0.0)} of their thickness)")
-    else:
-        zt = f.view.zoned_thickness
-        out.add(f"  all zones: {out.v(total)} {u} ({out.pct(100 * total / zt if zt else 0.0)} of the zoned thickness)")
-    n_all = f.depth.size                                          # the whole interval, runs across zone boundaries too
-    away = S.outside_mask(f.view)
-    if (sel.mask & away).any() and getattr(f.view, "basis", "all") != "zones":    # only where it differs: then what
-        every = _Whole(f)                                          #   the samples outside them hold, located
-        whole_runs = E.extent(f, sel.mask, [every])
-        if min_thickness is not None or max_thickness is not None:
-            whole_runs = [r for r in whole_runs if lo <= E.thickness(every, r[2]) <= hi]
-        n_sel = sum(r[2] for r in whole_runs)
-        out.add(f"  {S.whole_label_of(f.view, out.i)}: "
-                f"{out.v(f.inv.gross * n_sel / max(n_all, 1))} {u} ({out.pct(100 * n_sel / max(n_all, 1))} of the gross)")
-        _outside_runs(f, out, sel.mask & away)
-    if found:
-        first, last = found[0], max(found, key=lambda r: r[1])
-        out.add(f"  shallowest top {out.depth(first[0])} ({first[3].zone_id}); deepest base {out.depth(last[1])} "
-                f"({last[3].zone_id})")
-        cut = len(found) > limit
-        listed = sorted(sorted(found, key=lambda r: -r[2])[:limit], key=lambda r: r[0]) if cut else found
-        if cut:                                                    # a cut list says so, with the get of the others
-            rest = [(z.zone_id, t, b, k, z) for t, b, k, z in found if (t, b, k, z) not in listed]
-            kept, said = _keep_rest(f, EVERY_RUN, rest, lambda r: E.thickness(r[4], r[3]),
-                                    lambda r: f"{num(r[1])}-{num(r[2])} ({num(E.thickness(r[4], r[3]))})")
-            out.add(f"  longest runs (top-base, thickness, zone; {said}), top to base, {limit} of {len(found)}:")
-        else:
-            out.add(f"  every run, top to base (top-base, thickness, zone), {len(found)} of {len(found)}:")
-        rows = []
-        for top, base, n, z in listed:
-            row = out.child()
-            rows.append((f"{num(top)}-{num(base)}", f"    {row.span(top, base)}, {row.v(E.thickness(z, n))} {u}, {z.zone_id}", row))
-        out.fit(rows, what="runs")
-        if cut:
-            for ln, nums in kept:                                  # the others, kept for the get, a zone a line
-                out.keep(ln, nums + [E.thickness(z, k) for t, b, k, z in found if f"{num(t)}-{num(b)} (" in ln])
-    return out.result()
+    """The intervals where the condition holds, anywhere in the interval and uncut by zone boundaries (_runs_intervals),
+    under every reach."""
+    return _runs_intervals(f, E.select(f, condition), E.zones(f, zones), zones, condition, limit, min_thickness,
+                           max_thickness)
 
 
-EVERY_RUN = "other runs"
 OTHER_INTERVALS = "other intervals"
 
 
 runs.defaults_for = _runs_defaults          # the ledger keys a call by the limit it is computed with
 
 def _runs_intervals(f: Formation, sel, zs: list, zones, condition: str, limit: int, min_thickness, max_thickness) -> Result:
-    """runs under reach "well" (docs/designs/zones-and-intervals.md, 2b): the intervals where the condition holds over
-    the whole interval (or the selection, or the zones asked), consecutive samples uncut by zone boundaries, each with
-    its thickness (the whole interval's convention: its gross x the share of its samples) and the zones it touches;
+    """The intervals where the condition holds over the whole interval (or the selection, or the zones asked),
+    consecutive samples uncut by zone boundaries, each with its thickness (the whole interval's convention: its gross x
+    the share of its samples) and the zones it touches;
     the thickest `limit` when there are more (the others kept for get); then each zone's thickness of them (the zones'
     convention) and the zones whose means meet the condition."""
     d, n_all, u = f.depth, f.depth.size, f.inv.depth_unit
@@ -472,7 +415,7 @@ def _runs_intervals(f: Formation, sel, zs: list, zones, condition: str, limit: i
     if zones and (every & ~mask).any():                 # the zones asked leave samples out: the interval's own line
         groups = np.split(np.flatnonzero(every), np.flatnonzero(np.diff(np.flatnonzero(every)) > 1) + 1)
         whole = [f.inv.gross * g.size / max(n_all, 1) for g in groups if g.size]
-        whole = [t for t in whole if lo <= t <= hi]      # (suite X15: all 20 zones listed gave 57.08 m of 69.17 m)
+        whole = [t for t in whole if lo <= t <= hi]      # (all 20 zones listed gave 57.08 m of 69.17 m)
         row = out.child()
         out.add(f"  {S.whole_label(f.view)}: {row.i(len(whole))} interval{'' if len(whole) == 1 else 's'}, "
                 f"{row.v(sum(whole))} {u}, {row.pct(100 * sum(whole) / f.inv.gross if f.inv.gross else 0.0)} of the "
@@ -484,7 +427,7 @@ def _runs_intervals(f: Formation, sel, zs: list, zones, condition: str, limit: i
         rest = [(r[4], r[0], r[1], r[3]) for r in items if r not in listed]
         kept, said = _keep_rest(f, OTHER_INTERVALS, rest, lambda r: r[3],
                                 lambda r: (f"at {num(r[1])}" if r[1] == r[2] else f"{num(r[1])}-{num(r[2])}")
-                                + f" ({num(r[3])})")
+                                + f" ({num(r[3])})", shown=lambda r: (r[3],))      # the thickness its cell shows
         said = said.replace("other runs", "other intervals")
         out.add(f"  thickest intervals, top to base (top-base, thickness, zones; {said}), {limit} of {len(items)}:")
     else:
@@ -515,30 +458,6 @@ def _runs_intervals(f: Formation, sel, zs: list, zones, condition: str, limit: i
     if verdict:
         out.add(*verdict)
     return out.result()
-
-
-def _outside_runs(f: Formation, out: Out, mask) -> None:
-    """The samples outside the zones where a selection holds, located: their thickness and the runs they form (a
-    labelled gap, not a zone)."""
-    d, u = f.depth, f.inv.depth_unit
-    idx = np.flatnonzero(mask)
-    if not idx.size:
-        return
-    breaks = np.flatnonzero(np.diff(idx) > 1)
-    spans = [(int(a), int(b)) for a, b in zip(np.r_[idx[0], idx[breaks + 1]], np.r_[idx[breaks], idx[-1]])]
-    row = out.child()
-    cells = [row.v(d[a]) if a == b else f"{row.v(d[a])}-{row.v(d[b])}" for a, b in spans[:FULL_RUNS]]
-    more = f" ... ({len(spans) - FULL_RUNS} more)" if len(spans) > FULL_RUNS else ""
-    out.add(f"  {S.outside_label(f.view)}: {row.v(f.inv.gross * idx.size / max(d.size, 1))} {u} in "
-            f"{row.i(len(spans))} runs: " + ", ".join(cells) + more, row)
-
-
-class _Whole:
-    """The whole interval as one group of samples (runs across zone boundaries and between the zones)."""
-
-    def __init__(self, f: Formation):
-        self.zone_id, self.indices = "whole interval", np.arange(f.depth.size)
-        self.thickness, self.n_samples = f.inv.gross, max(f.depth.size, 1)
 
 
 def compare(f: Formation, a: str, b: str, zones=None, tolerance: Optional[float] = None, where=None) -> Result:
@@ -678,7 +597,7 @@ VALUES_AT_MAX = 40                                  # the samples a depth range 
 
 
 def values_at(f: Formation, curves, depths) -> Result:
-    """Curves read at depths (question suite X13: no tool read a curve at a depth, and the answer called a stretch's
+    """Curves read at depths (no tool read a curve at a depth, and the answer called a stretch's
     extremes its nearest samples). At each depth asked, the well's nearest sample: its depth and how far it lies from
     the depth asked, where it is (a zone, between zones, or outside the interval in a unit of the tops file), and each
     curve's value there, or that it has none with its nearest reading. A depth range TOP-BASE lists each of its
@@ -706,7 +625,7 @@ def values_at(f: Formation, curves, depths) -> Result:
         return "outside the interval" + (f", in {unit}" if unit else "")
 
     def nearest(c: str, i: int, row) -> str:
-        """A curve with no value at the sample read: its nearest sample with one (question suite X23: the log read at
+        """A curve with no value at the sample read: its nearest sample with one (the log read at
         a unit's base had a gap there, and the answer gave a filled value with no reading near it)."""
         ok = np.flatnonzero(np.isfinite(vals[c]))
         if not ok.size:
@@ -908,8 +827,8 @@ def _overlap(f: Formation, a: str, b: str, zones, limit: int) -> Result:
         row = out.child()
         out.add(f"  {S.outside_label(f.view)}: " + ", ".join(
             f"{name} {row.v(f.inv.gross * float((m & away).sum()) / n_all)}" for name, m in cols), row)
-    if away.any():                                               # the interval's own line, every sample (suite Y01:
-        row = out.child()                                        #   the share asked of the interval was not shown)
+    if away.any():                                               # the interval's own line, every sample (else the
+        row = out.child()                                        #   share asked of the interval is not shown)
         out.add(f"  {S.whole_label(f.view)}: " + ", ".join(
             f"{name} {row.v(f.inv.gross * float(m.sum()) / n_all)} ({row.pct(100 * float(m.sum()) / n_all)})"
             for name, m in cols), row)
@@ -1067,11 +986,12 @@ def _zone_shares(f: Formation, every: list) -> list:
 KEPT_CHARS = 4500          # the other runs of a cut list kept for its get: what one get returns (the thickest first)
 
 
-def _keep_rest(f: Formation, label: str, rest: list, thick, cell=None, find: str = None) -> tuple:
+def _keep_rest(f: Formation, label: str, rest: list, thick, cell=None, find: str = None, shown=None) -> tuple:
     """The runs a cut list does not show, kept for its get (Out.keep), a zone a line, as many as one get returns
     (the thickest first, each zone's in depth order): ([(line, its numbers)], the clause the shown line ends with).
     rest: [(zone id, top, base, ...)]; thick(run) its thickness; cell(run) its text (the depths as recorded); find: the
-    words of the get (the label when none)."""
+    words of the get (the label when none); shown(run): the numbers its cell shows beside its depths, recorded with
+    them (a number a kept line shows is one the checker can find)."""
     cell = cell or (lambda r: _depth_cell(f, r[1], r[2]))
     keep, used = [], 0
     for r in sorted(rest, key=lambda r: -thick(r)):
@@ -1085,7 +1005,7 @@ def _keep_rest(f: Formation, label: str, rest: list, thick, cell=None, find: str
         mine = sorted((r for r in keep if r[0] == zid), key=lambda r: r[1])
         if mine:
             lines.append((f"  {label} in {zid}: " + ", ".join(cell(r) for r in mine),
-                          [v for r in mine for v in ((r[1],) if r[1] == r[2] else (r[1], r[2]))]))
+                          [v for r in mine for v in ((r[1],) if r[1] == r[2] else (r[1], r[2])) + tuple(shown(r) if shown else ())]))
     left = [r for r in rest if r not in keep]
     u = f.inv.depth_unit
     said = f'the {"other runs" if not left else f"next {len(keep)} by thickness"}: {E.CUT_GET} "{find or label}"'
@@ -1153,7 +1073,7 @@ def zone_mean_labels(f: Formation, key: str) -> dict:
     cache = f.__dict__.setdefault("_zone_mean_cache", {})
     if topic not in cache:
         try:
-            from petroharness.record.catalog import zone_classes_raw
+            from petroharness.record.analyzers import zone_classes_raw
             cache[topic] = zone_classes_raw(f.view, topic)
         except Exception:  # noqa: BLE001  (no zone-mean run here: the sample view stands alone)
             cache[topic] = None
@@ -1234,7 +1154,7 @@ def step(f: Formation, name: str) -> Result:
         out.add(f"  {d}")
     if getattr(m, "facts_here", None):
         out.add("  in this interval: " + "; ".join(m.facts_here))
-    from petroharness.record.catalog import RECORD_LABEL
+    from petroharness.record.card import RECORD_LABEL
     for d in m.decisions_here:
         out.add(f"  {RECORD_LABEL}: {plain_inputs(d, m.inputs)}")
     return out.result()

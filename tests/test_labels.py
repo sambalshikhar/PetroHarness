@@ -1,7 +1,8 @@
-"""Labels and map texts that misled the model (the names, reach, traces and advice audits of 2026-11-18, "for the
-morning"), each checked against the well's own record or its raw arrays.
+"""The labels the map and the tools give a curve, a value or a method (its unit, its kind, the pair or rule the record
+used, its codes, what it leaves out, where it comes from), each read from the well's own record as data and checked
+against the record or the raw arrays.
 
-    .venv/bin/python -m pytest tests/test_label_fixes.py -q -n 4
+    .venv/bin/python -m pytest tests/test_labels.py -q -n 4
 """
 import re
 
@@ -193,6 +194,7 @@ def test_a_curve_held_at_one_value_is_said_for_any_curve():
     """engine.limits, which every curve's card line reads: tuhua's TEMP holds one value over most zoned samples; the
     temperature estimate says it by the same check."""
     from petroharness.agent import engine as E, schemas
+    from petroharness.agent.map import num
     f = formation_of(CASES["tuhua"])
     idx = np.unique(np.concatenate([np.asarray(z.indices) for z in f.view.zones]))
     x = np.asarray(f.view.values("TEMP"), dtype=float)[idx]
@@ -200,7 +202,7 @@ def test_a_curve_held_at_one_value_is_said_for_any_curve():
     vals, counts = np.unique(x, return_counts=True)
     v, share = float(vals[counts.argmax()]), 100 * counts.max() / x.size
     assert share > 50 and x.min() < v < x.max()
-    said = f"one value, {E.num(v)}, in {share:.1f}% of the zoned samples (a held or padded reading)"
+    said = f"one value, {num(v)}, in {share:.1f}% of the zoned samples (a held or padded reading)"
     assert said in E.limits(f, "TEMP") and said in E.provenance(f, ["TEMP"])
     assert f"TEMP {said}" in schemas.call(f, "estimate", {"parameter": "temperature"}).text
     assert not any("one value," in x for x in E.limits(f, "GR"))
@@ -210,7 +212,7 @@ def test_a_curve_held_at_one_value_is_said_for_any_curve():
 
 def test_an_absent_derived_quantity_names_the_functions_that_may_compute_it():
     from petroharness.agent import vocabulary
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     f = formation_of(CASES["tuhua"])
     assert not f.view.available("MHI")
     s = Session.__new__(Session)
@@ -287,3 +289,31 @@ def test_the_las_own_curves_are_the_maps_raw_input():
     raw = next(l for l in text.splitlines() if l.startswith("  curves: "))
     for c in ("DENS", "NEUT", "RESD"):
         assert f"{c} = " in raw and not E.status(f, c).startswith("copy of"), (c, E.status(f, c))
+
+
+@pytest.mark.parametrize("case", ["cheal", "brent"])
+def test_the_map_counts_what_petrophys_labelled(case):
+    """The map's analyzer notes count Petrophys's per-sample labels and quote its recorded rules; no threshold is
+    re-applied here. The analyzer runs on each zone's samples: on Cheal's lithology zones (Petrophys's solved
+    lithology) it labels no mismatch and no gas, and both notes are left out."""
+    from petroharness.agent import notes as NT
+    f = formation_of(CASES[case])
+    secs = f.inv.sections
+    notes = NT._mismatch_note(f.view, secs) + NT._gas_screen_note(f.view, secs)
+    sec = NT._section(secs, "carbonate_analysis")
+    mis = int(np.sum(NT._labels(f.view, sec) == "CARBONATE_LOG_MISMATCH")) if sec else 0
+    if mis:
+        assert any(f"CARBONATE_LOG_MISMATCH at {mis} of the " in x and "its indicators:" in x for x in notes)
+    assert not any("tested samples here PEF reads carbonate" in x for x in notes)     # the copied indicator's count
+    gas = next((x for x in notes if "gas classes" in x), None)
+    if gas:
+        assert "WEAK_GAS_EFFECT WEAK 0.03-0.08" in gas and "WEAK_GAS_EFFECT from 0.03" not in gas
+        gsec = NT._section(secs, "gas_indicator_analysis_methods")
+        names = [c.name for c in gsec.classes if c.name.endswith("_GAS_EFFECT") and not c.name.startswith("NO_")]
+        n = int(np.isin(NT._labels(f.view, gsec), names).sum())
+        assert f" at {n} of {f.depth.size} samples here" in gas
+    listed = {c.name for s in (sec, NT._section(secs, "gas_indicator_analysis_methods")) if s for c in s.classes}
+    if "CARBONATE_LOG_MISMATCH" in listed or any(n.endswith("_GAS_EFFECT") and not n.startswith("NO_") for n in listed):
+        assert notes
+    else:                                                # nothing the notes count: no note
+        assert notes == []

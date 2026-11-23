@@ -23,7 +23,7 @@ How a change is shown safe: it alters nothing it does not mean to, and what it m
 | Point the harness at your data | `export PETROHARNESS_DATA=/path/to/data.yaml` |
 | Run the tests | `.venv/bin/python -m pytest -o addopts= -q -n 16 -p no:cacheprovider tests` |
 | Run a question set with reference answers | `.venv/bin/petroharness benchmark --arm NAME --ids ids.json --gt-dir DIR` |
-| Print what answers a question | `petroharness setup` ([SETUP](SETUP.md)) |
+| Print what answers a question | `petroharness setup` ([EVIDENCE](EVIDENCE.md#the-setup-record)) |
 | Replay the golden tapes | `.venv/bin/python -m pytest -q tests/agent/test_golden_tapes.py` |
 
 ## Configuration
@@ -89,8 +89,8 @@ FIX: make the policy's cutoffs match the engine.
 With `interpret` set, `petrophys.interpret` interprets the LAS with those options (`{}` for the library's defaults).
 With `interpreter` set, that function does. With neither, the policy
 (`src/petroharness/resources/policy/reference_v2.yaml`) decides: the pinned engine it names, from `engines_dir`, run in
-a subprocess, or the installed library with the policy's corrections. Setting both `interpret` and `interpreter` is an
-error.
+a subprocess, or, when it names none, `petrophys.interpret` with the library's settings and the policy's cutoffs.
+Setting both `interpret` and `interpreter` is an error.
 
 **Context profiles.** For wells that belong to a Petrophys context package, `interpret: {context_profile: <name>}`
 interprets each well as that package's context does: its preparation, the workflow, its QC and recomputation, with
@@ -138,7 +138,7 @@ Each trace records the library it read (`skills`: its name and a hash of its fil
 | `PETROHARNESS_API_KEY` | the API key sent to the endpoints (a model card can name another variable) |
 | `PETROHARNESS_SKILLS` | the skill library: a folder or `none` |
 | `PETROHARNESS_COMPONENTS` | another copy of the component texts (`src/petroharness/agent/components`), to compare two versions |
-| `PETROHARNESS_SET` | switches under test, `name=true,...`; none is defined (`agent/options.py`) |
+| `PETROHARNESS_SET` | switches under test, `name=true,...`: `tight_numbers`, `cell_thickness` (`options.py`) |
 
 Hosted tracing stays off: the harness refuses to start when `LANGSMITH_TRACING` (or a LangChain equivalent) is on,
 because LangSmith would send every prompt, with the well data, to its service.
@@ -277,7 +277,8 @@ They skip without it:
 
 - the golden tapes (`tests/golden/`) and the prompt fixture (`tests/agent/fixtures/prompts.json.gz`) are recorded on
   benchmark wells and kept with that data; the golden tests also read the data configs from `$WELLLOGBENCH`;
-- the end-to-end tests of the own-well command and the web UI read sample wells from `$PETROHARNESS_SAMPLE_LAS`;
+- the end-to-end tests of the own-well command and the web UI read Petrophys's sample wells (from its `datasets`
+  package, or the folder `$PETROHARNESS_SAMPLE_LAS` names);
 - the tests of saved runs read `$PETROHARNESS_RUNS` (a glob of run folders).
 
 </details>
@@ -320,10 +321,10 @@ these pages.
 src/petroharness/
   cli.py        the command line: a question about one well (default), chat, audit, setup, ui and benchmark mode
   session/      a conversation on one interval: the session graph (graph.py), the session log (log.py), the
-                earlier-questions block, `petroharness chat` (docs/SESSIONS.md, docs/SESSION_GRAPH.md)
+                earlier-questions block, `petroharness chat` (docs/SESSIONS.md, docs/GRAPH.md)
   evidence/     the evidence graph rebuilt from a session log, the well's record as data, the number links, the
                 audit trail (docs/EVIDENCE.md)
-  core/         what every part shares: the setup record (docs/SETUP.md)
+  core/         what every part shares: the setup record (docs/EVIDENCE.md)
   figures.py    an answer's figures: Petrophys' plots chosen by the model, bound to the interval
   basis.py      the methods and parameters an answer rests on, read from the record
   ask.py        a question about any LAS file: the interval, the settings, the run, the output (and its Python API)
@@ -338,7 +339,7 @@ src/petroharness/
                 the tops reader (well/tops.py)
   record/       the workflow's record as evidence: analyzer sections, the evidence catalog, the record's facts
   agent/        the map, the tools, the ledger and claims, the question graph, the writer; toolset.py: each tool
-                defined once; library*.py: the verbs over Petrophys and the registry of its functions (docs/TOOLS.md)
+                defined once; library/: the verbs over Petrophys and the registry of its functions (docs/TOOLS.md)
   tools/        the tool definition and the set that holds the definitions (spec.py); no tool of its own
   agent/components/   every fixed text the model reads, by component (C1-C10)
   resources/    the policy, the report style, the registries, the topic areas, the skill libraries, the model cards
@@ -346,8 +347,8 @@ configs/        data.example.yaml
 tests/          unit and data tests; tests/agent the harness's own; tests/golden the tapes; tests/gate the public
                 mini set and the request gate; tests/session, tests/evidence, tests/core, tests/figures
 docs/           the guides (USAGE.md, SESSIONS.md, UI.md, MODELS.md, TOOLS.md), the concepts (ARCHITECTURE.md,
-                GRAPH.md and graph.mmd, SESSION_GRAPH.md, EVIDENCE.md, SETUP.md, DESIGN.md), DEVELOPMENT.md (this
-                file), reference/, images/
+                GRAPH.md with graph.mmd, graph_later.mmd and graph_session.mmd, EVIDENCE.md, DESIGN.md), DEVELOPMENT.md
+                (this file), reference/, images/
 ```
 
 </details>

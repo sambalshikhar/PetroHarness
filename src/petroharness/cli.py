@@ -27,8 +27,9 @@ from pathlib import Path
 
 from petroharness.agent import direction
 from petroharness.agent.graph import answer as graph_answer
-from petroharness.agent.loop import MAX_STEPS
+from petroharness.agent.state import MAX_STEPS
 from petroharness.config import REPO_ROOT as ROOT, HarnessConfig
+from petroharness.core.files import write_atomic
 from petroharness.core.setup import harness_commit
 from petroharness.models import DEFAULT_KEY
 from petroharness.tasks import load_tasks
@@ -48,7 +49,7 @@ def save(prefix: str, model_key: str, arm: str, items: list, index: dict, gt_dir
         (out / "traces").mkdir(parents=True, exist_ok=True)
         (out / "responses").mkdir(exist_ok=True)
         for t, r in rows:
-            (out / "traces" / f"{t.task_id}.json").write_text(json.dumps(r["trace"], indent=1, default=str), encoding="utf-8")
+            write_atomic(out / "traces" / f"{t.task_id}.json", json.dumps(r["trace"], indent=1, default=str))
         name = f"single_formation_{cat}_qa_pairs.json"
         pairs = [{"qa_id": index[t.task_id]["qa_id"], "question": t.question, "answer": r["answer"]} for t, r in rows]
         (out / "responses" / name).write_text(json.dumps({"metadata": {"category": cat, "model": model_key, "harness": f"petroharness {arm}",
@@ -61,6 +62,15 @@ def save(prefix: str, model_key: str, arm: str, items: list, index: dict, gt_dir
         sub.mkdir(parents=True, exist_ok=True)
         kept = [p for p in gt_rows if p["qa_id"] in keep]
         (sub / name).write_text(json.dumps({**gt_all, "qa_pairs": kept} if isinstance(gt_all, dict) else kept, indent=1), encoding="utf-8")
+
+
+def _saved(path: Path) -> dict | None:
+    """A trace an earlier run of the arm saved, or None: none, or one it cannot read (cut short by a run killed before
+    traces were written whole), which is answered again."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    except (OSError, ValueError):
+        return None
 
 
 def answer(task, model_key: str, rep: int, max_steps: int, writer: str = "", fmt: str = "profile",
@@ -137,14 +147,14 @@ def benchmark(argv=None):
         def one(t):
             group = index[t.task_id]["category"]                 # the output folder only; the run never sees it
             path = ROOT / "runs" / f"{prefix}_{group}" / "traces" / f"{t.task_id}.json"
-            if path.exists():
-                tr = json.loads(path.read_text(encoding="utf-8"))
+            tr = _saved(path)
+            if isinstance(tr, dict):
                 if tr.get("commit") == COMMIT and "answer" in tr and not str(tr.get("status", "")).startswith("error"):
                     return {"answer": tr["answer"], "status": tr["status"], "trace": tr}
             r = answer(t, key, args.rep, args.max_steps, args.writer, args.format, direct=not args.investigate)
             r["trace"]["answer"] = r["answer"]
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(r["trace"], indent=1, default=str), encoding="utf-8")
+            write_atomic(path, json.dumps(r["trace"], indent=1, default=str))
             return r
 
         with ThreadPoolExecutor(args.workers) as ex:

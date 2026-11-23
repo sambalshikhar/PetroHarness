@@ -1,11 +1,11 @@
 """The tools of the investigation, each defined once (petroharness.tools.spec.Tool).
 
-Everything that lists tools reads TOOLSET: the brief's tool text and its groups (agent/loop.py), the names the reply
+Everything that lists tools reads TOOLSET: the brief's tool text and its groups (agent/prompts.py), the names the reply
 parser knows, the door a call goes through (agent/schemas.py), the ledger's one-line listings, the web UI's groups.
 
 Adding a tool (docs/TOOLS.md, "Adding a tool"):
   1. its function, run(formation, **arguments) -> Result, where its kind lives: agent/tools.py (a lookup of the
-     record), agent/compute.py (a computed table) or agent/library*.py (an object of a verb over Petrophys);
+     record), agent/compute.py (a computed table) or agent/library/ (an object of a verb over Petrophys);
   2. its description, the text the model reads, in components/C4_tools/tool_descriptions.json;
   3. its definition below, under its group.
 tests/agent/test_tool_registration.py checks every definition, and the request gate (tests/gate) proves that a change
@@ -16,10 +16,11 @@ from __future__ import annotations
 from petroharness.agent import components as C  # the texts: src/petroharness/agent/components
 from petroharness.agent import compute as K
 from petroharness.agent import library as P
-from petroharness.agent import library_calibrate, library_check, library_classify, library_summarize
+from petroharness.agent.library import calibrate as library_calibrate, check as library_check
+from petroharness.agent.library import classify as library_classify, summarize as library_summarize
 from petroharness.agent import tools as T
 from petroharness.agent.engine import STATISTICS
-from petroharness.agent.library_api import verb_tool
+from petroharness.agent.library.api import verb_tool
 from petroharness.tools.spec import Tool, Toolset
 
 # --- the groups, as the brief heads them (docs/TOOLS.md: the tools by what users ask) ----------------------------------
@@ -59,7 +60,7 @@ def _verb(name: str, curated, group: str, text, arguments, main: str = "curves")
     every Petrophys function it serves, so none of its own arguments is required. Its description ends with what a
     search reaches. Both are built when asked: the lists of methods come from the library's catalog."""
     def description() -> str:
-        from petroharness.agent.library_api import menu_line
+        from petroharness.agent.library.api import menu_line
         return text() + "\n" + menu_line(name)
 
     def properties() -> dict:
@@ -113,13 +114,13 @@ TOOLSET.add(
           "depths": {"type": "array", "items": {"type": ["number", "string"]},
                      "description": "depths, e.g. [2900] or [\"9500 ft\"] (each nearest sample), or a range "
                                     "[\"2895-2905\"] (every sample in it)"}},
-         ("curves", "depths"), lead="curves"),
+         ("curves", "depths"), lead="curves", stretch="whole_well"),     # the depths it is asked, wherever they lie
     Tool("section", T.section, DESCRIBE, _text("section"),
          {"key": {"type": "string", "description": "the section key exactly as the description lists it (family.section)"}},
-         ("key",), main="key", lead="key"),
+         ("key",), main="key", lead="key", stretch="focus_only", focus_reason="the workflow's analyzer sections"),
     Tool("step", T.step, DESCRIBE, _text("step"),
          {"name": {"type": "string", "description": "the step name as the description lists it, e.g. saturation"}},
-         ("name",), main="name", lead="name"),
+         ("name",), main="name", lead="name", stretch="whole_well"),     # the well's record of a step
     Tool("formation_summary", K.formation_summary, DESCRIBE, _text("formation_summary"),
          {"curves": CURVES, "statistics": STATS},
          (), lead="curves", table=True),
@@ -131,20 +132,20 @@ TOOLSET.add(
           "zones": ZONES,
           "tolerance": {"type": "number", "description": "report the share of samples where |a - b| exceeds it"},
           "where": WHERE},
-         ("a", "b"), main="a", lead="a"),
+         ("a", "b"), main="a", lead="a", pair=("a", "b"), pair_word="vs"),
     # a least-squares line of one curve on another or on depth (relations, matrix lines, depth trends)
     Tool("crossplot", T.crossplot, COMPARE, _text("crossplot"),
          {"y": {"type": "string", "description": "the curve on the vertical axis, e.g. RHOB"},
           "x": {"type": "string", "description": "a curve, or DEPTH, e.g. NPHI"},
           "zones": ZONES, "log_y": {"type": "boolean", "description": "fit log10(y)"},
           "log_x": {"type": "boolean", "description": "fit against log10(x)"}, "where": WHERE},
-         ("y", "x"), main="y", lead="y"),
+         ("y", "x"), main="y", lead="y", pair=("y", "x"), pair_word="on"),
     Tool("overlap", T.overlap, COMPARE, _text("overlap"),
          {"a": {"type": "string", "description": "condition A: " + CONDITION},
           "b": {"type": "string", "description": "condition B, in the same grammar"},
           "zones": ZONES,
           "limit": {"type": "integer", "description": "how many runs of each set to list before cutting to the thickest (12)"}},
-         ("a", "b"), main="a"),
+         ("a", "b"), main="a", pair=("a", "b")),
     Tool("lithology_stats", K.lithology_stats, COMPARE, _text("lithology_stats"),
          {"curves": CURVES, "statistics": {"type": "array", "items": {"type": "string"}}, "zones": ZONES},
          ("curves",), lead="curves", table=True),
@@ -230,7 +231,8 @@ TOOLSET.add(
     Tool("zone_classes", K.zone_classes, CLASSIFY, _text("zone_classes"),
          {"topic": {"type": "string",
                     "description": "a classification topic, e.g. hc_indicators, porosity_quality, flow_units"}},
-         ("topic",), main="topic", lead="topic", table=True),
+         ("topic",), main="topic", lead="topic", table=True, stretch="focus_only",
+         focus_reason="the workflow's analyzer classes, zone by zone"),
     Tool("unit_roles", K.unit_roles, CLASSIFY, _text("unit_roles"),
          {"zones": ZONES},
          (), main="zones", table=True),

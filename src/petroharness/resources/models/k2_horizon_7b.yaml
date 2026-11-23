@@ -6,7 +6,7 @@
 # overlay file overrides it). The fields: docs/MODELS.md.
 model:
   base_url: http://localhost:8000/v1
-  model: k2-horizon-7b-grpo200
+  model: k2-horizon-7b
   label: K2-Horizon-7B
   reasoning: true
   chat_template_kwargs: {reasoning_effort: high}

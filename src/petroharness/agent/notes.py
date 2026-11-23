@@ -5,6 +5,7 @@ import re
 
 import numpy as np
 
+
 BAD_HOLE_SHOWN = 5.0           # zones with at least this share (%) of bad-hole samples are named
 NOT_RUN_SHARE = 99.0           # a class over at least this share (%) of the samples is "about the whole interval"
 _CURVE = re.compile(r"\b[A-Z][A-Z0-9_]{1,}\b")
@@ -83,8 +84,6 @@ def _not_run_notes(sections, curves: dict) -> list:
 # its carbonate indicators need PEF and RHOB on the same sample, and a sample it cannot test keeps NON_CARBONATE; its
 # GR and PEF consistency windows exist for these groups only, so a rock of any other group cannot match
 CARBONATE_INPUTS = ("PEF", "RHOB")
-CARBONATE_PEF, CARBONATE_RHOB = 2.8, 2.6            # its indicator: PEF > 2.8 and bulk RHOB > 2.6 on the same sample
-CALCITE_RHO, WATER_RHO = 2.71, 1.0                  # g/cm3, the matrix and fluid of a water-filled limestone
 CONSISTENCY_GROUPS = ("SHALE", "SANDSTONE", "LIMESTONE", "DOLOMITE")
 
 
@@ -110,53 +109,45 @@ def _carbonate_note(view, sections) -> list:
             + "; samples it could not test keep the label NON_CARBONATE"]
 
 
+def _labels(view, sec) -> np.ndarray:
+    """Each interval sample's label in the section, as Petrophys's analyzer gave it (None where it gave none)."""
+    from petroharness.record.analyzers import sample_labels
+    family, _, name = sec.key.partition(".")
+    return sample_labels(view, family, name)
+
+
 def _mismatch_note(view, sections) -> list:
-    """CARBONATE_LOG_MISMATCH where PEF reads carbonate and only bulk RHOB fails the indicator: the rule, the counts and
-    the bulk density a water-filled calcite matrix has at their median porosity (facts only: the model concludes)."""
+    """CARBONATE_LOG_MISMATCH (PEF reads carbonate and bulk RHOB fails the indicator): the samples Petrophys's analyzer
+    labelled so, and its recorded indicators (facts only: the model concludes)."""
     sec = _section(sections, "carbonate_analysis")
     mis = next((c for c in (sec.classes if sec else []) if c.name == "CARBONATE_LOG_MISMATCH"), None)
     if mis is None:
         return []
-    pef, rho = (np.asarray(view.values(c), dtype=float) if view.values(c) is not None else None for c in CARBONATE_INPUTS)
-    if pef is None or rho is None:
-        return []
-    tested = np.isfinite(pef) & np.isfinite(rho)
-    rho_only = tested & (pef > CARBONATE_PEF) & (rho <= CARBONATE_RHOB)
-    if tested.sum() == 0 or rho_only.sum() < 0.5 * tested.sum():
-        return []
-    phi = next((np.asarray(view.values(c), dtype=float) for c in ("PHIE", "PHIT") if view.available(c)), None)
-    if phi is None or not np.isfinite(phi[rho_only]).any():
-        return []
-    p = float(np.nanmedian(phi[rho_only]))
-    expect = CALCITE_RHO * (1 - p) + WATER_RHO * p
-    return [f"{sec.key}: its carbonate indicator needs PEF > {CARBONATE_PEF:g} and bulk RHOB > {CARBONATE_RHOB:g} g/cm3; at "
-            f"{int(rho_only.sum())} of {int(tested.sum())} tested samples here PEF reads carbonate and only bulk RHOB fails. "
-            f"At their median porosity ({p:.3g} v/v) a water-filled calcite matrix reads about {expect:.3g} g/cm3 "
-            f"(RHOB = {CALCITE_RHO:g} (1 - phi) + {WATER_RHO:g} phi)"]
-
-
-GAS_SCREEN = 0.03       # petrophys saturation_analysis: WEAK_GAS_EFFECT from PHID - PHIN >= 0.03 (0.08, 0.15 above)
+    labels = _labels(view, sec)
+    n, labelled = int(np.sum(labels == mis.name)), int(np.sum(labels != None))     # noqa: E711 (elementwise)
+    return [f"{sec.key}: {mis.name} at {n} of the {labelled} samples its analyzer labelled here"
+            + (f" (its indicators: {sec.thresholds})" if sec.thresholds else "")] if n else []
 
 
 def _gas_screen_note(view, sections) -> list:
     """The saturation analyzer's gas classes screen PHID - PHIN alone on every sample; the workflow's crossover call
     (CROSSOVER_FLAG) adds clay, porosity and hole conditions: how many screened samples it confirms here."""
     sec = _section(sections, "gas_indicator_analysis_methods")
-    if sec is None or not any(c.name.endswith("_GAS_EFFECT") and not c.name.startswith("NO_") for c in sec.classes):
+    gas = [c for c in (sec.classes if sec else []) if c.name.endswith("_GAS_EFFECT") and not c.name.startswith("NO_")]
+    if not gas:
         return []
     sep, flag = view.values("ND_SEPARATION"), view.values("CROSSOVER_FLAG")
     if sep is None or flag is None:
         return []
     sep, flag = np.asarray(sep, dtype=float), np.asarray(flag, dtype=float)
+    screened = np.isin(_labels(view, sec), [c.name for c in gas])      # the samples the analyzer gave a gas class
     with np.errstate(invalid="ignore"):
-        screened, called = sep >= GAS_SCREEN, flag > 0.5
-    try:
-        from petrophys.evaluation.diagnostics.hydrocarbon_analysis import HydrocarbonAnalysis as H
-        rule = (f"PHID - PHIN > {H.CROSSOVER_ND_SEPARATION:g} with VCL < {H.CROSSOVER_VCL_MAX:g}, PHIE > "
-                f"{H.CROSSOVER_PHIE_MIN:g} and good hole")
-    except Exception:  # noqa: BLE001  (an older petrophys: the rule unnamed)
-        rule = "a larger separation with clay, porosity and hole conditions"
-    return [f"{sec.key}: its gas classes screen PHID - PHIN alone (WEAK_GAS_EFFECT from {GAS_SCREEN:g}) with no clay, "
+        called = flag > 0.5
+    from petrophys.evaluation.diagnostics.hydrocarbon_analysis import HydrocarbonAnalysis as H
+    rule = (f"PHID - PHIN > {H.CROSSOVER_ND_SEPARATION:g} with VCL < {H.CROSSOVER_VCL_MAX:g}, PHIE > "
+            f"{H.CROSSOVER_PHIE_MIN:g} and good hole")
+    classes = "; ".join(f"{c.name} {c.definition}" if c.definition else c.name for c in gas)
+    return [f"{sec.key}: its gas classes screen PHID - PHIN alone ({classes}) with no clay, "
             f"porosity or hole condition, at {int(screened.sum())} of {screened.size} samples here; the workflow's "
             f"crossover call CROSSOVER_FLAG ({rule}) is set at {int((screened & called).sum())} of them"]
 
@@ -166,10 +157,7 @@ def _consistency_note(view, sections) -> list:
     sec = _section(sections, "lithology_log_consistency")
     if sec is None:
         return []
-    try:
-        from petrophys.evaluation.diagnostics.lithology_analysis import GROUND_TRUTH_GROUPS
-    except Exception:  # noqa: BLE001  (an older petrophys: no note)
-        return []
+    from petrophys.evaluation.diagnostics.lithology_analysis import GROUND_TRUTH_GROUPS
     table = getattr(view, "code_table", None) or {}
     hit = {}
     for z in view.zones:

@@ -38,7 +38,7 @@ flowchart TB
 | Choosing a library | `--skills`, else `PETROHARNESS_SKILLS`, else a model card's top-level `skills:` (`HarnessConfig.skills`; a data settings file has no `skills` key), else the default; `none` for no guides |
 | Loading | read and checked before the first question; every problem reported at once as WHAT / WHY / FIX |
 | Index | DIRECTION in every step prompt: one line per guide under its topic areas, the chosen topics first |
-| Reading a guide | the action `{"guide": "<name>"}`, up to 2 a step (`loop.MAX_GUIDES`), outside the 6 lookups |
+| Reading a guide | the action `{"guide": "<name>"}`, up to 2 a step (`state.MAX_GUIDES`), outside the 6 lookups |
 | GUIDES block | a guide whole at the step after it is read, short (its Compare calls) after that |
 | Provenance | every Decide, Know, Easily misread and Do not state line has a `sources.yaml` row: class `a` (literature), `g` (guideline) or `b` (workflow fact) |
 | Trace record | `trace["skills"] = {"library": <name or "none">, "version": <12 hex digits>}` |
@@ -73,7 +73,7 @@ flowchart TB
    calls it before the question runs, `cli` before a batch.
 2. **Load and check.** `direction.load` reads and checks `library.yaml`, `refs.yaml` and every guide folder, and
    returns a `Library` with a version hash, or raises `LibraryError` listing every problem.
-3. **Read the question.** The READ call (`loop.read_question`) chooses one to four topic areas from
+3. **Read the question.** The READ call (`read.read_question`) chooses one to four topic areas from
    `direction.areas()`; they key the first look, the map's notes, the index order and what a guide opens.
 4. **Show the index.** `graph.first_look` puts `DIRECTION` (`Library.index(topics)`) in the head of every look and
    investigation step.
@@ -96,7 +96,7 @@ One setting picks the library, read in this order of precedence.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `--skills PATH\|none` | command option | unset | `petroharness`, `petroharness chat` and `petroharness setup`; a relative path that exists is resolved from the working directory | `ask.run_options`, `ask.prepare` |
+| `--skills PATH\|none` | command option | unset | `petroharness`, `petroharness chat` and `petroharness setup`; a relative path that exists is resolved from the working directory | `ask.run_options`, `interval.prepare` |
 | `ask(skills=...)` | `str` or `None` | `None` | the Python API's argument; the same as `--skills` | `ask.ask` |
 | `skills` (web UI) | `str` | `default` | `default`, `none` or a folder that must exist | `ui/adapter.py` |
 | `PETROHARNESS_SKILLS` | environment variable | unset | used when no `--skills` is given | `config.SKILLS_ENV` |
@@ -147,7 +147,7 @@ areas:
 
 - `direction.areas()` returns the areas in file order; `families(topics)` and `overview(topics)` return each family
   or curve once, in topic order.
-- The topics are used for: the READ reply's schema (`loop.read_schema`), the first look (`graph.first_look`), the
+- The topics are used for: the READ reply's schema (`read.read_schema`), the first look (`graph.first_look`), the
   map's notes (`map.scoped_notes`), the index order, the sections a guide opens (`graph.decide`), the scope of the K8
   claim check (`Claims.families`) and the standard curves of the by-interval zone table (`writer.zone_table`).
 
@@ -267,7 +267,7 @@ areas: [porosity]
 - `direction.write_skill` writes a facet back in the same format; the packaged guides read and write back to the same
   bytes (`test_skill_file_is_canonical`). Write one finding per bullet, with no line break inside a bullet.
 - A line may carry a switch gate: `[option] text` is shown only while that switch is on, `[!option] text` only while
-  it is off (`direction.gated`). A gate must name a switch of `agent/options.py`, which defines none at present, so a
+  it is off (`direction.gated`). A gate must name a switch of `options.py`, which defines none at present, so a
   gated line fails the load check.
 - The packaged guides end Decide with an answer-shape line (`Answer shape: quantify (...)`), in one of five forms:
   locate, quantify, relate, classify or explain. Load does not require it.
@@ -452,7 +452,7 @@ The model reads a guide with `{"guide": "<name>"}`; `Session.run` renders it for
 
 | Name | Kind | Meaning | Defined in |
 |---|---|---|---|
-| action | `{"guide": name}` | also `{"tool": "guide", "name": name}` (or `"facet"`); the name is stripped and lower-cased | `loop.coerce_action`, `Session.run` |
+| action | `{"guide": name}` | also `{"tool": "guide", "name": name}` (or `"facet"`); the name is stripped and lower-cased | `replies.coerce_action`, `Session.run` |
 | per step | `int`, `2` (`MAX_GUIDES`) | guides read in an investigation step, outside the 6 lookups | `graph.decide` |
 | look step | rule | a guide counts toward the look step's 4 lookups, and its text goes into NEW | `graph.look` |
 | render | `str` | `GUIDE <name> (when: ...)`, then each part with lines: `Consider:`, `Compare:`, `Decide:`, `Know:`, `Easily misread:`, `Do not state:` | `direction.Library.guide` |
@@ -765,12 +765,12 @@ What changes with no library.
 |---|---|---|---|
 | `Session.library` | the plugged `Library` | `None` | `direction.plugged` |
 | DIRECTION | in the head | not in the head | `graph.first_look` |
-| brief (C1) | with the guide fragments | `{direction}` and `{guide_action}` filled with `""` | `loop.brief` |
-| step 1 (C5) | with the guide fragments | `{guide_sentence}` and `{guide_call}` filled with `""` | `loop.step1` |
-| guide action | read | not an action: said back by C8 `not_run`, whose action list leaves out `guide` | `loop.coerce_action`, `graph.decide` |
+| brief (C1) | with the guide fragments | `{direction}` and `{guide_action}` filled with `""` | `prompts.brief` |
+| step 1 (C5) | with the guide fragments | `{guide_sentence}` and `{guide_call}` filled with `""` | `prompts.step1` |
+| guide action | read | not an action: said back by C8 `not_run`, whose action list leaves out `guide` | `replies.coerce_action`, `graph.decide` |
 | GUIDES | when a guide is read | never shown | `Session.guides_text` |
 | lookups a guide opens | as section 7 | none | `graph.decide` |
-| READ, topics, first look, notes | | unchanged: they use the topic areas | `loop.read_question`, `graph.first_look` |
+| READ, topics, first look, notes | | unchanged: they use the topic areas | `read.read_question`, `graph.first_look` |
 | trace `skills` | name and version | `{"library": "none", "version": null}` | `direction.stamp` |
 
 `tests/agent/test_skill_library.py` checks that with no library no model-facing text speaks of guides and a run
@@ -787,10 +787,10 @@ library (sections 7 and 11):
 |---|---|---|
 | The setting names a folder with no `library.yaml` | `LibraryError` with one WHAT / WHY / FIX; the run does not start | `direction.load` |
 | A library has problems | `LibraryError` listing every problem; the run does not start | `direction.load` |
-| `--skills` names a relative path that does not exist | it is passed on and resolved against `src/petroharness/resources/`, then fails to load | `ask.prepare`, `direction.plugged` |
+| `--skills` names a relative path that does not exist | it is passed on and resolved against `src/petroharness/resources/`, then fails to load | `interval.prepare`, `direction.plugged` |
 | The web UI names a folder that does not exist | an input error before the run | `ui/adapter.py` |
 | More than 2 guides in one step | the first 2 run; the next prompt says how many were left out | `graph.decide`, C8 `extra_left_out` |
-| The READ reply has no readable topics | the index in `topics.yaml` order; no lookups are opened with a guide | `loop.read_question`, `graph.decide` |
+| The READ reply has no readable topics | the index in `topics.yaml` order; no lookups are opened with a guide | `read.read_question`, `graph.decide` |
 
 ## 13. Related pages
 

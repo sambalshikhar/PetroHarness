@@ -79,7 +79,7 @@ def test_any_statistic_the_layer_computes_is_served_and_another_is_derived():
 
 @lru_cache(maxsize=1)
 def formation():
-    from test_b2_tools import F
+    from _support.formations import F
     hit = [(t, f) for t, f in F() if len(f.view.zones) >= 3 and S.outside(f.view) > 0 and "PHIE" in f.inv.curves]
     if not hit:
         pytest.skip("no formation with three zones, samples between them and PHIE")
@@ -208,7 +208,7 @@ def test_a_continuous_curve_keeps_its_statistics():
 def test_measured_logs_and_computed_properties_read_as_values_on_every_formation():
     """The rule on real data: no measured log or computed property is taken for codes (the rule's survey over the
     datasets found only lithology logs, electrofacies and lithology group codes as classes)."""
-    from test_b2_tools import F
+    from _support.formations import F
     for t, f in F():
         for c in ("GR", "RHOB", "NPHI", "RDEP", "DTC", "CALI", "PEF", "PHIE", "PHIT", "SW", "VCL", "PERM", "BVW"):
             if c in f.inv.curves:
@@ -233,7 +233,7 @@ def test_labels_apply_where_the_record_maps_the_codes():
 
 @pytest.mark.data
 def test_the_lithology_log_is_labelled_from_the_code_table():
-    from test_b2_tools import F
+    from _support.formations import F
     done = 0
     for t, f in F():
         lith = f.view.lithology_curve
@@ -288,12 +288,12 @@ SHORT = r"^  (Z\d+), ({c})(?: \([a-z][a-z ,]*\))?: n \d+"                   # it
 def test_a_cut_text_names_what_it_cut_and_the_find_fetches_it(monkeypatch, limit):
     """Every zone's full row is in the item; the text shows each zone of every curve (full, or a shorter row when the
     full rows do not fit), or names it as cut; its last line names what is not shown and the find that fetches it."""
-    from test_b2_tools import F
+    from _support.formations import F
     t, f = max(F(), key=lambda tf: len(tf[1].view.zones))
     cs = [c for c in ("PHIE", "VCL", "SW", "GR") if c in f.inv.curves][:3]
     if len(f.view.zones) < 6 or len(cs) < 2:
         pytest.skip("too few zones or curves")
-    monkeypatch.setattr(E, "WIDE_CHARS", limit)                  # a small size limit: a cut is certain
+    monkeypatch.setattr(E.base, "WIDE_CHARS", limit)                  # a small size limit: a cut is certain
     led = Ledger(f)
     item, _ = led.open("stats", {"curves": cs})
     text = item.text.splitlines()
@@ -328,11 +328,11 @@ def test_a_cut_text_names_what_it_cut_and_the_find_fetches_it(monkeypatch, limit
 
 @pytest.mark.data
 def test_a_cut_table_names_its_rows(monkeypatch):
-    from test_b2_tools import F
+    from _support.formations import F
     t, f = max(F(), key=lambda tf: len(tf[1].view.zones))
     if len(f.view.zones) < 4:
         pytest.skip("too few zones")
-    monkeypatch.setattr(E, "WIDE_CHARS", 1200)
+    monkeypatch.setattr(E.base, "WIDE_CHARS", 1200)
     led = Ledger(f)
     item, _ = led.open("zone_classes", {"topic": "porosity_quality"})                # a row per zone
     last = item.text.splitlines()[-1]
@@ -375,7 +375,7 @@ def _labelled(f, ln) -> bool:
 
 @pytest.mark.data
 def test_every_value_line_of_a_summary_names_its_basis_and_curve():
-    from test_b2_tools import F
+    from _support.formations import F
     checked = 0
     for t, f in F()[:6]:
         cs = [c for c in ("PHIE", "PERM", "VCL", "SW", "GR", "NET_PAY", "ELECTROFACIES", f.view.lithology_curve or "")

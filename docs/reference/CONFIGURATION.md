@@ -30,12 +30,12 @@ flowchart LR
 | Model endpoints | `--model-url`, `PETROHARNESS_MODEL_URL` | none (benchmark mode: `http://localhost:8000/v1`) | every model call | `models.env_urls`, `agent.graph.task_config` |
 | Skill library | `--skills`, `PETROHARNESS_SKILLS` | `skills/researched` (packaged) | the investigation | `config.skills_setting`, `agent.direction.plugged` |
 | Interpretation policy | `resources/policy/reference_v2.yaml` (`ResourcePaths.policy_file`) | cutoffs VCL 0.30 and SW 0.70, zone minimum 2.0 m, VCL bands 0.3 and 0.6, depth unit m | interpretation and zoning | `well.prepare.load_policy` |
-| Step cap | `--max-steps`, `max_steps=` | 8 (`agent/loop.py MAX_STEPS`) | the investigation | `agent.loop` |
+| Step cap | `--max-steps`, `max_steps=` | 8 (`agent/state.py MAX_STEPS`) | the investigation | `agent.state` |
 
 ## 2. How it works
 
-For a question (`petroharness`, `petroharness chat`, the web UI, `ask()`, `Conversation.start`), `ask._settings` and
-`ask.prepare` build the data settings per LAS file: a settings file's `data:` section as the base, the LAS's folder,
+For a question (`petroharness`, `petroharness chat`, the web UI, `ask()`, `Conversation.start`), `interval._settings` and
+`interval.prepare` build the data settings per LAS file: a settings file's `data:` section as the base, the LAS's folder,
 the run's cache, the policy's net-pay cutoffs under any Petrophys options, then the user's interpretation settings.
 
 ```mermaid
@@ -68,7 +68,7 @@ petroharness --las $LAS --tops $TOPS --formation "BRENT GP." --settings brent.ya
   --question "Which zone has the best reservoir quality?"
 ```
 
-The data settings built for it (real output of `ask.prepare`; the two folders shortened):
+The data settings built for it (real output of `interval.prepare`; the two folders shortened):
 
 ```json
 {"interpret": {"gr_min": 30, "gr_max": 120, "vcl_cutoff": 0.3, "sw_cutoff": 0.7},
@@ -90,7 +90,7 @@ gave 31 zones.
 3. `--lithology-curve` replaces `lithology_curve`.
 4. `--profile NAME` sets `interpret: {context_profile: NAME}`. Otherwise, unless `interpreter` is set, `interpret`
    keeps the file's options and adds the policy's net-pay cutoffs where they are not set: `vcl_cutoff: 0.3` and
-   `sw_cutoff: 0.7` (`ask.POLICY_CUTOFFS`, from the policy's `cutoffs.vcl_max` and `cutoffs.sw_max`). Options with a
+   `sw_cutoff: 0.7` (`interval.POLICY_CUTOFFS`, from the policy's `cutoffs.vcl_max` and `cutoffs.sw_max`). Options with a
    `context_profile` get no cutoffs.
 5. The interpretation settings in force (the field notes' settings, overlaid by `interpretation=`) are checked by
    `well.settings.validate` and split by `well.settings.split`: Petrophys's go over `interpret`, the zone rule
@@ -122,7 +122,7 @@ petroharness --las $LAS --tops $TOPS --formation "BRENT GP." --question "..." --
 
 | Entry point | File read | With no file | Defined in |
 |---|---|---|---|
-| `petroharness`, `petroharness chat`, `petroharness ui`, `ask()`, `Conversation.start` | `--settings` (`settings=`), else `PETROHARNESS_DATA`; the `data:` section only | built from the LAS alone | `ask._settings` |
+| `petroharness`, `petroharness chat`, `petroharness ui`, `ask()`, `Conversation.start` | `--settings` (`settings=`), else `PETROHARNESS_DATA`; the `data:` section only | built from the LAS alone | `interval._settings` |
 | `petroharness setup` | `--settings`, else `PETROHARNESS_DATA`; the `data:` section is hashed, and with `--las` the settings are built from the LAS as for a question | `{data: {las_dir: "."}}`; with `--las`, built from the LAS alone | `core.setup.config_for`, `core.setup.for_well` |
 | `petroharness benchmark`, `HarnessConfig()`, `cli.answer` | `PETROHARNESS_DATA`, else `<repository root>/configs/data.local.yaml`; sections `data:` and `eval:` | `ValueError: WHAT: no data settings at <path> ...` | `config.data_file`, `config.user_settings` |
 | Code inside `config.given_settings(settings)` | none: the given dict | not applicable | `config.given_settings` |
@@ -180,14 +180,14 @@ samples; tops file formations_costa.csv, base: stated base)`.
 | `interpreter` | text or null | null | A Petrophys batch interpreter that interprets the data instead: `module:function` or `/path/adapter.py:function`, with the contract of Petrophys's `process_las_directory_with_workflow` (`(input_dir, output_dir, well_names=...)`, one `BatchLasResult` per well). Excludes `interpret`. | `DataPaths.interpreter`, `well.prepare._interpret_with_interpreter` |
 | `engines_dir` | path or null | null | The folder of pinned interpretation engines, one folder per engine name, used when the policy names an engine and neither `interpret` nor `interpreter` is set. | `DataPaths.engines_dir`, `well.prepare.engine_dir` |
 | `depth_unit` | `m`, `ft`, `las` or null | null (the policy's `m`); a question sets it | The unit depths, thicknesses and zone limits are shown in; `las` is each file's own unit. | `DataPaths.depth_unit`, `well.view` |
-| `lithology_curve` | text, list of text, or null | null (detected) | The lithology log's mnemonic, or several (the first a well has with data is used). Null: the LAS curve whose mnemonic or description names a lithology or facies log and holds integer codes; with none, shale-volume bands. | `DataPaths.lithology_curve`, `well.formation.find_lithology_curve` |
+| `lithology_curve` | text, list of text, or null | null (detected) | The lithology log's mnemonic, or several (the first a well has with data is used). Null: the LAS curve whose mnemonic or description names a lithology or facies log and holds integer codes; with none, the lithology Petrophys's mineral solver wrote (its domain is the `lithology_domain` setting); with neither, shale-volume bands. | `DataPaths.lithology_curve`, `well.formation.find_lithology_curve` |
 | `lithology_nomenclature` | path or null | null (the library's table) | A workbook mapping lithology codes to labels; the library's table fills any code it lacks. | `DataPaths.lithology_nomenclature` |
 | `lithology_columns` | mapping | `{code: code, label: lithology}` | The workbook's code column and label column (`LithologyColumns`, also strict). | `config.LithologyColumns` |
 | `zone_layout` | `lithology_runs` or `formation` | `lithology_runs` | Runs of one lithology (thin runs dropped), or the whole interval as one zone labelled by the majority lithology. | `DataPaths.zone_layout`, `well.view` |
 | `zone_min_thickness_m` | number or null | null (the policy's 2.0) | A run no thicker than this (metres) is not a zone. | `DataPaths.zone_min_thickness_m`, `well.formation.segment_zones` |
-| `zone_vcl_bands` | two numbers or null | null (the policy's `[0.3, 0.6]`) | The VCL edges of the clean, shaly and shale-prone bands that zone a well without a lithology log. | `DataPaths.zone_vcl_bands` |
+| `zone_vcl_bands` | two numbers or null | null (the policy's `[0.3, 0.6]`) | The VCL edges of the clean, shaly and shale-prone bands that zone a well with neither a lithology log nor a solved lithology. | `DataPaths.zone_vcl_bands` |
 | `reach` | `well` or `focus` | `well` | What a question can reach. `well`: any stretch of the well (a unit of the tops file, the user's zones, a depth range) through a tool's zones, a verb's run under `where`, and the question's scope; intervals listed uncut by zones. `focus`: the interval only, as a benchmark frames its answers (every welllogbench config sets it). | `DataPaths.reach`, `agent.selection` |
-| `units` | list | `[]`; a question sets it | The tops file's units over the whole well (name, top, base), selectable by name under `reach: well`. Set by `ask.prepare` from the tops file. | `DataPaths.units`, `ask._units` |
+| `units` | list | `[]`; a question sets it | The tops file's units over the whole well (name, top, base), selectable by name under `reach: well`. Set by `interval.prepare` from the tops file. | `DataPaths.units`, `interval._units` |
 | `zones` | list | `[]`; `--zones` sets it | The user's zones (name, top, base), which frame the question in place of the lithology zones; read from a zones file by `well.user_zones.read_zones`. | `DataPaths.zones`, `well.view._user_zones` |
 | `zones_source` | text or null | null | The zones file's name, as the map names it. | `DataPaths.zones_source` |
 | `basis` | `all` or `zones` | `all` | The tools' statistics: each zone, the zones pooled and the whole interval (`all`), or the zones only (`zones`; the record keeps all three). | `DataPaths.basis` |
@@ -199,10 +199,11 @@ Notes:
 
 - How each LAS is interpreted: with `interpret`, `petrophys.interpret` with those options; with `interpreter`, that
   function; with neither, the engine the policy names, from `engines_dir` (an error when `engines_dir` is not set),
-  run in a subprocess. A question always sets `interpret` unless the file sets `interpreter`.
-- The cache key is the LAS content, the policy's interpretation keys (`name`, `engine`, `interpretation_scope`,
-  `gr_endpoints`, `rw`, `cutoffs`, `value_range_qc`), the interpretation code's version
-  (`prepare.INTERPRETATION_VERSION`), the Petrophys build, the named lithology curve, and the `interpret` options or
+  run in a subprocess, or, when the policy names none, `petrophys.interpret` with the library's settings and the
+  policy's cutoffs. A question always sets `interpret` unless the file sets `interpreter`.
+- The cache key is the LAS content, the policy's interpretation keys (`name`, `engine`, `cutoffs`,
+  `value_range_qc`), the interpretation code's version
+  (`prepare.INTERPRETATION_VERSION`), the Petrophys build, and the `interpret` options or
   `interpreter` (with the content of files they name). Delete the folder to interpret again.
 - `basis: zones` and `conventions` are a dataset's reporting settings, used for a benchmark's data
   ([ARCHITECTURE.md](../ARCHITECTURE.md#reporting-settings)).
@@ -265,7 +266,7 @@ it from the data.
 | Setting | Kind | Default | Meaning | Group |
 |---|---|---|---|---|
 | `zone_min_thickness_m` | number, m | `2.0` (policy) | A run of one lithology (or one shale-volume band) no thicker than this is not a zone; its samples stay in the whole-interval statistics as samples outside the zones. | Zones |
-| `zone_vcl_bands` | bands, v/v | `[0.3, 0.6]` (policy) | For a well without a lithology log: the VCL edges of the clean, shaly and shale-prone bands that zone it. | Zones |
+| `zone_vcl_bands` | bands, v/v | `[0.3, 0.6]` (policy) | For a well with neither a lithology log nor a solved lithology: the VCL edges of the clean, shaly and shale-prone bands that zone it. | Zones |
 | `zone_layout` | `lithology_runs`, `formation` | `lithology_runs` | Split the interval into runs of one lithology, or keep it as one zone. | Zones |
 | `gr_method` | `linear`, `larionov_tertiary`, `larionov_older`, `steiber`, `clavier` | `linear` | Transform: "linear", "larionov_tertiary", "larionov_older", "stieber" (stored as "steiber") or "clavier". | Clay volume |
 | `gr_min` | number, API | from the data | Clean-rock gamma-ray endpoint, API, used as given. | Clay volume |
@@ -391,10 +392,7 @@ read; a task never sees it (`HarnessConfig.for_tasks` drops it).
 |---|---|---|---|---|
 | `questions` | path or null | null | The question file, a JSON list of rows (`qa_id`, `question`, `las_path`, `formation`, `category`; [CLI.md](CLI.md#9-petroharness-benchmark)). Required by benchmark mode. | `EvalPaths.questions`, `tasks.load_tasks` |
 | `reference_context_dir` | path or null | null | The reference contexts, by category, well and formation; read by tests. | `EvalPaths.reference_context_dir` |
-| `category_context_dir` | path or null | null | The reference context per category; evaluation only. | `EvalPaths.category_context_dir` |
 | `gt_dir` | path or null | null | The reference question-answer files; read by tests. | `EvalPaths.gt_dir` |
-| `v0_repo` | path or null | null | Accepted; not read by the package or its tests. | `EvalPaths.v0_repo` |
-| `v0_artifacts` | path or null | null | A benchmark's artifacts folder (`judge/`, `runs/`); not read by the package. | `EvalPaths.v0_artifacts` |
 
 Example:
 
@@ -402,7 +400,6 @@ Example:
 eval:
   questions: /data/benchmark/questions.json
   reference_context_dir: null
-  category_context_dir: null
   gt_dir: /data/benchmark/references
 ```
 
@@ -477,7 +474,7 @@ petroharness --las $LAS --tops $TOPS --formation "BRENT GP." --question "..." --
 
 | Source | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `--skills` / `skills=` | folder or `none` | not set | Wins over the others; a relative path that exists from the current folder is made absolute. | `ask.prepare`, `config.given_settings` |
+| `--skills` / `skills=` | folder or `none` | not set | Wins over the others; a relative path that exists from the current folder is made absolute. | `interval.prepare`, `config.given_settings` |
 | `PETROHARNESS_SKILLS` | folder or `none` | not set | Used when no `--skills` was given. | `config.skills_setting` |
 | `HarnessConfig.skills` | folder or `none` | `skills/researched` | The configuration's library: a model card's top-level `skills:` key, which `HarnessConfig.load` overlays (the data settings file has no `skills` key). | `config.HarnessConfig` |
 
@@ -510,13 +507,13 @@ These are every environment variable read in `src/petroharness`.
 
 | Variable | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `PETROHARNESS_DATA` | path | not set | The data config. For a question and for `petroharness setup`, the base settings file when `--settings` is not given; for benchmark mode and `HarnessConfig()`, the data config (else `configs/data.local.yaml`). The web UI shows it in `/api/config` (`settings_env`). | `config.data_file`, `ask._settings`, `core.setup.config_for`, `ui.server.App.config` |
+| `PETROHARNESS_DATA` | path | not set | The data config. For a question and for `petroharness setup`, the base settings file when `--settings` is not given; for benchmark mode and `HarnessConfig()`, the data config (else `configs/data.local.yaml`). The web UI shows it in `/api/config` (`settings_env`). | `config.data_file`, `interval._settings`, `core.setup.config_for`, `ui.server.App.config` |
 | `PETROHARNESS_MODEL_URL` | comma-separated URLs | not set | The model endpoints, when `--model-url` is not given. | `models.env_urls` |
 | `PETROHARNESS_API_KEY` | text | not set (`EMPTY` is sent) | The API key, unless the card's `api_key_env` names another variable. | `config.HarnessConfig.api_key` |
 | the card's `api_key_env` (for example `OPENAI_API_KEY`) | text | not set | The API key for that card. | `config.HarnessConfig.api_key` |
 | `PETROHARNESS_SKILLS` | folder or `none` | not set | The skill library, when `--skills` is not given. The web UI shows it in `/api/config` (`skills_env`). | `config.skills_setting`, `ui.server.App.config` |
 | `PETROHARNESS_COMPONENTS` | folder | not set (`src/petroharness/agent/components`) | Another copy of the component texts, read at import, to compare two versions. | `agent.components.HERE` |
-| `PETROHARNESS_SET` | `name=value,...` | not set | Switches under test; none is defined, so any name raises `ValueError`. | `agent.options.get` |
+| `PETROHARNESS_SET` | `name=value,...` | not set | Switches under test (`tight_numbers`, `cell_thickness`: [EXTENDING.md](EXTENDING.md#12-make-a-behaviour-change-a-switch)); another name raises `ValueError`. | `options.get` |
 | `LANGSMITH_TRACING`, `LANGSMITH_TRACING_V2`, `LANGCHAIN_TRACING`, `LANGCHAIN_TRACING_V2` | `true`/`1` or other | not set | When any is `true` or `1` (any case), the harness refuses to run: hosted tracing would send every prompt, with the well data, to its service. | `agent.graph.no_hosted_tracing` |
 
 Notes:
@@ -610,21 +607,21 @@ When several sources set the same thing, the first listed wins.
 
 | Setting | Order, first wins | Defined in |
 |---|---|---|
-| Data settings file (a question) | `--settings` (`settings=`), `PETROHARNESS_DATA`, none | `ask._settings` |
+| Data settings file (a question) | `--settings` (`settings=`), `PETROHARNESS_DATA`, none | `interval._settings` |
 | Data settings file (benchmark, `HarnessConfig()`) | `given_settings(...)`, `PETROHARNESS_DATA`, `configs/data.local.yaml` | `config.user_settings` |
-| `lithology_curve` | `--lithology-curve`, the file's `data.lithology_curve`, detection | `ask._settings` |
-| `las_dir`, `cache_dir` (a question) | the file's value, then the one built for the run (LAS folder, the run's `.cache`) | `ask._settings` |
-| `depth_unit` (a question) | `--depth-unit` (`depth_unit=`), the file's `data.depth_unit`, the tops file's unit, the LAS's own | `ask.prepare`, `ask._interval` |
-| How the LAS is interpreted | `--profile` (context profile), the file's `interpreter`, `interpret` | `ask._settings`, `well.prepare.prepare_well` |
-| A Petrophys setting (`m`, `rw`, `gr_min`, ...) | `/set` or `adopt` (from the next question), `interpretation=` or the web UI at the start, the field notes' `settings`, the file's `data.interpret`, Petrophys's default | `well.settings`, `ask._interpretation`, `Conversation.adopt` |
-| A net-pay cutoff (`vcl_cutoff`, `sw_cutoff`) | as a Petrophys setting, then the policy's `0.3` and `0.7` | `ask.POLICY_CUTOFFS` |
-| The zone rule (`zone_min_thickness_m`, `zone_vcl_bands`, `zone_layout`) | `/set` or `adopt`, `interpretation=`, the field notes, the file's `data.zone_*` keys, the policy (`2.0`, `[0.3, 0.6]`, `lithology_runs`) | `ask._interpretation`, `well.view` |
+| `lithology_curve` | `--lithology-curve`, the file's `data.lithology_curve`, detection | `interval._settings` |
+| `las_dir`, `cache_dir` (a question) | the file's value, then the one built for the run (LAS folder, the run's `.cache`) | `interval._settings` |
+| `depth_unit` (a question) | `--depth-unit` (`depth_unit=`), the file's `data.depth_unit`, the tops file's unit, the LAS's own | `interval.prepare`, `interval._interval` |
+| How the LAS is interpreted | `--profile` (context profile), the file's `interpreter`, `interpret` | `interval._settings`, `well.prepare.prepare_well` |
+| A Petrophys setting (`m`, `rw`, `gr_min`, ...) | `/set` or `adopt` (from the next question), `interpretation=` or the web UI at the start, the field notes' `settings`, the file's `data.interpret`, Petrophys's default | `well.settings`, `interval._interpretation`, `Conversation.adopt` |
+| A net-pay cutoff (`vcl_cutoff`, `sw_cutoff`) | as a Petrophys setting, then the policy's `0.3` and `0.7` | `interval.POLICY_CUTOFFS` |
+| The zone rule (`zone_min_thickness_m`, `zone_vcl_bands`, `zone_layout`) | `/set` or `adopt`, `interpretation=`, the field notes, the file's `data.zone_*` keys, the policy (`2.0`, `[0.3, 0.6]`, `lithology_runs`) | `interval._interpretation`, `well.view` |
 | Skill library | `--skills` (`skills=`), `PETROHARNESS_SKILLS`, `HarnessConfig.skills`, `skills/researched` | `config.skills_setting` |
 | Model card | `--model-card`, the generic card when `--model` is given, the K2-Horizon-7B card | `models.card_file` |
 | Model name | `--model`, the card's `model` | `agent.graph.task_config` |
 | Endpoints | `--model-url`, `PETROHARNESS_MODEL_URL`; benchmark mode then `http://localhost:8000/v1` | `ask._model_key`, `models.env_urls` |
 | API key | the variable the card's `api_key_env` names, `EMPTY` | `HarnessConfig.api_key` |
-| Step cap | `--max-steps` (`max_steps=`), 8 | `agent.loop.MAX_STEPS` |
+| Step cap | `--max-steps` (`max_steps=`), 8 | `agent.state.MAX_STEPS` |
 | Route | `--investigate` (`direct=False`), the direct route | `agent.graph.turn` |
 | Resumed conversation | the log's `session_start` inputs, except `--model-url` and `--investigate` given again | `Conversation.resume` |
 
@@ -645,13 +642,13 @@ Notes:
 |---|---|---|
 | No data config for benchmark mode or `HarnessConfig()` | `ValueError: WHAT: no data settings at <path>. ... FIX: copy configs/data.example.yaml to configs/data.local.yaml and fill it in, or set PETROHARNESS_DATA.` | `config.user_settings` |
 | A data config with a section other than `data` and `eval` | `ValueError: WHAT: <path> has sections [...]. FIX: give 'data' (and optionally 'eval') only.` | `config._read_settings` |
-| `--settings` or `PETROHARNESS_DATA` names no file (a question) | `FileNotFoundError: WHAT: no data settings file at <path>. ...` | `ask._settings` |
+| `--settings` or `PETROHARNESS_DATA` names no file (a question) | `FileNotFoundError: WHAT: no data settings file at <path>. ...` | `interval._settings` |
 | A misspelt key in `data`, `eval`, `lithology_columns` or a model card | A pydantic validation error naming the key | `config._Strict` |
 | `interpret` and `interpreter` both set | `ValueError: WHAT: both data.interpreter and data.interpret are set. ...` | `well.prepare.prepare_well` |
 | `interpret` names a setting Petrophys does not have | `ValueError: WHAT: data.interpret names settings Petrophys does not have: <names>. ... FIX: correct or remove them (the settings are the fields of petrophys.DynamicWorkflowConfig).` | `well.prepare._interpret_with_petrophys` |
 | `tops_csv` cannot be read as a table (a row with more fields than the header, an empty file) | `ValueError: WHAT: the settings' tops table <name> cannot be read as a table (<what pandas reports>). FIX: ...` | `well.formation._tops_table` |
-| `--profile` with `data.interpreter` | `ValueError: WHAT: --profile <name> and the settings' data.interpreter are both set. FIX: keep one.` | `ask._settings` |
-| Petrophys settings with a profile or interpreter | `ValueError` saying the profile or interpreter fixes its own settings | `ask._interpretation`, `Conversation.adopt` |
+| `--profile` with `data.interpreter` | `ValueError: WHAT: --profile <name> and the settings' data.interpreter are both set. FIX: keep one.` | `interval._settings` |
+| Petrophys settings with a profile or interpreter | `ValueError` saying the profile or interpreter fixes its own settings | `interval._interpretation`, `Conversation.adopt` |
 | An interpretation setting with a wrong name or value | `ValueError: WHAT: interpretation settings that cannot be used: <name>: <problem>. ...` | `well.settings.validate` |
 | The policy names an engine, nothing else interprets, and `engines_dir` is not set | `ValueError: WHAT: the policy names engine ... but no engines directory is configured. FIX: set data.engines_dir.` | `well.prepare.engine_dir` |
 | `data.interpreter` is not a function | `ValueError` naming the spec | `well.prepare._interpret_with_interpreter` |
@@ -659,7 +656,7 @@ Notes:
 | Two lithology logs and none named | `ValueError` naming both | `well.formation.find_lithology_curve` |
 | A bad skill library | `LibraryError` with each problem | `agent.direction.load` |
 | A field notes file with an unknown key, bad settings or too many or too long notes | `ValueError` per entry, with the fix | `well.notes.load` |
-| `PETROHARNESS_SET` with any name | `ValueError: PETROHARNESS_SET: no option '<name>'; options: none` | `agent.options.parse` |
+| `PETROHARNESS_SET` naming no switch | `ValueError: PETROHARNESS_SET: no option '<name>'; options: cell_thickness, tight_numbers` | `options.parse` |
 | Hosted tracing switched on | `RuntimeError` at import; the process stops | `agent.graph.no_hosted_tracing` |
 | No endpoint for a question | `ValueError: WHAT: no model endpoint. ...` | `ask._model_key` |
 
@@ -674,7 +671,7 @@ Notes:
 - [MODELS.md](../MODELS.md): serving a model, model cards and every field.
 - [SESSIONS.md](../SESSIONS.md#changing-a-setting): changing a setting mid-conversation, field notes.
 - [UI.md](../UI.md#interpretation-settings): the settings panel of the web UI.
-- [SETUP.md](../SETUP.md): which of these settings the setup hash covers.
+- [EVIDENCE.md](../EVIDENCE.md#what-a-setup-holds): which of these settings the setup hash covers.
 - [INTERPRETATION_SETTINGS.md](INTERPRETATION_SETTINGS.md): each interpretation setting in detail.
 - [WELL_PREPARATION.md](WELL_PREPARATION.md): how the data settings are used to prepare a well.
 - [TESTING.md](TESTING.md): the environment variables the tests read.

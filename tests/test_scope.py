@@ -1,4 +1,4 @@
-"""Brick 4a of docs/designs/zones-and-intervals.md: a question's scope. Under reach "well" the READ call also says the
+"""A question's scope. Under reach "well" the READ call also says the
 stretches of the well the question is about (its `scope`: a unit, a depth range, the user's zones, "the whole well";
 [] for the interval); the harness checks it as a selection and makes it every lookup's default zones (a call's own
 zones win; the well's step record and the interval's sections and classes are left as they are); step 1 says the
@@ -21,7 +21,7 @@ DONE = {"focus": "x", "edits": [], "next": [], "done": True}
 
 
 def _session(case=CASES["brent"]):
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.config import given_settings
     task, cfg, data = task_cfg(case, "q")
     with given_settings({"data": data, "eval": {}}):
@@ -29,11 +29,11 @@ def _session(case=CASES["brent"]):
 
 
 def _read(s, reply, data):
-    from prompt_fixture import Stub
-    from petroharness.agent.loop import read_question
+    from _support.model import ScriptedModel
+    from petroharness.agent.read import read_question
     from petroharness.config import given_settings
     from petroharness.llm import Usage
-    llm, trace = Stub(reply if isinstance(reply, list) else [reply], DONE), {}
+    llm, trace = ScriptedModel({"read*": reply if isinstance(reply, list) else [reply], "step_1": DONE}), {}
     with given_settings({"data": data, "eval": {}}):
         read_question(llm, s, Usage(), 3000, trace)
     return llm, trace
@@ -54,7 +54,7 @@ def brent():
 def test_the_read_call_asks_for_the_scope_under_reach_well(brent):
     s, data = brent
     llm, _ = _read(s, _reply([]), data)
-    text = llm.sent["read"][1]
+    text = llm.first("read")[1]
     assert "- scope: the stretches of the well the question is about" in text
     assert "This interval is one part of the well" in text and '"every interval in the well"): ["the whole well"]' in text
     assert '"named": ["..."], "scope": ["..."]' in text
@@ -83,6 +83,26 @@ def test_the_step_record_and_sections_are_not_scoped(brent):
     assert "Selection:" not in text and "ignored zones" not in text
 
 
+def test_values_at_is_not_scoped_and_gets_no_zones_note(brent):
+    """values_at reads the depths it is asked, wherever they lie (Tool.stretch "whole_well"): the question's scope is
+    not added to its call. Before, the scope's zones were added and the result opened with "(ignored zones: ...)" for
+    zones the model never sent."""
+    s, data = brent
+    _read(s, _reply(["Dunlin GP."]), data)
+    text, _ = s.run(("tool", "values_at", {"curves": ["GR"], "depths": [3000]}))
+    assert "ignored zones" not in text and "Selection:" not in text and "GR" in text, text[:300]
+
+
+def test_every_tool_says_what_its_zones_reach():
+    """One definition per tool: the scope, the call door and the focus refusal read Tool.stretch, so a tool is never
+    scoped by one and treated as whole-well by another."""
+    from petroharness.agent.toolset import TOOLSET
+    from petroharness.tools.spec import STRETCHES
+    by = {k: sorted(t.name for t in TOOLSET if t.stretch == k) for k in STRETCHES}
+    assert by["whole_well"] == ["step", "values_at"] and by["focus_only"] == ["section", "zone_classes"]
+    assert all(TOOLSET[n].focus_reason for n in by["focus_only"])
+
+
 def test_the_whole_well_is_the_wells_span(brent):
     s, data = brent
     _read(s, _reply(["the whole well"]), data)
@@ -105,7 +125,7 @@ def test_a_scope_item_is_typed_by_the_read_schema(brent):
     interval', live round 5; 'TOP-BASE m (the unit, ...' left unclosed) cannot be written, where regexes once cut it
     back. Every typed name resolves alone; a duplicated unit is offered by its depths only."""
     from petroharness.agent import selection
-    from petroharness.agent.loop import read_schema, scope_items
+    from petroharness.agent.read import read_schema, scope_items
     s, _ = brent
     names = selection.names(s.f)
     schema = read_schema(True, True, tuple(names))
@@ -121,7 +141,7 @@ def test_a_scope_item_is_typed_by_the_read_schema(brent):
 def test_no_scope_names_the_interval_in_force(brent):
     """Question suite B10: after a scope was cleared the next question kept it. Under reach well every question's
     prompt names the stretch in force, the interval itself when no scope is."""
-    from petroharness.agent.loop import scope_text
+    from petroharness.agent.read import scope_text
     from petroharness.agent.selection import interval_name
     s, data = brent
     _read(s, _reply([]), data)
@@ -130,7 +150,7 @@ def test_no_scope_names_the_interval_in_force(brent):
 
 
 def test_a_scope_that_cannot_be_used_is_said_and_left_out(brent):
-    from petroharness.agent.loop import scope_text
+    from petroharness.agent.read import scope_text
     s, data = brent
     _read(s, [_reply(["Nowhere Fm."]), _reply(["Nowhere Fm."])], data)        # asked again once, still unusable
     assert s.scope == [] and s.scope_note.startswith("The scope read from the question (Nowhere Fm.) is not used: ")
@@ -179,11 +199,11 @@ def test_step_one_says_the_scope_and_the_first_look_is_on_it():
 def test_under_reach_focus_no_scope_is_asked_or_applied():
     s, data = _session(replace(CASES["brent"], data=(("reach", "focus"),)))
     llm, trace = _read(s, _reply(["Dunlin GP."]), data)
-    assert "- scope:" not in llm.sent["read"][1] and s.scope == [] and "scope" not in trace
+    assert "- scope:" not in llm.first("read")[1] and s.scope == [] and "scope" not in trace
 
 
 def test_the_read_schema_has_scope_only_under_reach_well():
-    from petroharness.agent.loop import read_schema
+    from petroharness.agent.read import read_schema
     assert "scope" not in read_schema(True)["properties"] and read_schema(True) == read_schema(True, False)
     assert read_schema(True, True)["required"] == ["topics", "named", "depth", "scope"]
 
@@ -192,7 +212,7 @@ def test_a_scope_item_is_short_and_a_sentence_is_said_short():
     """Live: the model wrote its plans as scope items (a sentence each, eight of them). The schema types an item (a
     name a selection reads, or a depth range), and a note on one that cannot be used (a /scope the user typed, or a
     reply from a server without guided decoding) says it short."""
-    from petroharness.agent.loop import SCOPE_ITEM_CHARS, read_schema
+    from petroharness.agent.read import SCOPE_ITEM_CHARS, read_schema
     long = "the well section 2841-2958 m covering the named units, the overlap of 2800-3000 m with the record"
     assert not _typed(read_schema(True, True, ("NESS FM.",)), long)
     s, data = _session()
@@ -256,8 +276,8 @@ def test_a_scope_that_names_no_stretch_is_asked_again_once_with_the_reason(brent
     s, data = brent
     llm, trace = _read(s, [_reply(["Nowhere Fm."]), _reply(["Dunlin GP."])], data)
     assert s.scope == ["Dunlin GP."] and trace["scope"]["used"] == ["Dunlin GP."]
-    again = llm.sent["read_scope"][-1]
-    assert "SCOPE NOT USED" in again and "Nowhere Fm." in again and len(llm.sent["read_scope"]) == 2   # single turn
+    again = llm.first("read_scope")[-1]
+    assert "SCOPE NOT USED" in again and "Nowhere Fm." in again and len(llm.first("read_scope")) == 2   # single turn
     assert trace["read_scope_again"]["scope"] == ["Dunlin GP."]
 
 
@@ -267,8 +287,8 @@ def test_a_scope_that_names_no_stretch_is_asked_again_once_with_the_reason(brent
     ("what is the mean gamma ray of the manganui formation?", [])])
 def test_a_unit_the_tops_file_lists_twice_is_asked_back_to_the_user(question, scope):
     """tuhua-7's tops file lists Manganui twice (874-1251 m, 2165-2347 m). A question naming it (or a scope read to it)
-    is not computed on: which one is meant is the user's to say, or the file's to fix (user, 2026-11-20)."""
-    from petroharness.agent.loop import Session
+    is not computed on: which one is meant is the user's to say, or the file's to fix."""
+    from petroharness.agent.state import Session
     from petroharness.config import given_settings
     task, cfg, data = task_cfg(CASES["tuhua"], "q")
     task = task.model_copy(update={"question": question})
@@ -296,7 +316,7 @@ def test_the_graph_ends_with_the_question_to_the_user_when_one_is_asked():
 
 
 def _asked(case, question, scope=None):
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.config import given_settings
     task, cfg, data = task_cfg(case, "q")
     task = task.model_copy(update={"question": question})
@@ -350,7 +370,8 @@ def test_every_unit_of_the_file_asked_by_its_name_reads_as_it_is(case):
     ("Ness Formation" for Ness Fm., "The Ness Formation is ..."), is neither asked back nor noted, unless the file lists
     it more than once."""
     from collections import Counter
-    from petroharness.agent.loop import Session, ask_back
+    from petroharness.agent.state import Session
+    from petroharness.agent.read import ask_back
     from petroharness.config import given_settings
     task, cfg, data = task_cfg(CASES[case], "q")
     with given_settings({"data": data, "eval": {}}):
@@ -388,11 +409,12 @@ def _conventions(name: str) -> list:
 
 @pytest.mark.parametrize("case", ["brent", "tuhua", "cheal", "hw3"])
 def test_a_unit_written_in_any_users_convention_is_that_unit(case):
-    """User, 2026-11-20: users ask with their own naming conventions. Each unit of the tops file, written each way users
-    write a unit (_conventions), selects that unit, and a question naming it is not asked back (a name the file lists
-    twice, or one whose bare name several units share, is the user's to choose and is asked)."""
+    """Users ask with their own naming conventions. Each unit of the tops file, written each way users write a unit
+    (_conventions), selects that unit, and a question naming it is not asked back (a name the file lists twice, or
+    one whose bare name several units share, is the user's to choose and is asked)."""
     from collections import Counter
-    from petroharness.agent.loop import Session, ask_back
+    from petroharness.agent.state import Session
+    from petroharness.agent.read import ask_back
     from petroharness.agent.selection import _core, units_named
     from petroharness.config import given_settings
     task, cfg, data = task_cfg(CASES[case], "q")
@@ -450,7 +472,7 @@ def test_a_request_outside_the_wells_logs_is_answered_with_what_the_assistant_do
     llm, trace = _read(s, reply, data)
     assert s.depth == "outside" and s.ask_status == "outside" and trace.get("outside")
     assert "outside what I do here" in s.ask_user and "BRENT" in s.ask_user.upper()
-    assert '"outside"' in llm.sent["read"][1] or "outside" in llm.sent["read"][1]
+    assert '"outside"' in llm.first("read")[1] or "outside" in llm.first("read")[1]
     from types import SimpleNamespace as NS
     from petroharness.agent.graph import after_read, ask_user
     run = NS(context=NS(session=s))
@@ -460,7 +482,7 @@ def test_a_request_outside_the_wells_logs_is_answered_with_what_the_assistant_do
 def test_outside_is_offered_only_where_users_type_freely():
     """The benchmark (reach focus) asks about its interval by construction: its READ schema offers no "outside", and a
     reply that says it anyway is an investigation."""
-    from petroharness.agent.loop import _reading, read_schema
+    from petroharness.agent.read import _reading, read_schema
     assert "outside" in read_schema(True, True)["properties"]["depth"]["enum"]
     assert "outside" not in read_schema(True, False)["properties"]["depth"]["enum"]
     reply = json.dumps({"topics": ["porosity"], "named": [], "depth": "outside"})
@@ -473,7 +495,7 @@ def test_the_users_zones_with_no_sample_here_are_said_not_dropped(tmp_path):
     kept with why, and said under every question while the zones are in force."""
     from _wells import Case
     from petroharness.agent import vocabulary
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.config import given_settings
     z = tmp_path / "zones.csv"
     z.write_text("zone,top,bottom\nBrent,2841,2958\nBelow TD,3600,3700\n")
@@ -510,3 +532,20 @@ def test_a_question_back_carries_its_answers_to_pick(question, scope, kind):
     else:
         assert {c["label"] for c in s.ask_choices} >= {"Mangahewa"}
         assert any(c["question"] == "What is the mean gamma ray of the Mangahewa?" for c in s.ask_choices)
+
+
+def test_a_later_question_starts_with_no_scope_of_its_own():
+    """A later question whose READ reads no scope (its reply unreadable) computed on the previous question's stretch,
+    and its prompt said so: the question's scope is reset as it starts; a scope the user set (/scope) still applies."""
+    from petroharness.agent.state import Session
+    from petroharness.agent.read import apply_scope
+    from petroharness.config import given_settings
+    task, cfg, data = task_cfg(CASES["brent"], "n")
+    with given_settings({"data": data, "eval": {}}):
+        s = Session.build(task, cfg)
+        apply_scope(s, ["Ness Fm."])                      # the previous question's stretch
+        assert s.scope
+        s.next_turn(task.model_copy(update={"question": "And its median?"}), "")
+        assert (s.scope, s.scope_note, s.scope_merged, s.scope_by_user) == ([], "", "", False)
+        s.next_turn(task.model_copy(update={"question": "And there?", "scope": ["Ness Fm."]}), "")
+        assert s.scope and s.scope_by_user                # the user's scope applies

@@ -15,10 +15,8 @@ from petroharness.well.view import FormationView
 from petroharness.well import summary as S
 
 
-try:                                            # petrophys's own curve vocabulary (it supplies, the harness reads)
-    from petrophys.reporting.reference_export import FAMILY_LABELS as _PP_LABELS, REFERENCE_CURVE_TO_STEP as _PP_STEPS
-except Exception:                               # an older petrophys without them: those sources are skipped
-    _PP_LABELS, _PP_STEPS = {}, {}
+# petrophys's own curve vocabulary (it supplies, the harness reads)
+from petrophys.reporting.reference_export import FAMILY_LABELS as _PP_LABELS, REFERENCE_CURVE_TO_STEP as _PP_STEPS
 
 SOURCES = ("input", "computed", "analyzer", "copy", "unknown")
 PROPERTIES = {"porosity": "PHIC", "permeability": "KH_CORE", "water saturation": "SWC"}     # property -> its plug curve
@@ -121,7 +119,7 @@ class Method:
     decisions: list                    # the other decision lines, verbatim
     scope: str = "well"                # the record describes the whole well
     equations_here: list = field(default_factory=list)   # the equations scoped to this interval (evidence.scoped_decision)
-    routes_here: list = field(default_factory=list)      # this interval's routes, read from its curves (agent.routes)
+    routes_here: list = field(default_factory=list)      # this interval's routes, read from its curves (record.routes)
     facts_here: list = field(default_factory=list)       # what the step's output curves hold here (interval_facts)
     decisions_here: list = field(default_factory=list)   # the run's lines as written (the whole well's record)
     stage: str = "workflow"            # preparation / workflow / after (a context profile's QC and recomputation)
@@ -406,7 +404,7 @@ def _methods(view: FormationView) -> list:
     out = []
     routes = {}
     # the routes this interval's samples took (the record is the well's)
-    from petroharness.agent.routes import route_lines
+    from petroharness.record.routes import route_lines
     routes = route_lines(view)
     for step, rec in (view.prep.steps or {}).items():
         rec = rec or {}
@@ -414,7 +412,7 @@ def _methods(view: FormationView) -> list:
         lines = [d for d in rec.get("decisions") or [] if isinstance(d, str)]
         eq = [d for d in lines if _EQUATION.match(d)]
         rest = [d for d in lines if d not in eq]
-        from petroharness.record.catalog import interval_facts
+        from petroharness.record.card import interval_facts
         facts, _ = interval_facts(view, list(rec.get("outputs") or []))
         here = routes.get(step, [])                                  # this interval's route (data), the lines as written
         said = {k: v for k, v in (rec.get("notes") or {}).items() if k in params}    # Petrophys's notes on them

@@ -19,6 +19,8 @@ import secrets
 import threading
 from pathlib import Path
 
+from petroharness.core.files import write_atomic
+
 RUN_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{6}")
 VERDICTS = ("good", "partly", "wrong")
 LAS_SUFFIXES = (".las",)
@@ -140,7 +142,9 @@ class Store:
 
     # uploads ------------------------------------------------------------------------------------------------------
     def upload(self, kind: str, name: str, body: bytes) -> Path:
-        """An uploaded file, kept under uploads/ by its own name (a different file of the same name gets a suffix)."""
+        """An uploaded file, kept under uploads/ by its own name (a different file of the same name gets a suffix).
+        A kept file is never written over while a question may be reading it: the same bytes again are the file kept,
+        and a new file is written aside and moved into place whole."""
         suffixes = {"las": LAS_SUFFIXES, "notes": NOTES_SUFFIXES}.get(kind, TOPS_SUFFIXES)
         stem, suffix = Path(str(name or "")).stem, Path(str(name or "")).suffix.lower()
         if suffix not in suffixes:
@@ -150,18 +154,20 @@ class Store:
             raise ValueError(f"WHAT: {name!r} is empty. FIX: upload the file again.")
         stem = re.sub(r"[^A-Za-z0-9_.-]", "_", stem).strip("._") or "upload"
         self.uploads.mkdir(parents=True, exist_ok=True)
-        digest = hashlib.sha256(body).hexdigest()[:8]
-        path = self.uploads / f"{stem}{suffix}"
-        if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest()[:8] != digest:
-            path = self.uploads / f"{stem}_{digest}{suffix}"
-        path.write_bytes(body)
+        digest = hashlib.sha256(body).hexdigest()
+        with self._lock:                            # two files of one name uploaded at once: each gets its own path
+            for path in (self.uploads / f"{stem}{suffix}", self.uploads / f"{stem}_{digest[:8]}{suffix}"):
+                if not path.exists():
+                    break
+                if hashlib.sha256(path.read_bytes()).hexdigest() == digest:
+                    return path                     # the same file: kept as it is
+            #                                         (other bytes under both names: the second is written again)
+            write_atomic(path, body)
         return path
 
     @staticmethod
     def _write(path: Path, record: dict) -> None:
-        tmp = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
-        tmp.write_text(json.dumps(record, indent=1, default=str), encoding="utf-8")
-        os.replace(tmp, path)
+        write_atomic(path, json.dumps(record, indent=1, default=str))
 
 
 def brief(r: dict) -> dict:

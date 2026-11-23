@@ -14,9 +14,9 @@ from petroharness.well.calculations import as_context_group
 from petroharness.config import HarnessConfig
 from petroharness.tasks import Task
 from petroharness.well.derived import filled
-from petroharness.well.formation import (LIBRARY_CODE_TABLE, Interval, Zone, decode_lithology, interval_from_tops,
+from petroharness.well.formation import (LIBRARY_CODE_TABLE, Interval, Zone, cell_span, decode_lithology, interval_from_tops,
                                     lithology_table, normalize_top_name, find_lithology_curve, formation_zone, segment_zones,
-                                    vcl_band_labels)
+                                    solver_lithology, vcl_band_labels)
 from petroharness.registry import Registry, load as load_registry
 from petroharness.well.prepare import PreparedWell, load_policy, prepare_well, read_depth
 
@@ -113,12 +113,12 @@ def _prepare_in_metres(task: Task, policy: dict, cfg: HarnessConfig) -> tuple[Pr
                          "top and base with the task, or set data.tops_csv.")
     else:
         interval, unit = interval_from_tops(task.well, task.formation, cfg.data), cfg.data.tops_depth_unit
-    stated, las_interval = None, interval
-    if unit is not None:
-        # prepare_well slices a formation-scope interpretation in the LAS's unit: give it the interval in that unit.
+    stated = None
+    if unit is not None:                # both units known before the well is read: metres_per refuses any other
         stated = las_depth_unit(las)
-        las_interval = _scaled(interval, metres_per(unit, "the interval's") / metres_per(stated, f"{las.name}'s"))
-    prep = prepare_well(las, policy, las_interval, cfg.data.cache_dir, cfg.data.engines_dir, cfg.data.lithology_curve,
+        metres_per(unit, "the interval's")
+        metres_per(stated, f"{las.name}'s")
+    prep = prepare_well(las, policy, cfg.data.cache_dir, cfg.data.engines_dir,
                         interpreter=cfg.data.interpreter, interpret=cfg.data.interpret)
     scale = check_depth_unit(prep, policy)
     if scale != 1.0:
@@ -228,7 +228,7 @@ def _in_rep(rows: list, depth: np.ndarray, scale: float, rep_m: float) -> list:
 def _zones_left(rows: list, zones: list, depth: np.ndarray, here: np.ndarray, unit: str) -> list:
     """The user's zones that hold no sample of the interval, each with why: no sample of the log at all (the log's
     range said), or outside the interval the question is on (its range said). Left out silently, a zone the user gave
-    was denied in the answer ("the record holds only one zone", question suite Z2)."""
+    was denied in the answer ("the record holds only one zone")."""
     kept = {z.name for z in zones}
     lo, hi = (float(np.nanmin(depth)), float(np.nanmax(depth))) if depth.size else (0.0, 0.0)
     ilo, ihi = (float(np.nanmin(here)), float(np.nanmax(here))) if here.size else (0.0, 0.0)
@@ -274,8 +274,8 @@ def _user_zones(rows: list, depth: np.ndarray) -> list[Zone]:
 
 def _units_in_reach(units: list, depth: np.ndarray, scale: float, rep_m: float) -> list:
     """The tops file's units (data.units, each in the file's unit; None: the LAS's own) in the reporting unit
-    (agent.selection.Unit); a unit to the end of the log ends at the well's last sample."""
-    from petroharness.agent.selection import Unit
+    (well.tops.Unit); a unit to the end of the log ends at the well's last sample."""
+    from petroharness.well.tops import Unit
     return [Unit(name=n, top=t, base=b, line=line, closed=closed) for n, t, b, closed, line in
             _in_rep(units, depth, scale, rep_m)]
 
@@ -294,6 +294,10 @@ class FormationView:
     labels: np.ndarray            # decoded lithology label per interval sample
     reg: Registry = field(default_factory=load_registry)   # domain knowledge (rules/*.yaml)
     lithology_curve: Optional[str] = None        # the lithology log the zones come from (None: no lithology log)
+    # no lithology log: the lithology Petrophys's mineral solver wrote, which the zones come from instead (its code
+    # curve), and how it was made (formation.solver_lithology: method, domain, inputs, decisions); never called a log
+    solver_curve: Optional[str] = None
+    solver_record: dict = field(default_factory=dict)
     vcl_bands: Optional[tuple[float, float]] = None   # set when the zones are shale-volume bands instead
     code_table: dict[int, str] = field(default_factory=dict)   # the policy's lithology code table (code -> label)
     depth_scale: float = 1.0      # reporting units per LAS depth unit (0.3048 for a LAS in feet shown in metres)
@@ -314,14 +318,14 @@ class FormationView:
     zone_layout: str = "lithology_runs"     # the zone rule's layout (data.zone_layout): "lithology_runs" or "formation"
     requested: Optional[tuple] = None       # a stretch reaching past the well: the (top, base) asked for (stretch)
     reach: str = "focus"                    # what a tool's zones may name (data.reach): "focus", or "well" (anywhere)
-    units: list = field(default_factory=list)   # the tops file's units of this well (agent.selection.Unit), reach well
+    units: list = field(default_factory=list)   # the tops file's units of this well (well.tops.Unit), reach well
     units_left_out: list = field(default_factory=list)   # its rows left out (a base not below the top), reach well
     selection: Optional[str] = None         # a view of what a call selected (agent.selection): its name as asked
     user_zones: list = field(default_factory=list)       # the user's zones in the reporting unit (well.user_zones)
     user_zones_left: list = field(default_factory=list)  # the user's zones with no sample here: (name, top, base, why)
     lithology_zones: list = field(default_factory=list)  # under the user's zones, the lithology zones (L1..)
     zones_source: Optional[str] = None      # the zones file the user's zones come from
-    # curves Petrophys calculated during the question on the model's request (agent/library.py: calculate), name ->
+    # curves Petrophys calculated during the question on the model's request (agent/library/: calculate), name ->
     # values over the well's samples; read like the workflow's own curves
     calculated: dict = field(default_factory=dict)
     calc_flags: set = field(default_factory=set)     # flag curves a verb wrote in this question (unit "flag")
@@ -358,11 +362,14 @@ class FormationView:
             policy = {**policy, "zones": {**policy["zones"], **given}}
         describe = lambda c: str(getattr(prep.well.get(c), "description", "") or "")
         curve = find_lithology_curve(prep.curve, list(prep.input_curves), describe, cfg.data.lithology_curve)
+        solved = None if curve is not None else solver_lithology(prep.steps, prep.well)
+        if solved is not None:                    # no lithology log: the lithology Petrophys's mineral solver wrote
+            table = solved.pop("table")
         bands = None
-        if curve is None and prep.curve("VCL") is not None:
-            # No lithology log in this LAS: zones from shale-volume bands (policy zones.fallback_vcl_bands).
+        if curve is None and solved is None and prep.curve("VCL") is not None:
+            # No lithology log and none solved: zones from shale-volume bands (policy zones.fallback_vcl_bands).
             bands = tuple(float(b) for b in policy["zones"].get("fallback_vcl_bands", (0.3, 0.6)))
-        labels = _labels(prep, mask, curve, bands, table)
+        labels = _labels(prep, mask, curve or (solved or {}).get("curve"), bands, table)
         zones = _zones_over(depth[mask], labels, cfg.data.zone_layout, policy["zones"]["min_thickness_m"] / rep_m,
                             getattr(task, "formation_lithology", None))
         user = _in_rep(cfg.data.zones, depth, scale, rep_m) if cfg.data.zones else []
@@ -376,6 +383,7 @@ class FormationView:
         units = _units_in_reach(list(cfg.data.units) + list(cfg.data.zones), depth, scale, rep_m) if reach == "well" else []
         return cls(task=task, prep=prep, interval=interval, mask=mask, zones=zones, policy=policy, labels=labels,
                    reg=load_registry(cfg.resources.rules_dir), lithology_curve=curve, vcl_bands=bands,
+                   solver_curve=(solved or {}).get("curve"), solver_record=solved or {},
                    code_table=table, depth_scale=scale, report_unit=unit, m_per_unit=rep_m, basis=cfg.data.basis,
                    conventions=list(cfg.data.conventions), zone_layout=cfg.data.zone_layout, reach=reach,
                    units=units, units_left_out=list(cfg.data.units_left_out) if reach == "well" else [],
@@ -389,7 +397,7 @@ class FormationView:
         analyzers' and the question's curves). Limits past the well are clipped to its first and last samples, and
         `requested` keeps what was asked. `closed` False leaves out a sample on the base (a unit that ends at the next
         unit's top). A stretch with no sample is refused with the well's depth range
-        (docs/designs/zones-and-intervals.md, 4.1)."""
+        (docs/ARCHITECTURE.md)."""
         unit = self.report_unit
         top, base = float(top), float(base)
         if top > base:
@@ -405,7 +413,7 @@ class FormationView:
             raise ValueError(f"WHAT: no sample of the well lies between {top:g} and {base:g} {unit}. WHY: the well's "
                              f"samples run from {lo:g} to {hi:g} {unit}, every {self._well_step(depth):g} {unit}. "
                              "FIX: give limits inside that range that hold at least one sample.")
-        labels = _labels(self.prep, mask, self.lithology_curve, self.vcl_bands, self.code_table)
+        labels = _labels(self.prep, mask, self.lithology_curve or self.solver_curve, self.vcl_bands, self.code_table)
         if self.user_zones:                       # the user's zones frame any stretch too (cut to it)
             zones = _user_zones(self.user_zones, depth[mask])
         else:
@@ -595,7 +603,7 @@ class FormationView:
 
     @property
     def gross(self) -> float:
-        return self.base - self.top
+        return cell_span(self.top, self.base, int(self.depth.size))
 
     @property
     def zoned_thickness(self) -> float:

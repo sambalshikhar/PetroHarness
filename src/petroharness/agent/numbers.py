@@ -30,9 +30,22 @@ def decimals(raw: str) -> int:
     return max(0, k - int(exp or 0))
 
 
+def half_of(decimals_: int) -> float:
+    """Half the unit of the last digit of a number written with `decimals_` digits after the point (2 -> 0.005)."""
+    return 0.5 * 10 ** (-decimals_)
+
+
 def half_unit(raw: str) -> float:
     """Half the unit of a number's last written digit: the rounding a value written so can hide ('0.21' 0.005)."""
-    return 0.5 * 10 ** (-decimals(raw))
+    return half_of(decimals(raw))
+
+
+def tolerance(half: float, x: float) -> float:
+    """How far a value may lie from a written number (worth about x, its last digit's half-unit `half`) and still be
+    that number as written: the half-unit, and float slack relative to the size, so a large value (a map coordinate,
+    8201113.4470) keeps its last digit. The one rule every comparison of a written number with a value uses: the
+    checker, the claims, the ledger and the writer."""
+    return half * (1 + 1e-9) + 1e-12 * max(1.0, abs(x))
 
 
 def first(text: str):
@@ -114,8 +127,8 @@ def _spelled_value(words: list) -> "str | None":
 
 
 def spelled_as_digits(text: str) -> str:
-    """The text with numbers written in words as digits, so the checker reads them as it reads digits (question suite
-    P7: an answer wrote a top "twenty-four forty-one metres", 2441 where the record shows 2841, and no check saw it).
+    """The text with numbers written in words as digits, so the checker reads them as it reads digits (an
+    answer wrote a top "twenty-four forty-one metres", 2441 where the record shows 2841, and no check saw it).
     A run worth less than 20 stays a word (a count; the checker skips those)."""
     def convert(words: list) -> str:
         v = _spelled_value(words)

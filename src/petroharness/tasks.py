@@ -27,7 +27,7 @@ class Task(BaseModel):
     base_closed: bool = False
     # The formation's lithology as the data states it (its tops), when it gives one; the lithology log is read too.
     formation_lithology: Optional[str] = None
-    # A conversation's scope set by the user for this question on (agent.loop.apply_scope): None keeps the scope in
+    # A conversation's scope set by the user for this question on (agent.read.apply_scope): None keeps the scope in
     # force, [] is the interval; and its frame ("lithology": every lookup reports by the lithology zones)
     scope: Optional[list] = None
     scope_chosen: bool = False     # the scope is the user's answer to a question back: this question computes on it

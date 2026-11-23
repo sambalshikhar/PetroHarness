@@ -1,4 +1,4 @@
-"""The verbs over Petrophys (src/petroharness/agent/library.py): the library's catalog read as
+"""The verbs over Petrophys (src/petroharness/agent/library/): the library's catalog read as
 the menus, the calls checked against it, the steps a change carries into, and, on a sample well (data), calculate,
 estimate and what_if as the model would call them.
 
@@ -20,7 +20,7 @@ from petroharness.agent import library as L
 from petroharness.agent import schemas
 from petroharness.agent.engine import ToolError
 
-SAMPLES = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "sample_las"))   # a folder of sample wells; tests skip without it
+from _wells import SAMPLES  # noqa: E402  (Petrophys's sample files; PETROHARNESS_SAMPLE_LAS for a folder of them)
 
 
 # --- the catalog ----------------------------------------------------------------------------------------------------
@@ -78,7 +78,7 @@ def test_the_verbs_are_shown_with_the_lookups():
 
 def _session(las: Path, tops: Path = None, formation: str = None):
     import petroharness.ask as A
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.config import DataPaths, HarnessConfig, ResourcePaths, given_settings
     from petroharness.tasks import Task
     tmp = tempfile.mkdtemp()
@@ -122,7 +122,8 @@ def test_simandoux_saturation_then_its_statistics(topeka):
     assert "SW_SIMANDOUX" in f.inv.curves and "written: SW_SIMANDOUX, SXO_SIMANDOUX, BVW_SIMANDOUX" in r.text
     assert "mhi: Needs RMF" in r.text                                 # the library's own reason, said back
     s = schemas.call(f, "stats", {"curves": ["SW_SIMANDOUX"]})
-    assert "on request" in s.text and "zones pooled, SW_SIMANDOUX: n 65 of 65" in s.text
+    inside = sum(len(z.indices) for z in f.view.zones)              # the samples of the zones pooled
+    assert "on request" in s.text and f"zones pooled, SW_SIMANDOUX: n {inside} of {inside}" in s.text
     assert r.numbers and all(np.isfinite(r.numbers))
 
 
@@ -244,7 +245,7 @@ def test_the_estimates_listed():
 def test_a_flag_a_verb_writes_reads_as_a_flag_in_a_condition(tuhua):
     """check bad_hole writes WASHOUT (unit flag): a condition naming it selects WASHOUT > 0.5, not 'has a value'."""
     from petroharness.agent import engine
-    from petroharness.agent.library_check import check
+    from petroharness.agent.library.check import check
     check(tuhua, "bad_hole")
     assert "WASHOUT" in tuhua.inv.curves and tuhua.view.is_flag("WASHOUT")
     sel = engine.select(tuhua, "WASHOUT")

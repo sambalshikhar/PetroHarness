@@ -51,6 +51,7 @@ PACKAGES = (("preprocessing.quality", "check"), ("preprocessing.imputation", "ch
             ("evaluation.volumetrics", "summarize"), ("evaluation.bvw", "summarize"),
             ("interpretation", "calculate"))
 SKIP = ("._", "borehole_imaging", ".classification")    # private modules; image logs (no LAS curves); label tables
+_PATH = re.compile(r"\bPath(?:Like)?\b")                 # a parameter typed as a file or folder path
 MAX_FOUND = 8
 
 
@@ -96,7 +97,9 @@ def _verb(module: str) -> Optional[str]:
 
 @lru_cache(maxsize=None)
 def registry() -> tuple:
-    """Every public function of the library's interpretation, evaluation and preprocessing packages, with its verb."""
+    """Every public function of the library's interpretation, evaluation and preprocessing packages, with its verb.
+    A function that needs a file or folder path is left out, and an optional path parameter is not offered: a call
+    never reads or writes a file of the server's."""
     import petrophys
     from petrophys import function_schema
     out = []
@@ -124,12 +127,16 @@ def registry() -> tuple:
             pdoc = _param_docs(doc)
             params = {p: (str(q.annotation) if q.annotation is not q.empty else "", q.default, pdoc.get(p, ""))
                       for p, q in sig.parameters.items() if q.kind not in (q.VAR_POSITIONAL, q.VAR_KEYWORD)}
+            paths = {p for p, (ann, _, _) in params.items() if _PATH.search(ann)}
+            if any(params[p][1] is inspect.Parameter.empty for p in paths):
+                continue                    # it reads or writes a file: the question's data come from the well only
+            params = {p: v for p, v in params.items() if p not in paths}      # an optional path keeps its default
             summary = re.split(r"(?<=\.)\s", doc.strip().split("\n\n")[0].replace("\n", " "), maxsplit=1)[0][:160]
             r = re.search(r"Returns\n\s*-{3,}\n(.*?)(?:\n\s*\n\s*[A-Z][a-z]+\n\s*-{3,}|\Z)", doc, re.S)
             returns = " ".join(ln.strip() for ln in (r.group(1).splitlines() if r else []) if ln.strip())[:300]
             decl = function_schema.declaration(fn)
-            out.append(Fn(name, m.name, verb, summary, params, returns,
-                          dict(decl.parameters) if decl else {}, bool(decl and decl.samplewise)))
+            kinds = {p: k for p, k in (decl.parameters if decl else {}).items() if p not in paths}
+            out.append(Fn(name, m.name, verb, summary, params, returns, kinds, bool(decl and decl.samplewise)))
     return tuple(out)
 
 
@@ -478,10 +485,12 @@ def _parts(value, prefix: str = "", depth: int = 0) -> list:
     return out
 
 
-def _label(fn: Fn, part: str, label: Optional[str]) -> str:
+def _label(fn: Fn, part: str, label: Optional[str], whole: bool = False) -> str:
+    """The curve name of a result part: the call's label (else the function's name) and the part's, cut to 10
+    characters unless `whole` (two parts of one result that start alike: the pore pressure and its mud-weight form)."""
     base = (label or fn.name).upper()
     base = re.sub(r"[^A-Z0-9]+", "_", base).strip("_")[:20]
-    p = re.sub(r"[^A-Z0-9]+", "_", part.upper()).strip("_")[:10]
+    p = re.sub(r"[^A-Z0-9]+", "_", part.upper()).strip("_")[:None if whole else 10]
     name = L.joined_name(base, p) if p else base       # the part named once (library.joined_name)
     return name if re.match(r"[A-Z]", name) else f"X{name}"
 
@@ -653,7 +662,7 @@ def run(f: Formation, verb: str, function: str, args: Optional[dict] = None, lab
             + (f" (it is filed under {fn.verb})" if fn.verb != verb else "")
             + (f". It returns: {fn.returns}" if fn.returns else ""))
     n_int, n_well = int(f.view.mask.sum()), int(np.asarray(f.view.prep.depth).size)
-    written, shown = [], 0
+    written, named, shown = [], set(), 0
     for part, v in _parts(value) or [("", value)]:
         if shown >= 24:
             break
@@ -676,15 +685,18 @@ def run(f: Formation, verb: str, function: str, args: Optional[dict] = None, lab
             else:
                 full = arr.astype(float)
             name = _label(fn, part, label)
-            L.register(f, name, full, f"{fn.name} {part}".strip() + " (Petrophys, on request)", "",
-                       f"{fn.name} (on request)")
-            written.append(name)
+            name = _label(fn, part, label, whole=True) if name in named else name   # one part never replaces another
+            named.add(name)
             vals = full[f.view.mask]
-            flag = L._flag(vals)
+            k = S.kind_of(full)                                        # over the well, as curve_kind reads it
+            name = L.register(f, name, full, f"{fn.name} {part}".strip() + " (Petrophys, on request)",
+                              "flag" if k.kind == "flag" else "", f"{fn.name} (on request)")
+            written.append(name)
+            flag = k.kind == "flag"
             row = out.child()
             ok = vals[np.isfinite(vals)]
             codes = np.unique(ok)
-            if not flag and ok.size and np.all(ok == np.round(ok)) and 2 <= codes.size <= 12:    # class codes
+            if k.kind == "classes":                                    # class codes
                 every = vals[np.isfinite(vals)]                         # the whole selection: the headline
                 shares = "; ".join(f"{int(c)} {row.pct(100 * float(np.mean(every == c)))}" for c in codes if every.size)
                 out.add(f"  {part or 'result'}: written as {name}; classes, share of the samples of the "
@@ -745,9 +757,9 @@ def _objects(verb: str) -> set:
         return set(L.PROPERTIES) | set(L.PROPERTIES.values()) | set(L.ALIASES)
     if verb == "estimate":
         return set(L.ESTIMATES)
-    mod = {"check": "library_check", "classify": "library_classify", "summarize": "library_summarize",
-           "calibrate": "library_calibrate"}.get(verb)
-    return set(importlib.import_module(f"petroharness.agent.{mod}").OBJECTS) if mod else set()
+    if verb in ("check", "classify", "summarize", "calibrate"):       # each verb's module of the package: its objects
+        return set(importlib.import_module(f"petroharness.agent.library.{verb}").OBJECTS)
+    return set()
 
 
 def _is_function(name: str) -> bool:
@@ -785,4 +797,5 @@ def verb_tool(verb: str, curated):
     tool.__signature__ = sig.replace(parameters=own + extra)
     tool.__name__ = verb
     tool.curated_params = frozenset(names)          # what its curated objects take themselves (where: the call door's)
+    tool.curated = curated                          # the verb's own function, over its curated objects
     return tool

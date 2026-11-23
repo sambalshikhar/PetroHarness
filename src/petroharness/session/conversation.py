@@ -31,14 +31,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from petroharness import ask as A
+from petroharness import interval as I
 from petroharness.session.earlier import block
 from petroharness.session.log import SessionLog
 
 # what a conversation on a LAS file is started with, kept in the log so it can be resumed (the model endpoint is not:
 # it can change)
-INPUTS = ("formation", "tops", "top", "base", "depth_unit", "lithology_curve", "formation_lithology", "profile",
-          "settings", "skills", "model", "model_card", "max_steps", "figures", "direct", "interpretation",
-          "field_notes", "zones", "zones_sheet")
+INPUTS = I.Inputs.keys() + ("model", "model_card", "max_steps", "figures", "direct")
 
 
 @dataclass
@@ -63,7 +62,7 @@ def _sha(text: str) -> str:
 
 
 class Conversation:
-    def __init__(self, folder: Path, key: str, *, prepared: A.Prepared | None = None, inputs: dict | None = None,
+    def __init__(self, folder: Path, key: str, *, prepared: I.Prepared | None = None, inputs: dict | None = None,
                  llm_factory: Callable | None = None, writer: str = "open", fmt: str = "profile",
                  max_steps: int | None = None, figures: bool = False, depth: bool = True):
         self.folder, self.key, self.p, self.inputs = Path(folder), key, prepared, dict(inputs or {})
@@ -77,7 +76,7 @@ class Conversation:
         self.record_sha = (self.log.events("record") or [{}])[-1].get("sha256")
         self.setup = None                 # what this process answers under (core.setup), set by the first question
         self.turns: list = []             # one record per question asked (the log's turn_end events)
-        self.live = None                  # the session the questions run on (petroharness.agent.loop.Session)
+        self.live = None                  # the session the questions run on (petroharness.agent.state.Session)
         self.on_view = None               # called with the interval's view when the well is interpreted (the UI's plot)
         self._scope = None                # the user's /scope and /frame, waiting for the next question (Task.scope, .frame)
         self._frame = None
@@ -102,11 +101,8 @@ class Conversation:
         las = Path(las).expanduser().resolve()
         if not las.is_file():
             raise FileNotFoundError(f"WHAT: no LAS file at {las}. FIX: give the path of the well's LAS file.")
-        notes = None
-        if field_notes:
-            from petroharness.well.notes import load
-            notes = load(field_notes)
-            interpretation = {**notes["settings"], **(interpretation or {})}
+        read = I.Inputs(field_notes=field_notes, interpretation=interpretation).loaded()
+        notes, interpretation = read.field_notes, read.interpretation
         given = {"formation": formation, "tops": tops, "top": top, "base": base, "depth_unit": depth_unit,
                  "lithology_curve": lithology_curve, "formation_lithology": formation_lithology, "profile": profile,
                  "settings": settings, "skills": skills, "model": model, "model_card": model_card,
@@ -181,12 +177,10 @@ class Conversation:
         return c
 
     @staticmethod
-    def _prepared(las: Path, key: str, folder: Path, inputs: dict, on_view) -> A.Prepared:
+    def _prepared(las: Path, key: str, folder: Path, inputs: dict, on_view) -> I.Prepared:
         """The well interpreted and the interval checked under `inputs` (the conversation's, settings included)."""
-        p = A.prepare(las, key, cache=folder / ".cache",
-                      **{k: inputs.get(k) for k in INPUTS
-                         if k not in ("model", "model_card", "max_steps", "figures", "direct")})
-        A.check(p, A.task_for(p, "(the interval)")[0], on_view)
+        p = I.prepare(las, key, I.Inputs.of(inputs), cache=folder / ".cache")
+        I.check(p, I.task_for(p, "(the interval)")[0], on_view)
         return p
 
     @classmethod
@@ -220,7 +214,7 @@ class Conversation:
         if items and self.live is not None and getattr(self.live.f.view, "reach", "focus") == "well":
             from petroharness.agent import selection
             from petroharness.agent.engine import ToolError
-            from petroharness.agent.loop import scope_items
+            from petroharness.agent.read import scope_items
             try:                                      # checked on the well as it is now (zones may change before use)
                 selection.resolve(self.live.f, scope_items(self.live.f, items), force=True)
             except ToolError as e:
@@ -282,7 +276,7 @@ class Conversation:
         said = f"your zones from {Path(path).name}" if path else "the lithology zones (your zones taken away)"
         if self.live is not None:
             from petroharness.agent import graph
-            task, _ = A.task_for(self.p, "(the interval)", n)
+            task, _ = I.task_for(self.p, "(the interval)", n)
             with self._settings():
                 self.live.rewell(task, graph.task_config(task, self.key, 1), f"the zones changed before question {n} "
                                  f"({said})")
@@ -333,7 +327,7 @@ class Conversation:
         self.p = self._prepared(self.p.las, self.key, self.folder, self.inputs, self.on_view)
         if self.live is not None:
             from petroharness.agent import graph
-            task, _ = A.task_for(self.p, "(the interval)", n)
+            task, _ = I.task_for(self.p, "(the interval)", n)
             with self._settings():
                 self.live.rewell(task, graph.task_config(task, self.key, 1),
                                  f"the settings change before question {n} ({describe(made)})")
@@ -366,7 +360,7 @@ class Conversation:
         """The live session from the log: each recorded result opened again, in order -> the differences found (an id
         or a text that is not the recorded one), [] when the ledger is as it was."""
         from petroharness.agent import graph
-        from petroharness.agent.loop import Session
+        from petroharness.agent.state import Session
         from petroharness.tasks import Task
         results, tasks, bad = {}, {}, []
         for e in self.log.events("result"):
@@ -427,7 +421,7 @@ class Conversation:
         question = str(question or "").strip()
         if not question:
             raise ValueError("WHAT: the question is empty. FIX: give the question to answer.")
-        task, sent = A.task_for(self.p, question, len(self.turns) + 1)
+        task, sent = I.task_for(self.p, question, len(self.turns) + 1)
         pending = {k: v for k, v in (("scope", self._scope), ("frame", self._frame)) if v is not None}
         if pending.get("scope") and getattr(self, "_scope_chosen", False):
             pending["scope_chosen"] = True            # chosen in answer to a question back: this question's stretch
@@ -443,7 +437,7 @@ class Conversation:
 
     def _run(self, task, question: str, sent: str) -> Turn:
         """One question through the session graph (petroharness.session.graph: open -> turn -> project -> figures ->
-        commit; docs/SESSION_GRAPH.md)."""
+        commit; docs/GRAPH.md, "The session graph")."""
         from petroharness.session import graph
         return graph.run(self, task, question, sent)
 

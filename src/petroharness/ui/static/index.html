@@ -505,6 +505,50 @@ table.t.rt td:first-child { font-weight: 600; color: var(--ink); }
 .prose blockquote { margin: 0 0 14px; padding: 6px 14px; border-left: 3px solid var(--line); color: var(--muted); }
 
 /* well logs */
+/* the log viewer: full screen; a toolbar, the read-out, then the overview strip, the tracks and the curve panel */
+.lv { position: fixed; inset: 0; z-index: 80; background: var(--bg); display: flex; flex-direction: column; }
+.lv-wait { margin: auto; display: flex; flex-direction: column; gap: 12px; align-items: center; color: var(--muted); }
+.lv-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.lv-bar > b { font-size: 15px; color: var(--navy); }
+.lv-bar .seg button { white-space: nowrap; }
+.lv-read { min-height: 34px; padding: 7px 14px; font-size: 12.5px; color: var(--muted); background: var(--surface-2); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+.lv-main { flex: 1; min-height: 0; display: flex; }
+.lv-over { flex: none; width: 44px; background: var(--surface); border-right: 1px solid var(--line); cursor: pointer; }
+.lv-plot { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-x: auto; background: var(--surface); }
+.lv-heads { display: flex; flex: none; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.lvh { flex: none; padding: 6px 6px 5px; border-right: 1px solid var(--line-2); overflow: hidden; min-height: 78px; }
+.lvh > b { display: block; font-size: 11px; letter-spacing: .4px; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lvh small { display: block; font-size: 10.5px; color: var(--muted); }
+.lvcv { display: flex; align-items: center; justify-content: space-between; gap: 4px; font: 10.5px var(--mono); border-top: 2px solid currentColor; margin-top: 4px; padding-top: 2px; }
+.lvcv b { font-weight: 600; display: inline-flex; align-items: center; gap: 3px; overflow: hidden; }
+.lvf { padding: 4px 0; display: flex; justify-content: center; }
+.lvf span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 9.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.lv-body { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.lv-body canvas { display: block; }
+.lv-tag { font: 700 9px var(--sans); padding: 0 4px; border-radius: 3px; letter-spacing: .3px; flex: none; }
+.lv-tag.las { background: var(--navy-soft); color: var(--navy); }
+.lv-tag.pp { background: var(--pp-soft); color: var(--pp); }
+.lv-side { flex: none; width: 290px; overflow-y: auto; background: var(--surface); border-left: 1px solid var(--line); padding: 12px 14px 20px; font-size: 12.5px; }
+.lv-sh { font-size: 11.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--navy); margin-bottom: 6px; }
+.lv-track { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; }
+.lv-th { display: flex; align-items: center; gap: 8px; }
+.lv-th .link { font-size: 11.5px; }
+.lv-cv { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
+.lv-cv b { font: 600 11.5px var(--mono); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lv-cv input { width: 58px; border: 1px solid var(--line); border-radius: 5px; padding: 2px 4px; font: 11px var(--mono); background: var(--surface); }
+.lv-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.lv-side #lvq { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; margin-bottom: 6px; background: var(--surface); }
+.lv-add { color: var(--muted); margin-bottom: 8px; }
+.lv-add select { border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; background: var(--surface); max-width: 170px; }
+.lv-gh { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink-2); margin: 10px 0 4px; }
+.lv-list { display: flex; flex-direction: column; gap: 2px; }
+.lv-item { display: flex; align-items: center; gap: 6px; border: 1px solid transparent; background: none; border-radius: 6px; padding: 3px 6px; cursor: pointer; text-align: left; }
+.lv-item:hover { background: var(--surface-2); }
+.lv-item b { font: 600 11.5px var(--mono); }
+.lv-item small { color: var(--muted); font-size: 11px; }
+.lv-item > span:last-child { font-size: 11px; color: var(--accent-ink); }
+.lv-item.on { background: var(--surface-2); border-color: var(--line); }
+.lv-item.on > span:last-child { color: var(--done); }
 .wtools { display: flex; gap: 10px 16px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .legend2 { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
 .legend2 i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: 3px; margin-right: 5px; }
@@ -512,6 +556,14 @@ table.t.rt td:first-child { font-weight: 600; color: var(--ink); }
 .wp-in { display: inline-block; min-width: 100%; }
 .wp-read { position: sticky; left: 0; display: flex; gap: 4px 14px; flex-wrap: wrap; align-items: baseline; padding: 8px 14px; min-height: 36px; border-bottom: 1px solid var(--line-2); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .wp-read b { color: var(--ink); font-weight: 650; }
+.wp-top { position: sticky; left: 0; display: flex; align-items: flex-start; border-bottom: 1px solid var(--line-2); }
+.wp-top .wp-read { position: static; flex: 1; min-width: 0; border-bottom: 0; }
+.wp-btns { flex: none; display: flex; align-items: center; gap: 4px; padding: 5px 10px 5px 4px; }
+.wp-btns button { border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 7px; min-width: 30px; height: 28px; padding: 0 9px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.wp-btns button:hover:not(:disabled) { border-color: var(--navy); color: var(--navy); }
+.wp-btns button:disabled { opacity: .4; cursor: default; }
+.wp-btns .wp-exp { border-color: var(--accent); color: var(--accent-ink); margin-left: 6px; }
+.wp-btns .wp-exp:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
 .wp-read .rv1 { white-space: nowrap; }
 .wp-heads, .wp-body { display: flex; }
 .wp-heads { border-bottom: 1px solid var(--line); background: var(--surface-2); }
@@ -656,6 +708,70 @@ details.ritem > summary .apill { min-width: 0; }
 .chap { margin-bottom: 30px; }
 .chap .ch2 { font-size: 13px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
 .chap .ch2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+/* the work: one line per model call, the last lines of its reasoning under it (grey, never italic) */
+.work .wtoggle { border: 0; background: none; padding: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.work .chev, .wtog .chev { display: inline-block; font-size: 9px; color: var(--muted); transition: transform .15s; }
+.wlist { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.wrow { display: flex; gap: 12px; padding: 11px 18px; border-top: 1px solid var(--line-2); }
+.wrow:first-child { border-top: 0; }
+.wic { flex: none; width: 18px; padding-top: 2px; color: var(--done); }
+.wic svg { width: 16px; height: 16px; display: block; }
+.wrow.bad .wic { color: var(--bad); }
+.wbody { flex: 1; min-width: 0; }
+.whead { display: flex; align-items: baseline; gap: 12px; }
+.whead .wl { font-weight: 600; color: var(--ink); font-size: 13.5px; }
+.whead .wt { margin-left: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wdid { color: var(--ink-2); font-size: 13px; margin-top: 2px; line-height: 1.5; overflow-wrap: anywhere; }
+.wrow.live .wdid { color: var(--muted); }
+.wbad { color: var(--bad); }
+.wthink { color: var(--muted); font-size: 12.5px; line-height: 1.55; margin-top: 6px; overflow-wrap: anywhere; }
+.caret { display: inline-block; width: 7px; height: 13px; margin-left: 2px; vertical-align: -2px; background: var(--accent); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.wthink.full { white-space: pre-wrap; max-height: 420px; overflow: auto; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+.wmore { margin-top: 5px; font-size: 12px; }
+.wtogs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.wtog { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; color: var(--ink-2); cursor: pointer; }
+.wtog.on { border-color: var(--navy); color: var(--navy); }
+.made { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 14px 18px 12px; margin-top: 14px; }
+.mtitle { font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--navy); }
+.mlead { margin: 6px 0 10px; font-size: 13.5px; color: var(--ink-2); }
+.mrail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; margin-bottom: 12px; }
+.mrail .ms { font-size: 11.5px; color: var(--muted); padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); white-space: nowrap; }
+.mrail .ms.on { color: var(--pp); border-color: var(--pp); background: var(--pp-soft); font-weight: 600; }
+.mrail .mj { width: 10px; height: 1px; background: var(--line); }
+.mflow { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }
+.mnode { flex: 1 1 150px; min-width: 140px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--surface); }
+.mnode.pp { border-color: var(--pp); }
+.mnode.pp .mh { color: var(--pp); }
+.mnode.zones { flex: 2 1 240px; }
+.mh { font-size: 12.5px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+.mb { font-size: 12.5px; color: var(--ink-2); line-height: 1.45; }
+.msub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.marrow { align-self: center; color: var(--faint); font-size: 15px; }
+.mchips { display: flex; flex-wrap: wrap; gap: 4px; }
+.mchip { font-family: var(--mono); font-size: 11.5px; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); }
+.mchip.las { border-color: var(--navy); color: var(--navy); }
+.mchip.pp { border-color: var(--pp); color: var(--pp); }
+.mnotes { margin-top: 10px; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.mnotes .lb { font-weight: 600; color: var(--ink-2); }
+.lprompt { margin-top: 12px; border: 1px solid var(--accent); border-radius: 12px; padding: 12px 18px; background: var(--surface); }
+.lprompt .lq { font-weight: 700; color: var(--accent-ink); font-size: 14px; }
+.lprompt .lwhy { font-size: 13.5px; color: var(--ink-2); margin-top: 4px; max-width: 95ch; }
+.lacts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.lbtn { border: 1px solid var(--accent); background: var(--surface); color: var(--accent-ink); border-radius: 999px; padding: 6px 13px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.lbtn:hover:not(:disabled) { background: var(--accent-soft); }
+.lbtn:disabled { opacity: .5; cursor: default; }
+.lbtn.ok { border-color: var(--done); color: var(--done); }
+.lhint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.lprompt.ok { border-color: var(--line); display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--done); padding: 8px 14px; }
+.lprompt.ok svg { width: 16px; height: 16px; }
+.ppnote { display: flex; gap: 12px; align-items: flex-start; max-width: 860px; margin: 18px auto 0; text-align: left; background: var(--pp-soft); border: 1px solid var(--pp); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+.ppnote img { width: 22px; height: 22px; margin-top: 1px; }
+.ppnote b { color: var(--pp); }
+.ppnote .link { font-size: 13.5px; font-weight: 600; }
+.lshare { display: inline-flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.ltrack { display: inline-block; width: 120px; height: 8px; background: var(--line-2); border-radius: 2px; overflow: hidden; }
+.lbar { display: block; height: 100%; }
 .part { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 14px; overflow: hidden; }
 .phead { display: flex; gap: 12px; align-items: flex-start; padding: 14px 20px 10px; }
 .phead h3 { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ink); font-weight: 650; }
@@ -1609,7 +1725,7 @@ async function tick() {
     render();
     if (finished) { loadRuns(); loadConfig(); return; }
   } catch (e) { $("#run").innerHTML = `<div class="empty"><div class="errbox">${esc(e.message)}</div></div>`; return; }
-  S.poll = setTimeout(tick, 1500);
+  S.poll = setTimeout(tick, S.last && S.last.live ? 600 : 1500);     // a call streaming: its lines come in as written
 }
 
 // ---------- replay: a saved run played back from its events (#replay=<id>&speed=N) ----------
@@ -1820,7 +1936,8 @@ function render() {
   const finished = !["queued", "running"].includes(j.status);
   const res = j.result && Array.isArray(j.result.claims) ? j.result : null;   // a run that failed early has none
   const sig = `${j.status}|${S.events.length}|${S.tab}|${!!res}|${JSON.stringify(j.rating || {})}`;
-  if (sig === S.sig) { const el = $("#elapsed"); if (el) el.textContent = fmtS(j.elapsed); const nl = $("#nowline"); if (nl) nl.innerHTML = nowWords(j, m); return; }
+  if (sig === S.sig) { const el = $("#elapsed"); if (el) el.textContent = fmtS(j.elapsed); const nl = $("#nowline"); if (nl) nl.innerHTML = nowWords(j, m);
+    const ct = $("#calltime"); if (ct) ct.textContent = fmtS(Math.max(0, (+j.elapsed || 0) - (+ct.dataset.t0 || 0))); liveUpdate(j); return; }
   S.sig = sig; S.m = m; S.res = res;
   closePop();
   composerFor(j);
@@ -1867,6 +1984,10 @@ function wire(j) {
   $$("[data-secfold]").forEach(b => b.onclick = e => { if (e.target.closest(".eid, .zone, .numref")) return; S.det[b.dataset.secfold] = !S.det[b.dataset.secfold]; rerender(); });
   $$("[data-foldall]").forEach(b => b.onclick = () => { for (const k of b.dataset.foldall.split(",")) S.det[k] = !!b.dataset.open; rerender(); });
   $$("[data-more]").forEach(b => b.onclick = () => { S.det[b.dataset.more] = !S.det[b.dataset.more]; rerender(); });
+  $$("[data-lithok]").forEach(b => b.onclick = () => { S.det["w:lithok"] = true; rerender(); });
+  $$("[data-lv]").forEach(b => b.onclick = () => openViewer(j.id));
+  $$("[data-rerun]").forEach(b => b.onclick = () => rerunWith(j, JSON.parse(b.dataset.rerun)));
+  $$("[data-isettings]").forEach(b => b.onclick = () => interpOpen(S.followId ? "conv" : undefined));
   $$("[data-goto]").forEach(b => b.onclick = () => { S.tab = b.dataset.goto; S.pinned = true; rerender(); window.scrollTo(0, 0); });
   $$("[data-evmode]").forEach(b => b.onclick = () => { S.evMode = b.dataset.evmode; rerender(); });
   $$("[data-raw]").forEach(b => b.onclick = () => { S.raw[b.dataset.raw] = !S.raw[b.dataset.raw]; rerender(); });
@@ -2591,6 +2712,15 @@ const FILLS = {VCL: [[0, 1], "left", "#cdb98f"], PHIE: [[0.5, 0], "right", "#9cc
 const TW = {track: 130, log: 142, depth: 58, lith: 84, flag: 22};
 function niceStep(span, n) { const raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))); return [1, 2, 2.5, 5, 10].map(x => x * p).find(x => x >= raw) || 10 * p; }
 function fmtV(v) { if (v == null) return "–"; const a = Math.abs(v); return a >= 1000 ? v.toFixed(0) : a >= 100 ? v.toFixed(1) : a >= 1 ? v.toFixed(2) : a >= 0.01 ? v.toFixed(3) : v.toPrecision(2); }
+const ZOOMS = [1, 1.5, 2, 3, 4, 6, 8];          // a plot's depth zoom: its height against the fitted one
+function plotZoom(p) { return (S.pz && S.pz[p]) || 1; }
+function setPlotZoom(p, how) {                  // out, fit or in; the depth at the middle of the view stays there
+  const sc = $(`#${p}scroll`), at = ZOOMS.indexOf(plotZoom(p));
+  const mid = sc && sc.scrollHeight ? (sc.scrollTop + sc.clientHeight / 2) / sc.scrollHeight : 0.5;
+  S.pz = {...(S.pz || {}), [p]: how === "fit" ? 1 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, at + (how === "in" ? 1 : -1)))]};
+  rerender();
+  const now = $(`#${p}scroll`); if (now) now.scrollTop = Math.max(0, mid * now.scrollHeight - now.clientHeight / 2);
+}
 // the log plot: o.p (an id prefix), o.H (height), o.only (track titles to show; all when absent), o.flags (flag names
 // to show; all when absent), o.key (zones to mark), o.width (the width to fill)
 function plotHtml(w, o) {
@@ -2605,7 +2735,7 @@ function plotHtml(w, o) {
   for (let d = Math.ceil(w.top / st) * st; d <= w.base + 1e-9; d += st) ticks.push(+d.toFixed(6));
   const key = new Set(o.key || []);
   let heads = `<div class="wp-h" style="width:${tw.depth}px"><div class="tt2">Depth</div><div class="subtle" style="font-size:10.5px">${esc(w.unit)}</div></div>
-    <div class="wp-h" style="width:${tw.lith}px"><div class="tt2">Lithology</div><div class="subtle lc" title="${esc(w.lithology_curve ? `the lithology log ${w.lithology_curve}` : w.zone_bands ? "shale-volume bands" : "")}">${w.lithology_curve ? esc(w.lithology_curve) : w.zone_bands ? "VCL bands" : "–"}</div><div class="subtle" style="font-size:10.5px">and zones</div></div>`;
+    <div class="wp-h" style="width:${tw.lith}px"><div class="tt2">Lithology</div><div class="subtle lc" title="${esc(w.lithology_curve ? `the lithology log ${w.lithology_curve}` : lithOf(w).source === "mineral solver" ? `Petrophys's mineral solver, ${lithOf(w).domain} domain` : w.zone_bands ? "shale-volume bands" : "")}">${w.lithology_curve ? esc(w.lithology_curve) : lithOf(w).source === "mineral solver" ? `${esc(lithOf(w).curve)} (solved)` : w.zone_bands ? "VCL bands" : "–"}</div><div class="subtle" style="font-size:10.5px">and zones</div></div>`;
   let bodies = `<svg width="${tw.depth}" height="${H}">${ticks.map(d => `<line x1="${tw.depth - 6}" x2="${tw.depth}" y1="${y(d)}" y2="${y(d)}" stroke="var(--faint)"/><text x="${tw.depth - 9}" y="${y(d) + 4}" text-anchor="end" font-size="10.5" fill="var(--muted)" font-family="var(--mono)">${fmtD(d)}</text>`).join("")}</svg>`;
   const LW = 48;
   bodies += `<svg width="${tw.lith}" height="${H}">${w.lithology.map(r => `<rect x="0" y="${y(r.top)}" width="${LW}" height="${Math.max(0.5, y(r.base) - y(r.top))}" fill="${lithColor(r.lithology)}"><title>${esc(r.lithology)} ${fmtD(r.top)}–${fmtD(r.base)}</title></rect>`).join("")}
@@ -2644,8 +2774,11 @@ function plotHtml(w, o) {
   }
   const bands = w.zones.filter(z => key.has(z.zone) && z.zone !== S.hlZone).map(z => `<div class="zb key" style="top:${y(z.top)}px;height:${Math.max(2, y(z.base) - y(z.top))}px"></div>`).join("");
   const hz = w.zones.find(z => z.zone === S.hlZone);
-  return `<div class="wp"><div class="wp-in"><div class="wp-read" id="${o.p}read"><span>Move over the logs to read the values at a depth; click a zone to pick it.</span></div>
-    <div class="wp-heads">${heads}</div><div class="wp-scroll" id="${o.p}scroll"><div class="wp-body" id="${o.p}body" data-h="${H}" style="height:${H}px">${bodies}${bands}
+  const pz = plotZoom(o.p), at = ZOOMS.indexOf(pz);
+  return `<div class="wp"><div class="wp-in"><div class="wp-top"><div class="wp-read" id="${o.p}read"><span>Move over the logs to read the values at a depth; click a zone to pick it.</span></div>
+    <div class="wp-btns"><button data-pz="out" data-p="${o.p}" title="Zoom out on depth"${at <= 0 ? " disabled" : ""}>−</button><button data-pz="fit" data-p="${o.p}" title="${pz === 1 ? "The whole interval is in view" : "Back to the whole interval"}">Zoom${pz === 1 ? "" : ` ${pz}×`}</button><button data-pz="in" data-p="${o.p}" title="Zoom in on depth (then scroll the plot)"${at >= ZOOMS.length - 1 ? " disabled" : ""}>+</button>
+      <button class="wp-exp" data-lv="1" title="Open the log viewer full screen: zoom to any depth in full detail, choose the curves and their scales">⤢ Expand</button></div></div>
+    <div class="wp-heads">${heads}</div><div class="wp-scroll" id="${o.p}scroll"${o.frame ? ` style="max-height:${o.frame}px"` : ""}><div class="wp-body" id="${o.p}body" data-h="${H}" style="height:${H}px">${bodies}${bands}
     ${hz ? `<div class="zb" style="top:${y(hz.top)}px;height:${Math.max(2, y(hz.base) - y(hz.top))}px"></div>` : ""}<div class="xh" id="${o.p}xh"></div></div></div></div></div>`;
 }
 function zoneTable(w, key, opt = {}) {
@@ -2655,14 +2788,220 @@ function zoneTable(w, key, opt = {}) {
   return `<div class="tblwrap"><table class="t ztable"><thead><tr><th>Zone</th><th>Lithology</th><th class="num">Top</th><th class="num">Base</th><th class="num">Thick&shy;ness</th>${opt.samples ? `<th class="num">Samples</th>` : ""}${cols.map(([, l]) => `<th class="num">${esc(l)}</th>`).join("")}</tr></thead><tbody>
     ${w.zones.map(z => `<tr data-z="${z.zone}" class="${S.hlZone === z.zone ? "on" : k.has(z.zone) ? "key" : ""}"><td class="nw"><span class="zone">${z.zone}</span></td><td class="nw"><span class="swatch" style="background:${lithColor(z.lithology)}"></span>${esc(z.lithology)}</td><td class="num">${fmtD(z.top)}</td><td class="num">${fmtD(z.base)}</td><td class="num">${fmtV(z.thickness)}</td>${opt.samples ? `<td class="num">${fmtN(z.samples)}</td>` : ""}${cols.map(([c]) => `<td class="num">${z.stats && z.stats[c] != null ? fmtV(z.stats[c]) : "–"}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
+// ---------- the log viewer: the interval's logs full screen, as a log-viewing program shows them ----------
+// Zoom and pan on depth (the curves come back at the window's own detail), the curves and tracks chosen by the user,
+// each track's scale, and every curve marked as measured (in the LAS file) or computed by Petrophys.
+// Data: /api/run/<id>/logview and /logdata.
+const L = {run: null, extent: "interval", meta: null, top: 0, base: 1, tracks: [], flags: [], data: null, source: "all",
+           panel: true, drag: null, seq: 0, cur: null, addTo: "new", query: "", timer: null};
+const LV_PALETTE = ["#285aa6", "#b42318", "#2b7536", "#8f5300", "#6b4fa0", "#1f5fa8", "#b84e12", "#6b7280"];
+const lvCurve = name => (L.meta.curves.find(c => c.name === name) || {name, unit: "", scale: [0, 1], kind: "curve", source: ""});
+const lvCss = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+async function openViewer(runId) {
+  let el = $("#lv");
+  if (!el) { el = document.createElement("div"); el.id = "lv"; el.className = "lv"; document.body.appendChild(el); }
+  el.hidden = false; el.innerHTML = `<div class="lv-wait"><span class="spin"></span>Opening the logs…</div>`;
+  Object.assign(L, {run: runId, data: null, cur: null});
+  try { await lvLoad(L.extent); } catch (e) { el.innerHTML = `<div class="lv-wait"><div class="errbox">${esc(e.message)}</div><button class="btn" id="lvx">Close</button></div>`; $("#lvx").onclick = closeViewer; }
+}
+function closeViewer() { const el = $("#lv"); if (el) { el.hidden = true; el.innerHTML = ""; } window.removeEventListener("resize", lvDraw); }
+async function lvLoad(extent) {
+  const m = await api(`/api/run/${L.run}/logview?extent=${extent}`);
+  L.extent = extent; L.meta = m; L.top = m.top; L.base = m.base;
+  L.tracks = m.tracks.map(t => ({title: t.title, log: t.log, curves: t.curves.map((n, i) => ({name: n, color: (TRACK_COLORS[t.title] || LV_PALETTE)[i % (TRACK_COLORS[t.title] || LV_PALETTE).length], scale: [...lvCurve(n).scale]}))}));
+  L.flags = [...m.flags];
+  lvFrame(); lvFetch(true);
+}
+function lvFrame() {                                  // the viewer's fixed parts; the canvases are drawn by lvDraw
+  const m = L.meta, el = $("#lv");
+  el.innerHTML = `<div class="lv-bar"><b>Log viewer</b><span class="subtle" id="lvtitle"></span><span class="grow"></span>
+      <div class="seg">${["interval", "well"].map(x => `<button data-lvx="${x}" class="${L.extent === x ? "on" : ""}">${x === "well" ? "Whole well" : "The interval"}</button>`).join("")}</div>
+      <div class="seg"><button data-lvz="out" title="Zoom out (−)">−</button><button data-lvz="fit" title="Back to all of it">Zoom</button><button data-lvz="in" title="Zoom in (+)">+</button></div>
+      <div class="seg" title="Show every curve, only those measured (in the LAS file), or only those Petrophys computed">${[["all", "All curves"], ["LAS", "Measured · LAS"], ["Petrophys", "Computed · Petrophys"]].map(([k, l]) => `<button data-lvs0="${k}" class="${L.source === k ? "on" : ""}">${l}</button>`).join("")}</div>
+      <button class="btn small" id="lvpanel">${L.panel ? "Hide" : "Show"} curves</button><button class="btn small" id="lvclose" title="Close (Esc)">Close ✕</button></div>
+    <div class="lv-read" id="lvread"><span>Scroll or drag to move along depth; Ctrl + scroll, or + and −, to zoom; double-click to zoom in; click a zone to zoom to it. <span class="lv-tag las">LAS</span> measured, in the LAS file · <span class="lv-tag pp">PP</span> computed by Petrophys.</span></div>
+    <div class="lv-main"><canvas id="lvover" class="lv-over" width="44"></canvas>
+      <div class="lv-plot"><div class="lv-heads" id="lvheads"></div><div class="lv-body" id="lvbody"><canvas id="lvc"></canvas></div></div>
+      <div class="lv-side" id="lvside"${L.panel ? "" : " hidden"}></div></div>`;
+  $("#lvclose").onclick = closeViewer;
+  $("#lvpanel").onclick = () => { L.panel = !L.panel; $("#lvside").hidden = !L.panel; $("#lvpanel").textContent = `${L.panel ? "Hide" : "Show"} curves`; lvDraw(); };
+  $$("[data-lvx]").forEach(b => b.onclick = () => lvLoad(b.dataset.lvx).catch(e => toast(e.message)));
+  $$("[data-lvz]").forEach(b => b.onclick = () => b.dataset.lvz === "fit" ? lvWindow(m.top, m.base) : lvZoom(b.dataset.lvz === "in" ? 0.5 : 2));
+  $$("[data-lvs0]").forEach(b => b.onclick = () => { L.source = b.dataset.lvs0; $$("[data-lvs0]").forEach(x => x.classList.toggle("on", x === b)); lvHeads(); lvDraw(); });
+  lvWire(); lvSide(); lvHeads(); lvDraw();
+  window.addEventListener("resize", lvDraw);
+}
+function lvWindow(top, base) {                        // set the depth window, kept inside the extent and no thinner than a few samples
+  const m = L.meta, least = Math.max(5 * (m.step || 0.1), (m.base - m.top) / 5000);
+  let span = Math.min(m.base - m.top, Math.max(least, base - top));
+  let t = Math.max(m.top, Math.min(m.base - span, top));
+  L.top = t; L.base = t + span; lvDraw(); lvFetch(false);
+}
+function lvZoom(f, at) { const c = at ?? (L.top + L.base) / 2, s = (L.base - L.top) * f; lvWindow(c - (c - L.top) * f, c - (c - L.top) * f + s); }
+function lvNames() { return [...new Set([...L.tracks.flatMap(t => t.curves.map(c => c.name)), ...L.flags])]; }
+const lvOn = name => L.source === "all" || lvCurve(name).source === L.source;      // the source filter
+function lvTracks() { return L.tracks.map(t => ({...t, curves: t.curves.filter(c => lvOn(c.name))})).filter(t => t.curves.length); }
+function lvFlags() { return L.flags.filter(lvOn); }
+function lvFetch(now) {                               // the curves for the window (with a margin either side), after a short pause
+  clearTimeout(L.timer);
+  L.timer = setTimeout(async () => {
+    const seq = ++L.seq, span = L.base - L.top, m = L.meta, names = lvNames();
+    const top = Math.max(m.top, L.top - span / 2), base = Math.min(m.base, L.base + span / 2);
+    const points = Math.max(600, 3 * (($("#lvc") && $("#lvc").clientHeight) || 700));
+    try {
+      const d = await api(`/api/run/${L.run}/logdata?extent=${L.extent}&top=${top}&base=${base}&points=${points}&curves=${encodeURIComponent(names.join(","))}`);
+      if (seq === L.seq) { L.data = d; lvDraw(); }
+    } catch (e) { toast(e.message); }
+  }, now ? 0 : 140);
+}
+function lvLayout() {                                 // the columns across the canvas: depth, lithology and zones, the tracks, the flags
+  const W = $("#lvbody").clientWidth, dep = 64, lith = 92, fw = 18, ts = lvTracks(), fs = lvFlags(), n = ts.length;
+  const tw = Math.max(96, Math.floor((W - dep - lith - fw * fs.length) / Math.max(1, n)));
+  let x = dep + lith;
+  return {W: Math.max(W, dep + lith + tw * n + fw * fs.length), dep, lith, fw, tw, ts, fs, tracks: ts.map(() => (x += tw) - tw), flags: fs.map(() => (x += fw) - fw)};
+}
+function lvHeads() {
+  const g = lvLayout();
+  $("#lvheads").innerHTML = `<div class="lvh" style="width:${g.dep}px"><b>Depth</b><small>${esc(L.meta.unit)}</small></div><div class="lvh" style="width:${g.lith}px"><b>Lithology</b><small>and zones</small></div>` +
+    g.ts.map(t => `<div class="lvh" style="width:${g.tw}px"><b title="${esc(t.title)}">${esc(t.title)}</b>${t.curves.map(c => { const u = lvCurve(c.name), las = u.source === "LAS";
+      return `<div class="lvcv" style="color:${c.color}" title="${esc([c.name, u.about, u.unit, las ? "measured: in the LAS file" : "computed by Petrophys"].filter(Boolean).join(" · "))}"><span>${fmtV(c.scale[0])}</span><b><span class="lv-tag ${las ? "las" : "pp"}">${las ? "LAS" : "PP"}</span>${esc(c.name)}</b><span>${fmtV(c.scale[1])}</span></div>`; }).join("")}<small>${t.log ? "log scale" : "linear"}${t.curves[0] && lvCurve(t.curves[0].name).unit ? ` · ${esc(lvCurve(t.curves[0].name).unit)}` : ""}</small></div>`).join("") +
+    g.fs.map(f => `<div class="lvh lvf" style="width:${g.fw}px" title="${esc(f)} · flag computed by Petrophys"><span>${esc(f)}</span></div>`).join("");
+}
+function lvDraw() {
+  const cv = $("#lvc"), body = $("#lvbody"); if (!cv || !L.meta) return;
+  const g = lvLayout(), H = body.clientHeight, dpr = window.devicePixelRatio || 1, m = L.meta;
+  cv.width = g.W * dpr; cv.height = H * dpr; cv.style.width = g.W + "px"; cv.style.height = H + "px";
+  const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, g.W, H);
+  const span = L.base - L.top, y = d => (d - L.top) / span * H;
+  const line = lvCss("--line-2"), faint = lvCss("--faint"), muted = lvCss("--muted"), navy = lvCss("--navy"), ink = lvCss("--ink");
+  c.fillStyle = lvCss("--surface"); c.fillRect(0, 0, g.W, H);
+  c.font = `11px ${lvCss("--mono") || "monospace"}`; c.textBaseline = "middle";
+  const st = niceStep(span, Math.max(4, H / 64)), ticks = [];
+  for (let d = Math.ceil(L.top / st) * st; d <= L.base + 1e-9; d += st) ticks.push(+d.toFixed(6));
+  c.fillStyle = muted; c.textAlign = "right";
+  for (const d of ticks) { c.fillText(fmtD(d), g.dep - 9, y(d)); c.strokeStyle = faint; c.beginPath(); c.moveTo(g.dep - 6, y(d)); c.lineTo(g.dep, y(d)); c.stroke(); }
+  const LW = 44;                                       // lithology runs, then the zones beside them
+  for (const r of m.lithology) { if (r.base < L.top || r.top > L.base) continue; c.fillStyle = lithColor(r.lithology); c.fillRect(g.dep, y(r.top), LW, Math.max(0.6, y(r.base) - y(r.top))); }
+  c.textAlign = "center"; c.font = `700 10px ${lvCss("--mono") || "monospace"}`;
+  for (const z of m.zones) {
+    if (z.base < L.top || z.top > L.base) continue;
+    const y0 = y(z.top), y1 = y(z.base);
+    c.fillStyle = lvCss("--surface-2"); c.strokeStyle = lvCss("--line"); c.beginPath(); c.rect(g.dep + LW + 2, y0, g.lith - LW - 4, Math.max(1, y1 - y0)); c.fill(); c.stroke();
+    if (y1 - y0 > 13) { c.fillStyle = navy; c.fillText(z.zone, g.dep + LW + (g.lith - LW) / 2, Math.max(8, Math.min(H - 8, (Math.max(0, y0) + Math.min(H, y1)) / 2))); }
+  }
+  const D = L.data, dep = D ? D.depth : [];
+  g.ts.forEach((t, i) => {
+    const x0 = g.tracks[i], W = g.tw;
+    c.save(); c.beginPath(); c.rect(x0, 0, W, H); c.clip();
+    c.strokeStyle = line; c.lineWidth = 1; c.beginPath();
+    if (t.log && t.curves[0]) { const [a, b] = t.curves[0].scale.map(v => Math.log10(Math.max(v, 1e-9))); for (let e = Math.ceil(Math.min(a, b)); e <= Math.max(a, b); e++) { const x = x0 + (e - a) / (b - a) * W; c.moveTo(x, 0); c.lineTo(x, H); } }
+    else for (let q = 1; q < 4; q++) { c.moveTo(x0 + q * W / 4, 0); c.lineTo(x0 + q * W / 4, H); }
+    for (const d of ticks) { c.moveTo(x0, y(d)); c.lineTo(x0 + W, y(d)); }
+    c.stroke();
+    c.strokeStyle = faint; c.setLineDash([2, 3]); c.beginPath();
+    for (const z of m.zones) if (z.top >= L.top && z.top <= L.base) { c.moveTo(x0, y(z.top)); c.lineTo(x0 + W, y(z.top)); }
+    c.stroke(); c.setLineDash([]);
+    t.curves.forEach((cu, k) => {
+      const vals = D && D.values[cu.name]; if (!vals) return;
+      const [l, r] = cu.scale, lg = t.log;
+      const X = lg ? (v => v > 0 ? x0 + (Math.log10(v) - Math.log10(Math.max(l, 1e-9))) / (Math.log10(Math.max(r, 1e-9)) - Math.log10(Math.max(l, 1e-9))) * W : null) : (v => x0 + (v - l) / (r - l) * W);
+      const segs = []; let cur = [];
+      for (let j = 0; j < vals.length; j++) { const v = vals[j], xv = v == null ? null : X(v); if (xv == null || !isFinite(xv)) { if (cur.length) segs.push(cur); cur = []; } else cur.push([Math.max(x0 - 4, Math.min(x0 + W + 4, xv)), y(dep[j])]); }
+      if (cur.length) segs.push(cur);
+      const fill = FILLS[cu.name];
+      if (k === 0 && fill) { const xe = fill[1] === "left" ? x0 : x0 + W; c.fillStyle = fill[2]; c.globalAlpha = 0.5;
+        for (const s of segs) { c.beginPath(); c.moveTo(xe, s[0][1]); for (const p of s) c.lineTo(p[0], p[1]); c.lineTo(xe, s[s.length - 1][1]); c.closePath(); c.fill(); } c.globalAlpha = 1; }
+      c.strokeStyle = cu.color; c.lineWidth = k ? 1.1 : 1.5; c.setLineDash(k ? [4, 2] : []);
+      for (const s of segs) { c.beginPath(); if (s.length === 1) c.rect(s[0][0] - 1, s[0][1] - 1, 2, 2); else { c.moveTo(s[0][0], s[0][1]); for (const p of s) c.lineTo(p[0], p[1]); } c.stroke(); }
+      c.setLineDash([]);
+    });
+    c.restore(); c.strokeStyle = lvCss("--line"); c.beginPath(); c.moveTo(x0 + 0.5, 0); c.lineTo(x0 + 0.5, H); c.stroke();
+  });
+  const dy = D && dep.length > 1 ? Math.abs(y(dep[1]) - y(dep[0])) : 2;
+  g.fs.forEach((f, i) => { const vals = D && D.values[f]; if (!vals) return; c.fillStyle = /PAY/.test(f) ? "#2b7536" : /RES/.test(f) ? "#4f9a5a" : /BAD/.test(f) ? "#b42318" : "#8bbf93";
+    for (let j = 0; j < vals.length; j++) if (vals[j] > 0) c.fillRect(g.flags[i] + 3, y(dep[j]) - dy / 2, g.fw - 6, Math.max(1, dy)); });
+  if (L.cur != null) { c.strokeStyle = ink; c.globalAlpha = 0.55; c.lineWidth = 1; c.beginPath(); c.moveTo(g.dep, y(L.cur)); c.lineTo(g.W, y(L.cur)); c.stroke(); c.globalAlpha = 1; }
+  const every = D ? D.every : 1;
+  $("#lvtitle").textContent = `${fmtD(+L.top.toFixed(2))}–${fmtD(+L.base.toFixed(2))} ${m.unit} on screen (${fmtV(span)} ${m.unit} of ${fmtV(m.base - m.top)}) · ${every > 1 ? `every ${every}th sample` : "every sample"}`;
+  lvOver();
+}
+function lvOver() {                                   // the whole extent in a strip, the window on screen marked
+  const cv = $("#lvover"), m = L.meta; if (!cv) return;
+  const H = cv.parentElement.clientHeight, dpr = window.devicePixelRatio || 1;
+  cv.height = H * dpr; cv.width = 44 * dpr; cv.style.height = H + "px"; cv.style.width = "44px";
+  const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, 44, H);
+  const y = d => (d - m.top) / ((m.base - m.top) || 1) * H;
+  for (const r of m.lithology) { c.fillStyle = lithColor(r.lithology); c.fillRect(8, y(r.top), 28, Math.max(0.5, y(r.base) - y(r.top))); }
+  c.strokeStyle = lvCss("--accent"); c.lineWidth = 2; c.strokeRect(4, y(L.top) + 1, 36, Math.max(4, y(L.base) - y(L.top) - 2));
+}
+function lvAt(ev) { const r = $("#lvc").getBoundingClientRect(); return L.top + (ev.clientY - r.top) / r.height * (L.base - L.top); }
+function lvRead(d) {                                  // the values at the nearest sample
+  const D = L.data, m = L.meta; if (!D || !D.depth.length) return;
+  let lo = 0, hi = D.depth.length - 1; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (D.depth[mid] < d) lo = mid; else hi = mid; }
+  const k = Math.abs(D.depth[lo] - d) <= Math.abs(D.depth[hi] - d) ? lo : hi, z = m.zones.find(q => d >= q.top && d <= q.base);
+  const vals = lvTracks().flatMap(t => t.curves).map(cu => `<span class="rv1">${esc(cu.name)} <b>${fmtV((D.values[cu.name] || [])[k])}</b>${lvCurve(cu.name).unit ? ` <small>${esc(lvCurve(cu.name).unit)}</small>` : ""}</span>`);
+  const fl = lvFlags().filter(f => (D.values[f] || [])[k] > 0).map(esc);
+  $("#lvread").innerHTML = `<span class="rv1"><b>${fmtD(D.depth[k])} ${esc(m.unit)}</b></span>${z ? `<span class="rv1"><span class="zone">${z.zone}</span> ${esc(z.lithology)}</span>` : `<span class="rv1 subtle">outside the zones</span>`}${vals.join("")}${fl.length ? `<span class="rv1">flags <b>${fl.join(", ")}</b></span>` : ""}`;
+}
+function lvWire() {
+  const cv = $("#lvc"), ov = $("#lvover"); cv.style.cursor = "grab";
+  cv.onwheel = ev => { ev.preventDefault(); const span = L.base - L.top;
+    if (ev.ctrlKey || ev.metaKey) lvZoom(Math.exp(Math.max(-1, Math.min(1, ev.deltaY * 0.004))), lvAt(ev));
+    else lvWindow(L.top + ev.deltaY / cv.clientHeight * span, L.base + ev.deltaY / cv.clientHeight * span); };
+  cv.onmousedown = ev => { L.drag = {y: ev.clientY, top: L.top, base: L.base}; cv.style.cursor = "grabbing"; ev.preventDefault(); };
+  cv.onmousemove = ev => {
+    if (L.drag) { const dd = (L.drag.y - ev.clientY) / cv.clientHeight * (L.drag.base - L.drag.top); lvWindow(L.drag.top + dd, L.drag.base + dd); return; }
+    L.cur = lvAt(ev); lvRead(L.cur); lvDraw(); };
+  const up = ev => { const g = L.drag; L.drag = null; cv.style.cursor = "grab"; if (!g || Math.abs(ev.clientY - g.y) >= 3) return;
+    const lay = lvLayout(), r = cv.getBoundingClientRect(), x = ev.clientX - r.left, d = lvAt(ev), z = L.meta.zones.find(q => d >= q.top && d <= q.base);
+    if (z && x >= lay.dep && x <= lay.dep + lay.lith) { const pad = (z.base - z.top) * 0.1; lvWindow(z.top - pad, z.base + pad); } };   // a click on a zone: zoom to it
+  cv.onmouseup = up; cv.onmouseleave = ev => { if (L.drag) up(ev); L.cur = null; lvDraw(); };
+  cv.ondblclick = ev => lvZoom(0.5, lvAt(ev));
+  const jump = ev => { const r = ov.getBoundingClientRect(), m = L.meta, d = m.top + (ev.clientY - r.top) / r.height * (m.base - m.top), s = L.base - L.top; lvWindow(d - s / 2, d + s / 2); };
+  ov.onmousedown = ev => { jump(ev); ov.onmousemove = jump; }; ov.onmouseup = ov.onmouseleave = () => { ov.onmousemove = null; };
+}
+document.addEventListener("keydown", ev => { const el = $("#lv"); if (!el || el.hidden || /INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)) return;
+  if (ev.key === "Escape") closeViewer();
+  else if (ev.key === "+" || ev.key === "=") lvZoom(0.5); else if (ev.key === "-") lvZoom(2);
+  else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { const s = (L.base - L.top) * 0.2 * (ev.key === "ArrowDown" ? 1 : -1); lvWindow(L.top + s, L.base + s); ev.preventDefault(); } });
+function lvSide() {                                   // the tracks as they stand, and every curve of the well to add
+  const side = $("#lvside"), m = L.meta; if (!side) return;
+  const shown = new Set(lvNames()), q = L.query.trim().toLowerCase();
+  const list = m.curves.filter(c => !q || `${c.name} ${c.about} ${c.family || ""}`.toLowerCase().includes(q));
+  side.innerHTML = `<div class="lv-sh">Tracks</div>${L.tracks.map((t, i) => `<div class="lv-track"><div class="lv-th"><b>${esc(t.title)}</b><span class="grow"></span>
+      <button class="link" data-lvlog="${i}" title="Switch between a linear and a logarithmic scale">${t.log ? "log" : "linear"}</button><button class="link" data-lvdel="${i}" title="Remove the track">remove</button></div>
+      ${t.curves.map((c, k) => `<div class="lv-cv"><span class="lv-dot" style="background:${c.color}"></span><span class="lv-tag ${lvCurve(c.name).source === "LAS" ? "las" : "pp"}">${lvCurve(c.name).source === "LAS" ? "LAS" : "PP"}</span><b>${esc(c.name)}</b><input data-lvs="${i},${k},0" value="${c.scale[0]}" title="The value at the track's left edge"><input data-lvs="${i},${k},1" value="${c.scale[1]}" title="The value at the track's right edge"><button class="link" data-lvrm="${i},${k}" title="Take the curve off the track">✕</button></div>`).join("")}</div>`).join("")}
+    ${L.flags.length ? `<div class="lv-track"><div class="lv-th"><b>Flags</b></div>${L.flags.map(f => `<div class="lv-cv"><span class="lv-tag ${lvCurve(f).source === "LAS" ? "las" : "pp"}">${lvCurve(f).source === "LAS" ? "LAS" : "PP"}</span><b>${esc(f)}</b><span class="grow"></span><button class="link" data-lvfl="${esc(f)}">✕</button></div>`).join("")}</div>` : ""}
+    <div class="lv-sh" style="margin-top:14px">Every curve <span class="subtle">· ${m.curves.length}</span></div>
+    <input id="lvq" placeholder="Find a curve" value="${esc(L.query)}">
+    <div class="lv-add">Add to <select id="lvto"><option value="new">a new track</option>${L.tracks.map((t, i) => `<option value="${i}"${L.addTo === String(i) ? " selected" : ""}>${esc(t.title)}</option>`).join("")}</select></div>
+    ${[["LAS", "Measured: in the LAS file"], ["Petrophys", "Computed by Petrophys"]].map(([src, head]) => { const part = list.filter(c => c.source === src);
+      return `<div class="lv-gh"><span class="lv-tag ${src === "LAS" ? "las" : "pp"}">${src === "LAS" ? "LAS" : "PP"}</span>${head} <span class="subtle">· ${part.length}</span></div>
+        <div class="lv-list">${part.map(c => `<button class="lv-item${shown.has(c.name) ? " on" : ""}" data-lvadd="${esc(c.name)}" title="${esc([c.about, c.unit].filter(Boolean).join(" · "))}">
+          <b>${esc(c.name)}</b><small>${esc(c.kind === "curve" ? (c.unit || "") : c.kind)}</small><span class="grow"></span><span>${shown.has(c.name) ? "shown" : "add"}</span></button>`).join("") || `<div class="subtle" style="padding:4px 2px">none</div>`}</div>`; }).join("")}`;
+  const redo = () => { lvSide(); lvHeads(); lvDraw(); lvFetch(true); };
+  $("#lvq").oninput = ev => { L.query = ev.target.value; const pos = ev.target.selectionStart; lvSide(); const n = $("#lvq"); n.focus(); n.setSelectionRange(pos, pos); };
+  $("#lvto").onchange = ev => { L.addTo = ev.target.value; };
+  $$("[data-lvlog]").forEach(b => b.onclick = () => { const t = L.tracks[+b.dataset.lvlog]; t.log = !t.log; redo(); });
+  $$("[data-lvdel]").forEach(b => b.onclick = () => { L.tracks.splice(+b.dataset.lvdel, 1); L.addTo = "new"; redo(); });
+  $$("[data-lvrm]").forEach(b => b.onclick = () => { const [i, k] = b.dataset.lvrm.split(",").map(Number); L.tracks[i].curves.splice(k, 1); if (!L.tracks[i].curves.length) { L.tracks.splice(i, 1); L.addTo = "new"; } redo(); });
+  $$("[data-lvfl]").forEach(b => b.onclick = () => { L.flags = L.flags.filter(f => f !== b.dataset.lvfl); redo(); });
+  $$("[data-lvs]").forEach(inp => inp.onchange = () => { const [i, k, e] = inp.dataset.lvs.split(",").map(Number), v = parseFloat(inp.value); if (isFinite(v)) { L.tracks[i].curves[k].scale[e] = v; lvHeads(); lvDraw(); } });
+  $$("[data-lvadd]").forEach(b => b.onclick = () => { const name = b.dataset.lvadd, c = lvCurve(name);
+    if (lvNames().includes(name)) { L.flags = L.flags.filter(f => f !== name); L.tracks.forEach(t => t.curves = t.curves.filter(x => x.name !== name)); L.tracks = L.tracks.filter(t => t.curves.length); L.addTo = "new"; }
+    else if (c.kind === "flag") L.flags.push(name);
+    else if (L.addTo !== "new" && L.tracks[+L.addTo]) { const t = L.tracks[+L.addTo]; t.curves.push({name, color: LV_PALETTE[(t.curves.length + 3) % LV_PALETTE.length], scale: [...c.scale]}); }
+    else L.tracks.push({title: name, log: !!c.log, curves: [{name, color: LV_PALETTE[L.tracks.length % LV_PALETTE.length], scale: [...c.scale]}]});
+    redo(); });
+}
 function wellPane(m, res, finished) {
   const w = m.well;
   if (!w) return `<div class="card"><div class="cb"><div class="thinking">${finished ? "This run has no plot of the well (it was asked before the plot existed, or failed before Petrophys read the well)." : `<span class="spin"></span>The logs appear here once Petrophys has interpreted the well.`}</div></div></div>`;
   if (w.error) return `<div class="errbox">The plot could not be drawn: ${esc(w.error)}</div>`;
   S.wellData = w;
-  const zoom = S.wellZoom || 1, iv = res && res.interval;
+  const zoom = plotZoom("wp"), iv = res && res.interval;
   let html = `<div class="wtools"><div><b>${esc((iv && iv.name) || "The interval")}</b> <span class="subtle">${esc(fmtD(w.top))}–${esc(fmtD(w.base))} ${esc(w.unit)} · ${fmtN(w.samples)} samples · ${w.zones.length} zones ${esc(res ? lithText(res.lithology) : "")}</span></div>
-    <span class="grow"></span><div class="seg">${[1, 2, 4].map(z => `<button data-zoom="${z}" class="${zoom === z ? "on" : ""}">${z === 1 ? "Fit" : z + "×"}</button>`).join("")}</div></div>` + plotLegend();
+    <span class="grow"></span><button class="btn" data-lv="1" title="Full screen: zoom and move along depth, choose the curves and their scales">Open the log viewer ⤢</button></div>` + plotLegend();
   html += plotHtml(w, {p: "wp", H: Math.round(680 * zoom), width: ($("#run") && $("#run").clientWidth) || 1100});
   const liths = [...new Set(w.lithology.map(r => r.lithology))];
   html += `<div class="legend2" style="margin-top:8px"><b style="color:var(--ink-2)">Lithology</b>${liths.map(l => `<span><span class="swatch" style="background:${lithColor(l)}"></span>${esc(l)}</span>`).join("")}</div>`;
@@ -2698,7 +3037,7 @@ function wirePlot(p) {
 function wireWell() {
   for (const p of ["wp", "sp"]) wirePlot(p);
   $$(".ztable tr[data-z]").forEach(tr => tr.onclick = () => { S.hlZone = S.hlZone === tr.dataset.z ? null : tr.dataset.z; rerender(); });
-  $$("[data-zoom]").forEach(b => b.onclick = () => { S.wellZoom = +b.dataset.zoom; rerender(); });
+  $$("[data-pz]").forEach(b => b.onclick = ev => { ev.stopPropagation(); setPlotZoom(b.dataset.p, b.dataset.pz); });
 }
 function scrollToZone(p) {
   const w = S.wellData, sc = $(`#${p}scroll`), body = $(`#${p}body`), z = w && w.zones.find(x => x.zone === S.hlZone);
@@ -2787,6 +3126,197 @@ function finding(c, w, calls, m, shown) {
     <div class="ffoot">${rest || c.means || c.weak ? `<button class="readmore" data-more="${esc(key)}">${open ? "Show less" : "Read in full"}</button>` : ""}
       ${evs.length ? `<span class="grow"></span><button class="link" data-goclaim="${esc(c.id)}">${MINI.doc} Rests on ${evs.length} computed result${evs.length === 1 ? "" : "s"} →</button>` : ""}</div></div>`;
 }
+// ---------- the work, as it happens: each model call on a line, with the last lines of its reasoning ----------
+// The reasoning is the model's own working notes for the call (the server's reasoning text): shown as it is, never
+// checked; the answer's numbers are the checked part.
+const THINK_SKIP = /^(?:let me (?:write|output|produce|format|now)|let's (?:write|output|produce)|now (?:i'll|i will|let me) (?:write|output|produce)|i'?ll (?:write|output|produce|reply|respond|return)|(?:reply|respond|return|output|answer) (?:with )?only\b|only (?:the )?json\b|(?:the )?(?:final )?(?:json|output|answer) ?(?:is|:)?\s*$|\[… [\d,]+ characters left out …\])/i;
+function thinkTail(text, n) {                     // the last n lines of a call's reasoning that say something
+  const lines = String(text || "").split(/\n+/).map(l => l.trim())
+    .filter(l => l && !/^[{}\[\]"`]/.test(l) && !/^[-=*_#]{3,}$/.test(l) && !THINK_SKIP.test(l));
+  return lines.slice(-n);
+}
+function workLabel(c, live) {
+  const sub = (/^step_\d+_([a-z_]+?)(?:_?\d+)?$/.exec(c.stage) || [])[1];
+  if (c.type === "read") return live ? "Reading the question" : "Read the question";
+  if (c.type === "step") return `Step ${c.number}${sub && !/^(retry|again)$/.test(sub) ? ` · ${sub.replace(/_/g, " ")}` : ""}`;
+  if (c.type === "settle") return live ? "Settling the findings" : "Settled the findings";
+  if (c.type === "writer") return live ? "Writing the answer" : "Wrote the answer";
+  if (c.type === "repair") return live ? "Fixing the numbers the checker found" : "Fixed the numbers the checker found";
+  if (/^figures?\b/.test(c.stage)) return live ? "Choosing the answer's figures" : "Chose the answer's figures";
+  const t = c.stage.replace(/_/g, " ");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function workDid(c, m) {                          // what the call came back with, in a line
+  const r = c.reply || {};
+  if (r.error) return `<span class="wbad">${esc(clip(r.error, 200))}</span>`;
+  if (c.type === "read") {
+    const how = r.depth === "direct" ? "A direct lookup" : r.depth ? "An investigation" : "";
+    const tops = (r.topics || []).map(t => String(t).replace(/_/g, " "));
+    return [how, tops.length ? tops.join(", ") : ""].filter(Boolean).map(esc).join(" · ");
+  }
+  if (c.type === "step") {
+    const opened = [...m.resultStep].filter(([, k]) => k === c.number).length;
+    const bits = [];
+    if (r.focus) bits.push(esc(clip(r.focus, 220)));
+    if (r.points && r.points.length) bits.push(`${r.points.length} part${r.points.length === 1 ? "" : "s"} to answer`);
+    const ed = editCounts(r.edits);
+    if (ed) bits.push(`findings: ${ed}`);
+    if (opened && !/_/.test(c.stage.replace(/^step_\d+/, ""))) bits.push(`${opened} result${opened === 1 ? "" : "s"} opened`);
+    if (r.next && r.next.length) bits.push(`next: ${r.next.slice(0, 3).map(a => esc(clip(action(a).label, 70))).join(", ")}${r.next.length > 3 ? ` +${r.next.length - 3}` : ""}`);
+    if (r.done) bits.push("done investigating");
+    return bits.join(" · ");
+  }
+  if (c.type === "settle") { const ed = editCounts(r.edits); return ed ? `findings: ${ed}` : ""; }
+  if (c.type === "writer" || c.type === "repair") return r.chars ? `${fmtN(r.chars)} characters` : "";
+  return "";
+}
+// the call in flight, as the server streams it (j.live: its number, the last of its reasoning, the lengths so far)
+function liveOf(live, c) { return live && live.n === c.n ? live : null; }
+function liveMeta(live, c) {
+  const l = liveOf(live, c);
+  if (!l || !(l.thinking_chars || l.reply_chars)) return "Waiting for the model…";
+  return l.reply_chars ? `Writing the reply · ${fmtN(l.reply_chars)} characters (after ${fmtN(l.thinking_chars)} of reasoning)` : `Thinking · ${fmtN(l.thinking_chars)} characters`;
+}
+function liveLines(live, c) {                     // the last lines it is writing, the last one with a caret
+  const l = liveOf(live, c);
+  if (!l || !l.thinking) return "";
+  const lines = String(l.thinking).split(/\n+/).map(x => x.trim()).filter(Boolean).slice(-4);
+  return lines.map((x, i) => `<div>${esc(x.length > 300 ? "…" + x.slice(-299) : x)}${i === lines.length - 1 && !l.reply_chars ? `<span class="caret"></span>` : ""}</div>`).join("");
+}
+function liveUpdate(j) {                          // between re-renders: the call in flight's lines, in place
+  const box = $("#livethink"); if (!box) return;
+  const c = {n: +box.dataset.n};
+  box.innerHTML = liveLines(j.live, c);
+  const meta = $("#livemeta"); if (meta) meta.textContent = liveMeta(j.live, c);
+}
+function workHtml(j, m, finished) {
+  if (!m.calls.length) return "";
+  const live = c => !finished && !c.reply;
+  const secs = m.calls.reduce((s, c) => s + ((c.reply && c.reply.seconds) || 0), 0);
+  const steps = m.lastStep;
+  const open = S.det["w:work"] ?? !finished;
+  const head = finished
+    ? `Worked ${fmtS(j.elapsed)} · ${m.calls.length} model call${m.calls.length === 1 ? "" : "s"}${steps ? ` · ${steps} step${steps === 1 ? "" : "s"}` : ""}`
+    : "Working";
+  let html = `<section class="chap work"><h2 class="ch2"><button class="wtoggle" data-more="w:work"><span class="chev"${open ? ' style="transform:rotate(90deg)"' : ""}>▶</span>${esc(head)}</button></h2>`;
+  if (!open) return html + `</section>`;
+  const anyThink = m.calls.some(c => c.reply && c.reply.thinking);
+  html += `<div class="wlist">`;
+  for (const c of m.calls) {
+    const r = c.reply || {}, isLive = live(c), key = `w:th-${c.n}`, full = !!S.det[key];
+    const tail = thinkTail(r.thinking, 3);
+    const time = isLive ? `<span id="calltime" data-t0="${c.t || 0}">${fmtS(Math.max(0, (+j.elapsed || 0) - (c.t || 0)))}</span>` : r.seconds != null ? `${Math.round(r.seconds)} s` : "";
+    html += `<div class="wrow${isLive ? " live" : ""}${r.error ? " bad" : ""}">
+      <div class="wic">${isLive ? `<span class="spin"></span>` : r.error ? MINI.warn : MINI.ok}</div>
+      <div class="wbody"><div class="whead"><span class="wl">${esc(workLabel(c, isLive))}</span><span class="wt">${time}</span></div>
+        ${isLive ? `<div class="wdid" id="livemeta">${liveMeta(j.live, c)}</div><div class="wthink live" id="livethink" data-n="${c.n}">${liveLines(j.live, c)}</div>`
+          : (() => { const d = workDid(c, m); return d ? `<div class="wdid">${d}</div>` : ""; })()}
+        ${tail.length && !full ? `<div class="wthink">${tail.map(l => `<div>${esc(clip(l, 260))}</div>`).join("")}</div>` : ""}
+        ${full ? `<div class="wthink full">${esc(r.thinking)}</div>` : ""}
+        ${r.thinking ? `<button class="morebtn wmore" data-more="${key}">${full ? "Show the last lines" : `All of its reasoning (${fmtN(r.thinking_chars || r.thinking.length)} characters)`}</button>` : ""}</div></div>`;
+  }
+  html += `</div>`;
+  if (anyThink) html += `<div class="wnote">The grey lines are the model's own reasoning for each call: its working notes, not checked. The checked part is the answer: every number in it is traced to a computed result.</div>`;
+  return html + `</section>`;
+}
+// ---------- under the plot: how the lithology zones were made, and a question about the lithology ----------
+const STEP_WORDS = {normalization: "normalize", input_context: "inputs", temperature: "temperature", vclay: "shale volume",
+  rcl: "clay resistivity", porosity: "porosity", lithology: "lithology", rw: "Rw", saturation: "saturation",
+  permeability: "permeability", rock_quality: "rock quality", bvw: "bulk water", mhi: "movable HC", net_pay: "net pay",
+  bad_hole: "bad hole"};
+function lithOf(w) { return ((w && w.made) || {}).lithology || {}; }
+function zoneWord(w, n) {                       // what the zones are: lithology zones, shale-volume zones, the user's
+  const m = (w && w.made) || {}, src = lithOf(w).source, s = n === 1 ? "" : "s";
+  if (m.zone_rule && m.zone_rule.user) return `your zone${s}`;
+  return src === "shale-volume bands" ? `shale-volume zone${s}` : src === "none" ? `zone${s}` : `lithology zone${s}`;
+}
+function curveSource(w, name) {                 // LAS (measured) or Petrophys (computed), as the plot's tracks say
+  for (const t of (w.tracks || [])) for (const c of t.curves) if (c.name === name) return c.source;
+  return "";
+}
+function madeHtml(w, j) {
+  const md = w.made; if (!md) return "";
+  const L = md.lithology || {}, src = L.source, u = esc(w.unit || "");
+  const set = convSettings(j), changed = Object.keys(set);
+  const pp = `<span style="color:var(--pp);font-weight:600">Petrophys</span>`;
+  const how = md.run.kind === "dynamic workflow"
+    ? `${pp} interpreted the well with its dynamic workflow, ${changed.length ? `with your setting${changed.length === 1 ? "" : "s"} ${changed.map(k => `<b>${esc(k)}</b> ${esc(Array.isArray(set[k]) ? set[k].join("–") : set[k])}`).join(", ")}` : "<b>its default settings</b>"}`
+    : md.run.kind === "context profile" ? `${pp} interpreted the well with its context profile <b>${esc(md.run.name)}</b>`
+    : `The well was interpreted by the ${esc(md.run.kind)} <b>${esc(md.run.name)}</b>`;
+  const lit = src === "mineral solver" ? "lithology" : src === "shale-volume bands" ? "vclay" : "";
+  const rail = (md.steps || []).map(st => `<span class="ms${st === lit ? " on" : ""}">${esc(STEP_WORDS[st] || st.replace(/_/g, " "))}</span>`).join(`<span class="mj"></span>`);
+  const chip = c => { const s = curveSource(w, c); return `<span class="mchip${s === "LAS" ? " las" : s ? " pp" : ""}" title="${s === "LAS" ? "measured: in the LAS" : s ? "computed by Petrophys" : ""}">${esc(c)}</span>`; };
+  const node = (head, body, cls = "") => `<div class="mnode ${cls}"><div class="mh">${head}</div><div class="mb">${body}</div></div>`;
+  const arrow = `<span class="marrow">→</span>`;
+  const nz = w.zones.length, minT = md.zone_rule && md.zone_rule.min_thickness;
+  const zonesNode = node(`${nz} ${esc(zoneWord(w, nz))}`, `${zoneStrip(w.zones, w.top, w.base, w.unit)}<div class="msub">${md.zone_rule && md.zone_rule.layout === "formation" ? "one zone: the formation" : `runs of one ${src === "shale-volume bands" ? "band" : "lithology"}${minT ? ` thicker than ${fmtV(minT)} ${u}` : ""}`}</div>`, "zones");
+  let flow = "";
+  if (src === "mineral solver") {
+    const words = String(L.method || "").replace(/_/g, " ");
+    flow = node("Input curves", `<div class="mchips">${(L.inputs || []).map(chip).join("")}</div>`) + arrow +
+      node(`Mineral solver · <b>${esc(L.domain || "")}</b> domain`, `${esc(words)}${L.samples ? `<div class="msub">${fmtN(L.solved)} of ${fmtN(L.samples)} samples solved</div>` : ""}`, "pp") + arrow +
+      node(esc(L.curve || "LITHO"), `the lithology each sample is mostly, from the mineral volumes`) + arrow + zonesNode;
+  } else if (src === "lithology log") {
+    flow = node(`<span class="mchip las">${esc(L.curve)}</span>`, "the lithology log that came with the well") + arrow +
+      node("Decoded", `by the lithology code table${L.codes ? ` (${fmtN(L.codes)} codes)` : ""}`) + arrow + zonesNode;
+  } else if (src === "shale-volume bands") {
+    const [a, b] = L.bands || [0.3, 0.6];
+    flow = node(`<span class="mchip pp">VCL</span>`, `shale volume${L.method ? `, ${esc(String(L.method).replace(/_/g, " "))}` : ""}`, "pp") + arrow +
+      node("Bands", `below ${a} clean · ${a}–${b} shaly · above ${b} shale-prone`) + arrow + zonesNode;
+  } else flow = `<div class="msub">No lithology log, no solved lithology and no shale volume: the interval is not zoned by lithology.</div>`;
+  const notes = (L.decisions || []).map(x => String(x).replace(/\s*->\s*/g, " → "));
+  const user = md.zone_rule && md.zone_rule.user ? `<div class="msub" style="margin-top:8px">Your zones${md.zone_rule.file ? ` (${esc(md.zone_rule.file)})` : ""} frame the questions; the lithology zones lie under them as L1, L2, …</div>` : "";
+  return `<div class="made"><div class="mtitle">How the ${src === "shale-volume bands" ? "zones" : "lithology zones"} were made</div>
+    <p class="mlead">${how}.</p>
+    ${rail ? `<div class="mrail" aria-label="the workflow's steps, in order">${rail}</div>` : ""}
+    <div class="mflow">${flow}</div>${user}
+    ${notes.length ? `<div class="mnotes"><span class="lb">Petrophys's record</span>${more(notes.map(x => `<span>${esc(x)}</span>`), 2, "w:mnotes", x => x)}</div>` : ""}</div>`;
+}
+function lithPromptHtml(w, j, finished) {
+  const L = lithOf(w), src = L.source;
+  if (!src || R.run) return "";
+  if (S.det["w:lithok"]) return `<div class="lprompt ok">${MINI.ok}<span>You said the lithology looks right for this well.</span></div>`;
+  const set = convSettings(j).lithology_domain, can = !!(finished && j.status === "done" && j.conversation);
+  const btn = (label, change) => `<button class="lbtn" data-rerun="${esc(JSON.stringify(change))}"${can ? "" : " disabled"}>${esc(label)}</button>`;
+  let q, why, acts = [];
+  if (src === "mineral solver") {
+    const d = L.domain || "clastic";
+    q = "Is this lithology right for the well?";
+    why = `The LAS has no lithology log, so Petrophys's mineral solver gave it, in the <b>${esc(d)}</b> domain (${set === "auto" ? "the domain the logs pointed to" : set ? "the domain you set" : "its default"}). ` +
+      (d === "clastic" ? "In a carbonate, the clastic solve can call limestone sandstone." : d === "carbonate" ? "In the carbonate domain it names limestone and dolomite." : "");
+    if (d !== "carbonate") acts.push(btn("It is a carbonate: answer again", {lithology_domain: "carbonate"}));
+    if (d !== "clastic") acts.push(btn("It is clastic: answer again", {lithology_domain: "clastic"}));
+    if (set !== "auto") acts.push(btn("Let the logs decide: answer again", {lithology_domain: "auto"}));
+  } else if (src === "lithology log") {
+    q = "The lithology came with the well.";
+    why = `The zones follow the LAS's own lithology log <b>${esc(L.curve)}</b>; Petrophys's solver is not used for them.`;
+  } else if (src === "shale-volume bands") {
+    q = "No lithology for this well.";
+    why = "The LAS has no lithology log and Petrophys's solver gave none here, so the zones are shale-volume bands.";
+  } else return "";
+  return `<div class="lprompt"><div class="lq">${q}</div><div class="lwhy">${why}</div>
+    <div class="lacts"><button class="lbtn ok" data-lithok="1">Looks right</button>${acts.join("")}<button class="link" data-isettings="1">All interpretation settings…</button></div>
+    ${acts.length ? `<div class="lhint">${can ? "Answering again asks this question once more in this conversation, with the well interpreted again." : finished ? "This run cannot be continued." : "You can answer again once this answer is in."}</div>` : ""}</div>`;
+}
+async function rerunWith(j, change) {             // this question again, as the next of its conversation, with a setting changed
+  $$("[data-rerun]").forEach(b => b.disabled = true);
+  try {
+    const {id} = await post("/api/ask", {follow: S.followId || j.id, question: (j.inputs || {}).question || "", interpretation: {...convSettings(j), ...change}});
+    S.pinned = false; openRun(id); loadRuns();
+  } catch (e) { toast(e.message); $$("[data-rerun]").forEach(b => b.disabled = false); }
+}
+function lithSummary(w) {                         // each lithology of the zones: how many zones, how thick, its share
+  const by = new Map();
+  for (const z of w.zones) { const k = z.lithology || "unknown"; const e = by.get(k) || {lith: k, n: 0, thick: 0}; e.n += 1; e.thick += +z.thickness || 0; by.set(k, e); }
+  const all = [...by.values()].reduce((s, e) => s + e.thick, 0) || 1;
+  return [...by.values()].sort((a, b) => b.thick - a.thick).map(e => ({...e, share: 100 * e.thick / all}));
+}
+function lithTable(w) {
+  const rows = lithSummary(w);
+  return `<div class="tblwrap"><table class="t ltable"><thead><tr><th>Lithology</th><th class="num">Zones</th><th class="num">Thickness (${esc(w.unit)})</th><th class="num">Share of the zoned thickness</th></tr></thead><tbody>
+    ${rows.map(e => `<tr><td class="nw"><span class="swatch" style="background:${lithColor(e.lith)}"></span>${esc(e.lith)}</td><td class="num">${e.n}</td><td class="num">${fmtV(e.thick)}</td>
+      <td class="num"><span class="lshare"><span class="ltrack"><span class="lbar" style="width:${Math.max(1, Math.round(e.share))}%;background:${lithColor(e.lith)}"></span></span><span>${e.share.toFixed(1)}%</span></span></td></tr>`).join("")}</tbody></table></div>`;
+}
 function mainPane(j, m, res, finished, calls) {
   const w = m.well && !m.well.error ? m.well : null;
   if (w) S.wellData = w;
@@ -2799,7 +3329,25 @@ function mainPane(j, m, res, finished, calls) {
   const key = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([z]) => z);
   // the questions asked so far in this conversation (none above a first question)
   let html = "";
-  // 1. the answer (or the question back to the user)
+  // 1. the well: its logs, the zone and lithology tables folded
+  if (w) {
+    const iv = res && res.interval;
+    html += `<section class="chap"><h2 class="ch2">The well</h2><p class="lede2"><b>${esc((iv && iv.name) || "The interval")}</b>, ${esc(fmtD(w.top))}–${esc(fmtD(w.base))} ${esc(w.unit)}, interpreted by <span style="color:var(--pp);font-weight:600">Petrophys</span>:
+      ${w.zones.length} ${esc(zoneWord(w, w.zones.length))}${(() => { const L = lithOf(w); return L.source === "lithology log" ? ` from the LAS's lithology log ${esc(L.curve)}` : L.source === "mineral solver" ? ` from Petrophys's mineral solver (${esc(L.domain)} domain)` : L.source === "shale-volume bands" ? " from shale-volume bands (no lithology log, none solved)" : res ? ` ${esc(res.lithology && res.lithology.source === "lithology log" ? `from the lithology log ${res.lithology.curve}` : res.lithology && res.lithology.source === "shale-volume bands" ? "from shale-volume bands (the well has no lithology log)" : "")}` : ""; })()}.${key.length ? ` The answer centres on <b>${key.join(", ")}</b>, marked below.` : ""}</p>
+      ${plotHtml(w, {p: "sp", H: Math.round(440 * plotZoom("sp")), frame: 440, width: Math.min((($("#run") && $("#run").clientWidth) || 1000) - 2, 1100), key,
+        only: ["Gamma ray", "Resistivity", "Density · neutron", "Shale volume", "Porosity", "Water saturation", "Permeability"], flags: w.flags.map(f => f.name).filter(f => /PAY|RES/.test(f)).slice(0, 2)})}
+      ${madeHtml(w, j)}${lithPromptHtml(w, j, finished)}
+      ${(() => { const zt = !!S.det["w:zt"], lt = !!S.det["w:lt"], nz = w.zones.length, nl = lithSummary(w).length, zw = zoneWord(w, 2);
+        return `<div class="wtogs"><button class="wtog${zt ? " on" : ""}" data-more="w:zt"><span class="chev"${zt ? ' style="transform:rotate(90deg)"' : ""}>▶</span>${esc(zw.charAt(0).toUpperCase() + zw.slice(1))} · ${nz}</button>
+          <button class="wtog${lt ? " on" : ""}" data-more="w:lt"><span class="chev"${lt ? ' style="transform:rotate(90deg)"' : ""}>▶</span>Lithology · ${nl} type${nl === 1 ? "" : "s"}</button>
+          <span class="grow"></span><button class="morebtn" data-goto="well">All the logs →</button></div>
+          ${lt ? `<div style="margin-top:10px">${lithTable(w)}</div>` : ""}
+          ${zt ? `<div style="margin-top:10px">${zoneTable(w, key, {flags: w.flags.map(f => f.name).filter(f => /PAY/.test(f))})}</div>
+            <div class="wnote">Zone values are plain means of each zone's samples (permeability: the median), for orientation.</div>` : ""}`; })()}</section>`;
+  } else if (!finished && m.phase.interpreting) html += `<section class="chap"><h2 class="ch2">The well</h2><div class="thinking"><span class="spin"></span>Petrophys is interpreting the well; its logs appear here.</div></section>`;
+  // 2. the work: each model call, with the last lines of its reasoning (folded once the answer is in)
+  html += workHtml(j, m, finished);
+  // 3. the answer (or the question back to the user)
   if (finished && j.status !== "done" && !j.answer) return html + errorBox(j, j.result);
   const asked = finished && res && res.ask;
   if (asked) html += askCard(j, res);
@@ -2813,10 +3361,6 @@ function mainPane(j, m, res, finished, calls) {
       ${more ? `<button class="link" data-jump="full">Read the whole answer ↓</button>` : ""}
       ${res ? `<div class="heromt"><span class="stat"><b>${res.claims.length}</b>findings</span>${res.claims.length ? `<span class="gbwrap">${gradeBar(res.claims)}</span>` : ""}<span class="stat"><b>${res.opened.length}</b>computed results</span>
         <span class="chk ${unresolved || !ck.clean ? "warn" : ""}">${unresolved || !ck.clean ? MINI.warn : MINI.ok}${unresolved ? "A number in the answer is in no computed result" : ck.clean ? "Every number traced to a computed result" : "The checker's last findings stand"}</span></div>` : ""}</section>`;
-  } else if (!finished) {
-    const stage = !m.phase.started ? "Waiting for a free worker" : !m.calls.length ? "Petrophys is interpreting the well" : m.calls.some(c => c.type === "writer") ? "Writing the answer" :
-      m.calls.some(c => c.type === "settle") ? "Settling the findings" : m.lastStep ? `Investigating · step ${m.lastStep}` : "Reading the question";
-    html += `<section class="hero"><div class="hl">The answer</div><div class="thinking"><span class="spin"></span>${esc(stage)}… The story below fills in as the investigation goes; <button class="morebtn" data-goto="story">every step is in the Investigation log →</button></div></section>`;
   }
   // the answer's figures, under the answer: drawn by Petrophys from the results the answer rests on
   const figs = asked ? "" : figuresHtml(j, res);
@@ -2824,17 +3368,7 @@ function mainPane(j, m, res, finished, calls) {
     <p class="lede2">Drawn by <span style="color:var(--pp);font-weight:600">Petrophys</span> from the computed results this answer rests on.</p>${figs}</section>`;
   // how it was computed: the answer's path back to the measured logs, through the Petrophys steps
   if (finished && j.status === "done" && j.answer && !asked) html += lineageHtml(j);
-  // 2. the well
-  if (w) {
-    const iv = res && res.interval;
-    html += `<section class="chap"><h2 class="ch2">The well</h2><p class="lede2"><b>${esc((iv && iv.name) || "The interval")}</b>, ${esc(fmtD(w.top))}–${esc(fmtD(w.base))} ${esc(w.unit)}, interpreted by <span style="color:var(--pp);font-weight:600">Petrophys</span>:
-      ${w.zones.length} lithology zone${w.zones.length === 1 ? "" : "s"}${res ? ` ${esc(res.lithology && res.lithology.source === "lithology log" ? `from the lithology log ${res.lithology.curve}` : res.lithology && res.lithology.source === "shale-volume bands" ? "from shale-volume bands (the well has no lithology log)" : "")}` : ""}.${key.length ? ` The answer centres on <b>${key.join(", ")}</b>, marked below.` : ""}</p>
-      ${plotHtml(w, {p: "sp", H: 440, width: Math.min((($("#run") && $("#run").clientWidth) || 1000) - 2, 1100), key,
-        only: ["Gamma ray", "Resistivity", "Density · neutron", "Shale volume", "Porosity", "Water saturation", "Permeability"], flags: w.flags.map(f => f.name).filter(f => /PAY|RES/.test(f)).slice(0, 2)})}
-      <div style="margin-top:12px">${zoneTable(w, key, {flags: w.flags.map(f => f.name).filter(f => /PAY/.test(f))})}</div>
-      <div class="wnote">Zone values are plain means of each zone's samples (permeability: the median), for orientation. <button class="morebtn" data-goto="well">Open the full logs →</button></div></section>`;
-  } else if (!finished && m.phase.interpreting) html += `<section class="chap"><h2 class="ch2">The well</h2><div class="thinking"><span class="spin"></span>Petrophys is interpreting the well; its logs appear here.</div></section>`;
-  // 3. how the answer was reached
+  // 4. how the answer was reached
   const step1 = m.calls.find(c => c.type === "step" && c.number === 1 && c.reply && c.reply.points);
   const points = (res && res.points && res.points.length ? res.points : null) || (step1 && step1.reply.points) || [];
   const claims = res ? res.claims : liveFindings(m);
@@ -2850,7 +3384,7 @@ function mainPane(j, m, res, finished, calls) {
     }
     html += `</section>`;
   }
-  // 4. what limits it, and the whole answer
+  // 5. what limits it, and the whole answer
   if (ans) {
     const lim = ans.secs.findIndex((s, i) => i !== keyIdx && /limit|caveat|uncertain|data quality|trust/i.test(s.head));
     if (lim >= 0) html += `<section class="chap"><h2 class="ch2">What limits this answer</h2><div class="limits prose">${md(ans.secs[lim].body.replace(/\n\s*\|[\s\S]*$/, ""), {nums: true})}</div></section>`;
@@ -2926,8 +3460,10 @@ function emptyPage() {
   S.followId = null; chipsRender();
   $("#run").innerHTML = `<div class="empty start"><h2>Ask a well a question</h2><div>Choose a well and its interval, then ask in your own words. Every next question continues the conversation.</div>
     <div class="startbox" id="startwell"></div>
+    <div class="ppnote"><img src="/img/petrophys_mark.png" alt=""><div><b>Petrophys interprets every well with its default dynamic workflow</b>: shale volume, porosity, lithology (its mineral solver, where the LAS has no lithology log), water saturation, permeability and net pay. To change how, open <button class="link" id="startsettings">Interpretation settings</button> before you ask: the lithology domain, the shale-volume method, Archie's a, m and n, the cutoffs, the zone rule.</div></div>
     <div class="flow3"><div><b>Petrophys interprets</b><span>the well: logs, zones, the record</span></div><i>→</i><div><b>The model investigates</b><span>step by step, citing every result</span></div><i>→</i><div><b>Code checks</b><span>every number against the results</span></div><i>→</i><div><b>You audit</b><span>the answer, its claims and the logs</span></div></div>
     <div class="tagline"><span class="pp"><img src="/img/petrophys_mark.png" alt=""><b>Petrophys</b>&nbsp;calculates</span><span class="sep">·</span><span><b>PetroHarness</b> investigates and records</span><span class="sep">·</span><span><b>${esc((S.cfg && S.cfg.label) || "The model")}</b> interprets</span></div></div>`;
+  const ss = $("#startsettings"); if (ss) ss.onclick = () => interpOpen();
   startRender();
 }
 S.samples = null;

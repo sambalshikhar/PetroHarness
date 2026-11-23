@@ -69,10 +69,7 @@ def primary_absent(inv: Inventory) -> list:
     """The measured logs not in the input among those the workflow's completeness record counts
     (petrophys PRIMARY_LOGS_FOR_COMPLETENESS; the harness catalogue also lists logs the workflow never reads, such as
     spectral gamma, and answers called those missing)."""
-    try:
-        from petrophys.reporting.reference_export import PRIMARY_LOGS_FOR_COMPLETENESS
-    except Exception:  # noqa: BLE001  (an older petrophys: the catalogue's list)
-        return list(inv.logs_absent)
+    from petrophys.reporting.reference_export import PRIMARY_LOGS_FOR_COMPLETENESS
     primary = {str(n).upper() for n in PRIMARY_LOGS_FOR_COMPLETENESS}
     return [c for c in inv.logs_absent if c.upper() in primary]
 

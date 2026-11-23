@@ -11,6 +11,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+import numpy as np
+
 from petroharness.agent.engine import CUT_GET, Formation, ToolError, max_chars
 from petroharness.agent.schemas import arguments, call, fit, known_args
 from petroharness.agent.toolset import TOOLS, TOOLSET
@@ -50,10 +52,9 @@ class Item:
         """The call in one short line, for listings."""
         a = dict(self.args)
         head = a.pop("expression" if self.tool == "calc" else TOOLSET.lead(self.tool), "")     # the tool's own lead
-        if self.tool == "compare":
-            head = f"{head} vs {a.pop('b', '')}"
-        elif self.tool == "crossplot":
-            head = f"{head} on {a.pop('x', '')}"
+        t = TOOLSET.get(self.tool)
+        if t is not None and t.pair_word:                # the pair in one phrase: "PHIE vs PHIE_CC", "RHOB on NPHI"
+            head = f"{head} {t.pair_word} {a.pop(t.pair[1], '')}"
         head = ", ".join(head) if isinstance(head, list) else str(head)
         rest = "; ".join(f"{k} {', '.join(map(str, v)) if isinstance(v, list) else v}" for k, v in a.items())
         text = f"{self.tool} {head}".rstrip() + (f" ({rest})" if rest else "")      # a tool with no lead: no gap
@@ -211,7 +212,8 @@ def _claimed(value) -> tuple:
 
 
 def matches(claim: float, half: float, v: float) -> bool:
-    return abs(claim - v) <= half * (1 + 1e-9) + 1e-12 * max(1.0, abs(v))     # slack for float error at large values
+    """Whether v is the claimed number at its written precision (half: the half-unit of its last digit)."""
+    return abs(claim - v) <= N.tolerance(half, v)
 
 
 # --- arithmetic (calc) ----------------------------------------------------------------------------------------------
@@ -314,11 +316,12 @@ def normalize(tool: str, args: dict) -> str:
         if k in ("curves", "zones", "statistics"):
             v = [v] if isinstance(v, str) else list(v)
             v = list(dict.fromkeys(str(x).strip().upper() if k != "statistics" else str(x).strip() for x in v))
-        elif k in ("condition", "where"):
+        elif k in ("condition", "where", "a", "b"):          # a and b: overlap's conditions, or compare's curves (the
+            #                                                  same key: a curve name is a condition of one word)
             v = re.sub(r"\s+", " ", re.sub(r"\s*(<=|>=|==|!=|=|<|>)\s*", r" \1 ", str(v).strip()))
             v = " ".join(t if t.lower() in ("and", "or") else t.upper() for t in v.split(" "))
             v = re.sub(r"(?<![<>=!]) = (?!=)", " == ", v)
-        elif k in ("a", "b", "curve", "y", "x"):
+        elif k in ("curve", "y", "x"):
             v = str(v).strip().upper()
         elif isinstance(v, str):
             v = v.strip()
@@ -348,8 +351,8 @@ class Ledger:
         self.items: list = []
         self.errors: list = []                 # (tool, arguments, message)
         self._keys: dict = {}
-        # a conversation (petroharness.session): where the current question's items start, and the earlier items that
-        # read a curve a later question computed again (item id -> (curve, the item that computed it again))
+        # a conversation (petroharness.session): where the current question's items start; and the earlier items that
+        # read a curve a later call computed again under the same name (item id -> (curve, the item that computed it))
         self.turn_start: int = 0
         self.superseded: dict = {}
         # a conversation's settings change (petroharness.session: Conversation.adopt): the well was interpreted again;
@@ -373,11 +376,11 @@ class Ledger:
             shown = list(TOOLS)                                                            # the lookups the brief lists
             if name not in shown:
                 raise ToolError(f"no tool {name!r}; tools: {', '.join(shown)}")
-            args = fit(name, arguments(raw))
+            args = fit(name, arguments(raw, name))
             key = normalize(name, door_args(self.f, name, args))
             if key in self._keys:
                 return self._keys[key], False
-            before = {n: id(a) for n, a in self.f.view.calculated.items()} if self.turn_start else {}
+            before = dict(self.f.view.calculated)                        # the curves of the question, as they were
             r = call(self.f, name, args)
         except ToolError as e:
             self.errors.append((name, raw, str(e)))
@@ -386,16 +389,19 @@ class Ledger:
         item = Item(eid, name, args, key, list(r.rows), r.text.replace(CUT_GET, f"get {eid} with find"), list(r.numbers))
         self.items.append(item)
         self._keys[key] = item
-        again = [n for n, a in self.f.view.calculated.items() if n in before and id(a) != before[n]]
+        again = [n for n, a in self.f.view.calculated.items() if n in before and a is not before[n]
+                 and not np.array_equal(np.asarray(a, dtype=float), np.asarray(before[n], dtype=float), equal_nan=True)]
         if again:
             self._supersede(again, eid)
         return item, True
 
     def _supersede(self, curves: list, by: str) -> None:
-        """A later question of a conversation computed these curves again under the same names: the earlier
-        questions' items that name them keep their text (it is what was shown then) but say so when read again, and
-        the same call asked again is computed anew instead of served from them."""
-        for e in self.items[:self.turn_start]:
+        """A call (`by`, of this question or a later one) computed these curves again under the same names, with other
+        values (the same values computed again change nothing): the earlier items that name them keep their text (it is what was shown then) but say so when read again, and the
+        same call asked again is computed anew instead of served from them."""
+        for e in self.items:
+            if e.id == by:
+                continue
             hit = next((c for c in curves if re.search(rf"(?<![A-Z0-9_]){re.escape(c)}(?![A-Z0-9_])", f"{e.call_text()} {e.text}")), None)
             if hit and e.id not in self.superseded:
                 self.superseded[e.id] = (hit, by)

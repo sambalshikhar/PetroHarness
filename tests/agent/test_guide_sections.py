@@ -9,9 +9,10 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 from petroharness.llm import Usage  # noqa: E402
-from test_b5_loop import Script, _session  # noqa: E402
+from _support.sessions import pay_session as _session  # noqa: E402
 from petroharness.agent import direction  # noqa: E402
-from petroharness.agent.loop import investigate  # noqa: E402
+from petroharness.agent.graph import investigate  # noqa: E402
+from _support.model import in_turn  # noqa: E402
 
 FIRST = {"points": ["Where is net pay?"], "intent": "locate", "focus": "where",
          "edits": [{"op": "add", "point": 1, "text": "Pay likely in the upper zones", "grade": "hypothesis"}],
@@ -20,14 +21,14 @@ FIRST = {"points": ["Where is net pay?"], "intent": "locate", "focus": "where",
 
 def _run(on: bool, steps: list, cap: int = 6):
     """A short investigation with the lookup cap (a guide always opens its sections; `on` is kept for the callers)."""
-    from petroharness.agent import loop as L
+    from petroharness.agent import state as ST
     s = _session()
-    llm, trace = Script([{**FIRST, **steps[0]}] + steps[1:]), {}
-    old, L.ACTIONS = L.ACTIONS, cap
+    llm, trace = in_turn([{**FIRST, **steps[0]}] + steps[1:]), {}
+    old, ST.ACTIONS = ST.ACTIONS, cap
     try:
         investigate(llm, s, Usage(), 4000, trace, max_steps=len(steps) + 1)
     finally:
-        L.ACTIONS = old
+        ST.ACTIONS = old
     return s, llm, trace
 
 
@@ -69,7 +70,7 @@ def test_a_guide_opens_its_sections_first_and_outside_the_cap():
     first = tools.index("section")
     assert tools[first:first + len(want)] == ["section"] * len(want)          # before the model's own actions
     assert tools[first + len(want):] == ["profile", "profile", "stats"]       # all three of the cap still ran
-    user = llm.sent[1][1][-1]["content"]
+    user = llm.sent[1]["messages"][-1]["content"]
     guides, new = user.split("\nGUIDES (", 1)[1].split("\nNEW (from step 1):\n", 1)     # guides in their own block
     assert "GUIDE net_reservoir_pay" in guides and "GUIDE " not in new and "Only the first" not in user
     ids = [e.id for e in s.ledger.items if e.tool == "section"]
@@ -91,18 +92,18 @@ def test_an_opened_section_and_a_guide_read_again_open_nothing_twice():
 
 @pytest.mark.data
 def test_sections_beyond_the_step_budget_are_listed_to_get():
-    from petroharness.agent import loop
+    from petroharness.agent import state as ST
     s0 = _session()
     want = _opens(s0, "net_reservoir_pay")
     if not want:
         pytest.skip("no net-pay guide section in this formation")
-    keep = loop.NEW_CHARS
-    loop.NEW_CHARS = 200                                                      # nothing fits beside the guide
+    keep = ST.NEW_CHARS
+    ST.NEW_CHARS = 200                                                      # nothing fits beside the guide
     try:
         s, llm, trace = _run(True, [{"next": [{"guide": "net_reservoir_pay"}]}])
     finally:
-        loop.NEW_CHARS = keep
-    user = llm.sent[1][1][-1]["content"]
+        ST.NEW_CHARS = keep
+    user = llm.sent[1]["messages"][-1]["content"]
     assert _sections(s) == want and "Opened, not shown this step (size limit)" in user
 
 
@@ -113,9 +114,9 @@ STATS_GUIDE = "statistics_data_analysis"          # a statistics-type guide: its
 
 def _read_guide(*topics):
     """A session whose READ chose these topics (in order), one step that reads the statistics guide."""
-    from test_b5_loop import chose
+    from _support.sessions import chose
     s = chose(_session(), *topics)
-    llm, trace = Script([{**FIRST, "next": [{"guide": STATS_GUIDE}]}]), {}
+    llm, trace = in_turn([{**FIRST, "next": [{"guide": STATS_GUIDE}]}]), {}
     investigate(llm, s, Usage(), 4000, trace, max_steps=2)
     return s, llm, trace
 
@@ -134,7 +135,7 @@ def test_a_guide_opens_only_the_sections_of_the_primary_topic():
     assert STATS_GUIDE in s.guides and trace["steps"][0]["guide_sections"] == []
     assert not [k for k in _sections(s) if k.startswith("numerical.")]
     assert not [e for e in s.ledger.items if e.tool == "stats"][1:]         # only the first look's stats
-    user = llm.sent[1][1][-1]["content"]
+    user = llm.sent[1]["messages"][-1]["content"]
     assert all(f"section {k}" in user for k in numerical)                  # still listed in its Compare lines
     # numerical first: they open with the guide
     s, llm, trace = _read_guide("statistics_data_analysis", "hydrocarbon_detection")

@@ -1,4 +1,4 @@
-"""The session graph and the later-question graph (docs/SESSION_GRAPH.md): each graph's shape against its blueprint,
+"""The session graph and the later-question graph (docs/GRAPH.md): each graph's shape against its blueprint,
 and the routes on a conversation run with a stand-in model.
 
     .venv/bin/python -m pytest tests/session/test_session_graph.py -q
@@ -11,7 +11,7 @@ from types import SimpleNamespace as NS
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(ROOT / "tests" / "agent")]
 
-DOC = (ROOT / "docs" / "SESSION_GRAPH.md").read_text()
+DOC = (ROOT / "docs" / "GRAPH.md").read_text()
 
 
 def _shape(graph):

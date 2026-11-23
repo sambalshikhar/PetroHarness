@@ -87,8 +87,8 @@ def read_skill(text: str) -> dict:
 
 
 def switch_on(name: str) -> bool:
-    """A gate's switch (src/petroharness/agent/options.py) as set; an unknown name raises."""
-    from petroharness.agent import options
+    """A gate's switch (src/petroharness/options.py) as set; an unknown name raises."""
+    from petroharness import options
     o = options.get()
     if hasattr(o, name):
         return bool(getattr(o, name))
@@ -102,7 +102,7 @@ _GATE = re.compile(r"^\[(!?)([a-z][a-z0-9_]*)\]\s*")
 
 
 def gated(entry: str) -> tuple:
-    """(shown, text) of a facet entry: '[option] text' is shown only while that option (src/petroharness/agent/options.py) is on, and
+    """(shown, text) of a facet entry: '[option] text' is shown only while that option (src/petroharness/options.py) is on, and
     '[!option] text' only while it is off (the line an option replaces); several tags must all hold
     ('[a][!b] text': shown while a is on and b is off)."""
     text, shown = str(entry), True
@@ -210,7 +210,7 @@ class Library:
         return [g for g, f in self.facets.items() if area in f["areas"]]
 
     def listed(self, name: str) -> bool:
-        """A guide with an 'option' key is listed in the index only while that option (src/petroharness/agent/options.py)
+        """A guide with an 'option' key is listed in the index only while that option (src/petroharness/options.py)
         is on: a new guide is measured before it reaches every dataset."""
         opt = (self.facets.get(name) or {}).get("option")
         return not opt or switch_on(opt)
@@ -397,7 +397,7 @@ def load(path: Path) -> Library:
                 gated(entry)
             except KeyError as e:
                 bad.append((f"{name}: {e.args[0]} in {entry[:60]!r}", "a gate tag names a live switch",
-                            "remove the tag, or name a switch of src/petroharness/agent/options.py"))
+                            "remove the tag, or name a switch of src/petroharness/options.py"))
         for entry in f.get("compare") or []:
             try:
                 parse_source(entry)

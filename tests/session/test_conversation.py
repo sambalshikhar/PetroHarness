@@ -4,7 +4,6 @@ A scripted model on a real formation (no server).
 
     .venv/bin/python -m pytest tests/session -q   (PETROHARNESS_DATA selects the dataset)
 """
-import json
 import shutil
 import sys
 from pathlib import Path
@@ -16,6 +15,7 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(ROOT / "tests" / "agent")]
 from petroharness.agent import components as C  # noqa: E402
 from petroharness.session import Conversation  # noqa: E402
 from petroharness.session import earlier as E  # noqa: E402
+from _support.model import ScriptedModel  # noqa: E402
 
 Q1 = "Where is porosity highest in the formation?"
 Q2 = "And how does the clay volume vary?"
@@ -24,31 +24,21 @@ CLAIM1 = "Porosity is uniform: no zone stands out"
 CLAIM2 = "Clay volume is low in every zone"
 
 
-class Model:
-    """A model by stage (READ, the step replies in order, settle, a writer whose numbers all come from results);
-    every call is recorded."""
+class Model(ScriptedModel):
+    """READ, the step replies in order (then done), settle, and a writer whose numbers all come from results."""
 
     def __init__(self, steps):
-        self.steps, self.sent = list(steps), []
+        super().__init__({"read*": {"topics": ["porosity"], "named": ["porosity"]}, "step_*": list(steps),
+                          "settle*": {"edits": [], "done": True}}, default="The zones are alike: no zone stands out.\n")
 
-    def replays_reasoning(self):
-        return True
+    @property
+    def steps(self) -> list:
+        """The step replies still to come (a later question sets its own)."""
+        return self.replies["step_*"]
 
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
-        usage.log.append({"stage": stage, "prompt_tokens": sum(len(m["content"]) for m in messages) // 4})
-        if stage.startswith("read"):
-            r = {"topics": ["porosity"], "named": ["porosity"]}
-        elif stage.startswith("step_"):
-            r = self.steps.pop(0) if self.steps else {"edits": [], "next": [], "done": True}
-        elif stage.startswith("settle"):
-            r = {"edits": [], "done": True}
-        else:
-            r = "The zones are alike: no zone stands out.\n"
-        return r if isinstance(r, str) else json.dumps(r)
-
-    def calls(self, stage):
-        return [c for c in self.sent if c["stage"].startswith(stage)]
+    @steps.setter
+    def steps(self, items):
+        self.replies["step_*"] = list(items)
 
 
 def first_steps():
@@ -70,9 +60,9 @@ def later_steps(cite=("E2", "E3")):
 @pytest.fixture
 def formation(monkeypatch):
     """(task, a build that gives a fresh session on one real formation with PHIE, VCL and two zones)."""
-    from test_b2_tools import F
+    from _support.formations import F
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.agent.map import render
     got = next(((t, f) for t, f in F() if {"PHIE", "VCL"} <= set(f.inv.curves) and len(f.view.zones) >= 2), None)
     if got is None:
@@ -138,7 +128,11 @@ def test_a_later_question_sees_the_earlier_one_and_the_ids_go_on(formation, tmp_
     step2 = next(x for x in later if x["stage"] == "step_2")["messages"][-1]["content"]
     assert C.text("C5", "step1_later") not in step2
     opened = step2[step2.index("OPENED (fetch exact lines"):]
-    assert "E2 stats PHIE" in opened and "[E2] " in opened      # the earlier result is listed and digested
+    assert "E3 stats VCL" in opened and "[E3] " in opened       # its own result is listed and shown
+    assert "E2 stats PHIE" not in opened and "[E2] " not in opened   # an earlier result no claim of it cites yet is not
+    settle = next(x for x in later if x["stage"] == "settle")["messages"][-1]["content"]
+    results = settle[settle.index("ALL RESULTS:"):]
+    assert "[E2] " in results and "[E3] " in results and "[E1] " not in results   # cited at step 2: settle reads it
     writer = next(x for x in later if x["stage"] == "writer")["messages"]
     assert writer[0]["content"].endswith(C.text("C9", "later_rule").strip())
     for e in c.live.ledger.items[1:]:                          # its own result, and the earlier one its claim cites
@@ -240,3 +234,59 @@ def test_a_result_that_read_a_curve_computed_again_is_marked_and_not_served_from
     assert led.superseded == {"E1": ("SW_ALT", "E3")} and old.key not in led._keys and other.key in led._keys
     assert led.show(old, False).startswith("[E1] (opened before SW_ALT was computed again in [E3]: these are the earlier values;")
     assert led.show(other, False).startswith("[E2] (opened before: ")
+
+
+def test_a_curve_computed_again_in_the_same_question_is_not_served_stale(monkeypatch):
+    """calculate m=2.0, compare SW_ALT SW, calculate m=2.2 under the same name, compare SW_ALT SW again, all in one
+    question: the second compare was served from the first, with the m=2.0 numbers. It is computed anew, and the
+    first compare says it holds the earlier values when read again (as from a conversation's second question on)."""
+    from types import SimpleNamespace as NS
+    from petroharness.agent import ledger as Lg
+    calculated, computed = {}, []
+
+    def calculate(f, m=None):
+        pass
+
+    def compare(f, a=None, b=None):
+        pass
+
+    def call(f, name, args):
+        computed.append((name, dict(args)))
+        if name == "calculate":
+            calculated["SW_ALT"] = [args["m"]]                    # a new array under the same name
+        text = f"SW_ALT mean {calculated['SW_ALT'][0]}" if name == "compare" else f"SW_ALT computed, m {args['m']}"
+        return NS(rows=[], text=text, numbers=[])
+    monkeypatch.setattr(Lg, "TOOLS", {"calculate": calculate, "compare": compare})
+    monkeypatch.setattr(Lg, "fit", lambda name, args: args)
+    monkeypatch.setattr(Lg, "arguments", lambda raw, tool=None: dict(raw))
+    monkeypatch.setattr(Lg, "door_args", lambda f, name, args: args)
+    monkeypatch.setattr(Lg, "call", call)
+    led = Lg.Ledger(NS(view=NS(calculated=calculated)))
+    led.open("calculate", {"m": 2.0})
+    first, _ = led.open("compare", {"a": "SW_ALT", "b": "SW"})
+    led.open("calculate", {"m": 2.2})
+    second, new = led.open("compare", {"a": "SW_ALT", "b": "SW"})
+    assert new and second is not first and second.text == "SW_ALT mean 2.2"
+    assert [n for n, _ in computed] == ["calculate", "compare", "calculate", "compare"]
+    assert led.superseded["E2"] == ("SW_ALT", "E3") and "E3" not in led.superseded
+    assert led.show(first, False).startswith("[E2] (opened before SW_ALT was computed again in [E3]: these are the "
+                                             "earlier values;")
+
+
+@pytest.mark.data
+def test_ask_and_a_conversations_first_question_send_the_model_the_same_prompts(tmp_path, monkeypatch):
+    """ask() and a conversation prepare the interval from the same inputs (interval.Inputs) and answer the first
+    question the same way: every call's messages are the same."""
+    from test_adopt import LAS, Q1, WINDOW, Model as Saturation
+    from petroharness import ask as A
+    if not LAS.exists():
+        pytest.skip("no sample wells (PETROHARNESS_SAMPLE_LAS)")
+    for key in ("PETROHARNESS_DATA", "PETROHARNESS_SKILLS"):
+        monkeypatch.delenv(key, raising=False)
+    one, two = Saturation(), Saturation()
+    A.ask(LAS, Q1, **WINDOW, llm_factory=lambda cfg: one, direct=False)
+    Conversation.start(LAS, tmp_path / "s", **WINDOW, llm_factory=lambda cfg: two, figures=False,
+                       direct=False).ask(Q1)
+    assert one.stages() == two.stages()
+    for a, b in zip(one.sent, two.sent):
+        assert a["messages"] == b["messages"], a["stage"]

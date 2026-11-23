@@ -14,7 +14,7 @@ import pytest
 
 from petroharness.record.card import curve_origin, porosity_parameters
 from petroharness.tasks import load_tasks
-from petroharness.record.catalog import core_vs_log, provenance
+from petroharness.record.catalog import core_vs_log
 from petroharness.well.view import FormationView
 
 from _reference import CFG
@@ -68,19 +68,6 @@ def test_reference_rows_are_the_zone_means_and_shares():
         assert m.group(2).startswith("<") or abs(float(m.group(2)) - share) <= 0.5
         return
     pytest.skip("no interval with a supplied core reference in this dataset")
-
-
-@pytest.mark.data
-def test_provenance_porosity_gives_the_recorded_matrix_values():
-    for v in views():
-        st = v.prep.steps.get("porosity") or {}
-        eps = (st.get("parameters") or {}).get("matrix_endpoints") or []
-        facts = " ".join(provenance(v, ["porosity"])["facts"])
-        if eps:
-            assert "matrix by lithology:" in facts
-            shown = re.findall(r"([A-Z]+) rho_ma ([\d.]+) g/cc", facts)
-            recorded = {(e["lithology_group"], float(e["rho_ma"])) for e in eps}
-            assert shown and all((g, float(r)) in recorded for g, r in shown)
 
 
 def test_porosity_parameters_matches_lithology_names_loosely():

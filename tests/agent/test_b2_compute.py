@@ -26,7 +26,7 @@ NUM = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?(?![A-Za-z0
 
 @lru_cache(maxsize=1)
 def FS() -> list:
-    from test_b2_tools import F
+    from _support.formations import F
     return F()
 
 
@@ -101,7 +101,7 @@ def table(r: Result) -> dict:
 
 # --- P1 parity ------------------------------------------------------------------------------------------------------
 
-HARNESS_OWN = ("spike_flags", "data_record")   # the harness's spike screen; computed primary logs are not missing
+HARNESS_OWN = ("data_record",)                  # computed primary logs are not missing
 
 
 @pytest.mark.data
@@ -109,6 +109,8 @@ def test_p1_every_line_and_number_the_catalog_shows_is_in_the_item():
     checked, fails = 0, []
     for t, f in FS():
         for name, args in std_args(f).items():
+            if name not in CATALOG:                            # the harness's own (spike_flags: compute.spike_flags)
+                continue
             try:
                 d = CATALOG[name](f.view, **catalog_args(name, args))
             except EvidenceError:
@@ -476,16 +478,16 @@ def test_p4_items_digest_fetch_verify_and_dedupe():
     ("threshold_exceedance", {"curve": "VCL", "threshold": "0.3", "note": "x"}, {"curve": "VCL", "threshold": 0.3}),
 ])
 def test_p5_shapes_k2h_sends_are_read_as_meant(name, raw, want):
-    assert fit(name, arguments(raw)) == want
+    assert fit(name, arguments(raw, name)) == want
 
 
 def test_p5_a_list_written_as_json_text_is_a_list():
-    assert fit("spike_flags", arguments({"curves": '["GR", "RHOB"]'})) == {"curves": ["GR", "RHOB"]}
+    assert fit("spike_flags", arguments({"curves": '["GR", "RHOB"]'}, "spike_flags")) == {"curves": ["GR", "RHOB"]}
 
 
 def test_p5_two_curves_where_one_belongs_is_a_message():
     with pytest.raises(ToolError, match="takes one curve"):
-        fit("adjacent_jumps", arguments({"curve": ["DTC", "GR"], "threshold": 15}))
+        fit("adjacent_jumps", arguments({"curve": ["DTC", "GR"], "threshold": 15}, "adjacent_jumps"))
 
 
 # --- P6 one call answers --------------------------------------------------------------------------------------------

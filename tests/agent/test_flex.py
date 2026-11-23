@@ -13,8 +13,9 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 import b2_reference as R  # noqa: E402
-from test_b2_tools import F  # noqa: E402
+from _support.formations import F  # noqa: E402
 from petroharness.agent.engine import ToolError  # noqa: E402
+from _support.model import in_turn  # noqa: E402
 
 
 def _one_zone():
@@ -107,12 +108,13 @@ def test_one_zone_drops_zone_mean_lines_and_the_map_says_how_to_read_it():
 @pytest.mark.data
 def test_the_lithology_first_look_reads_the_mineral_volumes():
     from petroharness.llm import Usage
-    from test_b5_loop import Script, _session, chose
-    from petroharness.agent.loop import MINERAL_VOLUMES, investigate
+    from _support.sessions import pay_session as _session, chose
+    from petroharness.agent.prompts import MINERAL_VOLUMES
+    from petroharness.agent.graph import investigate
     s = chose(_session(), "lithology_mineralogy")
     first = {"points": ["What is the lithology?"], "intent": "describe", "edits": [], "next": [], "done": True}
     trace = {}
-    investigate(Script([first, first]), s, Usage(), 4000, trace, max_steps=1)
+    investigate(in_turn([first, first]), s, Usage(), 4000, trace, max_steps=1)
     look = trace.get("overview", "")
     have = [c for c in MINERAL_VOLUMES if c in s.f.inv.curves]
     assert all(c in look for c in have[:4]), (look, have)          # core_look adds them for lithology_mineralogy
@@ -263,14 +265,14 @@ def test_the_gas_screen_note_counts_the_screen_and_the_crossover_call():
 @pytest.mark.data
 def test_the_first_look_opens_the_key_curves_of_every_topic_the_model_chose():
     from petroharness.llm import Usage
-    from test_b5_loop import Script, _session, chose
+    from _support.sessions import pay_session as _session, chose
     from petroharness.agent import direction
-    from petroharness.agent.loop import investigate
+    from petroharness.agent.graph import investigate
     s = chose(_session(), "lithology_mineralogy", "porosity", "permeability_rock_quality")
     s.task = s.task.model_copy(update={"question": "Characterize the relationship between mineralogy, porosity and permeability."})
     first = {"points": ["x"], "intent": "describe", "edits": [], "next": [], "done": True}
     trace = {}
-    investigate(Script([first, first]), s, Usage(), 4000, trace, max_steps=1)
+    investigate(in_turn([first, first]), s, Usage(), 4000, trace, max_steps=1)
     look = trace.get("overview", "")
     extra = [c for area in ("porosity", "permeability_rock_quality") for c in direction.overview([area])[:3]
              if c in s.f.inv.curves and c not in direction.overview(["lithology_mineralogy"])]
@@ -283,12 +285,13 @@ def test_the_first_look_opens_the_key_curves_of_every_topic_the_model_chose():
 @pytest.mark.parametrize('on', [True])
 def test_core_look_adds_the_reservoir_context_and_the_mineral_volumes(on):
     from petroharness.llm import Usage
-    from test_b5_loop import Script, _session, chose
-    from petroharness.agent.loop import CORE_CURVES, MINERAL_VOLUMES, investigate
+    from _support.sessions import pay_session as _session, chose
+    from petroharness.agent.prompts import CORE_CURVES, MINERAL_VOLUMES
+    from petroharness.agent.graph import investigate
     s = chose(_session(), "lithology_mineralogy")
     first = {"points": ["x"], "intent": "describe", "edits": [], "next": [], "done": True}
     trace = {}
-    investigate(Script([first, first]), s, Usage(), 4000, trace, max_steps=1)
+    investigate(in_turn([first, first]), s, Usage(), 4000, trace, max_steps=1)
     look = [str(c).upper() for c in s.ledger.items[0].args.get("curves", [])]   # the first look's curves (the trace's
     core = [c for c in CORE_CURVES if c in s.f.inv.curves]                       # action text is cut short)
     minerals = [c for c in MINERAL_VOLUMES if c in s.f.inv.curves]
@@ -300,7 +303,7 @@ def test_core_look_adds_the_reservoir_context_and_the_mineral_volumes(on):
 
 @pytest.mark.parametrize('flex', [True])
 def test_route_counts_name_their_unit(flex):
-    from petroharness.agent import routes
+    from petroharness.record import routes
     c = {"n": 1960, "RSHA": 1924, "RMED": 36, "other": 0}
     text = routes._pairs(c)
     assert ("RSHA/RDEP at 1924 samples" in text and "RMED/RDEP at 36 samples" in text) == flex, text
@@ -311,14 +314,14 @@ def test_route_counts_name_their_unit(flex):
 @pytest.mark.parametrize("flex", [True])
 def test_a_guide_opens_the_workflow_curves_it_names(flex):
     from petroharness.llm import Usage
-    from test_b5_loop import Script, _session
-    from petroharness.agent.loop import investigate
+    from _support.sessions import pay_session as _session
+    from petroharness.agent.graph import investigate
     s = _session()
     want = s.library.workflow_stats("water_saturation", s.f)      # stats BVW, PHIE, SW
     if not want:
         pytest.skip("no workflow-computed BVW, PHIE and SW here")
     assert all(s.f.inv.curves[c].source in ("computed", "analyzer") for kw in want for c in kw["curves"])
-    llm = Script([{"asks": "How does bulk volume water vary?", "points": ["How does bulk volume water vary?"],
+    llm = in_turn([{"asks": "How does bulk volume water vary?", "points": ["How does bulk volume water vary?"],
                    "intent": "value", "focus": "f",
                    "edits": [{"op": "add", "point": 1, "text": "Likely near constant", "grade": "hypothesis"}],
                    "next": [{"guide": "water_saturation"}], "done": False}])

@@ -24,7 +24,7 @@ What the harness is: `README.md`, `docs/ARCHITECTURE.md`, `docs/GRAPH.md`. The c
 7. **A change that should not alter behaviour passes the public mini set** (`tests/gate`, which needs no data and no
    server). The maintainers, who hold the benchmark data, also check it against the golden tapes
    (`tests/agent/test_golden_tapes.py`), the prompt fixture (compared by `tests/agent/test_skill_library.py`) and the
-   ledger replay (`tests/agent/replay.py`). A change that should alter behaviour is a switch (`agent/options.py`, off
+   ledger replay (`tests/agent/replay.py`). A change that should alter behaviour is a switch (`options.py`, off
    by default) until it is measured. *Why: the proof of no change, and comparable A/Bs.*
 8. **Measure end to end.** Judge a behaviour change by the answers on a fixed set of questions, against a control run
    at the same time, with two runs of each; read the answers yourself before any automatic scoring. Record
@@ -35,6 +35,7 @@ What the harness is: `README.md`, `docs/ARCHITECTURE.md`, `docs/GRAPH.md`. The c
 10. **Keep the generality contract** (`docs/DESIGN.md`, G1-G8; the tests in `tests/test_generality.py`): no
     evaluation label enters the run; every model-facing line has a stated provenance; the harness states no
     conclusion; no rule is keyed to question wording; no evaluation text or words in model-facing text; where several
-    bases or conventions are valid, the tools show them and the model chooses; lithology zones are the unit of
-    analysis; the model decides, and code never decides for it or corrects its decisions. *Why:
+    bases or conventions are valid, the tools show them and the model chooses; the zones in force (the user's, else
+    lithology zones) are the unit of analysis; the model decides, and code never decides for it or corrects its
+    decisions. *Why:
     the harness must be general, so that no gain comes from fitting a particular set of questions.*

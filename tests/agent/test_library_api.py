@@ -1,11 +1,10 @@
-"""Every public Petrophys function reachable from its verb (src/petroharness/agent/library_api.py): the registry
+"""Every public Petrophys function reachable from its verb (src/petroharness/agent/library/api.py): the registry
 generated from the library, search and run, and the binder (the inputs the model names, read as Petrophys declares
 them; the question's scope; a missing input asked for; outputs as curves, values and parts).
 
-    .venv/bin/python -m pytest tests/agent/test_library_api.py -q
+    .venv/bin/python -m pytest tests/agent/test_library.api.py -q
 """
 import inspect
-import os
 import re
 import sys
 from pathlib import Path
@@ -15,11 +14,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(Path(__file__).resolve().parent)]
-from petroharness.agent import library_api as A
+from petroharness.agent.library import api as A
 from petroharness.agent import schemas
 from petroharness.agent.engine import ToolError
 
-SAMPLES = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "sample_las"))
+from _wells import SAMPLES  # noqa: E402  (Petrophys's sample files; PETROHARNESS_SAMPLE_LAS for a folder of them)
 
 
 def test_the_registry_is_the_librarys_public_functions_by_verb():
@@ -31,6 +30,25 @@ def test_the_registry_is_the_librarys_public_functions_by_verb():
     assert "apparent_water_resistivity" in by["estimate"] and "summarize_pay" in by["summarize"]
     assert "thomas_stieber" in by["calculate"] and "fit_j_function" in by["calibrate"]
     assert sum(len(v) for v in by.values()) > 200
+
+
+def test_no_function_reads_or_writes_a_file_of_the_servers():
+    """A call is the model's: a function that needs a file or folder path (a CSV reader, a LAS loader) is not in the
+    registry, and an optional path (impute's output) is not offered, so no call reads or writes a file of the server's.
+    Before, {"classify": {"run": "load_lithology_csv", "args": {"filepath": "/any/file.csv"}}} read a server file
+    into the answer."""
+    for fn in A.registry():
+        assert not [p for p, (ann, _, _) in fn.params.items() if re.search(r"\bPath(?:Like)?\b", ann)], fn.qualified
+        assert not [p for p in fn.params if p in {"filepath", "las_path", "formations_csv_path"}], fn.qualified
+    names = {fn.name for fn in A.registry()}
+    assert not names & {"load_lithology_csv", "load_formations_csv", "run_formation_analysis",
+                        "read_capillary_pressure"}
+    with pytest.raises(ToolError, match="no Petrophys function"):
+        A.lookup("load_lithology_csv", "classify")
+    impute = A.lookup("impute", "check")
+    assert "output" not in impute.params and "output" not in impute.kinds
+    with pytest.raises(ToolError, match="not output"):
+        A.bind(None, impute, {"output": "/tmp/x.las"})
 
 
 def test_every_function_carries_petrophys_declarations():
@@ -292,7 +310,7 @@ def test_a_function_of_one_sample_is_applied_sample_by_sample(tuhua):
 
 
 def test_a_docstring_line_naming_several_parameters_documents_each():
-    from petroharness.agent.library_api import _param_docs
+    from petroharness.agent.library.api import _param_docs
     doc = """Do it.
 
     Parameters

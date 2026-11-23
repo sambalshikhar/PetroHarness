@@ -1,6 +1,6 @@
 id: C3
 name: memory
-purpose: 'the state the model reads back: the claims, the ledger of opened results, NEW and OPENED'
+purpose: 'the state the model reads back: its points, its claims, the ledger, the earlier questions of a conversation'
 texts:
   earlier_head: earlier_head.md   # the head of the earlier questions of a conversation (petroharness.session)
 frames:

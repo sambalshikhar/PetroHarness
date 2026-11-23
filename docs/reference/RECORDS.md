@@ -127,16 +127,17 @@ Read from the well's record, not written by the model. The steps that computed t
 ...
 ```
 
-A well without a lithology log is zoned by shale-volume bands, and its header says so: Taranaki tuhua-7, McKee
-(Data: Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.), written by the
-header code for the prepared interval. No model ran, so there is no status and no answer:
+A well without a lithology log is zoned by the lithology Petrophys's mineral solver gives, and its header says so:
+Taranaki tuhua-7, McKee (Data: Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals),
+CDLA-Sharing-1.0.), written by the header code for the prepared interval. No model ran, so there is no status and no
+answer:
 
 ```markdown
 # tuhua-7: McKee
 
 - **Question:** What are the porosity and water saturation of the McKee Formation, and is any of it hydrocarbon-bearing?
 - **Interval:** 1935.02-2017.78 m (544 samples; tops file formations_tuhua-7.csv, base: stated base)
-- **Lithology:** no lithology log: zones from shale-volume bands (VCL below 0.3, 0.3-0.6, above 0.6)
+- **Lithology:** no lithology log: lithology zones from Petrophys's mineral solver (LITHO, clastic domain, canonical multi mineral solver)
 - ...
 ```
 
@@ -148,7 +149,7 @@ header code for the prepared interval. No model ran, so there is no status and n
 | Header | Markdown list | interactive runs | Title, question, interval, lithology, model, skill library, status and route, field notes, settings changes ([WRITER_AND_CHECKER.md](WRITER_AND_CHECKER.md#10-the-answer-header)) | `ask.py`, `_answer_md` |
 | `---` | rule | always | Ends the header | `ask.py`, `_answer_md` |
 | Answer | Markdown | always | The delivered answer, or `(no answer: <error or status>)` | `agent/graph.py`, `delivered` |
-| `## Figures` | section | conversation, at least one figure drawn | Each figure as `![caption](figures/figure_<n>_<kind>.png)` and its caption in italics | `figures.py`, `markdown` |
+| `## Figures` | section | conversation, at least one figure drawn | Each figure as a Markdown image of `figures/figure_<n>_<kind>.png` with its caption as the alt text, then the caption in italics | `figures.py`, `markdown` |
 | `## Methods and parameters this answer rests on` | section | conversation, the answer names a computed curve | The steps behind the curves the answer and its cited results name ([below](#methods-and-parameters-rows)), then `The steps those read from:` | `basis.py`, `markdown` |
 
 - A conversation on prepared tasks writes `**Question N:** <question>`, `---` and the answer instead of the header.
@@ -157,6 +158,7 @@ header code for the prepared interval. No model ran, so there is no status and n
 
 </details>
 
+<a id="methods-and-parameters-rows"></a>
 <details>
 <summary>Methods and parameters rows</summary>
 
@@ -195,7 +197,7 @@ Set in `agent/graph.py` unless noted.
 
 | Key | Type | Present | Meaning | Set by |
 |---|---|---|---|---|
-| `task_id` | str | always | The task's id: `a` + 10 hex of SHA-256 over the LAS path, question and interval (and `\|question N` for N > 1) for interactive runs; `t` + 10 hex for prepared tasks | `ask.py`, `task_for`; `tasks.py` |
+| `task_id` | str | always | The task's id: `a` + 10 hex of SHA-256 over the LAS path, question and interval (and `\|question N` for N > 1) for interactive runs; `t` + 10 hex for prepared tasks | `interval.py`, `task_for`; `tasks.py` |
 | `well` | str | always | The LAS file's stem | `turn` |
 | `formation` | str | always | The interval's name | `turn` |
 | `harness` | str | always | `petroharness <package version>` (`agent.graph.HARNESS`, from `petroharness.__version__`) | `turn` |
@@ -204,14 +206,14 @@ Set in `agent/graph.py` unless noted.
 | `skills` | object | always | `{"library": <name>, "version": <hash>}`, or `{"library": "none", "version": null}` | `agent/direction.py`, `stamp` |
 | `components` | object | always | Each prompt component's version, `C1` to `C10`: 12 hex of SHA-1 over its files and the code it frames | `agent/components.py`, `versions` |
 | `reads_depth` | bool | always | Whether the READ call was asked if the question is direct (false with `--investigate`) | `turn` |
-| `options` | object | after the investigation | The switches in force (`agent/options.py`); `{}` when none is defined | `close` |
+| `options` | object | after the investigation | The switches in force (`options.py`); `{}` when none is defined | `close` |
 | `status` | str | always | `ok`, `unresolved_numbers`, `ask_user` (asked back, nothing computed), `outside` (a request outside what the harness does), `error: empty answer (the writer's last draft was empty)` or `error: <exception type>` | `turn`, `finalize`, `answer_status` |
 | `seconds` | float | always | Wall time of the question graph, to 0.1 s | `turn` |
 | `error`, `traceback` | str | the run failed | `<type>: <message>`, and the last 4,000 characters of the traceback; for an empty answer only `error`, `the writer's last draft was empty` | `turn`, `finalize` |
 | `answer` | str | always | The delivered answer | `ask.py`, `session/graph.py`, `cli.py` |
 
 ```json
-{"task_id": "a2f8275dd57", "well": "30_6-5", "formation": "BRENT GP.", "harness": "petroharness 1.5.0",
+{"task_id": "a2f8275dd57", "well": "30_6-5", "formation": "BRENT GP.", "harness": "petroharness 2.0.0",
  "commit": "<commit>", "model": "K2-Horizon-7B", "skills": {"library": "researched", "version": "18c03ad5d3f8"},
  "components": {"C1": "6f8f4c39893a", "...": "..."}, "reads_depth": true, "status": "ok", "seconds": 903.5}
 ```
@@ -226,11 +228,17 @@ Set in `agent/graph.py` unless noted.
 | Key | Type | Present | Meaning | Set by |
 |---|---|---|---|---|
 | `map_chars` | int | always | Length of the map, set after `build` and after the READ call | `build`, `read_step` |
-| `read` | object | always | The READ call: `reply` (first 3,000 characters), `parse` (`ok`, `retry`, `failed`), `topics`, `named`, and `depth` (`direct` or `investigate`) when asked | `agent/loop.py`, `read_question` |
-| `topics` | list of str | always | The topic areas the model chose (at most 4; `[]` when unreadable) | `agent/loop.py`, `read_question` |
+| `read` | object | always | The READ call: `reply` (first 3,000 characters), `parse` (`ok`, `retry`, `failed`), `topics`, `named`, and `depth` (`direct` or `investigate`) when asked | `agent/read.py`, `read_question` |
+| `topics` | list of str | always | The topic areas the model chose (at most 4; `[]` when unreadable) | `agent/read.py`, `read_question` |
 | `absent` | list of objects | always | `{"name", "curves"}` for each measurement the question names with no data here | `first_look` |
 | `overview` | str | a first look ran | The first look's call, as `stats {"curves": [...]}` | `first_look` |
 | `depth` | object | a direct question went to an investigation | `{"read": "direct", "investigated_from_step": k, "why": ...}` from a look step, or `{"read": "direct", "investigated_from": "the writer", "why": ...}` | `look`, `write_brief` |
+| `scope` | object | a question with a tops file, zones or depth ranges to choose from | The stretches the READ named (`read`), those used (`used`), the reason when none could be (`note`), the units merged (`merged`); `by: "user"` when the user's scope stood in, `frame` when the answer is framed by your zones | `agent/read.py`, `read_question` |
+| `read_scope_again` | object | the READ named no usable stretch | The second READ call, asked once with the reason: `reply` (first 1,500 characters), `scope`, `note` | `agent/read.py`, `read_question` |
+| `scope_chosen` | list | the question answers a question back | The stretches the user chose, used whatever the READ reads | `agent/read.py`, `read_question` |
+| `ask_user`, `ask_choices` | str, list of objects | the question was asked back | The question back, and its choices (`{"label", "question"}`, with `scope` where a choice is a stretch); nothing was computed (status `ask_user`) | `agent/read.py`, `read_question` |
+| `outside` | bool | the request is outside what the harness does | `true`; the answer says what the harness does, with example questions (status `outside`) | `agent/read.py`, `read_question` |
+| `question_notes`, `reader_notes` | str, list of objects | the question names something the record lacks | The note the model is shown under the question, and the same as data for the answer's reader (`{"kind": "absent" or "empty", "name", "curves", ...}`; `agent/vocabulary.py`, `facts`) | `first_look` |
 
 ```json
 "read": {"reply": "...", "parse": "ok", "topics": ["porosity", "water_saturation", "permeability_rock_quality", "hydrocarbon_detection"],
@@ -252,15 +260,16 @@ Set in `agent/graph.py` unless noted.
 | `guides` | list of str | after the investigation | The skill guides read, in order | `close` |
 | `opened` | list of pairs | after the investigation | `[id, call text]` for every item in the ledger, earlier questions' included | `close` |
 | `errors` | list of str | after the investigation | Each rejected tool call's message, first 200 characters | `close` |
-| `claims` | list of objects | claims exist | The claims in force ([Claim records](#claim-records)), after `settle` when it ran | `close`; `agent/loop.py`, `settle` |
-| `dropped` | list of objects | claims exist | The claims dropped, same fields | `close`; `agent/loop.py`, `settle` |
+| `claims` | list of objects | claims exist | The claims in force ([Claim records](#claim-records)), after `settle` when it ran | `close`; `agent/settle.py`, `settle` |
+| `dropped` | list of objects | claims exist | The claims dropped, same fields | `close`; `agent/settle.py`, `settle` |
 | `done_issues` | list of str | claims exist | What the done rule still finds: points without a settled claim, hypotheses left, flagged claims | `agent/claims.py`, `done_issues` |
-| `settle` | object | the settle step ran | The settle record ([below](#the-settle-record)) | `agent/loop.py`, `settle` |
+| `settle` | object | the settle step ran | The settle record ([below](#the-settle-record)) | `agent/settle.py`, `settle` |
 
 Question 1: `"opened": [["E1", "stats PHIT, PHIE, ..."], ...]`, `"done_issues": ["flagged claims: C3 (fix or drop each)"]`.
 
 </details>
 
+<a id="step-records"></a>
 <details>
 <summary>Step records</summary>
 
@@ -274,7 +283,7 @@ Each entry of `steps` is one step of the investigation, or one look step of a di
 | `prompt_chars` | int | always | Characters of the system and user messages | `ask`, `look` |
 | `prompt_tokens` | int or null | always | Prompt tokens of the step's own call (its retry when the first reply was empty), not of a syntax-fix call | `ask`, `look` |
 | `reply` | str | always | The reply, first 6,000 characters | `ask`, `look` |
-| `repaired` | object | the reply was not one readable JSON object | `error` (200 characters), `broken` (the reply, 20,000 characters), `by`: `salvage`, `fix` or `salvage, incomplete` | `agent/loop.py`, `parse` |
+| `repaired` | object | the reply was not one readable JSON object | `error` (200 characters), `broken` (the reply, 20,000 characters), `by`: `salvage`, `fix` or `salvage, incomplete` | `agent/replies.py`, `parse` |
 | `asks` | str | step 1 | What the question asks (point 1) | `plan` |
 | `points_asked` | bool | step 1, when the points were asked for in an extra call | Whether that call gave them | `plan` |
 | `focus` | str | readable steps | The step's focus, first 300 characters | `decide` |
@@ -300,6 +309,7 @@ Step 1 of question 1, whose reply was salvaged (cut):
 
 </details>
 
+<a id="claim-records"></a>
 <details>
 <summary>Claim records</summary>
 
@@ -325,10 +335,11 @@ Each entry of `claims` and `dropped` is a `Claim` as `__dict__`. Defined in `age
 
 </details>
 
+<a id="the-settle-record"></a>
 <details>
 <summary>The settle record</summary>
 
-Set in `agent/loop.py`, `settle` unless noted.
+Set in `agent/settle.py`, `settle` unless noted.
 
 | Field | Type | Present | Meaning | Set by |
 |---|---|---|---|---|
@@ -354,6 +365,7 @@ Set in `agent/graph.py`.
 | `shape` | str | a writer ran | `direct_value`, `list` or `report` | `_write` |
 | `writer_variant` | str | a writer ran | `open` (two repair rounds) or `""` (one) | `_write` |
 | `cited_lines_chars` | int | a writer ran | Length of `writer.cited_lines` (not shown to the model) | `_write` |
+| `fetched_lines` | object | the investigation fetched lines with get or find | Lines fetched per result id (`{id: count}`), read with their results | `_write` |
 | `draft_chars` | int | a writer ran | Length of the first draft after note cleaning | `_write` |
 | `draft_notes_removed` | bool | the first reply held working notes | `true`: the answer after the notes was kept; `false`: the writer was asked again | `_write` |
 | `verify_rounds` | list of objects | finalize ran | Each checker round: `round`, `unsupported`, `process`, `contradictions`, `leaks`, and `kept_draft` on a refused repair | `verify`, `repair` |
@@ -380,7 +392,7 @@ figure choice's call after them, attributed to prompt components by `components.
 
 | Field | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `stage` | str | none | `read`, `read_retry`, `step_<k>`, `step_<k>_retry`, `step_<k>_fix`, `step_1_points`, `settle`, `settle_fix`, `writer`, `writer_retry`, `writer_again`, `repair_<n>`, `repair_<n>_again`, `figures`, `figures_retry` | `agent/graph.py`, `agent/loop.py`, `figures.py` |
+| `stage` | str | none | `read`, `read_retry`, `step_<k>`, `step_<k>_retry`, `step_<k>_fix`, `step_1_points`, `settle`, `settle_fix`, `writer`, `writer_retry`, `writer_again`, `repair_<n>`, `repair_<n>_again`, `figures`, `figures_retry` | `agent/graph.py`, `agent/read.py`, `agent/settle.py`, `figures.py` |
 | `messages[].role` | str | none | `system`, `user` or `assistant` | `agent/components.py`, `record_call` |
 | `messages[].segments` | list of `[component, version, start, end]` | none | Character spans covering the message exactly: a component's text found in the message is that component's; the rest belongs to the nearest preceding section header's owner (C5 `section_owners`), else to the message's owner by stage (`components.OWNERS`) | `agent/components.py`, `attribute` |
 
@@ -407,6 +419,7 @@ The writer call of question 1:
 
 | Field | Type | Present | Meaning | Defined in |
 |---|---|---|---|---|
+| `usage` | list of objects | always | The trace key: one entry per model call, with the fields below | `agent/graph.py`, `turn` |
 | `stage` | str | always | The call's stage, as in `calls` | `Usage.add` |
 | `prompt_tokens`, `completion_tokens` | int | always | As the server reports them (0 when none) | `Usage.add` |
 | `seconds` | float | always | Time of the call, to 0.01 s | `Usage.add` |
@@ -448,7 +461,7 @@ The `ask` object (defined in `ask.py` unless noted):
 | `las` | str | none | The LAS file's absolute path | `ask_record` |
 | `question`, `question_sent` | str, str or null | none | The question as asked; the text sent to the model when it differs (operator lithology, field notes appended) | `ask_record` |
 | `interval` | object | none | `name`, `top`, `base` (4 decimals), `unit`, `samples`, `from` | `check` |
-| `lithology` | object | none | `source` (`lithology log`, `shale-volume bands`, `none`), `curve`, and `how` (`named`, `detected`) or `bands` | `check` |
+| `lithology` | object | none | `source` (`lithology log`, `mineral solver`, `shale-volume bands`, `none`), `curve`, and `how` (`named`, `detected`), the solver's `method`, `domain`, `inputs`, `decisions`, `solved` and `samples`, or `bands` | `check` |
 | `zones` | list of objects | none | `zone`, `lithology`, `top`, `base` per zone | `ask_record` |
 | `model` | str | none | The model's name as people read it | `_model_label` |
 | `settings` | str | `built from the LAS` | Where the data settings came from (a file path, or built from the LAS) | `_settings` |
@@ -463,7 +476,18 @@ The `ask` object (defined in `ask.py` unless noted):
         "settings": "built from the LAS", "interpret": {"vcl_cutoff": 0.3, "sw_cutoff": 0.7}, "petrophys": "3.0.0@files-c5de047fe601", "...": "..."}
 ```
 
-On tuhua-7, McKee (no lithology log): `"lithology": {"source": "shale-volume bands", "curve": "VCL", "bands": [0.3, 0.6]}`.
+On tuhua-7, McKee (no lithology log), abridged:
+
+```json
+"lithology": {"source": "mineral solver", "curve": "LITHO", "method": "canonical_multi_mineral_solver", "domain": "clastic",
+              "inputs": ["RHOB", "VCL", "NPHI", "PHIE", "PEF", "DTC"],
+              "decisions": ["No lithology curve or lithology intervals were available -> inferred LITHO from mineral volumes", "..."],
+              "solved": 13418, "samples": 13652}
+```
+
+`solved` and `samples` count the whole well, as the lithology step records them. A well with neither a lithology log
+nor a solved lithology records `{"source": "shale-volume bands", "curve": "VCL", "bands": [0.3, 0.6]}` (the band
+edges in force).
 
 </details>
 
@@ -551,7 +575,7 @@ The first event: what the conversation was started with. Defined in `session/con
 | `mode` | str | none | `las` (a LAS file) or `tasks` (prepared questions) | - |
 | `las`, `las_sha256` | str | `las` mode | The LAS file's absolute path and the SHA-256 of its bytes | `Conversation.start` |
 | `inputs` | object | `las` mode | `formation`, `tops`, `top`, `base`, `depth_unit`, `lithology_curve`, `formation_lithology`, `profile`, `settings`, `skills`, `model`, `model_card`, `max_steps`, `figures`, `direct`, and `interpretation`, `field_notes` when given (paths as strings); a resume re-prepares the well from them | `INPUTS` |
-| `interval`, `lithology`, `zones` | object, object, list | `las` mode | As in the trace's `ask` object | `ask.py`, `check` |
+| `interval`, `lithology`, `zones` | object, object, list | `las` mode | As in the trace's `ask` object | `interval.py`, `check` |
 | `model` | str | none | `las` mode: the model's name as people read it; `tasks` mode: the registry key | `Conversation.start`, `on_tasks` |
 | `writer`, `fmt`, `max_steps`, `figures`, `direct` | various | `tasks` mode | The run's writer variant, format, step cap, figures and route setting | `Conversation.on_tasks` |
 | `petrophys` | str | none | The Petrophys build | `well/prepare.py`, `library_identity` |
@@ -577,7 +601,7 @@ The setup record of the process answering from this question on ([section 9](#9-
 
 ```json
 {"seq": 3, "time": "<time>", "turn": 1, "type": "setup", "hash": "d70dbbf039dd",
- "harness": "1.5.0", "commit": "<commit>", "petrophys": "3.0.0@files-c5de047fe601",
+ "harness": "2.0.0", "commit": "<commit>", "petrophys": "3.0.0@files-c5de047fe601",
  "components": {"C1": "6f8f4c39893a", "...": "..."}, "functions": "1e177d0c7ca2", "model": "<served model name>",
  "card": "33012b760d52", "data": "61dcbf7ecfe4", "policy": "7631a4a859eb", "writer": "open", "max_steps": 8, "...": "..."}
 ```
@@ -855,7 +879,7 @@ Set in `core/setup.py`, `of` unless noted.
 
 | Field | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `harness` | str | none | The package version (`petroharness.__version__`, `1.5.0`) | `of` |
+| `harness` | str | none | The package version (`petroharness.__version__`, `2.0.0`) | `of` |
 | `commit` | str | `""` for an installed package | The harness commit when `core/setup.py` is a tracked file, with `+dirty` when `src/` has changes | `harness_commit` |
 | `petrophys` | str | none | The Petrophys build (`library_identity`) | `well/prepare.py` |
 | `components` | object | none | Each component's version | `agent/components.py`, `versions` |
@@ -867,7 +891,7 @@ Set in `core/setup.py`, `of` unless noted.
 | `policy` | str | `""` when the file is missing | First 12 hex of SHA-256 of the policy file's bytes | `of` |
 | `writer` | str | `open` | The writer variant | `of` |
 | `fmt` | str | `profile` | The reader format | `of` |
-| `max_steps` | int | 8 (`loop.MAX_STEPS`) | The step cap | `of` |
+| `max_steps` | int | 8 (`state.MAX_STEPS`) | The step cap | `of` |
 | `mode` | str | `interactive` | `interactive` or `tasks` | `of` |
 | `depth` | bool | `true` | Whether the READ call says if a question is direct | `of` |
 
@@ -1197,7 +1221,7 @@ Defined in `evidence/report.py`, `markdown` unless noted.
 - **Interval:** BRENT GP. (2841.0-2958.0 m; 768 samples)
 - **LAS file:** `<site-packages>/petrophys/datasets/geolink/30_6-5.las`, SHA-256 `5ecf2c53...801b9`
 - ...
-- **PetroHarness:** 1.5.0 commit <commit>, setup `d70dbbf039dd`
+- **PetroHarness:** 2.0.0 commit <commit>, setup `d70dbbf039dd`
 - **Questions:** 2 answered of 2 asked
 ```
 
@@ -1303,9 +1327,9 @@ def factory(cfg):
 
 - [WRITER_AND_CHECKER.md](WRITER_AND_CHECKER.md): how the answer recorded here is written, checked and delivered.
 - [../SESSIONS.md](../SESSIONS.md): conversations, settings changes, field notes and resume, from the user's side.
-- [../EVIDENCE.md](../EVIDENCE.md): the evidence graph and the audit trail, in brief.
-- [../SETUP.md](../SETUP.md): the setup record and `petroharness setup`.
-- [../SESSION_GRAPH.md](../SESSION_GRAPH.md): the session graph whose nodes write the records.
-- [../GRAPH.md](../GRAPH.md): the question graph whose nodes fill the trace.
+- [../EVIDENCE.md](../EVIDENCE.md): the evidence graph, the audit trail, the setup record and `petroharness setup`, in
+  brief.
+- [../GRAPH.md](../GRAPH.md): the question graph whose nodes fill the trace, and the session graph whose nodes write
+  the records.
 - [../../tests/gate/README.md](../../tests/gate/README.md): the public mini set and the tape gates.
 - [../../src/petroharness/session/log.py](../../src/petroharness/session/log.py): the session log.

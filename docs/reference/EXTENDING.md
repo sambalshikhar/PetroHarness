@@ -21,13 +21,15 @@ flowchart LR
 | Extension | Where it goes | Tests to run | Changes what the model is sent |
 |---|---|---|---|
 | [A tool](#3-add-a-tool) | `src/petroharness/agent/toolset.py` (+ its function, + C4 description) | `tests/agent/test_tool_registration.py`, `tests/test_petrophys_integration.py`, `tests/test_lint.py`, `tests/test_generality.py` | Yes, on every question (the brief lists every tool) |
-| [A Petrophys function](#4-add-a-petrophys-function-the-model-can-reach) | Petrophys itself, with its parameter declarations; `PACKAGES` in `src/petroharness/agent/library_api.py` for a new package | `tests/agent/test_library_api.py` | Yes: each verb's description counts and groups its functions |
+| [A Petrophys function](#4-add-a-petrophys-function-the-model-can-reach) | Petrophys itself, with its parameter declarations; `PACKAGES` in `src/petroharness/agent/library/api.py` for a new package | `tests/agent/test_library_api.py` | Yes: each verb's description counts and groups its functions |
 | [A skill guide or library](#5-add-or-replace-a-skill-guide-or-a-library) | `src/petroharness/resources/skills/<library>/` or a folder of your own | `tests/agent/test_skills.py`, `tests/agent/test_b4_direction.py`, `tests/agent/test_recipes.py`, `tests/test_generality.py`, `tests/test_lint.py` | Yes for the plugged library (the index, and a guide when it is read) |
 | [A report style](#6-add-a-report-style) | `src/petroharness/resources/profiles/`, named by `reporting.profile` in the policy | `tests/test_generality.py`, `tests/test_lint.py` | Only through `format.zone_table` |
 | [A model card](#7-add-a-model-card) | `src/petroharness/resources/models/<name>.yaml`, or any YAML file | `tests/agent/test_ask.py` | Only for runs that use the card |
 | [A figure kind](#8-add-a-figure-kind) | `DISPLAYS` in `src/petroharness/figures.py` (+ the plot in Petrophys) | `tests/figures/test_figures.py`, `tests/ui/test_ui_runs.py` | The figures call of a conversation, when the display is offered |
 | [An interpretation setting](#9-add-an-interpretation-setting-mapping) | `src/petroharness/well/settings.py` (+ `config.DataPaths` for a zone-rule setting) | `tests/test_interpretation_settings.py` | Only when a run sets it |
-| [A behaviour change](#10-make-a-behaviour-change-a-switch) | `Options` in `src/petroharness/agent/options.py`, read where the behaviour lives | `tests/agent/test_options.py`, every gate with the switch off | Only with the switch on |
+| [A dataset config](#10-add-a-dataset-config) | `configs/data.local.yaml`, or a file `PETROHARNESS_DATA` names | `tests/test_lint.py`, the `data` tests | Only through `data.basis` and `data.conventions` |
+| [A component text](#11-add-a-component-text) | a file and a `texts` line in `src/petroharness/agent/components/C*/` | `tests/agent/test_components.py` | Yes, wherever a prompt holds it |
+| [A behaviour change](#12-make-a-behaviour-change-a-switch) | `Options` in `src/petroharness/options.py`, read where the behaviour lives | `tests/agent/test_options.py`, every gate with the switch off | Only with the switch on |
 
 ## 2. How it works
 
@@ -55,10 +57,10 @@ flowchart TD
 3. **Test it** with the recipe's tests, then the fast suite and the public mini set
    ([TESTING.md](TESTING.md#3-running-the-suite)).
 4. **Not meant to alter what the model is sent:** run every gate you can; a difference is the bug.
-5. **Meant to:** put it behind a switch (`agent/options.py`, off by default), show the gates pass with it off, measure
+5. **Meant to:** put it behind a switch (`options.py`, off by default), show the gates pass with it off, measure
    it end to end against a control run (AGENTS.md rule 8), and adopt or drop it.
 6. **On adoption** the switch and its branch go, and the gates are re-recorded live in the same change; a change to
-   what is done with the replies only is re-recorded by replay ([section 11](#11-keep-the-gates-green)).
+   what is done with the replies only is re-recorded by replay ([section 13](#13-keep-the-gates-green)).
 
 ## 3. Add a tool
 
@@ -75,21 +77,25 @@ Tool("adjacent_jumps", K.adjacent_jumps, CHECK, _text("adjacent_jumps"),
 1. **The function.** A lookup of the record: `src/petroharness/agent/tools.py`. A computed table: a function
    `(view, **args) -> dict` in `CATALOG` (`src/petroharness/record/catalog.py`) and a wrapper in
    `src/petroharness/agent/compute.py` that calls `_run(f, "<name>", zones, **args)`. An object of a verb over
-   Petrophys: the verb's module (`agent/library*.py`). Petrophysics is computed only by Petrophys (AGENTS.md rule 4).
+   Petrophys: the verb's module (`agent/library/`). Petrophysics is computed only by Petrophys (AGENTS.md rule 4).
 2. **The description.** `"<name>": "<text>"` in `src/petroharness/agent/components/C4_tools/tool_descriptions.json`,
    which holds every tool's description; `agent.toolset._text(name)` reads it.
 3. **The definition.** A `Tool(...)` in `TOOLSET.add(...)` under its group (`agent.toolset.TOOLSET`); the order of
    definition is the order in the brief.
-4. **Argument reading** (optional). A number argument a model may send as text: add it to `_NUMERIC` in
-   `src/petroharness/agent/schemas.py`. A list-of-names argument: `_LISTS` (`curves`, `zones`, `statistics`,
-   `inputs`). Both are read by `agent.schemas.arguments`.
+4. **Argument reading** (nothing to add). Each argument is read as its schema types it (`agent.schemas.kinds`):
+   `integer` or `number` (a number sent as text is read as one), an array of strings (one name as text is a list of
+   one), `string` (text sent as a list of one is that text) and `boolean` (`"true"` and `"false"` written as text are
+   flags). An example for a refusal's text can be added to `_LISTS` or to
+   `src/petroharness/agent/components/C4_tools/argument_texts.json`.
 5. **A generic data operation** (when it does not reach Petrophys). A `CATALOG` computation that is a generic data
    operation, not petrophysics, is listed in `GENERIC` of `tests/test_petrophys_integration.py` with its reason.
-6. **Tests.** `tests/agent/test_tool_registration.py` checks the definition automatically. Add a test of the tool's
+6. **Tests.** `tests/agent/test_tool_registration.py` checks the definition automatically, and
+   `tests/test_docs_tables.py` the tool reference's master table: refresh it with
+   `.venv/bin/python tests/docs_tables.py --write`. Add a test of the tool's
    output: offline on stub or synthetic data where possible, or with `@pytest.mark.data` beside
    `tests/agent/test_b2_compute.py` and `tests/agent/test_tool_lines.py`.
 7. **Gates.** The brief changes on every question: the mini set, the golden tapes, the prompt fixture and the request
-   gate all differ. Measure, then re-record live ([section 11](#11-keep-the-gates-green); AGENTS.md rule 7).
+   gate all differ. Measure, then re-record live ([section 13](#13-keep-the-gates-green); AGENTS.md rule 7).
 
 The tool above, called on the Brent Group of GeoLink 30/6-5 as `{"adjacent_jumps": {"curve": "DTC", "threshold": 10}}`:
 
@@ -142,11 +148,11 @@ PETROHARNESS_DATA=/path/to/data.yaml .venv/bin/python -m pytest -o addopts= -q t
   (`Tool.parameters()`), so the model is never shown an argument that would be ignored.
 - The description is model-facing text: no benchmark words, no conclusion forms, no preference phrases
   (`tests/test_generality.py`), no depth literals or dataset names (`tests/test_lint.py`).
-- `toolset.py`, `tools/spec.py`, `agent/schemas.py` and `agent/engine.py` are C4 frames, and `agent/tools.py` and
+- `toolset.py`, `tools/spec.py`, `agent/schemas.py` and `agent/engine/` are C4 frames, and `agent/tools.py` and
   `agent/compute.py` C7 frames, so editing them changes those components' versions
   ([TESTING.md](TESTING.md#9-component-versions-and-the-golden-tests)).
 - `Tool` has no switch field: the brief lists every defined tool. Measuring a tool before adoption needs a code path
-  that reads a switch ([section 10](#10-make-a-behaviour-change-a-switch)).
+  that reads a switch ([section 12](#12-make-a-behaviour-change-a-switch)).
 
 </details>
 
@@ -157,13 +163,13 @@ The definitions feed the brief, the native schemas, the reply parser, the ledger
 
 | Name | Type | Meaning | Defined in |
 |---|---|---|---|
-| The brief's tool text | text | C4's `library` line, then each group heading (`  <GROUP>`), each tool as `  {"<name>": {"<arg>": ..., ...}}   <description>`, then the zone selector line. | `agent.loop.tools_text`, `loop.VERBS` |
+| The brief's tool text | text | C4's `library` line, then each group heading (`  <GROUP>`), each tool as `  {"<name>": {"<arg>": ..., ...}}   <description>`, then the zone selector line. | `agent.prompts.tools_text`, `replies.VERBS` |
 | Native schemas | list | `{"type": "function", "function": {"name", "description", "parameters": {"type": "object", "properties", "required"}}}` per tool. | `tools.spec.Tool.schema`, `agent.schemas.named` |
-| Reply parser | set | `loop.TOOLS`: the action names a step reply may use. | `agent.loop.TOOLS` |
+| Reply parser | set | `replies.TOOLS`: the action names a step reply may use. | `agent.replies.TOOLS` |
 | Ledger listing | text | `<name> <lead value> (<other args>)`, for example `stats PHIE, SW (zones Z1)`. | `agent.ledger.Item.call_text` |
 | Web UI | JSON | `verbs` (tool to group) and `petrophys_verbs` in `GET /api/config`. | `ui.server.verbs` |
 
-The brief's lines for the tool above (`loop.tools_text()`):
+The brief's lines for the tool above (`prompts.tools_text()`):
 
 ```text
   CHECK: data quality
@@ -178,13 +184,13 @@ The brief's lines for the tool above (`loop.tools_text()`):
 ## 4. Add a Petrophys function the model can reach
 
 The verbs over Petrophys reach every public function of its interpretation, evaluation and preprocessing packages
-through a registry generated from the installed library (`agent.library_api.registry`, cached per process). A function
+through a registry generated from the installed library (`agent.library.api.registry`, cached per process). A function
 added to an already mapped package needs no harness change at all.
 
 1. **The function in Petrophys.** A public function in a module under a package `PACKAGES` maps, with a NumPy-style
    docstring (a first sentence, `Parameters`, `Returns`): the registry reads the summary and the parameter lines the
    model sees from it.
-2. **A new package** (only then). A `PACKAGES` line in `src/petroharness/agent/library_api.py`,
+2. **A new package** (only then). A `PACKAGES` line in `src/petroharness/agent/library/api.py`,
    `("<module prefix after petrophys.>", "<verb>")`, placed before any shorter prefix that would match first.
 3. **Its declaration, in Petrophys.** Each parameter's kind (`petrophys/_function_declarations.py`, read through
    `petrophys.function_schema`); Petrophys's `scripts/check_function_schema.py` fails its CI when one is missing. The
@@ -194,8 +200,8 @@ added to an already mapped package needs no harness change at all.
 5. **Tests.** `tests/agent/test_library_api.py`: the registry, search and run, the binder; its run tests need the
    sample wells.
 6. **Gates.** The verb's description ends with a line counting and grouping its functions
-   (`library_api.menu_line`), so the brief changes; the setup record's `functions` hash changes too
-   (`core.setup.functions_hash`). Re-record live after measuring ([section 11](#11-keep-the-gates-green)).
+   (`library.api.menu_line`), so the brief changes; the setup record's `functions` hash changes too
+   (`core.setup.functions_hash`). Re-record live after measuring ([section 13](#13-keep-the-gates-green)).
 
 What the model reaches, on the Brent Group of GeoLink 30/6-5: `{"calibrate": {"search": "saturation height"}}` returns
 
@@ -214,14 +220,14 @@ with Petrophys's defaults for the inputs it does not name.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| Packages walked | prefixes | | `petrophys.interpretation`, `petrophys.evaluation`, `petrophys.preprocessing`. | `library_api.registry` |
-| `PACKAGES` | tuple of (prefix, verb) | 31 entries | The module (after `petrophys.`) to the verb it serves; the first prefix that matches wins, so specific prefixes come before `interpretation` (which maps to `calculate`). A module no prefix matches is left out. | `library_api.PACKAGES`, `_verb` |
-| `SKIP` | tuple | `._`, `borehole_imaging`, `.classification` | Module names containing these are left out (private modules, image logs, label tables). | `library_api.SKIP` |
-| Functions kept | rule | | Public (`_` prefix left out), defined in that module (not imported into it), with a readable signature; a module that fails to import offers nothing. | `library_api.registry` |
-| `Fn` | dataclass | | `name`, `path`, `verb`, `summary` (the docstring's first sentence, 160 characters), `params` (annotation, default, the docstring's Parameters line, 200 characters), `returns` (the Returns section, 300 characters). | `library_api.Fn`, `_param_docs` |
-| `Fn.kinds`, `Fn.samplewise` | dict, bool | | Each parameter's declaration and whether the function takes one sample (Petrophys's `function_schema.declaration`). The binder reads a named input as its kind; the search shows each input's kind with what this well has for it. | `library_api.registry`, `bind`, `_facts` |
-| `MAX_FOUND` | integer | 8 | Functions a `search` lists. | `library_api.MAX_FOUND` |
-| Counts | per verb | | With the pinned Petrophys (7aa9968): calculate 83, estimate 62, calibrate 52, classify 40, summarize 41, check 25, what_if 5 (308 in all). | `library_api.functions` |
+| Packages walked | prefixes | | `petrophys.interpretation`, `petrophys.evaluation`, `petrophys.preprocessing`. | `library.api.registry` |
+| `PACKAGES` | tuple of (prefix, verb) | 31 entries | The module (after `petrophys.`) to the verb it serves; the first prefix that matches wins, so specific prefixes come before `interpretation` (which maps to `calculate`). A module no prefix matches is left out. | `library.api.PACKAGES`, `_verb` |
+| `SKIP` | tuple | `._`, `borehole_imaging`, `.classification` | Module names containing these are left out (private modules, image logs, label tables). | `library.api.SKIP` |
+| Functions kept | rule | | Public (`_` prefix left out), defined in that module (not imported into it), with a readable signature; a module that fails to import offers nothing. | `library.api.registry` |
+| `Fn` | dataclass | | `name`, `path`, `verb`, `summary` (the docstring's first sentence, 160 characters), `params` (annotation, default, the docstring's Parameters line, 200 characters), `returns` (the Returns section, 300 characters). | `library.api.Fn`, `_param_docs` |
+| `Fn.kinds`, `Fn.samplewise` | dict, bool | | Each parameter's declaration and whether the function takes one sample (Petrophys's `function_schema.declaration`). The binder reads a named input as its kind; the search shows each input's kind with what this well has for it. | `library.api.registry`, `bind`, `_facts` |
+| `MAX_FOUND` | integer | 8 | Functions a `search` lists. | `library.api.MAX_FOUND` |
+| Counts | per verb | | With the pinned Petrophys (7aa9968): calculate 83, estimate 62, calibrate 51, classify 39, summarize 39, check 25, what_if 5 (304 in all). | `library.api.functions` |
 
 </details>
 
@@ -229,7 +235,7 @@ with Petrophys's defaults for the inputs it does not name.
 <summary>Tests and notes for a Petrophys function</summary>
 
 ```bash
-.venv/bin/python -c "from petroharness.agent import library_api as L; print(L.menu_line('estimate'))"
+.venv/bin/python -c "from petroharness.agent.library import api; print(api.menu_line('estimate'))"
 .venv/bin/python -m pytest -o addopts= -q tests/agent/test_library_api.py
 petroharness setup     # the 'functions' hash changes with the registry
 ```
@@ -251,8 +257,8 @@ petroharness setup     # the 'functions' hash changes with the registry
   same version, it skips and says why (`record_mini.other_build`, from `well.prepare.library_identity`). A new build
   therefore needs a new recording before the mini set checks anything again.
 - A curated shortcut of a verb (an object such as `check`'s `bad_hole`) is harness code: it lives in the verb's
-  module (`OBJECTS` in `agent/library_check.py`, `library_classify.py`, `library_summarize.py`,
-  `library_calibrate.py`, or `PROPERTIES` and `ESTIMATES` in `agent/library.py`) and is a tool change (section 3).
+  module (`OBJECTS` in `agent/library/check.py`, `library/classify.py`, `library/summarize.py`,
+  `library/calibrate.py`, or `PROPERTIES` and `ESTIMATES` in `agent/library/`) and is a tool change (section 3).
 
 </details>
 
@@ -341,7 +347,7 @@ PETROHARNESS_DATA=/path/to/data.yaml .venv/bin/python -m pytest -o addopts= -q t
 - The topic areas are the harness's (`resources/topics.yaml`, a C6 frame); a library only declares which areas its
   guides serve.
 - A line measured before adoption may carry a switch tag (`[name] text`, `[!name] text` for the line it replaces) and
-  a guide `option: name` in its frontmatter ([section 10](#10-make-a-behaviour-change-a-switch)).
+  a guide `option: name` in its frontmatter ([section 12](#12-make-a-behaviour-change-a-switch)).
   `tests/agent/test_skills.py::test_skills_are_generic` fails while any tag is present, so the tags go when the
   measurement decides.
 - A reporting convention belongs in the report style or the data config, never in a guide (rule G6).
@@ -378,7 +384,6 @@ format:
 | `reporting.profile` | path | `profiles/report_style.yaml` | In the policy: the style, relative to `src/petroharness/resources` or absolute. A missing file raises `WHAT: report style <path> not found. ...`. | `resources/policy/reference_v2.yaml`, `profile.profile` |
 | Policy file | path | `resources/policy/reference_v2.yaml` | `ResourcePaths.policy_file`. | `config.ResourcePaths` |
 | `format.zone_table` | string | `by_curve` | `by_interval`: one row per interval, first column `Depth Interval (<unit>)`; anything else: by curve. The writer inserts the table for the `list` and `report` shapes. | `agent.writer.prompt`, `writer.zone_table` |
-| Other `format` keys | YAML | | The packaged style also holds `shapes`, `words`, `zone_names` and `rules`; no code reads them. | `resources/profiles/report_style.yaml` |
 | `--format default` | run option | `profile` | Benchmark mode and the replay tools can ignore the style; the trace records `writer_format: profile` or `default`. | `agent.writer.reader_format`, `agent.graph` |
 
 ```bash
@@ -433,7 +438,7 @@ petroharness ui --model-card /path/to/my_model.yaml
 | `model` | string | required | The served model's name (`--model` overrides it). | `config.ModelConfig` |
 | `label` | string | `model` | The name people read (UI, `answer.md`). | `models.label` |
 | Strictness | | | A misspelt field is a `ValueError` naming it; a card with no `model` section is an error. | `models.card_settings` |
-| Setup record | hash | | `card`: a hash of the request settings; `model`: the served name ([SETUP.md](../SETUP.md)). | `core.setup` |
+| Setup record | hash | | `card`: a hash of the request settings; `model`: the served name ([EVIDENCE.md](../EVIDENCE.md#the-setup-record)). | `core.setup` |
 
 ```bash
 .venv/bin/python -m pytest -o addopts= -q tests/agent/test_ask.py -k card
@@ -558,7 +563,7 @@ LABELS = {..., "vcl_cutoff": "VCL cutoff", ...}
 | `UNITS` | tuple | | (token in Petrophys's help, unit shown). | `well.settings.UNITS` |
 | `ZONE_FIELDS` | list | `zone_min_thickness_m`, `zone_vcl_bands`, `zone_layout` | The harness's own settings, with `key`, `label`, `kind`, `unit`, `help`, `more`, and `choices`/`choice_labels` where needed. | `well.settings.ZONE_FIELDS` |
 | Defaults | rule | | Zone settings: the policy's `zones` (`_zone_default`); `vcl_cutoff`, `sw_cutoff`, `phie_cutoff`: the policy's `cutoffs` (`vcl_max`, `sw_max`, `phie_min_clastic`); the rest: Petrophys's dataclass default. | `well.settings.schema` |
-| `split` | function | | Petrophys settings go to `data.interpret` (the options of `petrophys.interpret`); zone settings to `data.zone_*`. | `well.settings.split`, `ask._interpretation` |
+| `split` | function | | Petrophys settings go to `data.interpret` (the options of `petrophys.interpret`); zone settings to `data.zone_*`. | `well.settings.split`, `interval._interpretation` |
 | `used` | function | | The value Petrophys used for each setting, read from the step record (the applied `<name>_used` where recorded; the cutoffs from `net_pay`), with the unit the step records beside it. | `well.settings.used` |
 | `validate` | function | | Per-setting errors: unknown name, wrong kind, a choice not listed, bands not two edges `0 < a < b < 1`, a thickness not above 0, and whatever Petrophys's own validation refuses. | `well.settings.validate` |
 
@@ -584,19 +589,87 @@ With the pinned Petrophys every offered setting has a group, so the groups are t
 
 </details>
 
-## 10. Make a behaviour change a switch
+## 10. Add a dataset config
 
-A switch exists only while a comparison needs it: it defaults off, and once measured it becomes the code or goes
-(`src/petroharness/agent/options.py`). No switch is defined in this release.
+A dataset config is a settings file whose `data:` section says where a field's or a benchmark's wells and tops are,
+and whose `eval:` section names its question file. A question about one LAS file needs none; benchmark mode and the
+data tests do.
+
+```yaml
+# configs/data.local.yaml (git ignores it), or any file PETROHARNESS_DATA names
+data:
+  las_dir: /data/myfield/las            # one LAS file per well, named <well>.las
+  tops_csv: /data/myfield/tops.csv
+  tops_columns: {well: uwi, name: form, top: top}
+  tops_depth_unit: ft
+  lithology_curve: null                 # each LAS's own lithology log, else Petrophys's solved lithology, else shale-volume bands
+eval:
+  questions: /data/myfield/questions.json
+```
+
+1. **The file.** Copy `configs/data.example.yaml` to `configs/data.local.yaml`, or write any file and point
+   `PETROHARNESS_DATA` at it. Every key is `config.DataPaths` or `config.EvalPaths`
+   ([CONFIGURATION.md](CONFIGURATION.md#4-the-data-section)); a misspelt key is an error.
+2. **The tops.** `tops_columns` maps the table's columns when their names are not `well`, `name` and `top`;
+   `top_name_pattern` keeps the tops a regex on the upper-cased name matches; `tops_depth_unit` gives the table's unit
+   when it is not the LAS's.
+3. **The reporting conventions.** A dataset's own basis and conventions go in `data.basis` and `data.conventions`,
+   never in code, a guide or a prompt (rules G6 and G8; [ARCHITECTURE.md](../ARCHITECTURE.md#reporting-settings)).
+4. **No names in code.** Well, formation and dataset names stay in the config: `tests/test_lint.py` fails on any of
+   them in code, rules or prompts.
+5. **Check it.** `petroharness setup --las <one well> --formation <name>` prints the data settings a question builds
+   from the file; `PETROHARNESS_DATA=<file> .venv/bin/python -m pytest -m data` runs the data tests on its wells.
+
+## 11. Add a component text
+
+Every text the model reads is an entry of one component (`src/petroharness/agent/components/C*/`): a `.md` file holding
+the exact bytes, or a `.json` file of such strings. Code holds no model-facing text.
+
+```yaml
+# src/petroharness/agent/components/C10_reading/component.yaml
+texts:
+  empty_note: empty_note.md        # curves the question names that hold no values in this interval
+```
 
 ```python
-# src/petroharness/agent/options.py
+from petroharness.agent import components as C
+note = C.fill("C10", "empty_note", items=", ".join(names))
+```
+
+1. **The component.** Pick the one that owns what the text does
+   ([PROMPT_COMPONENTS.md](PROMPT_COMPONENTS.md#4-the-ten-components)): a stage's instructions C5, a check's message
+   C2, a writer rule C9, how evidence is read C10.
+2. **The file.** Write the text to a new file in the folder, with `{name}` slots for what the code fills in, and list
+   it under `texts` in `component.yaml`. A `.md` entry is read byte for byte, its trailing newline included.
+3. **The call.** `C.text(cid, entry)` gives the text as written, `C.fill(cid, entry, **values)` fills its slots, and
+   `C.prompt(cid, entry, **values)` also fills the shared slots (`{basis}`, `{premise}`).
+4. **The page.** Add the entry's row to its component's table in PROMPT_COMPONENTS.md (Entry, File, Slots, Holds,
+   Used by): `test_the_components_page_lists_every_entry_with_its_file` fails until it is there.
+5. **Gates.** The new file changes the component's version stamp and, once a prompt holds it, what the model is sent:
+   on a path the benchmark takes, put it behind a switch and measure it ([section 12](#12-make-a-behaviour-change-a-switch))
+   before it stays. `test_no_text_is_in_two_components` checks it copies no other entry.
+
+## 12. Make a behaviour change a switch
+
+A switch exists only while a comparison needs it: it defaults off, and once measured it becomes the code or goes
+(`src/petroharness/options.py`). Two switches are defined now. Each changes answers and waits on a fix before it
+can become the code:
+
+<!-- generated: switches (tests/docs_tables.py) -->
+| Switch | On | Off (today) |
+|---|---|---|
+| `tight_numbers` | a mean is worked out only from three values or more, a small whole number with a unit is checked, and a number tied to a curve or zone is read only from a line naming one of them | a midpoint of two passes whatever the mean; 'net pay 12 m' is never checked; 'Z3 SW 0.45' passes on any 0.45 |
+| `cell_thickness` | n regularly spaced samples are n steps thick (Petrophys's cells): a zone, a count of samples, the interval | first to last sample: one sample step less than Petrophys's gross for the same interval |
+<!-- end generated: switches -->
+
+```python
+# src/petroharness/options.py
 @dataclass(frozen=True)
 class Options:
-    my_change: bool = False          # the switch under test
+    my_change: bool = _switch("what it does on", "what happens off, today")   # the switch under test
 
 # where the behaviour lives
-from petroharness.agent import options
+from petroharness import options
 if options.get().my_change:
     ...                              # the new behaviour
 else:
@@ -607,11 +680,12 @@ with options.use(my_change=True):
     ...
 ```
 
-1. **The field.** Add the switch to `Options` in `agent/options.py`, default off (`False`).
+1. **The field.** Add the switch to `Options` in `options.py` with `_switch`, off by default, saying what it does on and
+   what happens off; the table above is generated from these fields.
 2. **The branch.** Read `options.get().<name>` where the behaviour lives, keeping the current path byte for byte when
    off; or tag guide lines and guides. Model-facing text goes into a component entry, not into code.
-3. **Tests.** `tests/agent/test_options.py::test_no_switch_is_under_test_and_an_empty_setting_parses` asserts that no
-   switch exists: update it for the switch under test. Add a test of the new behaviour under
+3. **Tests.** `tests/agent/test_options.py::test_every_switch_is_off_by_default_and_an_empty_setting_parses` asserts
+   that every switch is off by default. Add a test of the behaviour both ways: as today, and under
    `options.use(<name>=True)`.
 4. **Gates with the switch off.** The mini set, the golden tapes, the prompt fixture and the request gate must pass
    unchanged (only version stamps may differ; [TESTING.md](TESTING.md#7-regression-gates)).
@@ -630,7 +704,7 @@ PETROHARNESS_SET= petroharness benchmark --arm control --rep 1 --cats porosity
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `Options` | frozen dataclass | no fields | One field per switch: `bool = False`, or `str = ""` for a list of names joined by `+`. | `options.Options` |
+| `Options` | frozen dataclass | the switches above | One field per switch: `bool`, off by default (`_switch(on, off)`), or `str = ""` for a list of names joined by `+`. | `options.Options` |
 | `PETROHARNESS_SET` | environment | unset | `name=true,other=a+b` for one run. Booleans take `true`, `false`, `1`, `0`, `on`, `off`; strings `[a-z_]+` joined by `+`. An unknown name raises `PETROHARNESS_SET: no option '<name>'; options: ...`. | `options.ENV`, `options.parse` |
 | `options.get()` | function | | The options in force (an override from `use`, else the environment). | `options.get` |
 | `options.use(**kw)` | context manager | | Tests: switches set inside the block; an unknown name raises `TypeError`. | `options.use` |
@@ -645,7 +719,7 @@ PETROHARNESS_SET= petroharness benchmark --arm control --rep 1 --cats porosity
 
 </details>
 
-## 11. Keep the gates green
+## 13. Keep the gates green
 
 What each kind of change does to the four gates ([TESTING.md](TESTING.md#7-regression-gates)), and how to re-record:
 
@@ -705,7 +779,7 @@ PETROHARNESS_DATA=/path/to/configs/<dataset>.yaml .venv/bin/python -m pytest -o 
 
 </details>
 
-## 12. Limits and errors
+## 14. Limits and errors
 
 A definition error stops the import, a broken library stops the run before its first question, and most other
 mistakes fail a named test.
@@ -718,8 +792,8 @@ mistakes fail a named test.
 | A tool defined twice, in an unknown group, or with a `required`/`lead` it does not define | `ValueError` with WHAT / FIX when the harness is imported | `tools.spec.Toolset.add` |
 | A tool's schema shows an argument its function does not take | `test_every_definition_is_whole` fails | `tests/agent/test_tool_registration.py` |
 | A catalog computation or a toolset tool reaches no Petrophys function and is not in `GENERIC` or `RECORD_READERS` | `test_every_tool_reaches_petrophys_or_is_a_listed_data_operation` fails with the fix | `tests/test_petrophys_integration.py` |
-| A Petrophys module no `PACKAGES` prefix matches | Its functions are not in the registry | `library_api._verb` |
-| A Petrophys module that fails to import | Silently offers nothing | `library_api.registry` |
+| A Petrophys module no `PACKAGES` prefix matches | Its functions are not in the registry | `library.api._verb` |
+| A Petrophys module that fails to import | Silently offers nothing | `library.api.registry` |
 | A guide with an unknown frontmatter key, an area not in `topics.yaml`, a line without provenance, or a tag naming no switch | The library does not load; the run stops before its first question | `direction.read_skill`, `direction.load` |
 | A guide over 9000 characters or an index over 4000 | `tests/agent/test_b4_direction.py` fails | `INDEX_MAX`, `GUIDE_MAX` |
 | A report style the policy names is missing | `FileNotFoundError` `WHAT: report style <path> not found. ...` | `profile.profile` |
@@ -730,12 +804,12 @@ mistakes fail a named test.
 | A display kind with characters other than lower-case letters and `_` | The UI cannot serve the figure (404) | `ui.store.Store.figure` |
 | A new zone-rule field without its `_zone_default` entry | `schema()` raises `KeyError` | `well.settings._zone_default` |
 | A zone-rule field without a `DataPaths` field | The data settings are refused as an unknown key | `config.DataPaths` |
-| `PETROHARNESS_SET` naming no switch | `ValueError: PETROHARNESS_SET: no option '<name>'; options: none` | `options.parse` |
+| `PETROHARNESS_SET` naming no switch | `ValueError: PETROHARNESS_SET: no option '<name>'; options: cell_thickness, tight_numbers` | `options.parse` |
 | A recording with a switch the replay turns on | The golden comparison fails: `trace.options: new switches on: [...]` | `tape.compare_run` |
 
 </details>
 
-## 13. Related pages
+## 15. Related pages
 
 - [AGENTS.md](../../AGENTS.md): the rules for changing the code, each with its reason.
 - [DESIGN.md](../DESIGN.md): the design rules and the generality contract G1 to G8.

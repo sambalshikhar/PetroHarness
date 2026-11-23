@@ -17,12 +17,16 @@ from langgraph.runtime import Runtime
 from petroharness.llm import LLM, Usage, assistant_turn
 
 from petroharness.agent import components as C
-from petroharness.agent import direction, options, vocabulary
+from petroharness import options
+from petroharness.agent import direction, vocabulary
 from petroharness.agent.claims import Claims, coerce_edit
 from petroharness.agent.inventory import calibrated_twins
-from petroharness.agent import loop as L                    # the loop's tunables and prompt texts, read where used (tests set them)
-from petroharness.agent.loop import (MAX_STEPS, Session, action_text, brief, coerce_action, parse, read_question,
-                                     read_reply, settle, split_actions, topics_text)
+from petroharness.agent import prompts as PR, read as RD, settle as SE, state as ST                    # the loop's tunables and prompt texts, read where used (tests set them)
+from petroharness.agent.state import MAX_STEPS, Session
+from petroharness.agent.replies import action_text, coerce_action, parse, read_reply, split_actions
+from petroharness.agent.prompts import brief
+from petroharness.agent.read import read_question, topics_text
+from petroharness.agent.settle import settle
 
 from petroharness import __version__ as _VERSION
 
@@ -88,7 +92,6 @@ class State(TypedDict, total=False):
     text: str                    # this step's reply as recorded
     user: str                    # this step's user prompt
     reply: Optional[dict]        # this step's step object (None: unreadable)
-    call_errors: list
     rec: dict                    # this step's record
     steps: Annotated[list, operator.add]
     acts: list                   # the actions this step runs
@@ -114,7 +117,7 @@ def build(state: State, runtime: Runtime[Run]) -> dict:
 
 
 def read_step(state: State, runtime: Runtime[Run]) -> dict:
-    """The READ call: the model reads the question and chooses its topics (loop.read_question); the map's notes
+    """The READ call: the model reads the question and chooses its topics (read.read_question); the map's notes
     follow its topics."""
     r = runtime.context
     read_question(r.llm, r.session, r.usage, r.max_tokens, r.trace)
@@ -133,9 +136,9 @@ def holders(action) -> str:
     if not takes:
         return ""
     if key == "run" and isinstance(val, str):          # a function: the verb whose list holds it first
-        from petroharness.agent import library_api
+        from petroharness.agent.library import api
         try:
-            home = library_api.lookup(val.strip()).verb
+            home = api.lookup(val.strip()).verb
         except Exception:                              # noqa: BLE001 - not a function of the library: no verb first
             home = None
         takes = ([home] if home in takes else []) + [t for t in takes if t != home]
@@ -152,7 +155,7 @@ def first_look(state: State, runtime: Runtime[Run]) -> dict:
     zones pooled and the whole interval, with the default statistics), before step 1."""
     r = runtime.context
     s, trace = r.session, r.trace
-    r.system = brief(s.library, L._reach(s))
+    r.system = brief(s.library, PR._reach(s))
     absent = vocabulary.note(s)
     trace["absent"] = [{"name": n, "curves": c} for n, c in vocabulary.absent(s)]
     if absent:                                           # what the model is told under the question, and the same
@@ -162,17 +165,17 @@ def first_look(state: State, runtime: Runtime[Run]) -> dict:
     conv = conventions_block(s)
     r.head = (f"QUESTION:\n{s.task.question}\n" + (f"{absent}\n" if absent else "")
               + (f"\n{s.earlier}\n" if s.earlier else "") + (f"\n{conv}\n" if conv else "")
-              + f"\nTHE MAP\n{s.map}\n\n" + L.scope_text(s)
+              + f"\nTHE MAP\n{s.map}\n\n" + RD.scope_text(s)
               + (f"DIRECTION\n{s.library.index(s.topics)}\n\n" if s.library is not None else ""))
     look = ""
     curves = [c for c in direction.overview(s.topics) if c in s.f.inv.curves][:8]
     # the measurements the model's reading names (catalog vocabulary)
-    curves += [c for c in L.named_curves(s.f, s.reading.get("named")) if c not in curves]
+    curves += [c for c in PR.named_curves(s.f, s.reading.get("named")) if c not in curves]
     curves = curves[:12]
     # the formation's reservoir context for any question
-    want = list(dict.fromkeys(c for c in (L.MINERAL_VOLUMES if L.MINERAL_TOPIC in s.topics else ()) + L.CORE_CURVES
+    want = list(dict.fromkeys(c for c in (PR.MINERAL_VOLUMES if PR.MINERAL_TOPIC in s.topics else ()) + PR.CORE_CURVES
                               if c in s.f.inv.curves))
-    rest = [c for c in curves if c not in want][:max(L.CORE_LOOK_CAP - len(want), 8)]
+    rest = [c for c in curves if c not in want][:max(PR.CORE_LOOK_CAP - len(want), 8)]
     curves = [c for c in curves if c in rest or c in want] + [c for c in want if c not in curves]
     # each curve's core-calibrated twin beside it, where the record holds one (the inventory's ranking: X and X_CC)
     twins = calibrated_twins(s.f.inv)
@@ -194,7 +197,7 @@ def ask(state: State, runtime: Runtime[Run]) -> dict:
     s, llm, usage, k = r.session, r.llm, r.usage, state["k"]
     max_tokens, last = r.max_tokens, state["k"] == state["max_steps"]
     if k == 1:
-        user = r.head + topics_text(s) + r.first_look + L.step1(s.library) + L.POINTS_SCOPE
+        user = r.head + topics_text(s) + r.first_look + PR.step1(s.library) + PR.POINTS_SCOPE
         if s.turn > 1:                                  # a later question of a conversation: what is already opened
             user += C.text("C5", "step1_later")
             if not s.reads_depth:                       # its answer's length: said here, unless READ reads the depth
@@ -209,7 +212,6 @@ def ask(state: State, runtime: Runtime[Run]) -> dict:
                 f"{s.claims.render()}\n\nOPENED (fetch exact lines with get or find):\n{s.opened(set(state['shown_new']))}"
                 f"\n\n{s.guides_text(state['guides_new'])}NEW (from step {k - 1}):\n{state['new']}\n\n{ask_}")
     rec = {"step": k}
-    call_errors = []
     system = r.system
     text = llm.chat(f"step_{k}", [{"role": "system", "content": system}, {"role": "user", "content": user}],
                     usage, max_tokens)
@@ -221,8 +223,7 @@ def ask(state: State, runtime: Runtime[Run]) -> dict:
     rec["prompt_chars"] = len(system) + len(user)
     rec["prompt_tokens"] = tokens
     rec["reply"] = (text or "")[:6000]
-    return {"rec": rec, "reply": obj, "text": text, "user": user, "call_errors": call_errors, "shown_new": [],
-            "guides_new": []}
+    return {"rec": rec, "reply": obj, "text": text, "user": user, "shown_new": [], "guides_new": []}
 
 
 def _light(llm, on: bool) -> None:
@@ -293,14 +294,14 @@ def look(state: State, runtime: Runtime[Run]) -> dict:
         r.trace["depth"] = {"read": "direct", "investigated_from_step": k, "why": why}
         return {"steps": [rec], "k": 1, "new": "", "shown_new": [], "withheld": [], "guides_new": [],
                 "refused": False, "polish": 0, "finished": False}
-    acts = [] if obj.get("done") else wanted[:L.DIRECT_ACTIONS]
+    acts = [] if obj.get("done") else wanted[:ST.DIRECT_ACTIONS]
     if len(wanted) > len(acts) and not obj.get("done"):
         rec["over_cap"] = len(wanted) - len(acts)       # lookups asked beyond the step's cap: not run
     parts, shown, used = [], [], 0
     for a in acts:
         out, item = s.run(a)
         _seen(s, out, item)                             # the writer reads what this step is shown
-        if item is not None and used + len(out) > L.new_chars():
+        if item is not None and used + len(out) > ST.NEW_CHARS:
             out = f"[{item.id}] {item.call_text()} (opened; the answer's writer reads it whole)"
         elif item is not None:
             shown.append(item.id)
@@ -308,7 +309,7 @@ def look(state: State, runtime: Runtime[Run]) -> dict:
         used += len(out)
     rec.update(actions=[action_text(a) for a in acts], done=bool(obj.get("done")),
                unread=[json.dumps(a, default=str)[:200] for a, c in read if not c])
-    finished = bool(obj.get("done")) or not acts or k >= L.DIRECT_STEPS
+    finished = bool(obj.get("done")) or not acts or k >= ST.DIRECT_STEPS
     return {"steps": [rec], "new": "\n\n".join(parts) or C.text("C8", "nothing_new"), "shown_new": shown,
             "k": k + 1, "finished": finished}
 
@@ -368,15 +369,15 @@ def decide(state: State, runtime: Runtime[Run]) -> dict:
     last, refused = k == state["max_steps"], state["refused"]
     raw_edits = obj.get("edits") if isinstance(obj.get("edits"), list) else []
     settled_before = k > 1 and not s.claims.done_issues()
-    msgs = s.claims.apply(raw_edits) + state["call_errors"]
+    msgs = s.claims.apply(raw_edits)
     read = [(a, coerce_action(a, s.library is not None)) for a in split_actions(obj.get("next"))]
     acts = [c for _, c in read if c]
     unread = [a for a, c in read if not c]                          # said back, not dropped silently
     asked_guides, asked_calcs = [a for a in acts if a[0] == "guide"], [a for a in acts if a[0] == "calc"]
-    guides = asked_guides[:L.MAX_GUIDES]                              # reading direction does not use an action slot
-    calcs = asked_calcs[:L.MAX_CALCS]                                 # nor does arithmetic on shown numbers
+    guides = asked_guides[:ST.MAX_GUIDES]                              # reading direction does not use an action slot
+    calcs = asked_calcs[:ST.MAX_CALCS]                                 # nor does arithmetic on shown numbers
     work = [a for a in acts if a[0] not in ("guide", "calc")]
-    cap = L.ACTIONS
+    cap = ST.ACTIONS
     dropped = max(0, len(work) - cap)
     # a guide read the first time opens what it names that bears on the READ's first topic (the primary one): its
     # workflow sections of that topic's families, and, for a guide on that topic, the workflow's own curves it names;
@@ -396,7 +397,7 @@ def decide(state: State, runtime: Runtime[Run]) -> dict:
                 auto.append(a)
         if primary not in (s.library.facets.get(name) or {}).get("areas", ()):
             continue
-        for kw in s.library.workflow_stats(name, s.f)[:L.MAX_GUIDE_STATS]:   # their stats
+        for kw in s.library.workflow_stats(name, s.f)[:SE.MAX_GUIDE_STATS]:   # their stats
             a = ("tool", "stats", kw)
             if a not in auto and not s.ledger.has("stats", kw):
                 auto.append(a)
@@ -450,7 +451,7 @@ def act(state: State, runtime: Runtime[Run]) -> dict:
         nonlocal used
         if item is not None and item.id in shown:
             out = C.fill("C8", "shown_above", id=item.id)
-        elif item is not None and used + len(out) > L.new_chars():
+        elif item is not None and used + len(out) > ST.NEW_CHARS:
             if item.id not in withheld:
                 withheld.append(item.id)
             return
@@ -479,7 +480,7 @@ def act(state: State, runtime: Runtime[Run]) -> dict:
     ops = {str(coerce_edit(e)["op"]) for e in state["raw_edits"] if coerce_edit(e)}
     polish = state["polish"] + 1 if (state["settled_before"] and not s.claims.done_issues() and not opened
                                      and not ops & {"add", "drop"}) else 0
-    if polish >= L.POLISH_STEPS:
+    if polish >= ST.POLISH_STEPS:
         rec.update(answer=s.claims.render(), stopped="converged")
         return {"rec": rec, "steps": [rec], "polish": polish, "shown_new": shown, "withheld": withheld,
                 "guides_new": read, "finished": True}
@@ -510,7 +511,7 @@ ASK_USER = "ask_user"
 
 
 def ask_user(state: State, runtime: Runtime[Run]) -> dict:
-    """The question back to the user (loop.ask_listed_twice): the answer, nothing computed."""
+    """The question back to the user (read.ask_listed_twice): the answer, nothing computed."""
     s = runtime.context.session
     return {"answer": s.ask_user, "status": getattr(s, "ask_status", "") or ASK_USER}
 
@@ -667,7 +668,7 @@ def repair(state: State, runtime: Runtime[Run]) -> dict:
     if repaired.strip() and len(repaired) > 0.6 * len(draft):
         return {"draft": repaired}
     return {"rounds": [{"round": n, "kept_draft": True, "unsupported": bad, "process": talk, "contradictions": contra,
-                        "leaks": notes}]}
+                        "leaks": notes, **({"names": names} if names else {})}]}
 
 
 def delivered(draft: str, table: str) -> str:
@@ -868,7 +869,7 @@ _CONFIG = {"recursion_limit": RECURSION_LIMIT}
 
 
 def investigate(llm: LLM, s: Session, usage: Usage, max_tokens: int, trace: dict, max_steps: int = MAX_STEPS) -> Optional[Claims]:
-    """The investigation alone, on a built session (loop.investigate, the tests' entry point), from the first look
+    """The investigation alone, on a built session (the tests' entry point), from the first look
     with the session's topics as they are (no READ call): the claims, or None (step 1 unreadable)."""
     run = Run(task=s.task, cfg=None, llm=llm, usage=usage, trace=trace, max_tokens=max_tokens, session=s)
     INVESTIGATION.invoke({"max_steps": max_steps}, context=run, config=_CONFIG)

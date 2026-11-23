@@ -9,7 +9,8 @@ from typing import Any, Optional
 import numpy as np
 
 from petroharness.well.derived import DerivedCurves
-from petroharness.record.catalog import _ANALYZERS, Evidence, label_runs, zone_results
+from petroharness.record.analyzers import _ANALYZERS, label_runs, zone_results
+from petroharness.record.catalog import Evidence
 from petroharness.well.view import FormationView, fmt, fmt_depth, sig
 
 # --- store and index ---------------------------------------------------------------------------------------------

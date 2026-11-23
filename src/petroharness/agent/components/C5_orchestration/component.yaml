@@ -1,6 +1,6 @@
 id: C5
 name: orchestration
-purpose: 'what each stage asks: the reading, step 1, step k, the points request, settle (with its bookkeeping lists)'
+purpose: 'what each stage asks (reading, step 1, step k, points, settle and its bookkeeping), and each section header''s owner'
 texts:
   read_outside: read_outside.md   # reach well: a request outside the well's logs, answered with what this assistant does
   read: read.md
@@ -23,4 +23,8 @@ texts:
   section_owners: section_owners.json
 frames:
 - agent/graph.py
-- agent/loop.py
+- agent/state.py
+- agent/prompts.py
+- agent/read.py
+- agent/replies.py
+- agent/settle.py

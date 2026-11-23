@@ -1,6 +1,6 @@
 id: C2
 name: guardrails
-purpose: 'what the code checks and says when a check fails: the syntax fix, done issues, the writer checker''s repair requests'
+purpose: 'what code says when a check fails: claim flags, the done refusal, the syntax fix, repair requests'
 texts:
   fix: fix.md
   skip: skip.md

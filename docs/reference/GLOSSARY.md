@@ -103,10 +103,10 @@ flowchart TD
 | Session | The folder a conversation writes: its log, the texts it names (kept by hash), figures and answers. | [Records](RECORDS.md) |
 | Session log | The append-only log of a conversation's events; resuming rebuilds the conversation from it. | [Records](RECORDS.md) |
 | Settle | The model call that makes the claims final after the last investigation step. | [Investigation state](INVESTIGATION_STATE.md) |
-| Setup record | What answers a question (code, model card, skills, Petrophys build, data settings) under one hash; printed by `petroharness setup`, recorded in every question's trace and logged by every conversation. | [Records](RECORDS.md), [SETUP](../SETUP.md) |
+| Setup record | What answers a question (code, model card, skills, Petrophys build, data settings) under one hash; printed by `petroharness setup`, recorded in every question's trace and logged by every conversation. | [Records](RECORDS.md), [EVIDENCE](../EVIDENCE.md#the-setup-record) |
 | Skill library | The set of guides the model can ask for, one per topic area plus common guides; replaceable with your own. | [Skills](SKILLS.md) |
 | Status | What a curve's values are (a measurement, a model output or flag of a Petrophys step, a copy) and the record's cautions about them (a parameter, uncalibrated, a quicklook, a fallback input, not computed). Every result line carries it. | [Well preparation](WELL_PREPARATION.md) |
-| Switch | A behaviour change kept behind an option in `agent/options.py` until it is measured and made the default or removed. | [Extending](EXTENDING.md) |
+| Switch | A behaviour change kept behind an option in `options.py` until it is measured and made the default or removed. | [Extending](EXTENDING.md) |
 | Tape | A recording of every model request and reply of a question or conversation, replayed with no server. | [Records](RECORDS.md), [Testing](TESTING.md) |
 | Tool | An operation the model can call on the computed record (a lookup, a comparison, a computation, a Petrophys verb, or a ledger operation). | [Tools](TOOLS_REFERENCE.md) |
 | Topic area | One of the areas a question can touch (for example porosity or water saturation); the READ call picks them and they choose the guides. | [Skills](SKILLS.md) |
@@ -114,7 +114,7 @@ flowchart TD
 | Verb | A group of tools by kind of request: describe, compare and group, check, calculate, classify, summarize, calibrate. A verb over Petrophys (calculate, estimate, what_if, check, classify, summarize, calibrate) also searches and runs the registry's functions. | [Tools](TOOLS_REFERENCE.md), [TOOLS](../TOOLS.md) |
 | Verify | The checker that reads the writer's draft against the results opened and the rest of what the writer was shown, and sends findings back for repair. | [Writer and checker](WRITER_AND_CHECKER.md) |
 | Writer | The model call that writes the answer from the question's points and every result the investigation opened. | [Writer and checker](WRITER_AND_CHECKER.md) |
-| Zone | A depth run of one lithology (or of one shale-volume band when the well has no lithology log), at least the minimum thickness; the unit every answer reports on. The Brent Group of 30/6-5 has 20 zones from its lithology log; the McKee Formation of Taranaki tuhua-7, which has none, has 6 from the bands. | [Well preparation](WELL_PREPARATION.md) |
+| Zone | A depth run of one lithology (the lithology log's; without one, the lithology Petrophys's mineral solver gives; with neither, a run of one shale-volume band), at least the minimum thickness; the unit every answer reports on. The Brent Group of 30/6-5 has 20 zones from its lithology log; the McKee Formation of Taranaki tuhua-7, which has none, has 11 from the solved lithology. | [Well preparation](WELL_PREPARATION.md) |
 | Zone rule | The settings that decide the zones: minimum zone thickness, the shale-volume bands, or one zone for the whole interval. | [Interpretation settings](INTERPRETATION_SETTINGS.md) |
 | Zone table | The table of zoned values the code composes for the model and, for a list or report answer, inserts into the answer; the report style sets its layout. | [Writer and checker](WRITER_AND_CHECKER.md) |
 

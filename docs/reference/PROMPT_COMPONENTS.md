@@ -39,7 +39,7 @@ flowchart LR
     files["components/C*_*/<br/>component.yaml + texts"]:::record
     text["components.text<br/>exact bytes"]:::code
     fill["components.fill<br/>one-pass slots"]:::code
-    build["stage builders<br/>loop.brief, graph.ask, loop.settle, ..."]:::code
+    build["stage builders<br/>prompts.brief, graph.ask, settle.settle, ..."]:::code
     chat["llm.chat(stage, messages)"]:::model
     rec["components.recording<br/>record_call -> attribute"]:::code
     trace[("trace: components,<br/>calls[].messages[].segments")]:::record
@@ -58,8 +58,8 @@ flowchart LR
    `.json` entry as its list or dict); both are cached for the process.
 2. **Fill.** `components.fill(cid, entry, **values)` fills each `{name}` slot that has a value, in one pass, so a value is never read as a slot; a few
    slots are filled by the stage builder with `str.replace` or `str.format` (section 4).
-3. **Assemble.** The stage builders (`loop.read_question`, `graph.look`, `graph.ask`, `graph.plan`, `loop.parse`,
-   `loop.settle`, `writer.prompt`, `graph.repair`, `figures.pick`) join component texts with the state's text into a
+3. **Assemble.** The stage builders (`read.read_question`, `graph.look`, `graph.ask`, `graph.plan`, `replies.parse`,
+   `settle.settle`, `writer.prompt`, `graph.repair`, `figures.pick`) join component texts with the state's text into a
    system and a user message (section 6).
 4. **Version.** `graph.turn` writes `components.versions()` to `trace["components"]`.
 5. **Attribute.** `components.recording(llm, trace, library)` wraps the client's `chat`; after each successful call
@@ -113,7 +113,7 @@ An entry is one text file; a template entry has `{name}` slots.
 | `SLOT` | regex | `\{([A-Za-z_][A-Za-z0-9_]*)\}` | a slot is an identifier in braces; JSON braces such as `{"points": ...}` are not slots | `components.SLOT` |
 | `fill(cid, entry, **values)` | function | | the entry with its slots filled | `components.fill` |
 | `fill_text(template, **values)` | function | | the same on any template text | `components.fill_text` |
-| guide fragments | entries | | text about guides is its own entry, filled into its template's slot only when a skill library is plugged (C1 `brief_direction`, `brief_guide`; C5 `step1_guides`, `step1_guide_call`; C8 `not_run_guide`) | `loop.brief`, `loop.step1`, `graph.decide` |
+| guide fragments | entries | | text about guides is its own entry, filled into its template's slot only when a skill library is plugged (C1 `brief_direction`, `brief_guide`; C5 `step1_guides`, `step1_guide_call`; C8 `not_run_guide`) | `prompts.brief`, `prompts.step1`, `graph.decide` |
 
 One-pass filling (cases from `tests/agent/test_components.py`):
 
@@ -145,27 +145,29 @@ Each component's frames are listed in section 4.
 
 ## 4. The ten components
 
+<!-- generated: components (tests/docs_tables.py) -->
 | Component | Owns | Frames |
 |---|---|---|
 | C1 system | the role, the protocol and the reply format (the system message of READ, every step, settle) | none |
 | C2 guardrails | what code says when a check fails: claim flags, the done refusal, the syntax fix, repair requests | `agent/claims.py`, `agent/checks.py` |
 | C3 memory | the state the model reads back: its points, its claims, the ledger, the earlier questions of a conversation | `agent/ledger.py`, `agent/claims.py`, `session/earlier.py` |
-| C4 tools | what the model can call and how: tool descriptions, argument vocabularies, the condition grammar | `agent/schemas.py`, `agent/toolset.py`, `tools/spec.py`, `agent/engine.py` |
-| C5 orchestration | what each stage asks (reading, step 1, step k, points, settle and its bookkeeping), and each section header's owner | `agent/graph.py`, `agent/loop.py` |
+| C4 tools | what the model can call and how: tool descriptions, argument vocabularies, the condition grammar | `agent/schemas.py`, `agent/toolset.py`, `tools/spec.py`, `agent/engine/base.py`, `agent/engine/curves.py`, `agent/engine/conditions.py`, `agent/engine/output.py`, `agent/engine/measures.py` |
+| C5 orchestration | what each stage asks (reading, step 1, step k, points, settle and its bookkeeping), and each section header's owner | `agent/graph.py`, `agent/state.py`, `agent/prompts.py`, `agent/read.py`, `agent/replies.py`, `agent/settle.py` |
 | C6 skills | the DIRECTION index and the GUIDES block (the guide lines are the library's) | `resources/topics.yaml`, `agent/direction.py` |
-| C7 scripts | the tool outputs and the map: text computed by Petrophys and the harness's code | `agent/tools.py`, `agent/compute.py`, `agent/map.py`, `agent/inventory.py`, `agent/notes.py`, `agent/routes.py` |
+| C7 scripts | the tool outputs and the map: text computed by Petrophys and the harness's code | `agent/tools.py`, `agent/compute.py`, `agent/map.py`, `agent/inventory.py`, `agent/notes.py`, `record/routes.py` |
 | C8 middleware | the hooks around each call: actions left out, results withheld, edits not applied | `agent/graph.py` |
 | C9 answer | the writer's system texts, the zone-table rule, the one guideline for bases and conventions, the figure choice | `agent/writer.py`, `resources/rules/shapes.yaml`, `resources/profiles/*.yaml` |
 | C10 reading | how evidence is read and graded: caveats, levels and rankings, negatives, absence | `agent/vocabulary.py` |
+<!-- end generated: components -->
 
 <details>
 <summary>C1 system</summary>
 
 | Entry | File | Slots | Holds | Used by |
 |---|---|---|---|---|
-| `brief` | `brief.md` | `{direction}`, `{guide_action}` (fill); `{TOOLS}`, `{ACTIONS}` (replace) | the role, what each step shows, the reply keys, the edit and action shapes, the grades, the number rule, what to look at before finishing | `loop.brief` |
-| `brief_direction` | `brief_direction.md` | | `DIRECTION (guides you can read on demand); ` | `loop.brief`, with a library |
-| `brief_guide` | `brief_guide.md` | `{ACTIONS}` | the `{"guide": "<facet>"}` action line | `loop.brief`, with a library |
+| `brief` | `brief.md` | `{direction}`, `{guide_action}` (fill); `{TOOLS}`, `{ACTIONS}` (replace) | the role, what each step shows, the reply keys, the edit and action shapes, the grades, the number rule, what to look at before finishing | `prompts.brief` |
+| `brief_direction` | `brief_direction.md` | | `DIRECTION (guides you can read on demand); ` | `prompts.brief`, with a library |
+| `brief_guide` | `brief_guide.md` | `{ACTIONS}` | the `{"guide": "<facet>"}` action line | `prompts.brief`, with a library |
 
 The start of `brief.md`:
 
@@ -174,7 +176,7 @@ You are a senior petrophysicist answering one question about one formation in on
 set of claims and refine it step by step as evidence comes in. ...
 ```
 
-`loop.brief` appends C10 `brief_weaknesses` and `brief_levels`, then fills `{TOOLS}` with `loop.tools_text()` and
+`prompts.brief` appends C10 `brief_weaknesses` and `brief_levels`, then fills `{TOOLS}` with `prompts.tools_text()` and
 `{ACTIONS}` with `6`. `brief.md` holds the stop sentence (`Stop when every point is settled and nothing on the list
 under "Before you finish" is left.`).
 
@@ -188,12 +190,13 @@ under "Before you finish" is left.`).
 | `flags` | `flags.json` | per key: `{missing}`, `{numbers}`, `{number}`, `{items}`, `{said}`, `{curves}`, `{name}`, `{shown}`, `{how}` | the claim flags: keys `K1` to `K4`, `K5_present`, `K5_route`, `K7_unavailable`, `K7_absent`, `K8` to `K11` (`K3_held`, `K3_none` are K3's parts) | `claims._flag` |
 | `not_done` | `not_done.md` | `{why}`, `{issues}` | `NOT DONE ({why}): {issues}. Settle each, then set done.` | `graph.decide` |
 | `skip` | `skip.md` | | NEW after an unreadable reply | `graph.skip` |
-| `fix` | `fix.md` | `{error}`, `{text}` (`str.format`) | the request to fix a reply's JSON syntax | `loop.parse` |
+| `fix` | `fix.md` | `{error}`, `{text}` (`str.format`) | the request to fix a reply's JSON syntax | `replies.parse` |
 | `repair_contradictions` | `repair_contradictions.md` | | the head of up to 4 contradiction messages | `graph.repair` |
 | `repair_numbers` | `repair_numbers.md` | `{numbers}` | up to 12 numbers no result, the map or the question shows | `graph.repair` |
 | `repair_words` | `repair_words.md` | `{words}` | up to 8 phrases about the investigation | `graph.repair` |
 | `repair_leaks` | `repair_leaks.md` | `{leaks}` | up to 4 working notes left in the answer | `graph.repair` |
 | `repair_keep` | `repair_keep.md` | | `Keep everything else as it is. ...` closing every repair request | `graph.repair` |
+| `repair_names` | `repair_names.md` | `{names}` | `These names are not curves of this record: {names}. ...`: a curve name the record does not hold, close to one it holds | `graph._repair_ask` |
 
 One key of `flags.json`:
 
@@ -223,11 +226,12 @@ The flags are described in [INVESTIGATION_STATE.md](INVESTIGATION_STATE.md), sec
 | Entry | File | Slots | Holds | Used by |
 |---|---|---|---|---|
 | `tool_descriptions` | `tool_descriptions.json` | | a dict of 30 tool descriptions, one per tool name | `toolset._text` |
-| `library` | `library.md` | | the line heading the tool list: search Petrophys before a hand calculation | `loop.tools_text` |
+| `library` | `library.md` | | the line heading the tool list: search Petrophys before a hand calculation | `prompts.tools_text` |
 | `condition` | `condition.md` | | the condition grammar in the `where` argument's description | `toolset.WHERE` |
 | `zones_argument` | `zones_argument.md` | | the `zones` argument's description | `toolset.ZONES` |
 | `grammar` | `grammar.md` | | the condition grammar repeated in a bad condition's error message | `engine.GRAMMAR` |
 | `argument_texts` | `argument_texts.json` | | an example value per text argument, for type errors (`condition`, `where`, `a`, `b`, `curve`, `y`, `x`, `key`, `name`, `relation`, `baseline`, `topic`, `op`) | `schemas._TEXTS` |
+| `basis` | `basis.md` | | which line of a result is the interval's or a named stretch's value (its whole line); a shared text, filled into `{basis}` wherever a prompt holds that slot | `components.SHARED`, `tools._runs`, `derived.add` |
 
 `argument_texts.json` in an error message (`schemas.arguments`):
 
@@ -244,12 +248,12 @@ A new tool's description goes into `tool_descriptions.json` ([TOOLS_REFERENCE.md
 
 | Entry | File | Slots | Holds | Used by |
 |---|---|---|---|---|
-| `read` | `read.md` | | the READ instructions: topics and named measurements | `loop.read_question` |
-| `read_depth` | `read_depth.md` | | the same, and `depth`: `direct` or `investigate` | `loop.read_question` (depth read) |
+| `read` | `read.md` | | the READ instructions: topics and named measurements | `read.read_question` |
+| `read_depth` | `read_depth.md` | | the same, and `depth`: `direct` or `investigate` | `read.read_question` (depth read) |
 | `direct_step` | `direct_step.md` | | a direct question's look step | `graph.look` |
-| `step1` | `step1.md` | `{guide_sentence}`, `{guide_call}` (fill); `{ACTIONS}` (replace) | step 1's instructions and example reply | `loop.step1` |
-| `step1_guides` | `step1_guides.md` | `{ACTIONS}` | the sentence on reading guides | `loop.step1`, with a library |
-| `step1_guide_call` | `step1_guide_call.md` | `{guide}` | the example's guide call | `loop.step1`, with a library |
+| `step1` | `step1.md` | `{guide_sentence}`, `{guide_call}` (fill); `{ACTIONS}` (replace) | step 1's instructions and example reply | `prompts.step1` |
+| `step1_guides` | `step1_guides.md` | `{ACTIONS}` | the sentence on reading guides | `prompts.step1`, with a library |
+| `step1_guide_call` | `step1_guide_call.md` | `{guide}` | the example's guide call | `prompts.step1`, with a library |
 | `step1_later` | `step1_later.md` | | a later question of a conversation: read what is open first | `graph.ask` |
 | `step1_reply` | `step1_reply.md` | | a later question's answer length (`"reply": "brief"` or `"full"`), when depth is not read | `graph.ask` |
 | `points_scope` | `points_scope.md` | | points stay within the question | `graph.ask` (step 1) |
@@ -257,9 +261,12 @@ A new tool's description goes into `tool_descriptions.json` ([TOOLS_REFERENCE.md
 | `step_next` | `step_next.md` | | the closing line of step k | `graph.ask` |
 | `step_last` | `step_last.md` | `{done}` | the last step: no actions | `graph.ask` |
 | `step_settled_check` | `step_settled_check.md` | | added when every point is settled: go through "Before you finish" | `graph.ask` |
-| `settle` | `settle.md` | | the final step's instructions | `loop.settle` |
-| `settle_lists` | `settle_lists.json` | `{items}` per list | the BOOKKEEPING head and its `named`, `unused` and `hypotheses` lists | `loop.bookkeeping` |
+| `settle` | `settle.md` | | the final step's instructions | `settle.settle` |
+| `settle_lists` | `settle_lists.json` | `{items}` per list | the BOOKKEEPING head and its `named`, `unused` and `hypotheses` lists | `settle.bookkeeping` |
 | `section_owners` | `section_owners.json` | | frame header to owning component (section 8) | `components.headers` |
+| `read_outside` | `read_outside.md` | | the READ prompt's line offering the `outside` depth: a request not about this well's logs | `read.read_question` |
+| `read_scope` | `read_scope.md` | | the READ prompt's `scope` key: the stretches the question is about, one item each | `read.read_question`, `read._with_scope` |
+| `read_scope_again` | `read_scope_again.md` | `{reason}` | `SCOPE NOT USED: ...`: READ asked once more, single-turn, with the resolver's reason | `read.read_question` |
 
 `step_last.md`, filled with `done="set done to true"`:
 
@@ -267,7 +274,7 @@ A new tool's description goes into `tool_descriptions.json` ([TOOLS_REFERENCE.md
 This is the last step: edit your answer for what NEW shows and set done to true (no actions).
 ```
 
-`step1` names, in its example, the library's guide on `net_reservoir_pay` (`loop.EXAMPLE_TOPIC`), else the library's
+`step1` names, in its example, the library's guide on `net_reservoir_pay` (`prompts.EXAMPLE_TOPIC`), else the library's
 first guide.
 
 </details>
@@ -344,8 +351,16 @@ Only the first 6 actions ran (2 left out): one focus, at most 6 actions a step.
 | `reply_brief` | `reply_brief.md` | | the short answer's role and rules 1 to 5 | `writer.prompt` (brief) |
 | `brief_later` | `brief_later.md` | | rule 6 of a short answer to a later question | `writer.prompt` (brief) |
 | `brief_direct` | `brief_direct.md` | | a direct question's writer may reply `INVESTIGATE` | `writer.prompt` (brief, direct) |
-| `aspects_rule` | `aspects_rule.md` | | the one guideline for bases and conventions | `loop.settle` |
+| `aspects_rule` | `aspects_rule.md` | | the one guideline for bases and conventions | `settle.settle` |
 | `figures` | `figures.md` | | the system message of the figure choice | `figures.pick` |
+| `scope_rule` | `scope_rule.md` | | the writer's rule when the question's stretch reaches beyond the interval: answer over all of it | `writer.prompt` |
+| `ask_listed_twice` | `ask_listed_twice.md` | `{listed}`, `{example}` | the ask-back for a name the tops file lists more than once | `read.ask_listed_twice` |
+| `ask_left_out` | `ask_left_out.md` | `{name}`, `{line}`, `{why}`, `{unit}` | the ask-back for a tops row that cannot be used | `read.ask_back` |
+| `ask_did_you_mean` | `ask_did_you_mean.md` | `{name}`, `{candidates}`, `{example}` | the ask-back for a unit name the tops file lacks, with the close names | `read.ask_back` |
+| `ask_which_unit` | `ask_which_unit.md` | `{n}`, `{name}`, `{listed}`, `{example}` | the ask-back for a name several units of the tops file share | `read.ask_back` |
+| `outside_reply` | `outside_reply.md` | `{interval}` | the reply to an `outside` request: what the assistant does here | `read.read_question` |
+| `outside_examples` | `outside_examples.json` | `{interval}` | three example questions closing that reply, and the web UI's examples | `read.read_question`, `ui.server.examples` |
+| `premise` | `premise.md` | | where the question states something the results contradict, the answer says so; a shared text, filled into `{premise}` | `components.SHARED` |
 
 `aspects_rule.md`:
 
@@ -362,10 +377,13 @@ Where the way a number is summarised changes the answer (per zone or overall; zo
 
 | Entry | File | Slots | Holds | Used by |
 |---|---|---|---|---|
-| `brief_weaknesses` | `brief_weaknesses.md` | | readings and their weaknesses; negatives need the zone-level count; a class not computed is not `none` | `loop.brief` |
-| `brief_levels` | `brief_levels.md` | | levels and rankings against the workflow's thresholds | `loop.brief` |
-| `settle_weaknesses` | `settle_weaknesses.md` | | a caveat lowers a grade; it does not turn classes or flags into a denial | `loop.settle` |
+| `brief_weaknesses` | `brief_weaknesses.md` | | readings and their weaknesses; negatives need the zone-level count; a class not computed is not `none` | `prompts.brief` |
+| `brief_levels` | `brief_levels.md` | | levels and rankings against the workflow's thresholds | `prompts.brief` |
+| `settle_weaknesses` | `settle_weaknesses.md` | | a caveat lowers a grade; it does not turn classes or flags into a denial | `settle.settle` |
 | `absent_note` | `absent_note.md` | `{items}` | `Named but not in this well's record: {items}` | `vocabulary.note` |
+| `zones_left_note` | `zones_left_note.md` | `{items}` | your zones with no sample in the interval, named so the answer can say so | `read.say_zones_left` |
+| `absent_unit_note` | `absent_unit_note.md` | `{items}`, `{units}` | a name the question gives that is not a unit of the tops file | `read.ask_back` |
+| `empty_note` | `empty_note.md` | `{items}` | curves the question names that the record holds with no values in this interval | `vocabulary.kept` |
 
 On GeoLink 16/7-1 (2000–2560 m), which has no neutron and no PEF, for a question that names both (`vocabulary.note`
 on that well; data: GeoLink, CC BY-SA 4.0):
@@ -433,12 +451,12 @@ The first model call: the model chooses its topic areas, lists what the question
 
 | Message | Part | Component | Meaning | Defined in |
 |---|---|---|---|---|
-| system | the brief | C1, C4, C10 | as for every step | `loop.brief` |
-| user | C5 `read` or `read_depth` | C5 | the instructions; `read_depth` when `Session.reads_depth` | `loop.read_question` |
-| user | `QUESTION:` | C5 | the question | `loop.read_question` |
-| user | earlier questions | C3 | later questions only | `loop.read_question` |
-| user | `THE MAP` | C7 | the map with all notes (topics not chosen yet) | `loop.read_question` |
-| user | `TOPIC AREAS:` | C6 | one line per area: `name - when` | `loop.read_question` |
+| system | the brief | C1, C4, C10 | as for every step | `prompts.brief` |
+| user | C5 `read` or `read_depth` | C5 | the instructions; `read_depth` when `Session.reads_depth` | `read.read_question` |
+| user | `QUESTION:` | C5 | the question | `read.read_question` |
+| user | earlier questions | C3 | later questions only | `read.read_question` |
+| user | `THE MAP` | C7 | the map with all notes (topics not chosen yet) | `read.read_question` |
+| user | `TOPIC AREAS:` | C6 | one line per area: `name - when` | `read.read_question` |
 
 The end of the READ user message of the first Brent question:
 
@@ -448,7 +466,7 @@ data_quality - hole condition, tool and environmental effects, spikes, gaps, dep
 ...
 ```
 
-The call carries a JSON schema (`loop.read_schema`). Stages `read` and `read_retry`; owners `C1`, `C5`.
+The call carries a JSON schema (`read.read_schema`). Stages `read` and `read_retry`; owners `C1`, `C5`.
 
 </details>
 
@@ -495,7 +513,7 @@ Step 1 sets the points and the first draft; step k reads NEW and edits the claim
 |---|---|---|---|---|
 | system | the brief | C1, C4, C10 | | `graph.ask` |
 | user | the head | C5, C10, C3, C9, C7, C6 | as above | `graph.first_look` |
-| user, step 1 | `YOUR TOPICS:`, `FIRST LOOK (`, C5 `step1`, C5 `points_scope` | C3, C7, C5 | later questions add C5 `step1_later` (and `step1_reply`) | `graph.ask`, `loop.step1` |
+| user, step 1 | `YOUR TOPICS:`, `FIRST LOOK (`, C5 `step1`, C5 `points_scope` | C3, C7, C5 | later questions add C5 `step1_later` (and `step1_reply`) | `graph.ask`, `prompts.step1` |
 | user, step k | `YOUR POINTS:`, `YOUR ANSWER (` | C3 (flags C2) | the points and the claims with their flags | `graph.ask`, `Claims.render` |
 | user, step k | `OPENED (fetch exact lines` | C3 | the ledger's listing and digests | `Session.opened` |
 | user, step k | `GUIDES (a guide` | C6 | the guides read | `Session.guides_text` |
@@ -517,7 +535,7 @@ Two repair calls of the investigation.
 | `step_1_points`, 1 and 2 | the step 1 system and user messages | C1, C5 | as sent | `graph.plan` |
 | `step_1_points`, 3 | the step 1 reply as an assistant turn | C3 | the model's own text | `llm.assistant_turn` |
 | `step_1_points`, 4 | C5 `points_ask` | C5 | asks for the points the edits number | `graph.plan` |
-| `step_k_fix` or `settle_fix`, 1 | C2 `fix` with the parse error and the reply | C2 | one user message, no system message | `loop.parse` |
+| `step_k_fix` or `settle_fix`, 1 | C2 `fix` with the parse error and the reply | C2 | one user message, no system message | `replies.parse` |
 
 The fourth message of the points request of the second Brent question (`points_ask` with `n = 3`):
 
@@ -527,7 +545,7 @@ Your reply has no points. Reply with only the points your edits refer to, as JSO
 
 - `points_ask` is filled with `components.fill`; its JSON braces are not slots, only `{n}` is.
 - The fix call's stage is the fixed call's stage with `_fix` (`step_<k>_fix`, `settle_fix`;
-  `loop.parse(..., stage=)`).
+  `replies.parse(..., stage=)`).
 - `fix` is filled with `str.format(error=..., text=...)`, so `fix.md` must contain no other braces.
 
 </details>
@@ -539,13 +557,13 @@ The final step: every opened result in view, the claims made final.
 
 | Message | Part | Component | Meaning | Defined in |
 |---|---|---|---|---|
-| system | the brief | C1, C4, C10 | | `loop.settle` |
-| user | `QUESTION:`, absent note, earlier questions | C5, C10, C3 | | `loop.settle` |
-| user | `THE MAP` | C7 | | `loop.settle` |
-| user | `YOUR POINTS:`, `YOUR ANSWER:` | C3 | the claims with their flags | `loop.settle` |
+| system | the brief | C1, C4, C10 | | `settle.settle` |
+| user | `QUESTION:`, absent note, earlier questions | C5, C10, C3 | | `settle.settle` |
+| user | `THE MAP` | C7 | | `settle.settle` |
+| user | `YOUR POINTS:`, `YOUR ANSWER:` | C3 | the claims with their flags | `settle.settle` |
 | user | `ALL RESULTS:` | C7 | every result, whole while 24,000 characters last | `writer.opened_results` |
-| user | `BOOKKEEPING (` | C5 | C5 `settle_lists` | `loop.bookkeeping` |
-| user | C5 `settle`, C10 `settle_weaknesses`, `- ` C9 `aspects_rule` | C5, C10, C9 | the instructions | `loop.settle` |
+| user | `BOOKKEEPING (` | C5 | C5 `settle_lists` | `settle.bookkeeping` |
+| user | C5 `settle`, C10 `settle_weaknesses`, `- ` C9 `aspects_rule` | C5, C10, C9 | the instructions | `settle.settle` |
 
 The settle user message of the first Brent question, from BOOKKEEPING:
 
@@ -708,7 +726,7 @@ Runs the harness on another copy of the components folder.
 | `REPO` | `Path` | `src/petroharness` | where frames are read from, whatever `HERE` is | `components.REPO` |
 
 - `HERE` is read when `petroharness.agent.components` is imported, and several modules read texts at import time
-  (`loop.STEP1`, `loop.BRIEF_WEAKNESSES`, `writer.TABLE_RULE`, ...), so the variable must be set before the process
+  (`prompts.STEP1`, `prompts.BRIEF_WEAKNESSES`, `writer.TABLE_RULE`, ...), so the variable must be set before the process
   starts.
 - Uses: an A/B of component versions; or, with a golden tape replayed in collect mode
   (`tape.replay(llm, tape, collect=True)`), the list of calls an edit reaches.
@@ -830,7 +848,7 @@ figure choice's usage):
 | An entry file is missing | `FileNotFoundError` when the entry is read; most entries are read at import | `components.text` |
 | A `.json` entry is not JSON | `json.JSONDecodeError` when read | `components.text` |
 | A slot has no value | it stays as written in the request | `components.fill_text` |
-| `fix.md` gains other braces | `str.format` raises when a reply is repaired | `loop.parse` |
+| `fix.md` gains other braces | `str.format` raises when a reply is repaired | `replies.parse` |
 | A section has no header in `section_owners` | its characters go to the section before it | `components.attribute` |
 | `PETROHARNESS_COMPONENTS` set after import | no effect in that process | `components.HERE` |
 

@@ -58,16 +58,38 @@ def _rel(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
 
+def _stem(name) -> str:
+    """A unit's name without its rank (Fm., Gp., Mb., Formation, Group, Member), in capitals."""
+    return re.split(r"\s+(?:FM|GP|MB)\.|\s+(?:FORMATION|GROUP|MEMBER)\b", str(name).upper())[0].strip()
+
+
+def _sample_names() -> tuple[set[str], set[str]]:
+    """The wells the repository itself runs on, with no data settings (CI): Petrophys's sample wells, as the web UI
+    offers them (the mini set's among them), and the units of their tops."""
+    from petroharness.ui.adapter import samples
+    from petroharness.well.tops import read_tops
+    wells, formations = set(), set()
+    for s in samples():
+        names = [n for n in (s["well"], Path(s["las"]).stem) if len(n) >= 4]
+        wells |= {n.upper() for n in names}
+        if s["tops"]:
+            formations |= {_stem(n) for n in read_tops(s["tops"]["path"], names, None, s["unit"]).names()}
+    return wells, {f for f in formations if len(f) >= 4}
+
+
 def _benchmark_names() -> tuple[set[str], set[str]]:
-    from _reference import CFG         # the data settings: only this check needs them (skipped without; the others run)
-    wells = {p.stem.upper() for p in CFG.data.las_dir.glob("*.las")}
-    wells |= {w.replace("_", "/") for w in wells}
+    """The sample wells' names, and the benchmark's where data settings name it (its LAS folder and tops table)."""
+    wells, formations = _sample_names()
+    try:
+        from _reference import CFG
+    except Exception as e:  # noqa: BLE001  (no data settings: the sample wells alone)
+        if "WHAT: no data settings" not in str(e):
+            raise
+        return wells, formations
+    found = {p.stem.upper() for p in CFG.data.las_dir.glob("*.las")}
+    wells |= found | {w.replace("_", "/") for w in found}
     tops = pd.read_csv(CFG.data.tops_csv)
-    formations = set()
-    for name in tops["form"].dropna():
-        stem = re.split(r"\s+(FM|GP|MB)\.", str(name).upper())[0].strip()
-        if len(stem) >= 4:
-            formations.add(stem)
+    formations |= {f for f in (_stem(n) for n in tops["form"].dropna()) if len(f) >= 4}
     return wells, formations
 
 

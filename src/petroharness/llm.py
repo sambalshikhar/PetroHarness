@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any, Optional
 
 from openai import OpenAI
@@ -49,6 +50,11 @@ def assistant_turn(content: str, usage: Usage, reasoning_model: bool = False) ->
     return turn
 
 
+def _field(obj, name: str):
+    """A field of a streamed delta, also when the client keeps a server's own field (vLLM's reasoning) as an extra."""
+    return getattr(obj, name, None) or (getattr(obj, "model_extra", None) or {}).get(name)
+
+
 class LLM:
     def __init__(self, cfg: HarnessConfig):
         self.cfg = cfg
@@ -66,18 +72,16 @@ class LLM:
             kwargs["extra_body"] = {"chat_template_kwargs": self.template_kwargs(retry)}
         if m.top_p is not None:
             kwargs["top_p"] = m.top_p
-        if getattr(self, "seed_base", None) is not None:     # measurement: reproducible sampling per call site
-            import hashlib
-            kwargs["seed"] = int(hashlib.sha256(f"{self.seed_base}|{stage}".encode()).hexdigest()[:8], 16) % (2 ** 31)
         if json_schema is not None and m.structured_output == "json_schema":
             kwargs["response_format"] = {"type": "json_schema", "json_schema": {"name": stage, "schema": json_schema}}
         elif json_schema is not None and m.structured_output == "json_object":
             kwargs["response_format"] = {"type": "json_object"}
         t0 = time.perf_counter()
-        resp, shrunk = self._create(kwargs)
+        resp, shrunk = self._streamed(kwargs) if self.stream_to is not None else self._create(kwargs)
         choice = resp.choices[0]
         content = choice.message.content or ""
         reasoning = getattr(choice.message, "reasoning", None) or getattr(choice.message, "reasoning_content", None) or ""
+        self.last_reasoning = reasoning
         usage.add(stage, resp.usage, time.perf_counter() - t0, content_chars=len(content),
                   reasoning_chars=len(reasoning), finish_reason=choice.finish_reason)
         if shrunk:
@@ -86,8 +90,9 @@ class LLM:
             usage.log[-1]["template_kwargs"] = dict(m.retry_template_kwargs)
         elif self.light and m.light_template_kwargs is not None:
             usage.log[-1]["light"] = True
-            if m.reasoning_end and m.reasoning_end in content:      # reasoning the server left in the reply
-                content = content.rsplit(m.reasoning_end, 1)[1].lstrip()
+        if m.reasoning_end and m.reasoning_end in content:      # reasoning the server left in the reply: any call's
+            content = content.rsplit(m.reasoning_end, 1)[1].lstrip()
+            usage.log[-1]["reasoning_left"] = True
         if choice.finish_reason == "length" and self.cfg.model.reasoning:
             usage.log[-1]["discarded"] = "truncated reasoning reply"
             return ""                     # callers retry or keep their previous draft
@@ -110,11 +115,41 @@ class LLM:
                 raise
             return self.client.chat.completions.create(**(kwargs | {key: room})), room
 
+    def _streamed(self, kwargs: dict):
+        """The completion streamed: each piece of reasoning and of content goes to stream_to as it arrives. Returns
+        (a response shaped as the whole one: its message, finish reason and usage; the shrunk allowance or None)."""
+        stream, shrunk = self._create(kwargs | {"stream": True, "stream_options": {"include_usage": True}})
+        content, reasoning, finish, used = [], [], None, None
+        for chunk in stream:
+            used = getattr(chunk, "usage", None) or used
+            if not getattr(chunk, "choices", None):
+                continue
+            choice = chunk.choices[0]
+            finish = choice.finish_reason or finish
+            delta = choice.delta
+            for kind, text, into in (("reasoning", _field(delta, "reasoning") or _field(delta, "reasoning_content"), reasoning),
+                                     ("content", getattr(delta, "content", None), content)):
+                if text:
+                    into.append(text)
+                    self._tell(kind, text)
+        message = SimpleNamespace(content="".join(content), reasoning="".join(reasoning), reasoning_content=None)
+        return SimpleNamespace(choices=[SimpleNamespace(message=message, finish_reason=finish)], usage=used), shrunk
+
+    def _tell(self, kind: str, text: str) -> None:
+        try:
+            self.stream_to(kind, text)
+        except Exception:  # noqa: BLE001  (a listener never fails the call)
+            pass
+
     def replays_reasoning(self) -> bool:
         m = self.cfg.model
         return m.reasoning if m.replay_reasoning_field is None else m.replay_reasoning_field
 
     light = False                     # the calls that follow need little reasoning (set_light)
+    last_reasoning = ""               # the last call's reasoning text, for the web UI to show; the run never reads it
+    stream_to = None                  # a listener for a call's text as it arrives (the web UI): stream_to(kind, text),
+                                      # kind "reasoning" or "content". None (every run but the web UI's): the reply
+                                      # comes whole, the request as it always was
 
     def set_light(self, on: bool) -> None:
         """From here on, calls use the card's light thinking setting (light_template_kwargs), or its normal one again.

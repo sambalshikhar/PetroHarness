@@ -131,11 +131,11 @@ cases 30/6-5 does not have:
 
 | Case | Well | Interval options | The run record says |
 |---|---|---|---|
-| A tops file in feet, no lithology log | KGS 1046123714 | `--tops 1046123714_formation_tops.csv --formation "Lansing-Kansas City"` | `Lansing-Kansas City: 3991-4080 ft (178 samples; tops file 1046123714_formation_tops.csv, base: next top LKC G)`; zones from shale-volume bands, 5 zones |
+| A tops file in feet, no lithology log | KGS 1046123714 | `--tops 1046123714_formation_tops.csv --formation "Lansing-Kansas City"` | `Lansing-Kansas City: 3991-4080 ft (178 samples; tops file 1046123714_formation_tops.csv, base: next top LKC G)`; lithology zones from Petrophys's mineral solver, 4 zones |
 | Depths in metres, on a log in feet | KGS 1046123714 | `--top 1216.5 --base 1243.6 --depth-unit m` | `depth interval 1216.5-1243.6 m: 1216.5-1243.6 m (178 samples; depths given)`; the answer reports in m |
 | A tops table of several wells (a `well` column) | COSTA HW-3 | `--tops formations_costa.csv --formation KHARAIB-2` | `KHARAIB-2: 7805-8020 ft (431 samples; tops file formations_costa.csv, base: stated base)` |
 | A cored section by depth | GeoLink 25/5-1 | `--top 2990 --base 3290` | `depth interval 2990-3290 m: 2990-3290 m (1969 samples; depths given)`; zones from the lithology log LITHOLOGY_GEOLINK, 20 zones |
-| The whole log, in feet | Teapot 17-WX-21 | none | `whole well: 0-5649.5 ft (11300 samples; the whole log (no formation or depths given))`; zones from shale-volume bands, 124 zones |
+| The whole log, in feet | Teapot 17-WX-21 | none | `whole well: 0-5649.5 ft (11300 samples; the whole log (no formation or depths given))`; lithology zones from Petrophys's mineral solver, 102 zones |
 | The Brent Group (the main example) | GeoLink 30/6-5 | `--tops formations_30_6-5.csv --formation "BRENT GP."` | `BRENT GP.: 2841-2958 m (768 samples; tops file formations_30_6-5.csv, base: stated base)`; zones from the lithology log LITHOLOGY_GEOLINK, 20 zones |
 
 Each path is `petrophys.sample(NAME)`, NAME being the file named here or the well (`1046123714`, `HW-3`, `25/5-1`,
@@ -152,23 +152,23 @@ Energy.
 | `--question TEXT` | text | one of `--question` and `--question-file` is required | The question. Leading and trailing spaces are removed; an empty question is an error. | `ask.parser` |
 | `--question-file PATH` | path | none | A text file whose whole content is the question. Excludes `--question`. | `ask.parser`, `ask.options` |
 | `--formation NAME` | text | none | The formation: looked up in `--tops`, or a label for `--top`/`--base`. Alone, it is looked up in the settings file's `data.tops_csv`. | `ask.interval_options` |
-| `--tops PATH` | path | none | A tops table (CSV, TSV or Excel) whose columns are found by meaning: [USAGE.md](../USAGE.md#turning-formation-information-into-a-tops-file). Needs `--formation`; excludes `--base`; with `--top D` it takes the row of that top for a name the file lists twice. Every unit of the table is a stretch a question can name: the map lists them (`Units of the tops file: ...`). With `reach: focus` in the settings, the table's units inside the interval (a group's formations) go with the question instead: `(The tops file lists these units inside this interval: Ness Fm. 2841-2865 m; Etive Fm. 2865-2958 m.)`. | `ask.interval_options`, `well.tops.read_tops`, `ask._units`, `ask.task_for` |
+| `--tops PATH` | path | none | A tops table (CSV, TSV or Excel) whose columns are found by meaning: [USAGE.md](../USAGE.md#turning-formation-information-into-a-tops-file). Needs `--formation`; excludes `--base`; with `--top D` it takes the row of that top for a name the file lists twice. Every unit of the table is a stretch a question can name: the map lists them (`Units of the tops file: ...`). With `reach: focus` in the settings, the table's units inside the interval (a group's formations) go with the question instead: `(The tops file lists these units inside this interval: Ness Fm. 2841-2865 m; Etive Fm. 2865-2958 m.)`. | `ask.interval_options`, `well.tops.read_tops`, `interval._units`, `interval.task_for` |
 | `--zones PATH` | path | none | Your zones: a table (CSV, TSV or Excel) of zone, top and bottom, with optional `depth_unit` and `well` columns, read by Petrophys as it reads formation tops. They frame the answer in place of the lithology zones: Z1, Z2, ... under your names, with no minimum thickness; the lithology zones are kept as L1, L2, .... A table with tops only, overlapping zones, or rows for other wells only is refused with what to fix. | `ask.interval_options`, `well.user_zones.read_zones`, `well.view.FormationView` |
 | `--zones-sheet NAME` | text | the first sheet | The Excel sheet that holds the zones. | `ask.interval_options`, `well.user_zones.read_zones` |
-| `--top D` | float | the log's first depth, when only `--base` is given | The interval's top depth (included). With `--tops`, the top of the row meant, for a formation the file lists twice, as the file writes it. | `ask.interval_options`, `ask._interval`, `TopsTable.interval` |
-| `--base D` | float | the log's last depth, when only `--top` is given | The interval's base depth (included). Must be below `--top`. | `ask.interval_options`, `ask._interval` |
-| `--depth-unit UNIT` | `m` or `ft` | the tops file's unit, else the LAS's own | The unit of the depths given and of the answer's depths; it wins over a settings file's `data.depth_unit`, which otherwise sets the answer's unit. `metre`, `metres`, `meter`, `meters`, `feet`, `foot` and `f` are read too, in any case. | `ask.interval_options`, `well.tops.depth_unit_name`, `ask.prepare` |
-| `--lithology-curve MNEMONIC` | text | detected | The lithology log's mnemonic, as Petrophys names the curve. Left out: a LAS curve whose mnemonic or description names a lithology or facies log and holds integer codes; with none, the zones are shale-volume bands. | `ask.interval_options`, `well.formation.find_lithology_curve` |
-| `--formation-lithology TEXT` | text | none | The formation's lithology as you know it. It is added to the question as `(The operator states this formation's lithology: TEXT.)`. | `ask.interval_options`, `ask.task_for` |
+| `--top D` | float | the log's first depth, when only `--base` is given | The interval's top depth (included). With `--tops`, the top of the row meant, for a formation the file lists twice, as the file writes it. | `ask.interval_options`, `interval._interval`, `TopsTable.interval` |
+| `--base D` | float | the log's last depth, when only `--top` is given | The interval's base depth (included). Must be below `--top`. | `ask.interval_options`, `interval._interval` |
+| `--depth-unit UNIT` | `m` or `ft` | the tops file's unit, else the LAS's own | The unit of the depths given and of the answer's depths; it wins over a settings file's `data.depth_unit`, which otherwise sets the answer's unit. `metre`, `metres`, `meter`, `meters`, `feet`, `foot` and `f` are read too, in any case. | `ask.interval_options`, `well.tops.depth_unit_name`, `interval.prepare` |
+| `--lithology-curve MNEMONIC` | text | detected | The lithology log's mnemonic, as Petrophys names the curve. Left out: a LAS curve whose mnemonic or description names a lithology or facies log and holds integer codes; with none, the zones are runs of the lithology Petrophys's mineral solver wrote; with neither, shale-volume bands. | `ask.interval_options`, `well.formation.find_lithology_curve`, `well.formation.solver_lithology` |
+| `--formation-lithology TEXT` | text | none | The formation's lithology as you know it. It is added to the question as `(The operator states this formation's lithology: TEXT.)`. | `ask.interval_options`, `interval.task_for` |
 | `--field-notes PATH` | path | none | A field notes file (YAML: `name`, `settings`, `notes`): its settings are in force, its notes go with the question. | `ask.interval_options`, `well.notes.load` |
-| `--profile NAME` | text | none (Petrophys's default workflow) | A Petrophys context profile: the LAS is interpreted with `petrophys.interpret` options `{context_profile: NAME}`. | `ask.interval_options`, `ask._settings` |
+| `--profile NAME` | text | none (Petrophys's default workflow) | A Petrophys context profile: the LAS is interpreted with `petrophys.interpret` options `{context_profile: NAME}`. | `ask.interval_options`, `interval._settings` |
 | `--out DIR` | path | `./petroharness-out/<LAS file stem>` | The output folder. A second question with the same folder replaces its `answer.md` and `trace.json`. | `ask.parser`, `ask.options` |
 | `--model NAME` | text | the default model card (K2-Horizon-7B) | Any chat model by its served name (as the server lists it at `/v1/models`); uses the generic card unless `--model-card` is given. | `ask.run_options` |
 | `--model-card CARD` | YAML path or packaged card name | the K2-Horizon-7B card | A model card ([MODELS.md](../MODELS.md#model-cards)); the packaged names are `generic` and the default card's, `k2_horizon_7b`. | `ask.run_options`, `models.card_file` |
 | `--model-url URLS` | comma-separated URLs | `PETROHARNESS_MODEL_URL` | The OpenAI-compatible endpoints (`http://HOST:PORT/v1`). With none, the command stops before any model call. | `ask.run_options`, `ask._model_key` |
-| `--settings PATH` | path | `PETROHARNESS_DATA` if set, else none | A data settings YAML whose `data:` section is the base the settings start from ([CONFIGURATION.md](CONFIGURATION.md)). | `ask.run_options`, `ask._settings` |
+| `--settings PATH` | path | `PETROHARNESS_DATA` if set, else none | A data settings YAML whose `data:` section is the base the settings start from ([CONFIGURATION.md](CONFIGURATION.md)). | `ask.run_options`, `interval._settings` |
 | `--skills PATH` or `none` | folder or `none` | `PETROHARNESS_SKILLS`, else the packaged library `skills/researched` | The skill library; `none` runs with no guides. A relative path that exists is taken from the current folder, else from `src/petroharness/resources`. | `ask.run_options`, `agent.direction.plugged` |
-| `--max-steps N` | integer | 8 (`MAX_STEPS`, `agent/loop.py`) | The investigation's step cap. | `ask.run_options` |
+| `--max-steps N` | integer | 8 (`MAX_STEPS`, `agent/state.py`) | The investigation's step cap. | `ask.run_options` |
 | `--investigate` | switch | off | Every question gets the full investigation. Off: the model first says whether the question is direct (one or two lookups state it) and a direct question takes the short route ([GRAPH.md](../GRAPH.md#the-direct-route)). | `ask.run_options` |
 | `-h`, `--help` | switch | off | Prints the options and the other commands, then exits 0. | `ask.parser` |
 
@@ -317,6 +317,7 @@ questions are about, the zones they report by and your zones ([Interactive comma
 
 </details>
 
+<a id="interactive-commands"></a>
 <details>
 <summary>Interactive commands</summary>
 
@@ -489,7 +490,7 @@ The start of the report (the LAS path is shortened, the rest cut at […]):
 - **LAS file:** `…/petrophys/datasets/geolink/30_6-5.las`, SHA-256 `5ecf2c53826981f978c2efb47fe016abf94dac62e83dbdb54eee115596f801b9`
 - **Model:** K2-Horizon-7B
 - **Petrophys:** 3.0.0@files-c5de047fe601
-- **PetroHarness:** 1.5.0 commit <commit>, setup `d70dbbf039dd`
+- **PetroHarness:** 2.0.0 commit <commit>, setup `d70dbbf039dd`
 - **Questions:** 2 answered of 2 asked
 
 ![The interval as Petrophys displays it](overview.png)
@@ -528,7 +529,7 @@ The start of the report (the LAS path is shortened, the rest cut at […]):
 ## 7. petroharness setup
 
 `petroharness setup` prints the setup a question would be answered under, with one hash over it
-([SETUP.md](../SETUP.md)). Two runs with the same hash were made of the same parts.
+([EVIDENCE.md](../EVIDENCE.md#the-setup-record)). Two runs with the same hash were made of the same parts.
 
 ```bash
 petroharness setup --model Qwen/Qwen3-32B
@@ -539,7 +540,7 @@ The first command prints:
 
 ```text
 setup ae3aa9e6820f
-  harness: 1.5.0
+  harness: 2.0.0
   commit: <commit>
   petrophys: 3.0.0@files-c5de047fe601
   components:
@@ -569,12 +570,12 @@ settings built from the Brent interval, the ones a question about it is answered
 
 | Flag | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `--las PATH` | path | none | A well's LAS file: the data settings are built from it and the interval options as a question builds them (`ask.prepare`, `agent.graph.task_config`), so the hash is the one a question about that interval answers under. Without it, the data part covers the settings file alone. | `core.setup.main`, `core.setup.for_well` |
+| `--las PATH` | path | none | A well's LAS file: the data settings are built from it and the interval options as a question builds them (`interval.prepare`, `agent.graph.task_config`), so the hash is the one a question about that interval answers under. Without it, the data part covers the settings file alone. | `core.setup.main`, `core.setup.for_well` |
 | `--formation`, `--tops`, `--top`, `--base`, `--depth-unit`, `--lithology-curve`, `--formation-lithology`, `--field-notes`, `--profile` | as in section 3 | as in section 3 | The question's interval, lithology, field notes and profile. They need `--las`. | `ask.interval_options`, `core.setup.for_well` |
 | `--zones`, `--zones-sheet` | as in section 3 | none | Accepted, as the interval options are shared, but not read: `core.setup.for_well` does not pass them on, so the printed hash leaves your zones out and differs from the one a question with `--zones` records. | `ask.interval_options`, `core.setup.for_well` |
 | `--model NAME` | text | the default model card | The served model's name (the generic card unless `--model-card` is given). | `ask.run_options`, `core.setup.config_for` |
 | `--model-card CARD` | YAML path or packaged card name | the K2-Horizon-7B card | The model card whose request settings are hashed. | `ask.run_options`, `core.setup.config_for` |
-| `--settings PATH` | path | `PETROHARNESS_DATA` if set, else none | A data settings YAML: its `data:` section is hashed, or with `--las` is the base the settings start from. | `ask.run_options`, `core.setup.config_for`, `ask._settings` |
+| `--settings PATH` | path | `PETROHARNESS_DATA` if set, else none | A data settings YAML: its `data:` section is hashed, or with `--las` is the base the settings start from. | `ask.run_options`, `core.setup.config_for`, `interval._settings` |
 | `--skills PATH` or `none` | folder or `none` | `PETROHARNESS_SKILLS`, else the packaged library | The skill library recorded. | `ask.run_options` |
 | `--max-steps N` | integer | 8 | The step cap recorded. | `ask.run_options`, `core.setup.of` |
 | `--investigate` | switch | off | Records `depth: False` (every question investigated). | `ask.run_options`, `core.setup.of` |
@@ -585,8 +586,8 @@ settings built from the Brent interval, the ones a question about it is answered
 <details>
 <summary>What the setup hash covers, and its errors</summary>
 
-- The record's fields: [SETUP.md](../SETUP.md#what-it-holds). An empty value prints as `(none)`; `commit` is empty for
-  an installed package and ends `+dirty` when `src/` has uncommitted changes.
+- The record's fields: [EVIDENCE.md](../EVIDENCE.md#what-a-setup-holds). An empty value prints as `(none)`; `commit`
+  is empty for an installed package and ends `+dirty` when `src/` has uncommitted changes.
 - Without `--las`, the settings file is hashed as it is. A question also hashes the settings built from its LAS (the
   policy cutoffs passed to Petrophys, the depth unit), so its `data` part, and its hash, differ from the printed ones.
   With `--las` and the question's own options (other than `--zones`), the printed hash is the one its trace records
@@ -621,14 +622,14 @@ brackets.
 
 | Flag | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `--host ADDRESS` | text | `127.0.0.1` | Where to listen. `localhost` listens on `127.0.0.1` and, where the machine has IPv6, `::1`; `0.0.0.0` on every interface. | `ui.server.parser`, `make_servers` |
-| `--port N` | integer | 7860 | The port. | `ui.server.parser` |
-| `--allow-host NAME` | text, repeatable | none | A further host name a server on a loopback address answers, for a proxy that keeps its own host name. Without it, such a server answers API requests only for `localhost`, `127.0.0.1` and `::1`. | `ui.server.parser`, `make_servers`, `Handler._refused` |
-| `--runs DIR` | path | `./petroharness-ui-runs` | The folder for saved runs and uploads. | `ui.server.parser`, `ui.store.Store` |
-| `--workers N` | integer | 4 (at least 1) | Questions answered at once; more wait in a queue. | `ui.server.parser`, `App` |
-| `--model NAME` | text | the default model card (K2-Horizon-7B) | Any chat model by its served name. | `ui.server.parser` |
-| `--model-card CARD` | YAML path or packaged card name | the K2-Horizon-7B card | A model card. | `ui.server.parser` |
-| `--model-url URLS` | comma-separated URLs | `PETROHARNESS_MODEL_URL` | The endpoints. Each question goes to the least busy one that serves the model. | `ui.server.parser`, `Endpoints.acquire` |
+| `--host ADDRESS` | text | `127.0.0.1` | The address to listen on. `localhost` opens one server on `127.0.0.1` and, where the machine has IPv6, a second on `::1`. An address containing `:` is served over IPv6 (`_Server6`). `0.0.0.0` listens on every interface. | `ui.server.parser`, `ui.server.make_servers` |
+| `--port N` | integer | `7860` | The port. For `localhost`, the `::1` server takes the port the first server bound. | `ui.server.parser` |
+| `--allow-host NAME` | text, repeatable | none | A further host name a server on a loopback address (`--host` `localhost`, `127.0.0.1` or `::1`) answers, for a proxy that keeps its own host name. Names are compared in lower case. Without it, such a server answers API requests only for the host names `localhost`, `127.0.0.1` and `::1`. | `ui.server.parser`, `ui.server.make_servers`, `Handler._refused` |
+| `--runs DIR` | path | `petroharness-ui-runs` (relative to the current folder) | The folder for saved runs, uploads and the shared cache. It is created when missing and resolved to an absolute path. | `ui.server.parser`, `ui.store.Store` |
+| `--workers N` | integer | `4` | Questions answered at once; values below 1 become 1. | `ui.server.parser`, `ui.server.App` |
+| `--model NAME` | text | none (the default model card) | Any chat model by its served name; selects the generic card unless `--model-card` is given. | `ui.server.parser`, `models.card_file` |
+| `--model-card CARD` | YAML path or packaged card name | none (the default card, K2-Horizon-7B) | A model card ([MODELS.md](../MODELS.md)). | `ui.server.parser`, `models.card_file` |
+| `--model-url URLS` | comma-separated URLs | from the environment (below) | The OpenAI-compatible endpoints, each ending in `/v1`. Empty entries are dropped; a trailing `/` is removed. | `ui.server.parser`, `ui.server.Endpoints` |
 
 </details>
 
@@ -647,6 +648,9 @@ brackets.
   `POST` that is neither JSON nor an upload with its `X-Filename` header, and, on a loopback address, a request for a
   host name it does not answer ([WEB_UI_API.md](WEB_UI_API.md#14-security-notes)).
 - Endpoint health is `GET <url>/models` with a 4-second timeout, kept for 15 seconds (`Endpoints`).
+- Exit status 2 also when the model card is missing or wrong (`petroharness ui: <message>`), or when the address
+  cannot be bound (`petroharness ui: cannot listen on HOST:PORT (...). FIX: choose another --port.`).
+- Only requests for `/` and `/index.html` are logged to standard error (`Handler.log_message`); the polling is not.
 - The server runs until Ctrl+C and then exits 0. The page and its options: [UI.md](../UI.md); every HTTP route:
   [WEB_UI_API.md](WEB_UI_API.md).
 
@@ -769,22 +773,22 @@ Costa Gomes, Geiger and Arnold (2022), COSTA model, Heriot-Watt University, CC B
 | A card with no `model` section, or a misspelt card field | `ValueError` naming the card or the field; exit 2 | `models.card_settings` |
 | A card that names no model and no `--model` | `WHAT: the model card <file> names no model. FIX: give the served model's name (--model NAME ...)`; exit 2 (`ui`: at start, before it listens) | `models.register`, `ui.server.served_model` |
 | No tops file at `--tops` | `WHAT: no tops file at <path>. FIX: give the path of a CSV with one row per top ...`; exit 2 | `well.tops.read_tops` |
-| A tops file and `--base` together | `WHAT: both a tops file and depths (--top/--base) are given. ...`; exit 2 | `ask._interval` |
-| A tops file without `--formation` | The message lists the file's names; exit 2 | `ask._interval` |
+| A tops file and `--base` together | `WHAT: both a tops file and depths (--top/--base) are given. ...`; exit 2 | `interval._interval` |
+| A tops file without `--formation` | The message lists the file's names; exit 2 | `interval._interval` |
 | A formation the tops file lacks, lists twice with no `--top`, or has no row with the `--top` given | `FormationNotFound` with the names it has (and close matches), or the lines of each occurrence; exit 2 | `well.tops.TopsTable.interval` |
 | A tops file that cannot be read as a table (a row with more fields than the header or the first row, an empty file) | `WHAT: the tops file <name> cannot be read as a table (<what pandas reports>). FIX: give every row the same columns, ...`; exit 2. The settings' `data.tops_csv` gives the same message about `the settings' tops table` | `well.tops._read_frame`, `well.formation._tops_table` |
 | A tops file with rows for other wells only | `FormationNotFound` naming the well's names and the file's; exit 2 | `well.tops.read_tops` |
 | A tops file's unit and `--depth-unit` differ | `WHAT: the tops file <name> states its depths in <unit> and the depth unit given is <unit>. ...`; exit 2 | `well.tops.read_tops` |
-| `--depth-unit` is not a metre or foot spelling | `WHAT: depth unit '<text>' is not m or ft. FIX: give m or ft.`; exit 2 | `ask._interval` |
-| `--base` not below `--top` | `WHAT: the base (<b>) is not below the top (<t>). ...`; exit 2 | `ask._interval` |
-| `--formation` alone with no `data.tops_csv` | `WHAT: formation '<name>' is named without its depths. ...`; exit 2 | `ask._interval` |
+| `--depth-unit` is not a metre or foot spelling | `WHAT: depth unit '<text>' is not m or ft. FIX: give m or ft.`; exit 2 | `interval._interval` |
+| `--base` not below `--top` | `WHAT: the base (<b>) is not below the top (<t>). ...`; exit 2 | `interval._interval` |
+| `--formation` alone with no `data.tops_csv` | `WHAT: formation '<name>' is named without its depths. ...`; exit 2 | `interval._interval` |
 | The interval holds no samples | `WHAT: the interval '<name>' has no samples in <file> (the log runs <first>-<last> <unit>). ...`; exit 2 | `ask.check` |
 | `--lithology-curve` names a curve with no data | The message lists the well's curves; exit 2. The value `none` is read as a mnemonic, not as a keyword | `ask.check` |
 | A LAS with two lithology logs and none named | `WHAT: this LAS has several lithology logs (...). WHY: the zones come from one. FIX: name it in data.lithology_curve.`; exit 2 | `well.formation.find_lithology_curve` |
-| `--settings` (or `PETROHARNESS_DATA`) names no file | `WHAT: no data settings file at <path>. ...`; exit 2 | `ask._settings` |
+| `--settings` (or `PETROHARNESS_DATA`) names no file | `WHAT: no data settings file at <path>. ...`; exit 2 | `interval._settings` |
 | A misspelt key under `data:` in the settings file | A pydantic validation error naming the key; exit 2 | `config.DataPaths` |
 | `data.interpret` names a setting Petrophys does not have | `WHAT: data.interpret names settings Petrophys does not have: <names>. ... FIX: correct or remove them ...`; exit 2 | `well.prepare._interpret_with_petrophys` |
-| `--profile` with `data.interpreter`, or Petrophys settings with a profile or interpreter | `ValueError` saying to keep one; exit 2 | `ask._settings`, `ask._interpretation` |
+| `--profile` with `data.interpreter`, or Petrophys settings with a profile or interpreter | `ValueError` saying to keep one; exit 2 | `interval._settings`, `interval._interpretation` |
 | A field notes file that is missing, is not YAML, has unknown entries or bad settings, or has more than 20 notes or a note over 300 characters | `ValueError`/`FileNotFoundError` saying which entry and the fix; exit 2 | `well.notes.load` |
 | A bad skill library (`--skills`, `PETROHARNESS_SKILLS`) | `WHAT: no skill library at <path> ...`, or the list of its problems; exit 2, before Petrophys interprets the well (the question command, `chat` and `chat --resume`) | `ask.check`, `agent.direction.load` |
 | Petrophys cannot interpret the LAS | `RuntimeError` message; exit 1 | `well.prepare` |
@@ -813,8 +817,8 @@ petroharness: WHAT: a tops file is given without a formation. FIX: add --formati
 - [CONFIGURATION.md](CONFIGURATION.md): the data config, interpretation settings, environment variables and precedence.
 - [USAGE.md](../USAGE.md): evaluating a formation in your own wells, tops files, depth units, output.
 - [SESSIONS.md](../SESSIONS.md): conversations, figures, settings changes, field notes.
-- [EVIDENCE.md](../EVIDENCE.md): the evidence graph behind `audit` and `report`.
-- [SETUP.md](../SETUP.md): the setup record printed by `setup`.
+- [EVIDENCE.md](../EVIDENCE.md): the evidence graph behind `audit` and `report`, and the setup record printed by
+  `setup`.
 - [UI.md](../UI.md): the web UI; [WEB_UI_API.md](WEB_UI_API.md): its server and HTTP routes.
 - [MODELS.md](../MODELS.md): serving a model, model cards and their fields.
 - [DEVELOPMENT.md](../DEVELOPMENT.md#benchmark-mode): benchmark mode and testing.

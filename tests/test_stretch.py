@@ -1,49 +1,24 @@
-"""Brick 1 of docs/designs/zones-and-intervals.md (section 4.1): a view of any stretch of the well.
-
-`FormationView.stretch(top, base)` is the same prepared well over [top, base] in the reporting unit, both limits
-included; its zones are built by the focus's rule over its own samples; everything else is the focus view's. The
-focus view is made through the same path and must not change (tests/fixtures/focus_views.json, recorded before the
-change). The cases are Petrophys's sample wells (tests/_wells.py): a lithology log in metres, an interval by depth,
-shale-volume bands, a feet log reported in feet and in metres, the whole of a log, the formation layout.
+"""A view of any stretch of the well (`FormationView.stretch(top, base)`): the same prepared well over [top, base] in
+the reporting unit, both limits included; its zones are built by the focus's rule over its own samples; everything
+else is the focus view's. The cases are Petrophys's sample wells (tests/_wells.py): a lithology log in metres, an
+interval by depth, shale-volume bands, a feet log reported in feet and in metres, the whole of a log, the formation
+layout.
 
 Expectations are computed here from the prepared well's raw arrays, not from the view's own code.
 
     .venv/bin/python -m pytest tests/test_stretch.py -q -n 8
 """
-import json
-from pathlib import Path
-
 import numpy as np
 import pytest
 
 from _wells import CASES, focus_view
 
-_SNAP = Path(__file__).parent / "fixtures" / "focus_views.json"      # a maintainers' record: not in the public tree
-SNAP = json.loads(_SNAP.read_text()) if _SNAP.exists() else {}
 KEYS = list(CASES)
 RUNS = [k for k in KEYS if dict(CASES[k].data).get("zone_layout") != "formation"]   # lithology runs or bands
 FORMATION = [k for k in KEYS if k not in RUNS]
 
 
 # --- helpers: independent of the view's code -------------------------------------------------------------------------
-
-def _ranges(idx) -> list:
-    idx = np.asarray(idx, dtype=int)
-    if idx.size == 0:
-        return []
-    cut = np.flatnonzero(np.diff(idx) != 1)
-    return [[int(a), int(b)] for a, b in zip(np.r_[idx[0], idx[cut + 1]], np.r_[idx[cut], idx[-1]])]
-
-
-def _runs(values) -> list:
-    out = []
-    for v in values:
-        if out and out[-1][0] == v:
-            out[-1][1] += 1
-        else:
-            out.append([v, 1])
-    return out
-
 
 def _zones(view) -> list:
     return [(z.zone_id, z.name, z.lithology, z.top, z.base, z.n_samples, tuple(np.asarray(z.indices).tolist()), z.stated)
@@ -115,27 +90,6 @@ def _stretches(view, seed: int) -> list:
 def _min_thickness(view) -> float:
     """The zone minimum in the reporting unit (the policy states it in metres)."""
     return float(view.policy["zones"]["min_thickness_m"]) / view.m_per_unit
-
-
-# --- 1. the focus view is unchanged ----------------------------------------------------------------------------------
-
-@pytest.mark.parametrize("key", KEYS)
-def test_the_focus_view_is_the_one_recorded_before_the_change(key):
-    from petroharness.well.prepare import library_identity
-    if not SNAP:
-        pytest.skip("the focus views recorded before the change are not in this checkout")
-    if library_identity() != SNAP["petrophys"]:
-        pytest.skip(f"recorded with Petrophys {SNAP['petrophys']}, this is {library_identity()}: its interpretation, "
-                    "and so the shale-volume bands, can differ")
-    v, want = focus_view(CASES[key]), SNAP["cases"][key]
-    assert [v.interval.formation, v.interval.top, v.interval.base, v.interval.closed] == want["interval"]
-    assert (v.report_unit, v.depth_scale, v.m_per_unit, v.lithology_curve) == \
-        (want["report_unit"], want["depth_scale"], want["m_per_unit"], want["lithology_curve"])
-    assert (list(v.vcl_bands) if v.vcl_bands else None) == want["vcl_bands"]
-    assert v.mask.size == want["n_well"] and _ranges(np.flatnonzero(v.mask)) == want["mask"]
-    assert _runs([str(x) for x in v.labels]) == want["labels"]
-    assert [[z.zone_id, z.name, z.lithology, z.top, z.base, z.n_samples, _ranges(z.indices), z.stated]
-            for z in v.zones] == want["zones"]
 
 
 # --- 2. the same path ------------------------------------------------------------------------------------------------

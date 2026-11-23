@@ -80,6 +80,39 @@ def _thin(values: np.ndarray, k: int, flag: bool = False) -> list:
     return [_round(float(x)) for x in values]
 
 
+def made(view) -> dict:
+    """How the interval was interpreted and zoned, as the page says it under the plot: Petrophys's run (its dynamic
+    workflow with the settings given, a context profile, an interpreter or an engine) and the steps its workflow ran;
+    where the lithology came from (the LAS's own lithology log; Petrophys's mineral solver, with its step record:
+    method, domain, input curves, decisions, samples solved; or shale-volume bands, with the shale-volume step's
+    method); and the zone rule (layout, minimum thickness in the reporting unit, the user's zones)."""
+    prep = view.prep
+    adj = prep.policy_adjustments or {}
+    opts = adj.get("interpret") or {}
+    if "engine" in adj:
+        run = {"kind": "engine", "name": str(adj["engine"])[:120]}
+    elif "interpreter" in adj:
+        run = {"kind": "interpreter", "name": str(adj["interpreter"])[:120]}
+    elif opts.get("context_profile"):
+        run = {"kind": "context profile", "name": str(opts["context_profile"])}
+    else:
+        run = {"kind": "dynamic workflow"}
+    steps = [name for name, e in (prep.steps or {}).items() if (e or {}).get("stage", "workflow") == "workflow"]
+    if view.lithology_curve:
+        lith = {"source": "lithology log", "curve": view.lithology_curve, "codes": len(view.code_table or {})}
+    elif view.solver_curve:
+        lith = {"source": "mineral solver", **view.solver_record}
+    elif view.vcl_bands:
+        lith = {"source": "shale-volume bands", "bands": list(view.vcl_bands),
+                "method": str(((prep.steps or {}).get("vclay") or {}).get("method") or "")}
+    else:
+        lith = {"source": "none"}
+    zones = view.policy.get("zones") or {}
+    rule = {"layout": view.zone_layout, "user": bool(view.user_zones), "file": view.zones_source,
+            "min_thickness": _round(float(zones.get("min_thickness_m", 0.0)) / (view.m_per_unit or 1.0))}
+    return {"run": run, "steps": steps, "lithology": lith, "zone_rule": rule}
+
+
 def payload(view) -> dict:
     """The interval's plot: depths (the reporting unit), the tracks with their curves and scales, the flags, the
     lithology column (each run of one lithology), the zones with their means, and the net-pay step's cutoffs."""
@@ -157,5 +190,82 @@ def payload(view) -> dict:
     return {"unit": view.report_unit, "top": _round(float(view.interval.top)), "base": _round(base),
             "samples": int(n), "step": _round(step * k), "depth": _thin(depth, k), "tracks": tracks, "flags": flags,
             "lithology": runs, "lithology_curve": view.lithology_curve,
-            "zone_bands": list(view.vcl_bands) if view.vcl_bands else None,
+            "zone_bands": list(view.vcl_bands) if view.vcl_bands else None, "made": made(view),
             "zones": zones, "means": list(MEANS), "medians": list(MEDIANS), "cutoffs": cutoffs, "cutoff_step": CUTOFF_STEP}
+
+
+# --- the log viewer: every curve of the well, and any depth window at the detail it needs ---------------------------
+
+EXTENTS = ("interval", "well")
+
+
+def extent_view(view, extent: str = "interval"):
+    """The view the log viewer shows: the question's interval, or the whole prepared well (its zones by the same rule)."""
+    if extent not in EXTENTS:
+        raise ValueError(f"WHAT: no extent {extent!r}. FIX: use one of {', '.join(EXTENTS)}.")
+    if extent == "interval":
+        return view
+    depth = np.asarray(view.prep.depth, dtype=float) * view.depth_scale
+    held = depth[np.isfinite(depth)]
+    return view.stretch(float(held.min()), float(held.max()), name="whole well")
+
+
+def _kind(view, name: str, values: np.ndarray) -> str:
+    """curve, flag (0 and 1 only) or classes (Petrophys keeps category labels with it)."""
+    got = view.prep.well.get(name)
+    if ((getattr(getattr(got, "metadata", None), "custom", None) or {}).get("category_labels")):
+        return "classes"
+    v = values[np.isfinite(values)]
+    return "flag" if v.size and bool(np.all((v == 0) | (v == 1))) else "curve"
+
+
+def log_index(view, extent: str = "interval") -> dict:
+    """What the log viewer can show of an extent: its depth range, every curve with a value there (unit, what it is,
+    measured or computed, its kind, a scale to start from and whether it reads better on a log scale), the tracks the
+    page starts with (the plot's), the lithology runs, the zones and how they were made."""
+    v = extent_view(view, extent)
+    base = payload(v)
+    reg, prep = view.reg.curves, view.prep
+    measured = set(prep.input_curves)
+    log_families = {m[7:] if m.startswith("family:") else m[9:] if m.startswith("families:") else m
+                    for _, members, scale in TRACKS if scale == "log" for m in members}
+    curves = []
+    for name in sorted(prep.well.curves):
+        if name.upper() in ("DEPT", "DEPTH") or not v.available(name):
+            continue
+        values = np.asarray(v.values(name), dtype=float)
+        fam = _family(reg, name)
+        log = fam in log_families or name in log_families
+        got = prep.well.get(name)
+        curves.append({"name": name, "unit": prep.unit(name), "about": str(getattr(got, "description", "") or "")[:120],
+                       "source": "LAS" if name in measured else "Petrophys", "family": fam, "kind": _kind(view, name, values),
+                       "log": log, "scale": _scale(values, SCALES.get(fam) or SCALES.get(name), log)})
+    tracks = [{"title": t["title"], "log": t["log"], "curves": [c["name"] for c in t["curves"]]} for t in base["tracks"]]
+    return {"extent": extent, "unit": base["unit"], "top": base["top"], "base": base["base"], "samples": base["samples"],
+            "step": _round(float(np.median(np.diff(np.asarray(v.depth, dtype=float)))) if base["samples"] > 1 else 0.0),
+            "curves": curves, "tracks": tracks, "flags": [f["name"] for f in base["flags"]],
+            "lithology": base["lithology"], "zones": [{k: z[k] for k in ("zone", "lithology", "top", "base")} for z in base["zones"]],
+            "made": base["made"], "cutoffs": base["cutoffs"]}
+
+
+def _window(v, top: float, base: float) -> np.ndarray:
+    depth = np.asarray(v.depth, dtype=float)
+    lo, hi = (top, base) if top <= base else (base, top)
+    return np.flatnonzero((depth >= lo) & (depth <= hi))
+
+
+def log_window(view, top: float, base: float, curves: list, points: int = MAX_POINTS, extent: str = "interval") -> dict:
+    """The named curves between two depths, at most `points` samples each (every k-th beyond that; a flag keeps a set
+    sample of each k): what the viewer draws for the window on screen, in full detail once it is zoomed in."""
+    v = extent_view(view, extent)
+    idx = _window(v, float(top), float(base))
+    depth = np.asarray(v.depth, dtype=float)[idx]
+    k = max(1, math.ceil(idx.size / max(1, int(points))))
+    out = {}
+    for name in curves:
+        if not v.available(name):
+            continue
+        values = np.asarray(v.values(name), dtype=float)[idx]
+        out[name] = _thin(values, k, flag=_kind(view, name, values) == "flag")
+    return {"extent": extent, "top": float(top), "base": float(base), "samples": int(idx.size), "every": k,
+            "depth": [round(float(d), 4) for d in depth[::k]], "values": out}       # depths exact: a zoomed window

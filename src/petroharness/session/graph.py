@@ -1,5 +1,6 @@
 """The session graph: one question of a conversation, from the user's message to its committed record, as a LangGraph
-state graph (docs/SESSION_GRAPH.md is its blueprint; tests/session/test_session_graph.py keeps the two equal).
+state graph (docs/GRAPH.md, "The session graph", is its blueprint; tests/session/test_session_graph.py keeps the two
+equal).
 
     open -> turn -> project -> figures -> commit
               |        |__________________^        figures off, or prepared tasks: no figures
@@ -200,7 +201,7 @@ def after_project(state: State, runtime: Runtime[Ctx]) -> str:
 
 
 def session_graph():
-    """open -> turn -> project -> figures -> commit (docs/SESSION_GRAPH.md)."""
+    """open -> turn -> project -> figures -> commit (docs/GRAPH.md, "The session graph")."""
     g = StateGraph(State, context_schema=Ctx)
     for name, fn in (("open", open_question), ("turn", turn), ("project", project), ("figures", figures),
                      ("commit", commit)):

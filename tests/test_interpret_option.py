@@ -87,6 +87,25 @@ def test_petrophys_interprets_with_the_options_and_its_well_is_the_well(las, int
     assert sorted(prep.workflow_well.curves) == ["GR", "RHOB"]                 # the workflow's own well
 
 
+def test_with_no_engine_petrophys_interprets_with_the_library_settings_and_the_policys_cutoffs(las, interpret):
+    """A policy naming no engine (or "installed"), and neither data.interpret nor data.interpreter: petrophys.interpret
+    with the library's settings and the policy's net-pay cutoffs, the options `petroharness ask` gives it."""
+    for policy in ({"name": "p", "cutoffs": {"vcl_max": 0.4}},
+                   {"name": "p", "engine": "installed", "cutoffs": {"vcl_max": 0.4}}):
+        prep = prepare_well(las, policy)
+        assert interpret[-1] == (las, {"vcl_cutoff": 0.4})
+        assert prep.policy_adjustments == {"interpret": {"vcl_cutoff": 0.4}} and prep.derived_curves == ["VCL"]
+
+
+def test_default_options_are_the_policys_cutoffs_under_the_given_ones():
+    from petroharness.well.prepare import default_interpret
+    policy = {"cutoffs": {"vcl_max": 0.4, "sw_max": 0.6, "phie_min_clastic": 0.08}}
+    assert default_interpret(policy) == {"vcl_cutoff": 0.4, "sw_cutoff": 0.6}
+    assert default_interpret(policy, {"sw_cutoff": 0.5}) == {"vcl_cutoff": 0.4, "sw_cutoff": 0.5}
+    assert default_interpret(policy, {"context_profile": "costa"}) == {"context_profile": "costa"}   # a profile's own
+    assert default_interpret({}) == {}
+
+
 def test_the_step_record_is_every_recorded_calculation_in_order(las, interpret):
     prep = prepare_well(las, {"name": "p"}, interpret={"context_profile": "costa"})
     assert list(prep.steps) == ["preparation_input_reading", "vclay", "net_pay", "context_value_range_qc"]

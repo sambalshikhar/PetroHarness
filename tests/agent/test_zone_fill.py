@@ -108,7 +108,7 @@ def test_no_fill_reads_the_interpreted_curve_as_before():
 def test_a_zone_the_workflow_left_empty_reads_the_analyzers_values():
     from petroharness.config import HarnessConfig
     from petroharness.tasks import load_tasks
-    from petroharness.record.catalog import zone_results
+    from petroharness.record.analyzers import zone_results
     from petroharness.record.store import build as build_store
     cfg = HarnessConfig()
     tasks, _ = load_tasks(cfg.eval.questions, cfg.data.las_dir)

@@ -83,25 +83,25 @@ def test_every_definition_is_whole():
 
 
 def test_every_list_of_tools_follows_the_definitions():
-    from petroharness.agent import loop as L
+    from petroharness.agent import replies as RP
     from petroharness.agent import schemas as S
     from petroharness.agent.toolset import TOOLS, TOOLSET
     names = TOOLSET.names()
-    assert L.TOOLS == set(names)                                          # the reply parser
+    assert RP.TOOLS == set(names)                                          # the reply parser
     assert list(TOOLS) == names and S.TOOLS is TOOLS                      # the functions the door runs
     assert [t["function"]["name"] for t in S.named()] == names            # the schemas
-    assert [n for _, ns in L.VERBS for n in ns] == names                  # the brief's groups, in the brief's order
+    assert [n for _, ns in RP.VERBS for n in ns] == names                  # the brief's groups, in the brief's order
     assert set(S.LIBRARY_NAMES) == {t.name for t in TOOLSET if t.verb}
     for t in TOOLSET:
-        assert L.coerce_action({t.name: "X"}) == ("tool", t.name, {t.main: "X"}), t.name   # a bare value: its main argument
-    assert L.coerce_action({"what_if": "net_pay"}) == ("tool", "what_if", {"property": "net_pay"})
-    assert L.coerce_action({"unit_roles": "Z2"}) == ("tool", "unit_roles", {"zones": "Z2"})
+        assert RP.coerce_action({t.name: "X"}) == ("tool", t.name, {t.main: "X"}), t.name   # a bare value: its main argument
+    assert RP.coerce_action({"what_if": "net_pay"}) == ("tool", "what_if", {"property": "net_pay"})
+    assert RP.coerce_action({"unit_roles": "Z2"}) == ("tool", "unit_roles", {"zones": "Z2"})
 
 
 def test_the_brief_lists_each_tool_once_under_its_group():
-    from petroharness.agent import loop as L
+    from petroharness.agent import prompts as PR
     from petroharness.agent.toolset import TOOLSET
-    text = L.tools_text()
+    text = PR.tools_text()
     lines = text.split("\n")
     at = {head: lines.index(f"  {head}") for head, _ in TOOLSET.by_group()}
     assert list(at.values()) == sorted(at.values())                       # the groups in their order
@@ -113,7 +113,7 @@ def test_the_brief_lists_each_tool_once_under_its_group():
         assert start < mine[0] < heads[heads.index(start) + 1], f"{t.name} is not under {t.group}"
         args = ", ".join(f'"{k}": ...' for k in t.properties())
         assert lines[mine[0]].startswith(f'  {{"{t.name}": {{{args}}}}}   '), t.name
-    assert L.brief(None).count(text) == 1                                 # the investigation's system prompt carries it
+    assert PR.brief(None).count(text) == 1                                 # the investigation's system prompt carries it
 
 
 def test_a_call_is_listed_by_its_tools_lead():

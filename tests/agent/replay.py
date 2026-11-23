@@ -22,7 +22,7 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(Path(__file__).resolve().paren
 warnings.simplefilter("ignore")
 
 from petroharness.agent.claims import Claim, Claims  # noqa: E402
-from petroharness.agent.loop import Session  # noqa: E402
+from petroharness.agent.state import Session  # noqa: E402
 
 NUM = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?![A-Za-z0-9_])")
 
@@ -203,7 +203,7 @@ def main():
     from petroharness.tasks import load_tasks
     from petroharness.llm import LLM, Usage
     from petroharness.models import MODELS
-    from petroharness.agent import writer
+    from petroharness.agent.graph import write_answer
     ap = argparse.ArgumentParser()
     ap.add_argument("prefix")
     ap.add_argument("out")
@@ -234,9 +234,9 @@ def main():
             ans, wtrace = tr.get("answer", ""), tr
         else:
             wtrace = {"absent": tr.get("absent")}
-            from petroharness.agent.loop import settle                  # options.settle: the final step on the rebuilt session
+            from petroharness.agent.settle import settle                  # options.settle: the final step on the rebuilt session
             settle(LLM(tcfg), s, Usage(), tcfg.model.max_tokens_spec, wtrace)
-            ans, _ = writer.write(LLM(tcfg), s, tcfg, Usage(), wtrace, variant=args.variant, fmt=args.format)
+            ans, _ = write_answer(LLM(tcfg), s, tcfg, Usage(), wtrace, variant=args.variant, fmt=args.format)
             wtrace["absent"] = tr.get("absent")
         return {"task_id": tr["task_id"], "topics": tr.get("topics"), "rebuild": rep, "answer": ans,
                 "metrics": metrics(s, ans, wtrace), "verify_rounds": wtrace.get("verify_rounds"),

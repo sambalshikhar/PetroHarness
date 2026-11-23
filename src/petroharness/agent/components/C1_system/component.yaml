@@ -1,6 +1,6 @@
 id: C1
 name: system
-purpose: the role, the protocol and the reply format every investigation step and the settle step read
+purpose: 'the role, the protocol and the reply format (the system message of READ, every step, settle)'
 texts:
   brief: brief.md
   brief_direction: brief_direction.md     # with a skill library only

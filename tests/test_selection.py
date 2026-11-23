@@ -1,4 +1,4 @@
-"""Brick 2a of docs/designs/zones-and-intervals.md (4.2): what a tool's `zones` names, anywhere in the well.
+"""What a tool's `zones` names, anywhere in the well.
 
 An item is, first match wins: a zone id of the focus, ALL, a lithology of the focus's zones, a unit of the tops file
 (matched as the focus's name is), a depth range TOP-BASE (a unit m or ft, else the reporting unit). Focus items alone
@@ -77,7 +77,7 @@ UNITS = [  # name, top, base (reporting unit), the tops file's line; a unit list
 
 def _f(reach="well"):
     from petroharness.agent.engine import Formation
-    from petroharness.agent.selection import Unit
+    from petroharness.well.tops import Unit
     v = view(DEPTH, lithology=CODES, focus=(0.0, 7.0))
     v.reach = reach
     v.units = [Unit(name=n, top=t, base=b, line=line) for n, t, b, line in UNITS]
@@ -189,7 +189,8 @@ def test_a_unit_listed_twice_is_refused_with_both_rows():
 
 def test_a_unit_that_ends_at_the_next_top_leaves_out_the_sample_on_it():
     """A unit with no stated base ends at the next top, not included: OPEN 0-7.0 m holds 0-6.5 (14 samples)."""
-    from petroharness.agent.selection import Unit, resolve
+    from petroharness.agent.selection import resolve
+    from petroharness.well.tops import Unit
     f = _f()
     f.view.units = [Unit(name="OPEN", top=0.0, base=7.0, line=2, closed=False)]
     f2, _ = resolve(f, ["OPEN"])
@@ -398,21 +399,22 @@ def brent():
 def test_every_tool_computes_on_the_selection_or_refuses_with_the_focus_reason(brent, tool, what):
     """Computed: every depth it prints (metres, 2000-4500 m) lies in the selection, and no zone id of the focus
     appears for a selection outside the focus. Refused: only because the tool reads what the workflow computed for the
-    focus (selection.FOCUS_ONLY), said so; any other refusal of the selection is a failure."""
+    focus (Tool.stretch "focus_only"), said so; any other refusal of the selection is a failure."""
     from petroharness.agent import schemas
     from petroharness.agent.engine import ToolError
-    from petroharness.agent.selection import FOCUS_ONLY
+    from petroharness.agent.toolset import TOOLSET
+    focus_only = TOOLSET.stretch(tool) == "focus_only"
     zones, top, base = SELECTIONS[what]
     try:
         r = schemas.call(brent, tool, {**TOOL_ARGS[tool], "zones": zones})
     except ToolError as e:
         said = str(e)
-        if tool in FOCUS_ONLY:
+        if focus_only:
             assert "computed for the focus" in said, (tool, what, said[:300])
         else:                                    # a reason of the data inside the selection, not the selection unread
             assert not re.search(r"no zone|no unit|not a zone|is a row of", said), (tool, what, said[:300])
         return
-    assert tool not in FOCUS_ONLY, (tool, "computed although listed as focus-only")
+    assert not focus_only, (tool, "computed although listed as focus-only")
     step = 0.16
     bad = []
     for m in _DEPTHS.finditer(r.text):

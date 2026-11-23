@@ -1,7 +1,7 @@
-"""A LAS whose depths are out of order (question suite L7): spliced logging runs leave the depth going back over the
+"""A LAS whose depths are out of order: spliced logging runs leave the depth going back over the
 overlap, which is then logged twice and counted twice in every result. The file is refused where a question first
 reads it (the command, a conversation, the web UI), naming the line, the depths and the fix; a file that runs one way
-(down or up) is read as it is.
+top down is read as it is; one logged bottom up is refused.
 
     .venv/bin/python -m pytest tests/test_depth_order.py -q
 """
@@ -52,10 +52,16 @@ def test_a_depth_given_twice_is_said(tmp_path):
                           f"{first_data + 2}."), got
 
 
-def test_a_file_that_runs_one_way_is_read_as_it_is(tmp_path):
+def test_a_file_logged_top_down_is_read_and_one_logged_bottom_up_is_refused(tmp_path):
+    """A file whose depth decreases down the whole file read as it stands gave an interval with no zone and no error
+    (each zone's base above its top): it is refused with where it starts and ends, and the fix."""
     assert depth_order(_las(tmp_path, [1000.0, 1000.5, 1001.0, 1001.5])) == ""
-    assert depth_order(_las(tmp_path, [1001.5, 1001.0, 1000.5, 1000.0], "up.las")) == ""     # logged bottom up
     assert depth_order(_las(tmp_path, [1000.0, 1000.5, -999.25, 1001.5], "null.las")) == ""  # a null depth is skipped
+    got = depth_order(_las(tmp_path, [1001.5, 1001.0, 1000.5, 1000.0], "up.las"))
+    first_data = HEAD.count("\n") + 1
+    assert got.startswith(f"WHAT: the depth in up.las decreases down the file, from 1001.5 at line {first_data} to "
+                          f"1000 m at line {first_data + 3} (logged bottom up)."), got
+    assert "FIX: write the file with depth increasing down the file" in got
 
 
 def test_a_depth_going_back_is_refused_where_a_question_reads_the_file(tmp_path):
@@ -66,7 +72,7 @@ def test_a_depth_going_back_is_refused_where_a_question_reads_the_file(tmp_path)
     las = _las(tmp_path, [1000.0, 1000.5, 1001.0, 1001.5, 1002.0, 1001.0, 1001.5, 1002.0, 1002.5])
     said = depth_order(las)
     with pytest.raises(ValueError) as e:
-        A.prepare(las, "k2-horizon-7b", top=1000.0, base=1002.0, cache=tmp_path / "cache")
+        A.prepare(las, "k2-horizon-7b", A.Inputs(top=1000.0, base=1002.0), cache=tmp_path / "cache")
     assert str(e.value) == said
     with pytest.raises(U.InputError) as e:
         U.las_info(str(las))

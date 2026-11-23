@@ -21,7 +21,7 @@ from petroharness.agent.notes import BAD_HOLE_SHOWN, bad_hole, not_run  # noqa: 
 
 @lru_cache(maxsize=1)
 def cases():
-    from test_b0_inventory import formations
+    from _support.formations import formations
     return [(t, v, inv, render(inv)) for t, v, s, inv in formations()]
 
 

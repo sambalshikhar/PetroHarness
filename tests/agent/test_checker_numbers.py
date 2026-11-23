@@ -240,3 +240,34 @@ def test_a_number_written_in_words_is_checked_like_digits():
     card = "BRENT GP. 2841-2958 m, 768 samples"
     assert _bad("The group opens at twenty-four forty-one metres.", card) == ["2441"]
     assert _bad("The group opens at twenty-eight forty-one metres over seven hundred sixty-eight samples.", card) == []
+
+
+@pytest.mark.parametrize("text, card, flagged", [
+    ("PHIE ranges 0.12 to 0.24, mean 0.18.", "PHIE min 0.12, max 0.24", ["0.18"]),       # a midpoint is no mean
+    ("PHIE is 0.12, 0.24 and 0.21, mean 0.19.", "PHIE 0.12; 0.24; 0.21", []),             # a mean of three, shown
+    ("Net pay is 12 m thick.", "NET_PAY 31.5 m", ["12"]),                                  # a small measure
+    ("Zone 3 holds 12 runs.", "NET_PAY 31.5 m", []),                                       # a small count
+])
+def test_with_tight_numbers_a_midpoint_is_no_mean_and_a_small_measure_is_checked(text, card, flagged):
+    """Off (as today) a mean of two stated numbers passes whatever it is, and whole numbers below 20 are
+    never checked; with tight_numbers a mean needs three values, and a small whole number written with a unit is."""
+    from petroharness import options
+    assert number_provenance(text, card, [])[0] == []
+    with options.use(tight_numbers=True):
+        assert number_provenance(text, card, [])[0] == flagged
+
+
+@pytest.mark.parametrize("text, card, flagged", [
+    ("Z3 SW is 0.45.", "PHIE by zone\nZ5 0.45\nSW by zone\nZ3 0.31", ["0.45"]),          # 0.45 only where Z5 PHIE is
+    ("Z3 SW is 0.45.", "SW by zone\nZ3 0.45", []),                                        # on the line naming Z3
+    ("SW is 0.45 in Z5.", "| zone | SW |\n|---|---|\n| Z5 | 0.45 |", []),                 # a row, its header names SW
+    ("The porosity is 0.45.", "PHIE by zone\nZ5 0.45", []),                               # the sentence names neither
+])
+def test_with_tight_numbers_a_number_tied_to_a_curve_or_zone_is_read_where_it_is_named(text, card, flagged):
+    """Off (as today) a number passes on any line that shows it ('Z3 SW 0.45' on a PHIE line of Z5); with
+    tight_numbers a number in a sentence naming curves or zones must be shown on a line naming one of them (the line,
+    its result's first line or its table's header)."""
+    from petroharness import options
+    assert number_provenance(text, card, [])[0] == []
+    with options.use(tight_numbers=True):
+        assert number_provenance(text, card, [])[0] == flagged

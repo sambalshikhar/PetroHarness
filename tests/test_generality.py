@@ -12,6 +12,7 @@ import tokenize
 from pathlib import Path
 
 import pytest
+from _support.model import in_turn  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "src")]
@@ -27,10 +28,10 @@ def _code(path: Path) -> list:
 def test_no_benchmark_inputs():
     """G1: the run takes a question, a well and a formation; no benchmark label (the category) enters it."""
     from petroharness import cli
-    from petroharness.agent import graph, loop
-    for fn in (graph.answer, loop.Session.build, cli.answer):
+    from petroharness.agent import graph, state as ST
+    for fn in (graph.answer, ST.Session.build, cli.answer):
         assert "category" not in inspect.signature(fn).parameters, fn
-    for cls in (graph.Run, loop.Session):
+    for cls in (graph.Run, ST.Session):
         assert "category" not in {f.name for f in dataclasses.fields(cls)}, cls
     bad = []                                              # no .category or category= in the agent's code
     for p in sorted(AGENT.glob("*.py")):
@@ -168,11 +169,11 @@ def test_the_one_guideline_reaches_the_settle_step():
     """G6: one settle text covers bases and conventions, and no basis rule exists; the report style holds the format
     only."""
     import yaml
-    from petroharness.agent import components as C, loop, writer
+    from petroharness.agent import components as C, writer, settle as SE
     rule = C.text("C9", "aspects_rule")
     assert rule.startswith("Where the way a number is summarised changes the answer")
     assert "exceeds the spread within them" in rule
-    assert loop.ASPECTS_RULE == rule and not hasattr(writer, "ASPECTS_RULE")
+    assert SE.ASPECTS_RULE == rule and not hasattr(writer, "ASPECTS_RULE")
     style = yaml.safe_load((ROOT / "src" / "petroharness" / "resources" / "profiles" / "report_style.yaml").read_text())
     assert set(style) == {"format"}
     policy = yaml.safe_load((ROOT / "src" / "petroharness" / "resources" / "policy" / "reference_v2.yaml").read_text())
@@ -315,10 +316,11 @@ def test_no_question_patterns(tmp_path):
 def test_no_question_form_or_scope_rules():
     """G4/G8: the package has no question-form rules (SUGGEST, AFFECT), no asked-absent list with stand-ins and no
     fluid-point scope."""
-    from petroharness.agent import loop, writer
+    from petroharness.agent import prompts, read, replies, settle, state, writer
     from petroharness.registry import DEFAULT_RULES_DIR, Registry
     assert not (AGENT / "forms.py").exists()
-    for mod, names in ((loop, ("asked_absent", "scope_points", "FLUID_POINT")),
+    gone = ("asked_absent", "scope_points", "FLUID_POINT")
+    for mod, names in (*((m, gone) for m in (prompts, read, replies, settle, state)),
                        (writer, ("SUGGEST_RULE", "ABSENT_FORM_RULE", "asked_statistic", "lead_checks", "flow_unit_denials"))):
         assert not [n for n in names if hasattr(mod, n)], mod
     reg = Registry(DEFAULT_RULES_DIR)
@@ -332,7 +334,7 @@ def test_the_zone_table_follows_no_question_wording():
     """G4: the writer's zone table shows each zone's mean (and a log-normal curve's median beside it) whatever
     statistic the question's words name."""
     sys.path[:0] = [str(ROOT / "tests" / "agent"), str(ROOT / "tests")]
-    from test_b5_loop import _session
+    from _support.sessions import pay_session as _session
     from petroharness.agent.claims import Claims
     from petroharness.agent.writer import zone_table
     s = _session()
@@ -383,12 +385,14 @@ def test_no_overrides():
     unrepaired, its points its own (no point rewrite, no fluid-point scope)."""
     from types import SimpleNamespace as NS
     sys.path[:0] = [str(ROOT / "tests" / "agent"), str(ROOT / "tests")]
-    from test_b2_tools import F
-    from test_b5_loop import Script, chose
+    from _support.formations import F
+    from _support.sessions import chose
     from petroharness.llm import Usage
     from petroharness.agent.graph import write_answer
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session, investigate, settle
+    from petroharness.agent.state import Session
+    from petroharness.agent.settle import settle
+    from petroharness.agent.graph import investigate
     from petroharness.agent.map import render
     pick = None
     for t, f in F():
@@ -410,7 +414,7 @@ def test_no_overrides():
              for p, x in ((1, NEGATIVE), (1, FLOW_UNITS), (2, SIGNIFICANCE), (3, "Permeability is computed in every zone."))]
     step2 = {"focus": "f", "edits": [{"op": "drop", "id": "C1", "why": "replaced"}] + edits, "next": [], "done": True}
     trace = {}
-    investigate(Script([step1, step2]), s, Usage(), 4000, trace, max_steps=3)
+    investigate(in_turn([step1, step2]), s, Usage(), 4000, trace, max_steps=3)
     assert s.points == [asks] + points                                       # the model's points, unchanged
     opened = "\n".join(e.text for e in s.ledger.items)
     if re.search(r"\b(MEGA|MACRO|MESO|MICRO)_PORES\b", opened) is None:
@@ -419,9 +423,9 @@ def test_no_overrides():
     for text in (NEGATIVE, FLOW_UNITS, SIGNIFICANCE):
         assert got[text].flags == [] and got[text].grade == "moderate", (text, got[text].flags)
     assert s.claims.done_issues() == []
-    llm = Script(['{"edits": [], "done": true}'])
+    llm = in_turn(['{"edits": [], "done": true}'])
     settle(llm, s, Usage(), 4000, {})
-    shown = llm.sent[0][1][-1]["content"].split("YOUR ANSWER:\n", 1)[1].split("\n\nALL RESULTS", 1)[0]
+    shown = llm.sent[0]["messages"][-1]["content"].split("YOUR ANSWER:\n", 1)[1].split("\n\nALL RESULTS", 1)[0]
     assert all(text in shown for text in (NEGATIVE, FLOW_UNITS, SIGNIFICANCE))
     assert not [ln for ln in shown.splitlines() if ln.strip().startswith("!")], shown        # no flag under any claim
     lead = NEGATIVE
@@ -432,10 +436,10 @@ def test_no_overrides():
         lead = f"With a rank correlation of {coef.group(1)} between VCL and PERM, {NEGATIVE}"
     draft = (f"## Answer\n{lead}\n\n## Flow units\n{FLOW_UNITS} No zones show macro pores or meso pores as distinct "
              f"units.\n\n## Conclusions\n{SIGNIFICANCE}\n")
-    llm = Script([draft])
+    llm = in_turn([draft])
     wtrace = {}
     answer, status = write_answer(llm, s, NS(model=NS(max_tokens_writer=4000)), Usage(), wtrace, "open", "profile")
-    assert [stage for stage, _ in llm.sent] == ["writer"], [stage for stage, _ in llm.sent]      # no repair round
+    assert llm.stages() == ["writer"], llm.stages()      # no repair round
     assert wtrace["verify_rounds"][0]["contradictions"] == []
     for text in (lead, FLOW_UNITS, SIGNIFICANCE, "No zones show macro pores or meso pores as distinct units."):
         assert text in answer, text

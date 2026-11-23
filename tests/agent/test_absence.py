@@ -69,7 +69,7 @@ def test_a_named_curve_with_data_gives_none():
 
 def test_a_named_property_maps_through_the_synonyms():
     s = _session("What is the irreducible water saturation of the sands?", have={"SW", "BVW"})
-    from petroharness.agent.library_api import computes
+    from petroharness.agent.library.api import computes
     fns = computes("irreducible water saturation")      # a derived quantity: the Petrophys functions that may compute it
     assert fns and vocabulary.note(s) == HEAD + f"irreducible water saturation (SWIRR_APP; Petrophys may compute it: {', '.join(fns)})"
     s = _session("Where does the density correction exceed 0.05 g/cc?", have={"RHOB"})
@@ -112,16 +112,16 @@ def test_there_is_no_stand_in_text():
 
 @pytest.mark.data
 def test_the_note_reaches_step_1_the_settle_step_and_the_writer(monkeypatch):
-    from test_read import Stub, _formation, _session as built
+    from test_read import read_model, _formation, _session as built
     from petroharness.agent import graph
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     raw = REG["inventory"]["raw"]
     t, f = _formation(lambda f: "PHIE" in f.inv.curves and any(not f.view.available(c) for c in raw))
     gone = next(c for c in raw if not f.view.available(c))
     t = t.model_copy(update={"question": f"How does porosity vary, and what does the {gone} show?"})
     s = built(t, f)
     monkeypatch.setattr(Session, "build", classmethod(lambda cls, task, cfg: s))
-    llm = Stub([{"topics": ["porosity"], "named": [gone]}])
+    llm = read_model([{"topics": ["porosity"], "named": [gone]}])
     out = graph.answer(t, "k2-horizon-7b", 1, 2, "open", "profile", llm_factory=lambda cfg: llm)
     tr = out["trace"]
     assert not tr.get("error"), tr.get("traceback")
@@ -137,13 +137,13 @@ def test_the_note_reaches_step_1_the_settle_step_and_the_writer(monkeypatch):
 
 @pytest.mark.data
 def test_no_note_when_everything_named_is_here(monkeypatch):
-    from test_read import Stub, _formation, _session as built
+    from test_read import read_model, _formation, _session as built
     from petroharness.agent import graph
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     t, f = _formation(lambda f: f.view.available("PHIE") and f.view.available("SW"))
     t = t.model_copy(update={"question": "How do PHIE and the water saturation vary by zone?"})
     s = built(t, f)
     monkeypatch.setattr(Session, "build", classmethod(lambda cls, task, cfg: s))
-    llm = Stub([{"topics": ["porosity"], "named": ["PHIE", "water saturation"]}])
+    llm = read_model([{"topics": ["porosity"], "named": ["PHIE", "water saturation"]}])
     out = graph.answer(t, "k2-horizon-7b", 1, 2, "open", "profile", llm_factory=lambda cfg: llm)
     assert out["trace"]["absent"] == [] and HEAD not in json.dumps([c["messages"] for c in llm.sent])

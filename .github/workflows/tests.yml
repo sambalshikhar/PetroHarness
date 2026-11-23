@@ -25,6 +25,8 @@ jobs:
       - name: Tests
         # No model server and no benchmark data: tests that need them skip. The public mini set (tests/gate) replays a
         # recorded conversation on a Petrophys sample well, so a change that reaches the model fails here.
+        # PETROHARNESS_GATE_REQUIRED: the mini set fails, not skips, when it cannot run (another Petrophys build).
         env:
           LANGSMITH_TRACING: "false"
+          PETROHARNESS_GATE_REQUIRED: "1"
         run: python -m pytest tests -q -p no:cacheprovider

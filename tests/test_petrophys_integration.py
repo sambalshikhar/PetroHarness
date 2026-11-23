@@ -5,7 +5,7 @@ A static call graph over the harness modules: a tool's own functions and the har
 the petrophys functions they import or the analyzers they run (evidence.zone_results / _ANALYZERS). The tools are the
 catalog's computations and every tool of the toolset (agent/toolset.py: agent/tools.py, agent/compute.py; a compute
 function that runs a catalog computation by name, _run(f, "name") or CATALOG["name"], reaches what that computation
-reaches). The verbs (agent/library_api.py) run Petrophys's own registered functions. A new tool that computes
+reaches). The verbs (agent/library/api.py) run Petrophys's own registered functions. A new tool that computes
 petrophysics in the harness fails here until its computation is in petrophys (or it is shown to be a generic data
 operation and listed below).
 
@@ -17,31 +17,34 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULES = {"catalog": "src/petroharness/record/catalog.py", "sections": "src/petroharness/record/sections.py",
+MODULES = {"catalog": "src/petroharness/record/catalog.py", "analyzers": "src/petroharness/record/analyzers.py",
+           "result": "src/petroharness/record/result.py", "sections": "src/petroharness/record/sections.py",
            "card": "src/petroharness/record/card.py", "view": "src/petroharness/well/view.py", "stats": "src/petroharness/well/stats.py",
            "formation": "src/petroharness/well/formation.py", "prepare": "src/petroharness/well/prepare.py", "store": "src/petroharness/record/store.py",
            "summary": "src/petroharness/well/summary.py", "tools": "src/petroharness/agent/tools.py",
-           "compute": "src/petroharness/agent/compute.py", "engine": "src/petroharness/agent/engine.py"}
+           "compute": "src/petroharness/agent/compute.py", "engine": "src/petroharness/agent/engine/__init__.py",
+           "base": "src/petroharness/agent/engine/base.py", "curves": "src/petroharness/agent/engine/curves.py",
+           "conditions": "src/petroharness/agent/engine/conditions.py", "output": "src/petroharness/agent/engine/output.py",
+           "measures": "src/petroharness/agent/engine/measures.py"}
 # Reaching any of these runs a petrophys analyzer (imported by name at run time).
-ANALYZER_ENTRIES = {("catalog", "zone_results"), ("catalog", "zone_classes_raw")}
+ANALYZER_ENTRIES = {("analyzers", "zone_results"), ("analyzers", "zone_classes_raw")}
 
 # Generic data operations on curves and zone means: the operation itself is not petrophysics, and its statistics go
 # through petrophys only.
 GENERIC = {
-    "correlation": "Pearson / rank correlation of two curves and their zone means",
     "adjacent_jumps": "changes between adjacent samples above a threshold",
-    "zone_relation": "the per-zone order of curve means",
     "zone_contrast": "zone means grouped by the high and low zones of a curve",
     "threshold_exceedance": "samples beyond a threshold, per zone",
-    "depth_trend": "linear trend of zone means with depth",
     "spike_flags": "samples beyond k standard deviations",
+    "values_at": "the values of curves at given depths (each nearest sample)",
+    "lag_correlation": "the correlation of two curves with one shifted by a depth lag",
 }
 
 # Tools that render what the petrophys workflow recorded (its step record: what ran, with which inputs and
 # decisions): library output read, not computed.
 RECORD_READERS = {
-    "provenance": "the workflow's step record for the topics asked",
     "step": "one step of the workflow's record: its method, inputs, the curves it wrote, equations and parameters",
+    "section": "one section of the workflow's analyzer output: its classes, runs and shares, as recorded",
 }
 
 
@@ -98,6 +101,11 @@ def _graph():
                             calls[key].add(("view", f.attr))
                 if isinstance(sub, ast.Name) and sub.id == "_ANALYZERS":
                     lib[key].add("petrophys analyzers")
+    for m in MODULES:                                  # a name a module imports from another and passes on (the engine
+        for nm, target in imported[m].items():         # package's names are its submodules'): that module's function
+            if target[0] != "petrophys" and (m, nm) not in defs:
+                defs[(m, nm)] = None
+                calls[(m, nm)].add(target)
     return defs, calls, lib
 
 
@@ -120,7 +128,7 @@ def test_every_tool_reaches_petrophys_or_is_a_listed_data_operation():
     tools = [("catalog", name) for name in CATALOG]
     for tool in TOOLSET:
         module, name = tool.run.__module__, tool.run.__name__
-        if module == "petroharness.agent.library_api":                 # a verb: Petrophys's registered functions
+        if module == "petroharness.agent.library.api":                 # a verb: Petrophys's registered functions
             continue
         assert module.split(".")[-1] in MODULES, f"{tool.name}: {module} is not in the graph (MODULES)"
         tools.append((module.split(".")[-1], name, tool.name))
@@ -135,7 +143,7 @@ def test_every_tool_reaches_petrophys_or_is_a_listed_data_operation():
 def test_the_graph_sees_library_calls():
     """The checker itself: tools known to call petrophys are found to, and a pure-numpy helper is not."""
     defs, calls, lib = _graph()
-    for tool in ("pay_summary", "classify", "zone_classes", "unit_roles", "formation_summary", "vertical_sequence",
-                 "curve_order", "zone_stats", "flag_intervals", "core_vs_log"):
+    for tool in ("pay_summary", "zone_classes", "unit_roles", "formation_summary", "vertical_sequence", "curve_order",
+                 "core_vs_log"):
         assert _reaches_petrophys(("catalog", tool), defs, calls, lib), tool
     assert not _reaches_petrophys(("formation", "segment_zones"), defs, calls, lib)

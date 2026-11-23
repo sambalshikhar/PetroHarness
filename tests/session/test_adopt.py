@@ -7,10 +7,7 @@ each answer's trail shows the parameters it was made with. A scripted model on t
     PETROHARNESS_SAMPLE_LAS=<folder of tuhua-7.las> .venv/bin/python -m pytest tests/session/test_adopt.py -q
 """
 import json
-import os
-import re
 import shutil
-from pathlib import Path
 
 import pytest
 
@@ -18,8 +15,9 @@ from petroharness.evidence.graph import EvidenceGraph
 from petroharness.session import Conversation
 from petroharness.session import chat as CH
 from petroharness.well import settings as T
+from _support.model import DONE, ScriptedModel, newest_result  # noqa: E402
 
-SAMPLES = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "sample_las"))
+from _wells import SAMPLES  # noqa: E402  (Petrophys's sample files; PETROHARNESS_SAMPLE_LAS for a folder of them)
 LAS = SAMPLES / "tuhua-7.las"
 WINDOW = dict(top=600.0, base=700.0, depth_unit="m", formation="test window")
 Q1 = "What is the mean water saturation of the interval?"
@@ -28,36 +26,21 @@ Q2 = "And with the new cementation exponent?"
 pytestmark = pytest.mark.data
 
 
-class Model:
+class Model(ScriptedModel):
     """READ; step 1 opens the saturation's statistics and adds a claim; step 2 settles it on the newest result it was
-    shown and is done; the writer states no number. Every call is recorded."""
+    shown and is done; the writer states no number."""
 
     def __init__(self):
-        self.sent = []
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
-        usage.log.append({"stage": stage, "prompt_tokens": 10, "completion_tokens": 5, "seconds": 0.0})
-        if stage.startswith("read"):
-            r = {"topics": ["saturation"], "named": ["SW"]}
-        elif stage == "step_1":
-            r = {"points": ["What is the mean SW?"], "intent": "characterize", "focus": "water saturation",
-                 "edits": [{"op": "add", "point": 1, "text": "Water saturation is read zone by zone", "grade": "hypothesis"}],
-                 "next": [{"stats": {"curves": ["SW"]}}], "done": False}
-        elif stage == "step_2":                       # cite the newest result the step was shown
-            ids = re.findall(r"\[(E\d+)\]", messages[-1]["content"])
-            newest = max(ids, key=lambda x: int(x[1:])) if ids else "E1"
-            r = {"edits": [{"op": "revise", "id": "C1", "ev": [newest], "grade": "moderate",
-                            "means": "the saturation as computed"}], "next": [], "done": True}
-        elif stage.startswith(("step_", "settle")):
-            r = {"edits": [], "next": [], "done": True}
-        else:
-            r = "## Water saturation\nWater saturation is read zone by zone from the results.\n"
-        return r if isinstance(r, str) else json.dumps(r)
-
+        super().__init__({
+            "read*": {"topics": ["saturation"], "named": ["SW"]},
+            "step_1": {"points": ["What is the mean SW?"], "intent": "characterize", "focus": "water saturation",
+                       "edits": [{"op": "add", "point": 1, "text": "Water saturation is read zone by zone",
+                                  "grade": "hypothesis"}],
+                       "next": [{"stats": {"curves": ["SW"]}}], "done": False},
+            "step_2": lambda m: {"edits": [{"op": "revise", "id": "C1", "ev": [newest_result(m)], "grade": "moderate",
+                                            "means": "the saturation as computed"}], "next": [], "done": True},
+            "step_*": DONE, "settle*": DONE},
+            default="## Water saturation\nWater saturation is read zone by zone from the results.\n")
 
 @pytest.fixture(scope="module")
 def env():

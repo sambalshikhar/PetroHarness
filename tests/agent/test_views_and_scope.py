@@ -16,12 +16,13 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 from petroharness.agent.checks import ascii_minus, number_provenance  # noqa: E402
-from test_b2_tools import F  # noqa: E402
+from _support.formations import F  # noqa: E402
 from test_b7_writer import real  # noqa: E402,F401  (the writer's session with claims)
-from petroharness.agent import routes  # noqa: E402
+from petroharness.record import routes  # noqa: E402
 from petroharness.agent.engine import Formation, ToolError, zone_at  # noqa: E402
 from petroharness.agent import engine as E  # noqa: E402
 from petroharness.agent.inventory import _banded, from_view  # noqa: E402
+from _support.model import in_turn  # noqa: E402
 
 LOGNORMAL = ("RDEP", "RMED", "RSHA", "RXO", "PERM")
 
@@ -342,7 +343,7 @@ def test_zone_mean_classes_beside_the_sample_shares():
     """A section's classes both ways (the summary layer's class views): the zones pooled by zone mean (shares of the
     zoned thickness, summing to 100%) beside the share of the zone samples; no zone-mean view for classes that count
     samples (the numerical family)."""
-    from petroharness.record.catalog import zone_classes_raw
+    from petroharness.record.analyzers import zone_classes_raw
     from petroharness.agent.tools import ZONE_MEAN_FAMILIES, section
     done = 0
     for t, f in F()[:12]:
@@ -430,9 +431,9 @@ def test_k8_asks_only_about_the_families_the_topics_read():
 @pytest.mark.data
 @pytest.mark.parametrize('on', [True])
 def test_guide_sections_stay_in_the_families_of_the_topics(on):
-    from test_b5_loop import Script, _session, chose
+    from _support.sessions import pay_session as _session, chose
     from petroharness.llm import Usage
-    from petroharness.agent.loop import investigate
+    from petroharness.agent.graph import investigate
     s = _session()
     keys = s.library.sections("invasion_movability", s.f)
     other = [k for k in keys if not k.startswith("permeability.")]
@@ -442,12 +443,12 @@ def test_guide_sections_stay_in_the_families_of_the_topics(on):
     first = {"points": ["How does separation relate to permeability?"], "intent": "explain", "focus": "separation",
              "edits": [{"op": "add", "point": 1, "text": "Separation likely marks permeable sands", "grade": "hypothesis"}],
              "next": [{"guide": "invasion_movability"}], "done": False}
-    llm, trace = Script([first]), {}
+    llm, trace = in_turn([first]), {}
     investigate(llm, s, Usage(), 4000, trace, max_steps=2)
     opened = trace["steps"][0]["guide_sections"]
     assert (set(opened) & set(other) == set()) is on and set(opened) <= set(keys)
     assert all(k.startswith("permeability.") for k in opened) or not on
-    step1 = llm.sent[0][1][-1]["content"]
+    step1 = llm.sent[0]["messages"][-1]["content"]
     assert ("Each point is a part of this question" in step1) is on
 
 
@@ -466,12 +467,12 @@ def test_guides_state_no_conclusion_as_a_rule():
 
 
 def test_the_brief_carries_the_readings_and_weaknesses_lines():
-    from petroharness.agent.loop import BRIEF_WEAKNESSES, brief
+    from petroharness.agent.prompts import BRIEF_WEAKNESSES, brief
     assert BRIEF_WEAKNESSES in brief()
 
 
 def test_tool_descriptions_say_signs_zone_values_and_the_zone_selector():
-    from petroharness.agent.loop import tools_text
+    from petroharness.agent.prompts import tools_text
     on = tools_text()
     assert "a > b and with a < b" in on and "each zone's own values" in on and "a lithology" in on
     assert on.splitlines()[-1].startswith("  zones (any lookup that takes them)")      # the zone selector line, last

@@ -12,10 +12,11 @@ import pytest
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
-from test_b0_inventory import formations  # noqa: E402
+from _support.formations import formations  # noqa: E402
 from petroharness.agent.direction import parse_source  # noqa: E402
 from petroharness.agent.ledger import Ledger, normalize  # noqa: E402
-from petroharness.agent.loop import coerce_action, tools_text  # noqa: E402
+from petroharness.agent.replies import coerce_action  # noqa: E402
+from petroharness.agent.prompts import tools_text
 from petroharness.agent.schemas import call  # noqa: E402
 from petroharness.agent.tools import Formation, ToolError, crossplot  # noqa: E402
 import b2_reference as R  # noqa: E402

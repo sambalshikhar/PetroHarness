@@ -7,7 +7,6 @@ The expected values are computed here from the view's arrays with numpy/scipy, n
 import re
 import sys
 import time
-from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -16,7 +15,7 @@ from scipy.stats import spearmanr
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
-from test_b0_inventory import formations  # noqa: E402
+from _support.formations import F, formations  # noqa: E402,F401
 from test_b1_map import advisory  # noqa: E402
 from petroharness.agent import engine as E  # noqa: E402
 from petroharness.agent.engine import Result, max_chars  # noqa: E402
@@ -31,9 +30,6 @@ KEY = ("SW", "PHIE", "PHIT", "PHIE_CC", "PERM", "PERM_CC", "VCL", "BVW", "SO", "
 REL = 1e-9
 
 
-@lru_cache(maxsize=1)
-def F() -> list:
-    return [(t, Formation(inv, v, s)) for t, v, s, inv in formations()]
 
 
 def keys(f) -> list:
@@ -135,23 +131,31 @@ def test_t1_runs_match_numpy():
                 x = f.view.values(c)
                 with np.errstate(invalid="ignore"):
                     m &= np.isfinite(x) & ((x > v) if op == ">" else (x < v))
-            total = 0.0
+            head, u = r.text.splitlines()[0], f.inv.depth_unit
+            if not m.any():
+                if not head.startswith("No interval where "):
+                    bad.append((t.well, t.formation, text, "none", head))
+                continue
+            # each zone: its samples where the condition holds, as their share of the zone's thickness (first to last
+            # sample); a zone with none is named as such
+            by = line(r.text, "  by zone: ")
             for z in f.view.zones:
                 n = int(m[z.indices].sum())
                 th = (z.base - z.top) * n / z.n_samples
-                total += th
-                ln = line(r.text, f"  {z.zone_id} ")
-                if f"{num(th)} {f.inv.depth_unit} ({100 * n / z.n_samples:.1f}% of the zone)" not in ln:
-                    bad.append((t.well, t.formation, text, z.zone_id, ln, th))
+                if n and f"{z.zone_id} {num(th)} {u} ({100 * n / z.n_samples:.1f}% of the zone)" not in by:
+                    bad.append((t.well, t.formation, text, z.zone_id, by, th))
+                if not n and not re.search(rf"; none in (?:Z\d+, )*{z.zone_id}(?:, |$)", by):
+                    bad.append((t.well, t.formation, text, z.zone_id, "not named as holding none", by))
+            # the interval: every sample where it holds, as its share of the gross (first to last sample)
+            d = np.asarray(f.depth, dtype=float)
+            total = (d.max() - d.min()) * int(m.sum()) / d.size
             if not holds(r.numbers, total):
                 bad.append((t.well, t.formation, text, "total", total))
-            # run count: consecutive True samples within one zone
-            count = 0
-            for z in f.view.zones:
-                zm = m[z.indices].astype(int)
-                count += int(zm[0]) + int(np.sum(np.diff(zm) == 1)) if zm.size else 0
-            if f"({count} runs)" not in r.text.splitlines()[0]:
-                bad.append((t.well, t.formation, text, "count", r.text.splitlines()[0], count))
+            # interval count: stretches of consecutive True samples of the interval, zone boundaries aside
+            mi = m.astype(int)
+            count = int(mi[0]) + int(np.sum(np.diff(mi) == 1))
+            if f"({count} interval{'' if count == 1 else 's'}, {num(total)} {u}, " not in head:
+                bad.append((t.well, t.formation, text, "count", head, count, total))
     assert not bad, bad[:10]
 
 
@@ -338,15 +342,16 @@ def test_t2_flags_and_classes_are_conditions():
     for t, f in F():
         flags = [c for c in f.inv.curves if c in f.view.reg.flags]
         for c in flags[:2]:
-            r = runs(f, c)
-            assert r.text.startswith(f"Runs where {c} > 0.5"), r.text[:80]
+            r = runs(f, c)                                           # a flag alone: where it is set
+            set_here = bool((np.nan_to_num(np.asarray(f.view.values(c), dtype=float)) > 0.5).any())
+            assert r.text.startswith(f"Intervals where {c} > 0.5" if set_here else f"No interval where {c} > 0.5"), r.text[:80]
             done += 1
         for key, sec in list(f.store.sections.items())[:3]:
             for label, rs in list(sec.classes.items())[:1]:
-                r = runs(f, f"{key}:{label}")
-                total = sum(x.thickness for x in rs)
-                shown = float(re.search(r"all zones: ([\d.]+)", r.text).group(1))
-                assert abs(shown - total) <= max(0.01 * total, f.inv.step), (t.well, key, label, shown, total)
+                out = R.runs_output(runs(f, f"{key}:{label}").text)
+                total = sum(x.thickness for x in rs)                 # the analyzer's runs, zone by zone
+                assert out["zones"] if rs else out["none"], (t.well, key, label)
+                assert abs(out["zoned"] - total) <= max(0.01 * total, f.inv.step), (t.well, key, label, out["zoned"], total)
                 done += 1
     assert done
 
@@ -503,9 +508,13 @@ def test_t6_condition_follows_the_data():
     g = Formation(f.inv, Mutated(f.view, "SW", lambda x: x - 10.0), f.store)
     z = f.view.zones[0]
     share = 100 * np.isfinite(f.view.zone_values(z, "SW")).mean()
-    assert f"({share:.1f}% of the zone)" in line(runs(g, "SW < 0").text, f"  {z.zone_id} ")
+    by = line(runs(g, "SW < 0").text, "  by zone: ")
+    if share:
+        assert re.search(rf"\b{z.zone_id} [\d.]+ \S+ \({share:.1f}% of the zone\)", by), (z.zone_id, share, by)
+    else:
+        assert re.search(rf"; none in (?:Z\d+, )*{z.zone_id}(?:, |$)", by), (z.zone_id, by)
     g2 = Formation(f.inv, Mutated(f.view, "SW", lambda x: x + 10.0), f.store)
-    assert "(0 runs)" in runs(g2, "SW < 1").text
+    assert runs(g2, "SW < 1").text.startswith("No interval where SW < 1")
 
 
 # --- T8 fast --------------------------------------------------------------------------------------------------------

@@ -29,6 +29,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tests"), str(Path(__file__).resolve().parent)]
 from petroharness.agent import engine as E  # noqa: E402
+from petroharness.agent.map import num  # noqa: E402
 from petroharness.agent import tools as T  # noqa: E402
 from petroharness.agent.engine import Formation, ToolError  # noqa: E402
 from petroharness.agent.inventory import criteria  # noqa: E402
@@ -136,7 +137,7 @@ def test_a_class_is_its_runs_top_to_base_with_its_criterion_and_its_size_last(co
                 if c.definition:
                     assert ln.startswith(f"  {c.name}: criterion {c.definition}; "), (t.well, ln[:200])
                 if c.thickness is not None and c.share_pct is not None:  # its size last, on the line after it
-                    assert lines[lines.index(ln) + 1] == (f"    {c.name} in all: {E.num(c.thickness)} {f.inv.depth_unit}, "
+                    assert lines[lines.index(ln) + 1] == (f"    {c.name} in all: {num(c.thickness)} {f.inv.depth_unit}, "
                                                          f"{c.share_pct}% of the zoned thickness"), (t.well, ln[-120:])
                 runs = T._store_runs(f, s.key, c.name)
                 if not runs:
@@ -177,7 +178,8 @@ def test_a_small_class_reads_as_located_runs_not_as_noise():
 def test_a_cut_run_list_says_so_and_its_runs_call_lists_every_run():
     """A class with more runs than fit: its thickest runs in depth order, each with its thickness, the line saying how
     many of how many ("thickest k of N: ...") and ending with the condition that lists every run ("... (every run:
-    condition KEY:NAME)"); that runs call counts every run. Never cut silently."""
+    condition KEY:NAME)"); that runs call counts every interval of the class: its runs, one that goes on into the
+    next zone joined with its other part. Never cut silently."""
     done = 0
     for name, t, f in every():
         for s in f.inv.sections:
@@ -196,8 +198,10 @@ def test_a_cut_run_list_says_so_and_its_runs_call_lists_every_run():
                 step = float(f.view.step)
                 thick = sorted((b - a + step for _, a, b in runs), reverse=True)[:len(shown)]
                 assert sorted((b - a + step for _, a, b in shown), reverse=True) == pytest.approx(thick, abs=1e-6)
-                listed = T.runs(f, m.group(3)).text                                     # the runs call: every run
-                assert re.search(rf"\({len(runs)} runs\)", listed.splitlines()[0]), listed.splitlines()[0]
+                spans = sorted((a, b) for _, a, b in runs)                              # a zone edge between two
+                joined = 1 + sum(1 for (_, b0), (a1, _) in zip(spans, spans[1:]) if a1 - b0 > 1.5 * step)   # runs: one
+                listed = T.runs(f, m.group(3)).text                                     # the runs call: every interval
+                assert re.search(rf"\({joined} intervals?, ", listed.splitlines()[0]), (len(runs), listed.splitlines()[0])
                 done += 1
                 if done >= 4:
                     return
@@ -291,8 +295,9 @@ def test_the_whole_interval_only_where_it_differs_then_what_the_outside_samples_
     o = lines[w + 1]
     assert o.startswith(f"  outside any zone ({k} samples; not a zone), GR: "), o
     assert "mean " in o and "median" not in o and "(between zones)" not in o          # what they hold, briefly
-    run = T.runs(f, "GR > 0").text                                                  # the label in full, once a result
-    assert f"outside any zone ({k} samples, " in run and "zone minimum" in run and "not a zone" in run
+    both = T.overlap(f, "GR > 0", "GR >= 0").text                                   # the label in full, once a result
+    assert f"outside any zone ({k} samples, " in both and "zone minimum" in both and "not a zone" in both
+    assert "outside any zone" in T.runs(f, "GR > 0").text         # runs: an interval says where it leaves the zones
     x = np.asarray(f.view.values("GR"), dtype=float)[S.outside_mask(f.view)]
     assert f"n {int(np.isfinite(x).sum())} of {k}" in o
     zone = f.view.zones[0].zone_id
@@ -561,7 +566,7 @@ def test_compare_and_crossplot_lead_with_the_zone_level_and_label_each_coefficie
         if ln is not None and ok.sum() >= 3:
             m = re.search(rf"\(Spearman, on ranks; n (\d+); {a} (-?[\d.]+)(?:-| to )(-?[\d.]+), {b} ", ln)
             assert m and int(m.group(1)) == int(ok.sum()), ln
-            assert E.num(float(xa[ok].min())) == m.group(2) and E.num(float(xa[ok].max())) == m.group(3), ln
+            assert num(float(xa[ok].min())) == m.group(2) and num(float(xa[ok].max())) == m.group(3), ln
         fits = [r for r in T.crossplot(f, a, b, log_y=False).text.splitlines() if "correlation" in r and r.startswith("  Z")]
         assert all(f"(Pearson on {a} and {b}; n " in r for r in fits), fits[:1]
         seen += 1
@@ -587,24 +592,26 @@ def test_a_logarithm_s_dropped_samples_are_counted():
 # --- runs ---------------------------------------------------------------------------------------------------------------
 
 @pytest.mark.data
-def test_runs_lists_every_run_or_says_the_cut_and_its_get():
-    """runs: every run top to base when they are at most limit; else the longest, in depth order, with the get of
-    every run, which returns them a zone a line."""
+def test_runs_lists_every_interval_or_says_the_cut_and_its_get():
+    """runs: every interval top to base when they are at most limit; else the thickest, in depth order, with the get
+    of the others, which returns them a line for each set of zones they touch."""
     t, f = _outside_formation()
-    cond = "GR > 0"
-    found = E.extent(f, E.select(f, cond).mask, f.view.zones)
+    x = np.asarray(f.view.values("GR"), dtype=float)
+    cond = f"GR > {num(float(np.nanmedian(x)))}"                  # above its median: several intervals
+    on = E.select(f, cond).mask.astype(int)
+    found = int(on[0]) + int(np.sum(np.diff(on) == 1))           # stretches of consecutive samples, zone edges aside
     full = T.runs(f, cond, limit=1000).text
-    assert f"every run, top to base (top-base, thickness, zone), {len(found)} of {len(found)}:" in full
-    if len(found) < 2:
-        return
+    assert f"every interval, top to base (top-base, thickness, zones), {found} of {found}:" in full
+    if found < 2:
+        pytest.skip("one interval here: no list to cut")
     led = Ledger(f)
     item, _ = led.open("runs", {"condition": cond, "limit": 1})
-    assert re.search(rf'; the (other runs|next \d+ by thickness): get {item.id} with find "other runs"(; the other '
-                     rf'\d+, each at most [\d.]+ \w+ thick, are not listed)?\), top to base, 1 of {len(found)}:', item.text)
-    kept = [ln for ln in item.lines if ln.startswith("  other runs in ")]
+    assert re.search(rf'; the (other intervals|next \d+ by thickness): get {item.id} with find "other intervals"(; the '
+                     rf'other \d+, each at most [\d.]+ \w+ thick, are not listed)?\), 1 of {found}:', item.text)
+    kept = [ln for ln in item.lines if ln.startswith("  other intervals in ")]
     left = re.search(r"; the other (\d+), each at most", item.text)
-    assert sum(len(ln.split(": ", 1)[1].split(", ")) for ln in kept) == len(found) - 1 - int(left.group(1) if left else 0)
-    assert all(ln in led.get(item.id, "other runs") for ln in kept)
+    assert sum(len(ln.split(": ", 1)[1].split(", ")) for ln in kept) == found - 1 - int(left.group(1) if left else 0)
+    assert all(ln in led.get(item.id, "other intervals") for ln in kept)
 
 
 # --- 4. the guides ------------------------------------------------------------------------------------------------------
@@ -650,7 +657,8 @@ def test_recipes_say_what_each_tool_computes():
 
 
 def test_overlap_is_a_tool_the_model_is_shown():
-    from petroharness.agent.loop import TOOLS as SHOWN, tools_text
+    from petroharness.agent.replies import TOOLS as SHOWN
+    from petroharness.agent.prompts import tools_text
     from petroharness.agent.schemas import named
     from petroharness.agent.toolset import TOOLSET
     assert "overlap" in SHOWN and "overlap" in TOOLSET

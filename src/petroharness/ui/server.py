@@ -34,6 +34,8 @@ API (JSON):
     GET  /api/run/<id>/figures/<name>  one figure of the answer (PNG)
     GET  /api/run/<id>/audit        the answer's audit trail (Markdown)
     GET  /api/run/<id>/lineage      what the answer rests on: claims, results, curves, Petrophys steps, measured logs
+    GET  /api/run/<id>/logview?extent=interval|well   the log viewer: every curve it can show, tracks, zones
+    GET  /api/run/<id>/logdata?top=&base=&curves=A,B&points=N&extent=   those curves in a depth window (thinned to N)
     POST /api/rate/<id>             {verdict: good|partly|wrong, note}
 """
 
@@ -170,7 +172,7 @@ class App:
         follow = str(inputs.get("follow") or "").strip() if isinstance(inputs, dict) else ""
         scope = A.scope_input(inputs.get("scope")) if isinstance(inputs, dict) else None   # wrong: said now
         if follow:                                  # a follow-up: the next question of that run's conversation
-            prev = self.jobs[follow].record() if follow in self.jobs else self.store.load(follow)
+            prev = self._record(follow)
             if prev.get("status") != "done":
                 raise A.InputError("WHAT: that question has no answer yet. FIX: wait for it to finish, then ask the "
                                    "follow-up.")
@@ -227,6 +229,22 @@ class App:
                 self._forget()
                 self._queue.task_done()
 
+    def _job(self, run_id: str):
+        """The job of a run while the job table holds it (read once, under its lock), else None."""
+        with self._lock:
+            return self.jobs.get(run_id)
+
+    def _record(self, run_id: str) -> dict:
+        """A run's record: its job's while the job table holds it, else its saved record (KeyError: no such run). A
+        worker may drop a finished job from the table at any time (_forget), so the table is read once."""
+        job = self._job(run_id)
+        return job.record() if job is not None else self.store.load(run_id)
+
+    def _live(self) -> list:
+        """The jobs not yet finished, copied under the table's lock (workers add and drop jobs meanwhile)."""
+        with self._lock:
+            return [j for j in self.jobs.values() if j.finished is None]
+
     def _forget(self, keep: int = KEEP_FINISHED) -> None:
         """Finished jobs beyond the newest `keep` are served from their saved record."""
         with self._lock:
@@ -237,7 +255,7 @@ class App:
     def _evidence(self, run_id: str):
         """(the evidence graph of a run's conversation, the run's turn in it), from the conversation's session folder."""
         from petroharness.evidence import EvidenceGraph
-        rec = self.jobs[run_id].record() if run_id in self.jobs else self.store.load(run_id)
+        rec = self._record(run_id)
         conv = rec.get("conversation") or {}
         session = self.store.folder(conv.get("root") or run_id) / "session"
         if not (session / "log.jsonl").is_file() or not conv.get("turn"):
@@ -261,11 +279,9 @@ class App:
         run's too, and one still waiting or running), each with its answer, its figures, the interpretation settings
         it ran under and the settings changed for it, for the page to keep the earlier questions on screen. A question
         not yet run is numbered after the last one that ran."""
-        def record(i: str) -> dict:
-            job = self.jobs.get(i)
-            return job.record() if job is not None else self.store.load(i)
+        record = self._record
         root = (record(run_id).get("conversation") or {}).get("root") or run_id       # an unknown run: KeyError (404)
-        live = {j.id: brief(j.record()) for j in list(self.jobs.values()) if j.finished is None and j.root == root}
+        live = {j.id: brief(j.record()) for j in self._live() if j.root == root}
         mine = list(live.values()) + [b for b in self.store.conversation(root) if b["id"] not in live]
         turns = []
         for b in sorted(mine, key=lambda b: (b.get("created") or "", b["id"])):
@@ -281,12 +297,41 @@ class App:
                                       for f in res.get("figures") or [] if isinstance(f, dict) and f.get("file")]})
         return {"root": root, "turns": turns}
 
+    VIEWS_KEPT = 6                              # runs whose interpreted well the log viewer keeps open
+
+    def view(self, run_id: str):
+        """A run's view for the log viewer (adapter.view_of), kept for the last VIEWS_KEPT runs asked for."""
+        with self._lock:
+            views = self.__dict__.setdefault("_views", {})
+            if run_id in views:
+                views[run_id] = views.pop(run_id)           # the most recently used last
+                return views[run_id]
+        view = A.view_of(self._record(run_id)["inputs"], self.store.cache)
+        with self._lock:
+            views[run_id] = view
+            while len(views) > self.VIEWS_KEPT:
+                views.pop(next(iter(views)))
+        return view
+
+    def logs(self, run_id: str, what: str, q: dict) -> dict:
+        """The log viewer's two reads of a run: logview (what it can show) and logdata (curves in a depth window)."""
+        from petroharness.ui import wellplot as W
+        view, extent = self.view(run_id), q.get("extent") or "interval"
+        if what == "logview":
+            return W.log_index(view, extent)
+        try:
+            top, base = float(q["top"]), float(q["base"])
+        except (KeyError, ValueError):
+            raise A.InputError("WHAT: the window needs top and base, as numbers. FIX: give both depths.") from None
+        curves = [c for c in (q.get("curves") or "").split(",") if c]
+        return W.log_window(view, top, base, curves, int(q.get("points") or W.MAX_POINTS), extent)
+
     def position(self, run_id: str) -> int | None:
         with self._lock:
             return self.waiting.index(run_id) + 1 if run_id in self.waiting else None
 
     def job_view(self, run_id: str, since: int) -> dict:
-        job = self.jobs.get(run_id)
+        job = self._job(run_id)
         if job is None:
             rec = self.store.load(run_id)
             return rec | {"events": rec.get("events", [])[since:], "n_events": len(rec.get("events", []))}
@@ -296,7 +341,7 @@ class App:
 
     def runs(self) -> list:
         saved = self.store.history()
-        live = {j.id: j for j in self.jobs.values() if j.finished is None}
+        live = {j.id: j for j in self._live()}
         out = [brief(j.record()) | {"elapsed": j.elapsed()} for j in sorted(live.values(), key=lambda j: j.id, reverse=True)]
         return out + [r for r in saved if r["id"] not in live]
 
@@ -328,7 +373,7 @@ class App:
     def config(self) -> dict:
         from petroharness import __version__
         from petroharness.agent import direction
-        from petroharness.agent.loop import MAX_STEPS
+        from petroharness.agent.state import MAX_STEPS
         with self._lock:
             running = sum(j.status == "running" for j in self.jobs.values())
             waiting = len(self.waiting)
@@ -504,6 +549,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(app.lineage(arg))
             if method == "GET" and what == "run" and len(parts) == 4 and parts[3] == "conversation":
                 return self._json(app.conversation(arg))
+            if method == "GET" and what == "run" and len(parts) == 4 and parts[3] in ("logview", "logdata"):
+                return self._json(app.logs(arg, parts[3], q))        # the log viewer
             if method == "GET" and what == "run" and len(parts) == 4:
                 path = app.store.file(arg, parts[3])
                 ctype = "text/markdown; charset=utf-8" if path.suffix == ".md" else "application/json"

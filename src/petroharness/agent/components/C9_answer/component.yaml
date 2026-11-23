@@ -1,6 +1,6 @@
 id: C9
 name: answer
-purpose: 'the writer: its prompt (the question''s points and their limits, every result, the map, the provenance card), the zone table and its frame'
+purpose: 'the writer''s system texts, the zone-table rule, the one guideline for bases and conventions, the figure choice'
 texts:
   table_rule: table_rule.md
   aspects_rule: aspects_rule.md

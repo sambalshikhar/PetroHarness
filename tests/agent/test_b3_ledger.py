@@ -17,7 +17,7 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 from test_b2_dense import queries  # noqa: E402
-from test_b2_tools import F  # noqa: E402
+from _support.formations import F  # noqa: E402
 from petroharness.agent.engine import ToolError  # noqa: E402
 from petroharness.agent.ledger import DIGEST_CHARS, SECTION_DIGEST_CHARS, Ledger, shown_values  # noqa: E402
 from ledger_numbers import locate, verify  # noqa: E402
@@ -125,8 +125,8 @@ def test_l1_a_rejected_call_is_an_error_not_an_item():
 
 # --- L2 digest ------------------------------------------------------------------------------------------------------
 
-SUMMARY = ("  whole interval", "  zones pooled:", "  these zones pooled:", "  all zones:", "  zones asked:",
-           "  shallowest top", "  highest zone by", "  classes (")
+SUMMARY = ("  whole interval", "  zones pooled:", "  these zones pooled:", "  by zone:", "  highest zone by",
+           "  classes (")
 
 
 @pytest.mark.data
@@ -182,8 +182,10 @@ def test_l3_get_by_zone_is_exact_and_complete():
                 got = led.get(item.id, z)
                 want = [ln for ln in item.lines if token(z, ln) and not ln.startswith(("  classes (", "  ("))
                         and not re.match(r"^  [A-Z][A-Z0-9_]*(?: \([^)]*\))?: .*; runs: ", ln)
-                        and not re.match(r"^  .*other runs in Z\d+: ", ln)]   # the other runs of a cut list
-                #   of runs or overlap, fetched by the get its shown line names (test_tool_lines.py), not by a zone alone
+                        and not re.match(r"^  .*other runs in Z\d+: ", ln)    # the other runs of a cut list
+                        #   of overlap, fetched by the get its shown line names (test_tool_lines.py), not by a zone alone
+                        and not ln.startswith("No interval where ")]          # a runs result with no interval is this
+                #   one line, which names the zones asked: it has no line under it for a get by zone to return
                 for ln in want:
                     if ln not in got:
                         bad.append((t.well, item.id, z, "missing", ln[:70]))
@@ -302,6 +304,8 @@ def test_l5_every_line_is_reachable():
                 if first:
                     finds.append(first.group(1))
                 finds += [c for c in re.findall(r"[A-Z][A-Z0-9_]+", ln) if c in f.inv.curves]   # its curve
+                if ln.endswith("outside any zone"):                 # an interval of runs between the zones: its label
+                    finds.append("outside any zone")
                 if not any(ln in led.get(item.id, q) for q in finds):
                     bad.append((t.well, item.id, ln[:70]))
     assert not bad, (len(bad), bad[:10])

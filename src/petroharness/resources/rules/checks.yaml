@@ -5,7 +5,7 @@
 numbers:                       # number provenance (the claims' K3 and the writer's checker)
   skip_integers_below: 20      # small counts and ordinals are not checked
   derived: true                # a difference/sum/ratio of two supported numbers in the same sentence is supported
-  question: true               # numbers the question states (a threshold, the 25 of "25th percentile") are supported
+  question: true               # numbers the question states (a threshold, a depth, a count) are supported
   # Text that contains digits but is not a number (regexes). The task's well name is always ignored, however the
   # dataset names its wells (src/petroharness/agent/checks.py: well_name_pattern).
   ignore: []

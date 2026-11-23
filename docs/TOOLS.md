@@ -13,7 +13,7 @@ flowchart LR
         r1["describe<br/>compare and group"]:::record
         r2["check · classify<br/>summarize · calibrate"]:::record
     end
-    subgraph PP ["Petrophys: 7 verbs, 308 functions"]
+    subgraph PP ["Petrophys: 7 verbs, 304 functions"]
         direction TB
         p1["calculate · what_if<br/>estimate"]:::petrophys
         p2["check · classify<br/>summarize · calibrate"]:::petrophys
@@ -267,9 +267,9 @@ evaluation and preprocessing packages, filed under the verb its package serves. 
 |---|---|---|
 | calculate | 83 | clay volume (GR, SP, Thomas-Stieber), invasion, porosity and its corrections, saturation models, permeability, Eaton |
 | estimate | 62 | Rw, Rwa, Pickett, Archie parameters, Rmf, salinity, temperature, apparent matrix |
-| calibrate | 52 | core calibration, grain size, NMR calibration, saturation height, capillary pressure, SCAL, formation pressure, rock physics, elastic properties |
-| summarize | 41 | net pay, averages, net-to-gross, ranking, zone summaries, screening, hydrocarbon pore volume |
-| classify | 40 | flow units, rock quality, MHI, zonation, heterogeneity, clay typing, spectroscopy, lithology crossplots, mineral solvers |
+| calibrate | 51 | core calibration, grain size, NMR calibration, saturation height, capillary pressure, SCAL, formation pressure, rock physics, elastic properties |
+| summarize | 39 | net pay, averages, net-to-gross, ranking, zone summaries, screening, hydrocarbon pore volume |
+| classify | 39 | flow units, rock quality, MHI, zonation, heterogeneity, clay typing, spectroscopy, lithology crossplots, mineral solvers |
 | check | 25 | washout detection, held readings, value ranges, normalization, imputation, depth matching |
 | what_if | 5 | sensitivity, uncertainty |
 
@@ -303,7 +303,8 @@ Tool("adjacent_jumps", K.adjacent_jumps, CHECK, _text("adjacent_jumps"),
 ```
 
 Everything that lists tools reads these definitions: the functions the call door runs, the schemas, the brief's tool
-text and its groups, the names the reply parser knows, the ledger's listings, the web UI's groups. A wrong definition
+text and its groups, the names the reply parser knows, the ledger's listings, the web UI's groups, and what a tool's
+zones reach (`stretch`: the selection, the whole well, or the focus only). A wrong definition
 (a name used twice, a group the brief does not list, a required, main or lead argument it does not define) is reported
 when the harness is imported. `tests/agent/test_tool_registration.py` checks every definition.
 

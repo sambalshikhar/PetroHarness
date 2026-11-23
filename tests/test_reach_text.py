@@ -1,4 +1,4 @@
-"""Brick 2c of docs/designs/zones-and-intervals.md: under reach "well" the model is told what a tool's zones may name
+"""Under reach "well" the model is told what a tool's zones may name
 beyond the interval's zones: the brief's zones line (a depth range, a unit of the tops file) and the map (the well's
 span, the units with their depths). Under reach "focus" (the benchmark) every text is today's: the prompt fixture and
 the golden tapes prove it byte for byte; here the brief's two forms and the map are checked directly, and a general-mode
@@ -17,12 +17,12 @@ FOCUS_LINE = ('  zones (any lookup that takes them): zone ids ["Z2", "Z3"], a li
 
 
 def test_the_focus_brief_lists_zones_as_today():
-    from petroharness.agent.loop import tools_text
+    from petroharness.agent.prompts import tools_text
     assert tools_text() == tools_text("focus") and FOCUS_LINE in tools_text("focus").splitlines()
 
 
 def test_under_reach_well_only_the_zones_line_differs():
-    from petroharness.agent.loop import brief, tools_text
+    from petroharness.agent.prompts import brief, tools_text
     focus, well = tools_text("focus").splitlines(), tools_text("well").splitlines()
     diff = [(a, b) for a, b in zip(focus, well) if a != b]
     assert len(focus) == len(well) and len(diff) == 1 and diff[0][0] == FOCUS_LINE

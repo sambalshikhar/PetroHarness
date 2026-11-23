@@ -79,7 +79,7 @@ flowchart LR
 ```
 
 `Conversation.ask()` runs one question through the session graph instead, `open -> turn -> project -> figures ->
-commit` (`petroharness.session.graph.run`, [SESSION_GRAPH.md](../SESSION_GRAPH.md)): the first question is answered
+commit` (`petroharness.session.graph.run`, [GRAPH.md](../GRAPH.md#the-session-graph)): the first question is answered
 as `ask()` answers it, a later one on the same ledger with the earlier questions in view.
 
 <details>
@@ -137,24 +137,24 @@ r2 = ask(petrophys.sample("30/6-5"), "Which zone has the best reservoir quality?
 |---|---|---|---|---|
 | `las` | path or str | required | The well's LAS file. | `ask.ask` |
 | `question` | str | required | The question; stripped, must not be empty. | `ask.ask` |
-| `formation` | str or None | None | The formation in `tops`, or a label for `top`/`base`; alone, looked up in the settings' `data.tops_csv`. | `ask._interval` |
+| `formation` | str or None | None | The formation in `tops`, or a label for `top`/`base`; alone, looked up in the settings' `data.tops_csv`. | `interval._interval` |
 | `tops` | path or None | None | A tops table (CSV, TSV or Excel), columns found by meaning ([USAGE.md](../USAGE.md#turning-formation-information-into-a-tops-file)). Excludes `base`; with `top`, the row of that top for a name the table lists twice. | `well.tops.read_tops`, `TopsTable.interval` |
-| `top`, `base` | float or None | None | The interval's depths, both included; one alone runs to the log's first or last depth. With `tops`, `top` is the top of the row meant, as the file writes it. | `ask._interval` |
-| `depth_unit` | `"m"`, `"ft"` or None | None (the tops file's unit, else the LAS's) | The unit of the depths given and of the answer's depths. | `ask._interval` |
-| `lithology_curve` | str or None | None (detected) | The lithology log's mnemonic. | `ask._settings`, `ask.check` |
-| `formation_lithology` | str or None | None | The formation's lithology as the user states it; added to the question. | `ask.task_for` |
-| `profile` | str or None | None | A Petrophys context profile (`interpret: {context_profile: NAME}`). | `ask._settings` |
+| `top`, `base` | float or None | None | The interval's depths, both included; one alone runs to the log's first or last depth. With `tops`, `top` is the top of the row meant, as the file writes it. | `interval._interval` |
+| `depth_unit` | `"m"`, `"ft"` or None | None (the tops file's unit, else the LAS's) | The unit of the depths given and of the answer's depths. | `interval._interval` |
+| `lithology_curve` | str or None | None (detected) | The lithology log's mnemonic. | `interval._settings`, `ask.check` |
+| `formation_lithology` | str or None | None | The formation's lithology as the user states it; added to the question. | `interval.task_for` |
+| `profile` | str or None | None | A Petrophys context profile (`interpret: {context_profile: NAME}`). | `interval._settings` |
 | `out` | path or None | None | A folder for `answer.md`, `trace.json` and `.cache/`. None writes nothing. | `ask.ask` |
 | `model_url` | str or None | None (`PETROHARNESS_MODEL_URL`) | The endpoints, comma-separated. | `ask._model_key` |
 | `model` | str or None | None | The served model's name (the generic card unless `model_card` is given). | `models.card_file` |
 | `model_card` | str or None | None (the K2-Horizon-7B card) | A model card's YAML file, or a packaged card's name. | `models.card_file` |
-| `settings` | path or None | None (`PETROHARNESS_DATA` if set) | A data settings YAML whose `data:` section is the base. | `ask._settings` |
-| `skills` | str or None | None (`PETROHARNESS_SKILLS`, else the packaged library) | A skill library folder, or `"none"`. | `ask.prepare` |
-| `max_steps` | int or None | None (8, `agent.loop.MAX_STEPS`) | The investigation's step cap. | `ask.ask` |
+| `settings` | path or None | None (`PETROHARNESS_DATA` if set) | A data settings YAML whose `data:` section is the base. | `interval._settings` |
+| `skills` | str or None | None (`PETROHARNESS_SKILLS`, else the packaged library) | A skill library folder, or `"none"`. | `interval.prepare` |
+| `max_steps` | int or None | None (8, `agent.state.MAX_STEPS`) | The investigation's step cap. | `ask.ask` |
 | `llm_factory` | callable or None | None (`petroharness.llm.LLM`) | `llm_factory(cfg)` returns the model client ([section 11](#11-model-clients-and-tapes)). With it and no endpoint, no endpoint is needed. | `ask._model_key` |
 | `on_view` | callable or None | None | Called with the interval's `FormationView` once Petrophys has interpreted the well, before the first model call. | `ask.check` |
 | `direct` | bool | True | The model first says whether the question is direct; False gives every question the full investigation. | `agent.graph.turn` |
-| `interpretation` | dict or None | None | Interpretation settings, `{setting: value}` ([CONFIGURATION.md](CONFIGURATION.md#5-interpretation-settings)); over the field notes' settings. | `ask._interpretation` |
+| `interpretation` | dict or None | None | Interpretation settings, `{setting: value}` ([CONFIGURATION.md](CONFIGURATION.md#5-interpretation-settings)); over the field notes' settings. | `interval._interpretation` |
 | `field_notes` | path or None | None | A field notes file: its settings are in force, its notes go with the question. | `well.notes.load` |
 | `zones` | path or None | None | Your zones: a table (CSV, TSV or Excel) of zone, top and bottom (optional `depth_unit` and `well` columns). They frame the answer in place of the lithology zones (Z1, Z2, ... under your names; the lithology zones are kept as L1, L2, ...). | `well.user_zones.read_zones` |
 | `zones_sheet` | str or None | None (the first sheet) | The Excel sheet of the zones. | `well.user_zones.read_zones` |
@@ -217,7 +217,7 @@ asked about, and the files written. `ok` is True unless `status` starts with `er
 |---|---|---|---|---|
 | `answer` | str | required | The answer as delivered ("" when there is none). | `ask.AskResult` |
 | `status` | str | required | `ok`, `unresolved_numbers` (a number no result shows survived the checker), `error: <type>`, or `error: empty answer (the writer's last draft was empty)`. | `ask.AskResult`, `agent.graph.answer_status` |
-| `trace` | dict | required | The full trace ([ARCHITECTURE.md](../ARCHITECTURE.md#the-trace)), plus `answer`, the `ask` block, and the setup: `setup` (its hash) and `setup_parts` (the record, [SETUP.md](../SETUP.md)). | `ask.ask`, `agent.graph.answer` |
+| `trace` | dict | required | The full trace ([ARCHITECTURE.md](../ARCHITECTURE.md#the-trace)), plus `answer`, the `ask` block, and the setup: `setup` (its hash) and `setup_parts` (the record, [EVIDENCE.md](../EVIDENCE.md#the-setup-record)). | `ask.ask`, `agent.graph.answer` |
 | `interval` | dict | required | What was asked about: `name`, `top` and `base` (rounded to 4 decimals), `unit`, `samples`, `from`. | `ask.check` |
 | `out_dir` | Path or None | None | The output folder, when `out` was given. | `ask.AskResult` |
 | `files` | dict | `{}` | `{"answer": Path, "trace": Path}` when files were written. | `ask.ask` |
@@ -244,9 +244,13 @@ asked about, and the files written. `ok` is True unless `status` starts with `er
 
 - `question_sent` is the question as the model read it, when it differs (the operator's lithology or the field notes
   added); `field_notes` (`name`, `sha256`, `settings`, `notes`) is present only when a file was given.
-- `lithology.source` is `lithology log` (with `curve` and `how`: `named` or `detected`), `shale-volume bands` (with
-  `bands`) or `none`. A well without a lithology log, such as Taranaki tuhua-7 (McKee Formation), gives
-  `{"source": "shale-volume bands", "curve": "VCL", "bands": [0.3, 0.6]}`.
+- `lithology.source` is `lithology log` (with `curve` and `how`: `named` or `detected`), `mineral solver` (no
+  lithology log: the lithology Petrophys's mineral solver wrote, with its `curve`, `method`, `domain`, `inputs`,
+  `decisions`, and the well's `solved` and `samples`), `shale-volume bands` (with `bands`; neither a log nor a solved
+  lithology) or `none`. A well without a lithology log, such as Taranaki tuhua-7 (McKee Formation), gives
+  `{"source": "mineral solver", "curve": "LITHO", "method": "canonical_multi_mineral_solver", "domain": "clastic",
+  "inputs": ["RHOB", "VCL", "NPHI", "PHIE", "PEF", "DTC"], "decisions": ["No lithology curve or lithology intervals
+  were available -> inferred LITHO from mineral volumes", "..."], "solved": 13418, "samples": 13652}`.
 
 </details>
 
@@ -271,7 +275,8 @@ print(p.used["samples"], len(p.view.zones), p.litho["curve"])      # 768 20 LITH
 ```
 
 A whole-log question on an old well logged in feet, with no lithology log (Teapot 17-WX-21): with no formation and
-no depths the interval is the whole log, in the LAS's own unit, and the zones are shale-volume bands.
+no depths the interval is the whole log, in the LAS's own unit, and the zones are runs of the lithology Petrophys's
+mineral solver wrote.
 
 ```python
 from petroharness.well import settings
@@ -282,7 +287,8 @@ check(p, task)
 p.used
 # {'name': 'whole well', 'top': 0.0, 'base': 5649.5, 'unit': 'ft', 'samples': 11300,
 #  'from': 'the whole log (no formation or depths given)'}
-p.litho, len(p.view.zones)      # ({'source': 'shale-volume bands', 'curve': 'VCL', 'bands': [0.3, 0.6]}, 124)
+p.litho["source"], p.litho["curve"], p.litho["domain"], len(p.view.zones)
+# ('mineral solver', 'LITHO', 'clastic', 102)
 used = settings.used(p.view.prep)                       # what Petrophys used, read from its step record
 used["sw_model"], used["a"]
 # ({'value': 'indonesia+archie', 'step': 'saturation'}, {'value': 0.81, 'step': 'saturation'})
@@ -342,13 +348,13 @@ prepare(las: Path, key: str, *, formation=None, tops=None, top=None, base=None, 
 
 | Argument | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `las` | Path | required | The LAS file, already resolved to an absolute path. | `ask.prepare` |
-| `key` | str | required | A model registry key (`petroharness.models.register`). | `ask.prepare` |
-| `formation` ... `skills` | as `ask()` | as `ask()` | As in `ask()`. | `ask.prepare` |
-| `interpretation` | dict or None | None | The settings in force, field notes' settings already merged in. | `ask._interpretation` |
-| `field_notes` | dict or None | None | The loaded field notes (`well.notes.load(path)`), not a path. | `ask.prepare` |
-| `zones`, `zones_sheet` | as `ask()` | as `ask()` | Your zones, read into `data.zones` (and the file's name into `data.zones_source`). | `ask.prepare`, `well.user_zones.read_zones` |
-| `cache` | Path | required | The folder the interpreted well is cached in (`data.cache_dir` unless the settings file sets one). | `ask._settings` |
+| `las` | Path | required | The LAS file, already resolved to an absolute path. | `interval.prepare` |
+| `key` | str | required | A model registry key (`petroharness.models.register`). | `interval.prepare` |
+| `formation` ... `skills` | as `ask()` | as `ask()` | As in `ask()`. | `interval.prepare` |
+| `interpretation` | dict or None | None | The settings in force, field notes' settings already merged in. | `interval._interpretation` |
+| `field_notes` | dict or None | None | The loaded field notes (`well.notes.load(path)`), not a path. | `interval.prepare` |
+| `zones`, `zones_sheet` | as `ask()` | as `ask()` | Your zones, read into `data.zones` (and the file's name into `data.zones_source`). | `interval.prepare`, `well.user_zones.read_zones` |
+| `cache` | Path | required | The folder the interpreted well is cached in (`data.cache_dir` unless the settings file sets one). | `interval._settings` |
 
 - The data settings start from `settings` (else `PETROHARNESS_DATA`); `las_dir` defaults to the LAS's folder and
   `cache_dir` to `cache`. The full order: [CONFIGURATION.md](CONFIGURATION.md#2-how-it-works).
@@ -364,19 +370,19 @@ prepare(las: Path, key: str, *, formation=None, tops=None, top=None, base=None, 
 
 | Field | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `las` | Path | required | The LAS file. | `ask.Prepared` |
-| `key` | str | required | The model registry key. | `ask.Prepared` |
-| `data` | dict | required | The data settings built for this LAS (the `data:` section, [CONFIGURATION.md](CONFIGURATION.md#4-the-data-section)). | `ask._settings` |
-| `source` | str | required | Where they came from: the settings file's path, or `built from the LAS`. | `ask._settings` |
-| `span` | dict | required | The interval asked about: `name`, `top`, `base`, `closed`, `unit`, `from`, `las_unit`, `report`. | `ask._interval` |
-| `said` | str | required | The operator's lithology for the formation ("" when not given). | `ask.prepare` |
-| `given` | dict | required | The settings every question runs under, for `config.given_settings`: `{"data", "eval": {}, "skills"?}`. | `ask.prepare` |
-| `skills_given` | str or None | None | The `skills` argument as given. | `ask.prepare` |
-| `lithology_curve` | str or None | None | The lithology curve named. | `ask.prepare` |
+| `las` | Path | required | The LAS file. | `interval.Prepared` |
+| `key` | str | required | The model registry key. | `interval.Prepared` |
+| `data` | dict | required | The data settings built for this LAS (the `data:` section, [CONFIGURATION.md](CONFIGURATION.md#4-the-data-section)). | `interval._settings` |
+| `source` | str | required | Where they came from: the settings file's path, or `built from the LAS`. | `interval._settings` |
+| `span` | dict | required | The interval asked about: `name`, `top`, `base`, `closed`, `unit`, `from`, `las_unit`, `report`. | `interval._interval` |
+| `said` | str | required | The operator's lithology for the formation ("" when not given). | `interval.prepare` |
+| `given` | dict | required | The settings every question runs under, for `config.given_settings`: `{"data", "eval": {}, "skills"?}`. | `interval.prepare` |
+| `skills_given` | str or None | None | The `skills` argument as given. | `interval.prepare` |
+| `lithology_curve` | str or None | None | The lithology curve named. | `interval.prepare` |
 | `view` | FormationView or None | None | The interval's view, set by `check()`. | `ask.check` |
 | `used` | dict | `{}` | The interval as used, set by `check()` (`AskResult.interval`). | `ask.check` |
 | `litho` | dict | `{}` | Where the zones came from, set by `check()`. | `ask.check` |
-| `notes` | dict | `{}` | The field notes in force. | `ask.prepare` |
+| `notes` | dict | `{}` | The field notes in force. | `interval.prepare` |
 
 ```python
 p.span          # 30/6-5, Brent Group
@@ -396,7 +402,7 @@ These three functions turn a `Prepared` into a question the graph can run and re
 
 | Function | Returns | Arguments (defaults) | Meaning | Defined in |
 |---|---|---|---|---|
-| `task_for(p, question, turn=1)` | `(Task, str)` | `turn`: the question's number in a conversation | The `Task` (id `a` + 10 hex digits of a SHA-256 of the LAS, question, interval and turn) and the question as sent: with `(The operator states this formation's lithology: ...)`, the tops file's units inside the interval under `reach: focus` (`(The tops file lists these units inside this interval: ...)`; under the default `reach: well` the map lists the file's units instead) and the field notes statement appended when present. | `ask.task_for` |
+| `task_for(p, question, turn=1)` | `(Task, str)` | `turn`: the question's number in a conversation | The `Task` (id `a` + 10 hex digits of a SHA-256 of the LAS, question, interval and turn) and the question as sent: with `(The operator states this formation's lithology: ...)`, the tops file's units inside the interval under `reach: focus` (`(The tops file lists these units inside this interval: ...)`; under the default `reach: well` the map lists the file's units instead) and the field notes statement appended when present. | `interval.task_for` |
 | `check(p, task, on_view=None)` | None | `on_view`: callback | Builds the `FormationView` (Petrophys interprets the well), raises when the interval has no samples or the named lithology curve has no data, fills `p.view`, `p.used`, `p.litho`, then calls `on_view(view)`. | `ask.check` |
 | `ask_record(p, question, sent, trace)` | dict | none | The trace's `ask` block ([AskResult](#askresult)). | `ask.ask_record` |
 
@@ -587,7 +593,7 @@ c.adopt_zones(None)                         # 'the lithology zones (your zones t
 
 | Method | Returns | Arguments (defaults) | Meaning | Defined in |
 |---|---|---|---|---|
-| `set_scope(scope, by="user", chosen=False)` | list | `scope`: units of the tops file, your zones, depth ranges `TOP-BASE` or the whole well; `[]` for the interval. `chosen`: the user's answer to a question back, the next question's stretch | The stretches the questions from the next one on are about. The question session keeps it until it is changed; a question that names other stretches computes on those. | `Conversation.set_scope`, `agent.loop.Session.take_user_scope` |
+| `set_scope(scope, by="user", chosen=False)` | list | `scope`: units of the tops file, your zones, depth ranges `TOP-BASE` or the whole well; `[]` for the interval. `chosen`: the user's answer to a question back, the next question's stretch | The stretches the questions from the next one on are about. The question session keeps it until it is changed; a question that names other stretches computes on those. | `Conversation.set_scope`, `agent.state.Session.take_user_scope` |
 | `set_frame(frame, by="user")` | str or None | `frame`: `"lithology"`, or `"zones"`, `"none"` or None for the zones in force | `"lithology"`: every lookup reports by the lithology zones under your zones. | `Conversation.set_frame` |
 | `adopt_zones(zones, sheet=None, by="user")` | str | `zones`: a zones file, or None to take your zones away; `sheet`: its Excel sheet | Your zones from the next question on. The interval is prepared again under them (no new interpretation) and the live session moves to it; earlier results say they were read under the earlier zones. | `Conversation.adopt_zones`, `Conversation._zones` |
 
@@ -665,7 +671,7 @@ A `Conversation` exposes its state as plain attributes.
 | `record_sha` | str or None | the last `record` event's | The SHA-256 of the well's record as last kept in the log (a new `record` event is logged when it changes). | `Conversation.__init__` |
 | `setup` | Setup or None | None | What this process answers under, set by the first question. | `session.graph.open_question` |
 | `turns` | list of dict | `[]` | One `turn_end` record per question (not `Turn` objects). | `session.graph.commit` |
-| `live` | Session or None | None | The question session with its ledger (`petroharness.agent.loop.Session`). | `session.graph.turn` |
+| `live` | Session or None | None | The question session with its ledger (`petroharness.agent.state.Session`). | `session.graph.turn` |
 | `on_view` | callable or None | None | Called with the view whenever the well is interpreted. | `Conversation._open` |
 
 ```python
@@ -934,8 +940,8 @@ Path("brent-session/report.md").write_text(report.markdown("brent-session"))   #
 ## 9. Setup
 
 A `Setup` is what a run is made of: the harness and Petrophys builds, the prompt components, the skill library, the
-model and the hashes of its card, the data settings and the policy ([SETUP.md](../SETUP.md)). Two runs under the same
-setup have the same 12-character hash.
+model and the hashes of its card, the data settings and the policy ([EVIDENCE.md](../EVIDENCE.md#the-setup-record)).
+Two runs under the same setup have the same 12-character hash.
 
 ```python
 from petroharness.config import given_settings
@@ -957,7 +963,7 @@ with given_settings(given2):
 
 | Field | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `harness` | str | required | The package version (`1.5.0`). | `core.setup.Setup` |
+| `harness` | str | required | The package version (`2.0.0`). | `core.setup.Setup` |
 | `commit` | str | required | The checkout's short commit, `+dirty` when `src/` has changes; "" for an installed package. | `harness_commit` |
 | `petrophys` | str | required | The Petrophys build (version and commit, or a hash of its installed files). | `well.prepare.library_identity` |
 | `components` | dict | required | Prompt component (`C1` ... `C10`) -> version. | `agent.components.versions` |
@@ -982,7 +988,7 @@ These functions build, compare and print setup records.
 |---|---|---|---|---|
 | `of(cfg, *, writer="open", fmt="profile", max_steps=None, mode="interactive", depth=True)` | Setup | `cfg`: a HarnessConfig with its card applied | The setup a configuration answers under; `max_steps` None records 8. | `core.setup.of` |
 | `config_for(model=None, model_card=None, settings=None, skills=None)` | (HarnessConfig, dict) | as listed; `settings` None: `PETROHARNESS_DATA`, else none | The configuration a question would run under with no well, and the settings to run `of()` under. | `core.setup.config_for` |
-| `for_well(args)` | Setup | the parsed `petroharness setup` arguments, with `las` | The setup a question about the interval of `args.las` answers under: the data settings built from the LAS as `ask()` builds them (`ask.prepare`), the configuration as each question's (`agent.graph.task_config`). | `core.setup.for_well` |
+| `for_well(args)` | Setup | the parsed `petroharness setup` arguments, with `las` | The setup a question about the interval of `args.las` answers under: the data settings built from the LAS as `ask()` builds them (`interval.prepare`), the configuration as each question's (`agent.graph.task_config`). | `core.setup.for_well` |
 | `Setup.hash()` | str | none | 12 hex digits of the SHA-256 of the sorted JSON record. | `Setup.hash` |
 | `Setup.to_dict()` | dict | none | The record. | `Setup.to_dict` |
 | `differences(a, b)` | list | two records (dicts) | The parts that differ (`"card"`, `"components.C9"`); `[]` for the same setup. | `core.setup.differences` |
@@ -1158,9 +1164,9 @@ figure or projection costs nothing but itself.
 | An empty question | `ValueError` | `ask.ask`, `Conversation.ask` |
 | No endpoint and no `llm_factory` | `ValueError` naming `PETROHARNESS_MODEL_URL` | `ask._model_key` |
 | Unknown or bad model card | `ValueError` | `models.card_file`, `models.card_settings` |
-| Wrong interval inputs (tops with depths, unit, base above top, a name the tops file lacks, a tops file that cannot be read as a table) | `ValueError`, or `FormationNotFound` (`LookupError`) | `ask._interval`, `well.tops` |
+| Wrong interval inputs (tops with depths, unit, base above top, a name the tops file lacks, a tops file that cannot be read as a table) | `ValueError`, or `FormationNotFound` (`LookupError`) | `interval._interval`, `well.tops` |
 | The interval has no samples, or the named lithology curve has no data | `ValueError` | `ask.check` |
-| A settings file that does not exist, a misspelt data key, or a `data.interpret` setting Petrophys does not have | `FileNotFoundError`, or a pydantic `ValidationError` or another `ValueError` | `ask._settings`, `ask.check`, `well.prepare._interpret_with_petrophys` |
+| A settings file that does not exist, a misspelt data key, or a `data.interpret` setting Petrophys does not have | `FileNotFoundError`, or a pydantic `ValidationError` or another `ValueError` | `interval._settings`, `ask.check`, `well.prepare._interpret_with_petrophys` |
 | Petrophys cannot interpret the LAS | `RuntimeError` | `well.prepare` |
 | A bad skill library | `LibraryError` (a `ValueError`) before Petrophys interprets the well (`ask()`, `Conversation.start`, `Conversation.resume`) | `ask.check`, `agent.direction.load` |
 | Hosted tracing on | `RuntimeError` when `petroharness.agent.graph` is imported, and again before each conversation question | `agent.graph.no_hosted_tracing` |
@@ -1181,8 +1187,8 @@ figure or projection costs nothing but itself.
 - [CONFIGURATION.md](CONFIGURATION.md): the data config, interpretation settings, environment variables, `HarnessConfig`.
 - [USAGE.md](../USAGE.md): a formation evaluation of your own well.
 - [SESSIONS.md](../SESSIONS.md): conversations, settings changes, field notes.
-- [SESSION_GRAPH.md](../SESSION_GRAPH.md) and [GRAPH.md](../GRAPH.md): the session graph and the question graph.
-- [EVIDENCE.md](../EVIDENCE.md) and [SETUP.md](../SETUP.md): the evidence graph and the setup record.
+- [GRAPH.md](../GRAPH.md): the question graph, the later-question graph and the session graph.
+- [EVIDENCE.md](../EVIDENCE.md): the evidence graph and the setup record.
 - [ARCHITECTURE.md](../ARCHITECTURE.md#the-trace): what a trace holds.
 - [INTERPRETATION_SETTINGS.md](INTERPRETATION_SETTINGS.md): each interpretation setting in detail.
 - [TESTING.md](TESTING.md): the tests and gates that use the tapes.

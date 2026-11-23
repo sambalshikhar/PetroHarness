@@ -74,9 +74,9 @@ def test_the_section_of_the_answer_file():
 
 @pytest.mark.data
 def test_on_a_real_formation_the_porosity_curve_leads_to_its_recorded_step():
-    from test_b2_tools import F as formations
+    from _support.formations import F as formations
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.agent.map import render
     got = next(((t, f) for t, f in formations() if f.inv.curves.get("PHIE") is not None and f.inv.curves["PHIE"].step), None)
     if got is None:

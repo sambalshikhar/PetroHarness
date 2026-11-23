@@ -1,8 +1,8 @@
-"""calibrate (src/petroharness/agent/library_calibrate.py): Petrophys's calibration fits of the log to core, the
+"""calibrate (src/petroharness/agent/library/calibrate.py): Petrophys's calibration fits of the log to core, the
 poro-perm transform, the shear prediction and the elastic properties, on a sample well and, where the benchmark data
 is present, on wells whose LAS carries core plugs or a measured shear sonic.
 
-    .venv/bin/python -m pytest tests/agent/test_library_calibrate.py -q
+    .venv/bin/python -m pytest tests/agent/test_library.calibrate.py -q
 """
 import hashlib
 import math
@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(Path(__file__).resolve().parent)]
 from test_library_tools import SAMPLES, _session
 
-from petroharness.agent import library_calibrate as K
+from petroharness.agent.library import calibrate as K
 from petroharness.agent.engine import ToolError
 
 DATA = Path(os.environ["WELLLOGBENCH"]) if os.environ.get("WELLLOGBENCH") else None   # the datasets' data configs
@@ -82,7 +82,7 @@ def _benchmark_session(well: str, formation: str):
     import yaml
 
     import petroharness.ask as A
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.config import (
         DataPaths,
         HarnessConfig,

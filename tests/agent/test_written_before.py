@@ -5,12 +5,11 @@ text still said it did not). A fact of order: code reads no claim's content, the
 
     .venv/bin/python -m pytest tests/agent/test_written_before.py -q
 """
-import json
-import re
 
 import pytest
 
 from _wells import CASES, formation_of, sample
+from _support.model import DONE, ScriptedModel, newest_result  # noqa: E402
 
 pytestmark = pytest.mark.data
 
@@ -26,7 +25,7 @@ def opened():
 
 
 def _listed(cl):
-    from petroharness.agent.loop import written_before
+    from petroharness.agent.settle import written_before
     return written_before(list(cl.claims.values()), {e.id: e for e in cl.ledger.items})
 
 
@@ -49,37 +48,20 @@ def test_a_claim_whose_text_came_before_its_points_newer_results_is_listed(opene
     assert cl.claims["C1"].text_at == 3 and _listed(cl) == []
 
 
-class Model:
+class Model(ScriptedModel):
     """An investigation: step 1 adds a hypothesis citing nothing and opens PHIE's statistics; step 2 grades it on that
     result without a new text; settle changes nothing; the writer states no number."""
 
     def __init__(self):
-        self.sent = []
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
-        usage.log.append({"stage": stage, "prompt_tokens": 10, "completion_tokens": 5, "seconds": 0.0})
-        if stage.startswith("read"):
-            r = {"topics": ["porosity"], "named": ["PHIE"]}
-        elif stage == "step_1":
-            r = {"points": ["What is the porosity?"], "intent": "characterize", "focus": "porosity",
-                 "edits": [{"op": "add", "point": 1, "text": "Porosity is to be read", "grade": "hypothesis"}],
-                 "next": [{"stats": {"curves": ["PHIE"], "zones": ["Ness Fm."]}}], "done": False}
-        elif stage == "step_2":
-            newest = max(re.findall(r"\[(E\d+)\]", messages[-1]["content"]), key=lambda x: int(x[1:]))
-            r = {"edits": [{"op": "revise", "id": "C1", "ev": [newest], "grade": "moderate"}], "next": [], "done": True}
-        elif stage.startswith(("step_", "settle")):
-            r = {"edits": [], "next": [], "done": True}
-        else:
-            r = "Porosity is read from the results."
-        return r if isinstance(r, str) else json.dumps(r)
-
-    def last(self, stage):
-        return next(c for c in reversed(self.sent) if c["stage"] == stage)["messages"][-1]["content"]
-
+        super().__init__({
+            "read*": {"topics": ["porosity"], "named": ["PHIE"]},
+            "step_1": {"points": ["What is the porosity?"], "intent": "characterize", "focus": "porosity",
+                       "edits": [{"op": "add", "point": 1, "text": "Porosity is to be read", "grade": "hypothesis"}],
+                       "next": [{"stats": {"curves": ["PHIE"], "zones": ["Ness Fm."]}}], "done": False},
+            "step_2": lambda m: {"edits": [{"op": "revise", "id": "C1", "ev": [newest_result(m)], "grade": "moderate"}],
+                                 "next": [], "done": True},
+            "step_*": DONE, "settle*": DONE},
+            default="Porosity is read from the results.")
 
 def test_settle_is_shown_a_claim_its_newer_result_never_rewrote(tmp_path, monkeypatch):
     from petroharness.session import Conversation

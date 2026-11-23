@@ -10,7 +10,6 @@ import re
 import numpy as np
 
 from petroharness.profile import profile
-from petroharness.llm import LLM, Usage
 from petroharness.agent.checks import availability_issues, data_denials, number_provenance
 from petroharness.agent.compose import strip_citations
 
@@ -19,6 +18,7 @@ from petroharness.agent.ledger import get_lines
 from petroharness.agent import numbers as N  # the one grammar for written numbers
 from petroharness.agent import components as C  # noqa: E402  (the texts: src/petroharness/agent/components)
 from petroharness.agent import vocabulary
+from petroharness.agent.state import own_items
 
 LINES_CHARS = 9000
 
@@ -63,7 +63,8 @@ def _number_lines(item, numbers: list) -> list:
         raw = N.first(str(x).replace("\u2212", "-"))
         if raw is None:
             continue
-        val, tol = N.number(raw), N.half_unit(raw) + 1e-12
+        val = N.number(raw)
+        tol = N.tolerance(N.half_unit(raw), val)
         out += [ln for ln, ns in item.rows if any(abs(n - val) <= tol for n in ns) and ln not in out]
     return out
 
@@ -136,7 +137,7 @@ def contradictions(draft: str, s) -> list:
     route record read as this interval's route. Each states the fact; the model writes the correction."""
     if not (draft or "").strip():
         return []
-    from petroharness.agent.routes import contradictions as route_contradictions
+    from petroharness.record.routes import contradictions as route_contradictions
     text, view = strip_ids(draft), s.f.view
     out = availability_issues(strip_citations(text), view, view.reg) + data_denials(text, view)
     out += [f"WHAT: the answer {m}. FIX: state the route this interval uses." for m in route_contradictions(text, view)]
@@ -174,6 +175,9 @@ def _shown_to_writer(s, table: str = "") -> tuple:
     curve card, and the question's points with the limits the investigation found (a number in the notes alone was
     never shown to it) - and the results, a shown negative value also as its magnitude."""
     items = [_Magnitudes(_Item(e)) for e in s.ledger.items]
+    prompt_text = getattr(s, "writer_shown", "")
+    if prompt_text:                                  # the prompt the writer got, whole
+        return prompt_text + ("\n" + table if table and table not in prompt_text else ""), items
     shown = readings(s) if getattr(s, "claims", None) is not None else ""
     card = writer_map(s.map) + ("\n" + table if table else "") + ("\n" + getattr(s, "card", "") if getattr(s, "card", "") else "") \
         + ("\n" + shown if shown else "")
@@ -193,7 +197,7 @@ _MNEMONIC_NAME = re.compile(r"(?<![A-Za-z0-9_./-])([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+
 
 def unknown_names(text: str, s, shown: str = "") -> list:
     """Curve names the answer writes that the record does not hold and the writer was not shown, each with the curve
-    of the record it is close to (question suite F13): [(name, the record's curve)]. A mnemonic-shaped name only (an
+    of the record it is close to: [(name, the record's curve)]. A mnemonic-shaped name only (an
     underscore or a digit in it), and only a near miss of a curve the record holds (difflib ratio 0.85): a word, a
     class label or an abbreviation is no curve name (measured on the golden and question-suite answers: the near
     misses were misspellings, INVAISION_RATIO; any other unshown name was a word or a label)."""
@@ -349,8 +353,10 @@ def strip_ids(text: str) -> str:
     return re.sub(r"[ \t]+([.,;:])", r"\1", out)
 
 
-# the model's working notes, which a reasoning model sometimes writes into its reply (the repair turn above all)
-META = re.compile(r"\bThe user\b|\bLet me\b|\bI need to\b|\bI will (?:now )?(?:rewrite|check|fix|remove|go)|\b(?:my|the) "
+# the model's working notes, which a reasoning model sometimes writes into its reply (the repair turn above all); "the
+# user" only as a note says it ("The user asks ..."): an answer cites the user's field notes and the scope set by the user
+META = re.compile(r"\bthe user (?:asks|asked|wants|is asking|is pointing|points|said|says|wrote)\b|\bLet me\b|"
+                  r"\bI need to\b|\bI will (?:now )?(?:rewrite|check|fix|remove|go)|\b(?:my|the) "
                   r"previous (?:answer|draft|version|reply)\b|\bActually,|\brewrite the answer\b|\bthese need to go\b|"
                   r"^\s*-\s*\"[^\"]{3,}\"\s*[—-]", re.I | re.M)
 
@@ -400,11 +406,11 @@ def whole_while_it_fits(s, items: list, budget: int) -> str:
     return "\n\n".join(texts[e.id] for e in items)
 
 
-def opened_results(s, budget: int = OPEN_CHARS) -> str:
-    """Every opened result: whole while the budget lasts, newest last; then digests. the results the
+def opened_results(s, budget: int = OPEN_CHARS, items: list | None = None) -> str:
+    """Every opened result (or `items`): whole while the budget lasts, newest last; then digests. the results the
     claims cite and the newest are kept whole first, the oldest uncited ones digested first (a digested newest result
     would leave a class found last written as 'not shown')."""
-    items = s.ledger.items
+    items = s.ledger.items if items is None else items
     claims = getattr(s, "claims", None)               # a session before its investigation has none
     cited = {x for c in (claims.claims.values() if claims is not None else []) for x in c.ev}
     order = [e for e in items if e.id in cited] + [e for e in reversed(items) if e.id not in cited]
@@ -459,15 +465,14 @@ def prompt(s, fmt: str = "profile", brief: bool = False) -> tuple:
     form = reader_format(view.policy, fmt)
     table = (zone_table(s, s.claims, wide=True, style=form.get("zone_table") or "by_curve")
              if shape in ("list", "report") and not brief else "")      # a short reply carries no zone table
-    items = s.ledger.items
     later = getattr(s, "turn", 1) > 1
-    if later:                 # a later question of a conversation: its own results, and the earlier ones its claims cite
-        cited = {x for c in s.claims.claims.values() for x in c.ev} | set(getattr(s, "fetched", ()))   # or it fetched whole
-        items = [e for i, e in enumerate(items) if i >= s.turn_start or e.id in cited]
+    items = own_items(s)      # a later question of a conversation: its own results, and the earlier ones it cites
     if brief and getattr(s, "depth", "") == "direct":         # the look steps' results: whole while the budget lasts
         results = whole_while_it_fits(s, items, RESULTS_CHARS)
     else:
         results = "\n\n".join(result_text(s, e) for e in items)
+        if len(results) > RESULTS_CHARS:
+            results = opened_results(s, RESULTS_CHARS, items)     # cited and newest whole, oldest uncited as digests
     if len(results) > RESULTS_CHARS:
         results = results[:RESULTS_CHARS] + "\n... (cut)"
     s.card = curve_card(s)
@@ -480,25 +485,27 @@ def prompt(s, fmt: str = "profile", brief: bool = False) -> tuple:
              f"RESULTS (everything the investigation computed, by id):\n{results}",
              f"WHAT THE CURVES ARE (from the record: each curve's meaning, status and what its values show):\n{s.card}",
              seen, f"THE MAP\n{writer_map(s.map)}"]
+    user = "\n\n".join(p for p in parts if p)
+    s.writer_shown = user     # what the writer was shown, as the checker reads it
     if brief:                 # a short reply: its own brief, no report form (C9 reply_brief)
         system = C.prompt("C9", "reply_brief") + ("\n" + C.text("C9", "brief_later") if later else "")
         if getattr(s, "depth", "") == "direct":   # the look steps' results may not state it: the writer may hand over
             system += "\n" + C.text("C9", "brief_direct")
         system += ("\n" + C.text("C9", "scope_rule")) if stretch else ""
-        return system, "\n\n".join(p for p in parts if p), table, shape
+        return system, user, table, shape
     system = C.prompt("C9", "write")
     system += f"\n9. {TABLE_RULE}" if table else ""     # the zone table once, as the writer's
     system += "\n" + C.text("C9", "points_rule")
     if later:
         system += "\n" + C.text("C9", "later_rule").strip()
     system += ("\n" + C.text("C9", "scope_rule")) if stretch else ""
-    return system, "\n\n".join(p for p in parts if p), table, shape
+    return system, user, table, shape
 
 
 def question_stretch(s) -> str:
     """THE QUESTION'S STRETCH for the writer (reach well, a scope in force: the stretches every lookup computed on),
     with the interval as a part of it; "" without (the benchmark's reach focus has none). The steps read the scope
-    (loop.scope_text); without it the writer, told to answer about one interval, narrowed a whole-well answer to it."""
+    (read.scope_text); without it the writer, told to answer about one interval, narrowed a whole-well answer to it."""
     scope = list(getattr(s, "scope", None) or [])
     if not scope:
         return ""
@@ -532,15 +539,3 @@ def doubts(s) -> list:
         seen.add(w)
         out.append((c.point, w))
     return out
-
-
-def point_claims(s, k: int) -> list:
-    """The ids of the settled claims on point k (1-based)."""
-    return [c.id for c in s.claims.claims.values() if c.point == k and c.grade != "hypothesis"]
-
-
-def write(llm: LLM, s, cfg, usage: Usage, trace: dict, variant: str = "", fmt: str = "profile") -> tuple:
-    """The answer: the writer's draft, the checker's rounds and the repairs, the zone table -> (text, status). The
-    nodes are in the question graph (src/petroharness/agent/graph.py, docs/GRAPH.md), run here as the writer graph."""
-    from petroharness.agent.graph import write_answer
-    return write_answer(llm, s, cfg, usage, trace, variant, fmt)

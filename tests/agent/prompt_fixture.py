@@ -22,9 +22,11 @@ from pathlib import Path
 
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _support.model import ScriptedModel  # noqa: E402
+
 DATASETS = ("geolink", "costa", "danish")
 STRINGS = ("brief", "read", "step1", "direction", "step2")
-DONE = {"edits": [], "next": [], "done": True}
 
 
 def topics(i: int, areas: list) -> list:
@@ -47,22 +49,6 @@ def step1(i: int, areas: list) -> dict:
     return {"asks": "What does the formation hold?", "points": ["How does it vary by zone?"], "intent": "characterize",
             "focus": "zones", "edits": [{"op": "add", "point": 1, "text": "It likely varies by zone", "grade": "hypothesis"}],
             "next": [{"guide": g} for g in guides] + [{"jump": "Z1"}], "done": False}
-
-
-class Stub:
-    """The model by stage: the READ replies in turn, step 1's object, then done. Keeps each stage's first messages."""
-
-    def __init__(self, reads, step1):
-        self.reads, self.step1, self.sent = list(reads), step1, {}
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        self.sent.setdefault(stage, [m["content"] for m in messages])
-        usage.log.append({"stage": stage, "prompt_tokens": 0})
-        r = self.reads.pop(0) if stage.startswith("read") else self.step1 if stage == "step_1" else DONE
-        return r if isinstance(r, str) else json.dumps(r)
 
 
 def config(path: Path):
@@ -90,14 +76,16 @@ def tasks(configs: dict, ids: dict) -> list:
 def render(task, cfg, i: int) -> dict:
     """Build the session, run READ with the stub's reply, run steps 1 and 2: the strings the model reads."""
     from petroharness.agent import direction
-    from petroharness.agent.loop import Session, investigate, read_question
+    from petroharness.agent.state import Session
+    from petroharness.agent.read import read_question
+    from petroharness.agent.graph import investigate
     from petroharness.llm import Usage
     s = Session.build(task, cfg)
     areas = list(direction.areas())
-    llm, trace = Stub(reads(i, areas), step1(i, areas)), {}
+    llm, trace = ScriptedModel({"read*": reads(i, areas), "step_1": step1(i, areas)}), {}   # then done
     read_question(llm, s, Usage(), 3000, trace)
     investigate(llm, s, Usage(), 3000, trace, max_steps=2)
-    (brief, read), (system, first), (system2, second) = llm.sent["read"], llm.sent["step_1"], llm.sent["step_2"]
+    (brief, read), (system, first), (system2, second) = llm.first("read"), llm.first("step_1"), llm.first("step_2")
     assert system == brief == system2, "a step's system prompt is not the READ call's"
     return {"brief": brief, "read": read, "step1": first,
             "direction": first.split("\n\nDIRECTION\n", 1)[1].split("\n\n", 1)[0], "step2": second}

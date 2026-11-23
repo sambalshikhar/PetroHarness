@@ -42,7 +42,7 @@ What comes back:
 | A tops file | `--tops FILE --formation NAME` | GeoLink 30/6-5: `--tops formations_30_6-5.csv --formation "BRENT GP."` |
 | A tops table of several wells | the same; the rows of this well are used | COSTA HW-3: `--tops formations_costa.csv --formation KHARAIB-2` (a `well` column; feet) |
 | Depths | `--top T --base B` | GeoLink 25/5-1: `--top 2990 --base 3290` |
-| Neither | nothing | Teapot 17-WX-21: the whole log, 0–5649.5 ft, 11,300 samples in 124 zones |
+| Neither | nothing | Teapot 17-WX-21: the whole log, 0–5649.5 ft, 11,300 samples in 102 zones |
 
 When the tops file lists units inside the interval, such as the Brent Group's Ness and Etive formations, the question
 carries them with their depths, so you can ask about them by name.
@@ -54,10 +54,11 @@ GeoLink and Taranaki wells in metres.
 ## Zones
 
 Every answer reports zone by zone. When the LAS carries a lithology log, as every GeoLink well does, the zones are
-its runs. Without one, the zones are bands of shale volume: clean (VCL below 0.3), shaly (0.3 to 0.6) and
+its runs. Without one, the zones are runs of the lithology Petrophys's mineral solver gives, and the answer's header
+says so. A well with neither is zoned by bands of shale volume: clean (VCL below 0.3), shaly (0.3 to 0.6) and
 shale-prone (above 0.6).
 
-![Zones from a lithology log](images/zones-lithology-log.png "With a lithology log: GeoLink 30/6-5, Brent Group. Sand, silt, coal and cross-bedded sand, as logged. Data: GeoLink, CC BY-SA 4.0.") ![Zones from shale-volume bands](images/zones-shale-volume-bands.png "Without one: Taranaki tuhua-7, McKee Formation. The zones are runs of one shale-volume band. Data: Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.")
+![Zones from a lithology log](images/zones-lithology-log.png "With a lithology log: GeoLink 30/6-5, Brent Group. Sand, silt, coal and cross-bedded sand, as logged. Data: GeoLink, CC BY-SA 4.0.") ![Zones from a solved lithology](images/zones-solved-lithology.png "Without one: Taranaki tuhua-7, McKee Formation. The zones are runs of the lithology Petrophys's mineral solver gives, here shale and sandstone. Data: Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.")
 
 A lithology log is found by its mnemonic or description (lithology or facies, integer codes). Name it with
 `--lithology-curve MNEMONIC` when detection misses it, and pass what you know of the rock with
@@ -128,6 +129,7 @@ petroharness --las $LAS --tops $TOPS --formation "BRENT GP." \
 When Petrophys needs an input the well lacks, the answer says what to provide. The tools: [Tools](TOOLS.md).
 </details>
 
+<a id="turning-formation-information-into-a-tops-file"></a>
 <details>
 <summary>Turning formation information into a tops file</summary>
 
@@ -182,6 +184,7 @@ runs without them; `--skills PATH` plugs your own library ([Skills](reference/SK
 go with the question ([Conversations](SESSIONS.md)).
 </details>
 
+<a id="a-data-settings-file-optional"></a>
 <details>
 <summary>A data settings file (optional)</summary>
 

@@ -1,7 +1,8 @@
-"""Each rule at the shared point every sibling passes through, tested over every sibling (every well case, every step,
-every curve, every tool), not over the case that exposed it (gaps/fix1119/CONSOLIDATE.md, 2026-11-19).
+"""Each rule at the shared point every sibling passes through (class labels, record lines, selections and ranges, the
+condition grammar, lithology choices, curve writers, arithmetic), tested over every sibling: every well case, every
+step, every curve, every tool.
 
-    .venv/bin/python -m pytest tests/test_shared_points.py -q
+    .venv/bin/python -m pytest tests/test_shared_rules.py -q
 """
 from pathlib import Path
 import re
@@ -46,7 +47,7 @@ def test_every_class_curve_is_named_from_the_one_field_petrophys_keeps(case):
 def test_no_record_line_is_dropped_or_rewritten(case):
     """C3 then O3: every step record line reaches the map as Petrophys wrote it (the whole well's run, the map's header
     says), none dropped, none rewritten by a regex over its counts; the interval's facts come from the step's curves
-    (record.catalog.interval_facts). Dropping lines with a count had hidden the defaults (Rcl, the N-D clay point),
+    (record.card.interval_facts). Dropping lines with a count had hidden the defaults (Rcl, the N-D clay point),
     fallbacks (SWIRR_APP) and checks (the Rw against Rwa) they stated."""
     from petroharness.agent.map import plain_inputs, render
     f = formation_of(CASES[case])
@@ -135,7 +136,7 @@ def test_every_choice_a_call_leaves_to_petrophys_is_said_in_its_inputs():
     shear prediction ran as sandstone in a carbonate (question suite W03). Every such choice is now in the Inputs
     line, with what it takes, for every function of the registry that declares one."""
     import inspect
-    from petroharness.agent import library_api as A
+    from petroharness.agent.library import api as A
     from petroharness.agent.engine import ToolError
     f = formation_of(CASES["hw3"])
     ran = 0
@@ -203,9 +204,8 @@ def test_f15_f17_a_las_description_is_the_providers_words_by_one_reading():
     assert curve_description(NS(descr="Total CMR Porosity {F13.4}", value="")) == "Total CMR Porosity"
     assert curve_description(NS(descr="", value="Micro Inverse")) == "Micro Inverse"
     assert curve_description(NS(descr="", value="07 310 01 00")) == ""                  # an API code is not a name
-    import os
-    from pathlib import Path
-    kgs = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "/nonexistent")) / "1046123714.las"
+    from _wells import SAMPLES
+    kgs = SAMPLES / "1046123714.las"
     if kgs.exists():                                              # the KGS well with the microlog
         d = las_curve_descriptions(str(kgs))
         assert (d.get("MI"), d.get("MN")) == ("Micro Inverse", "Micro Normal")
@@ -239,7 +239,7 @@ def test_a_tools_zones_are_the_union_of_what_they_name():
     were refused ('ask for them in separate calls') while a scope merged them; then the notes sat in the selection's
     name (every whole line's label) and were lost where the union was the interval."""
     from types import SimpleNamespace as NS
-    from petroharness.agent import loop, schemas, selection
+    from petroharness.agent import schemas, selection, read as RD
     f = formation_of(CASES["brent"])
     notes = []
     inner = selection.resolve(f, ["Ness Fm.", "2850-2860 m"], force=True, notes=notes)[0]
@@ -266,10 +266,10 @@ def test_a_tools_zones_are_the_union_of_what_they_name():
     t = schemas.call(f, "stats", {"curves": ["GR"], "zones": [f"{iv.top:g}-{iv.base:g} m", "Ness Fm."]}).text
     assert t.startswith("Zones as asked:") and "is part of" in t.splitlines()[0], t[:300]
     s = NS(f=f, scope=[], scope_note="", scope_merged="", scope_by_user=False, frame=None)
-    loop.apply_scope(s, ["Ness Fm.", "2850-2860 m"])
+    RD.apply_scope(s, ["Ness Fm.", "2850-2860 m"])
     assert s.scope == ["Ness Fm."] and "is part of" in s.scope_merged and not s.scope_note
-    assert s.scope_merged in loop.scope_text(s)
-    loop.apply_scope(s, [f"{iv.top:g}-{iv.base:g} m", "Ness Fm."])
+    assert s.scope_merged in RD.scope_text(s)
+    RD.apply_scope(s, [f"{iv.top:g}-{iv.base:g} m", "Ness Fm."])
     assert not s.scope and "the interval's own samples" in s.scope_merged and not s.scope_note
 
 
@@ -341,13 +341,14 @@ def test_every_reader_names_the_writer_the_record_gives(case):
 # --- D3: a lithology choice is filled from the record, at the binder ---------------------------------------------------
 
 def test_a_lithology_choice_left_unset_is_the_records_per_sample_lithology():
-    """Petrophys declares the parameters that take the rock's lithology (role "lithology"); library_api.bind, which
+    """Petrophys declares the parameters that take the rock's lithology (role "lithology"); library.api.bind, which
     every Petrophys call passes, fills one left unset from the record per sample (a function on curves runs once per
     lithology, the results put together; a sample whose rock no option names takes the default), says so, and leaves
     one the model gives as given. Before, a run by name used the function's default (sandstone) for a carbonate."""
     import inspect
     from petrophys.interpretation.saturation.sonic.rock_physics import vs_from_vp_greenberg_castagna as gc
-    from petroharness.agent import library as L, library_api as A
+    from petroharness.agent import library as L
+    from petroharness.agent.library import api as A
     f = formation_of(CASES["hw3"])
     dtc = np.asarray(f.view.values("DTC"), dtype=float)
     vp = 304800.0 / dtc
@@ -374,14 +375,53 @@ def test_a_lithology_choice_left_unset_is_the_records_per_sample_lithology():
     assert "lithology dolomite (asked)" in given.text
 
 
+def test_two_parts_of_one_result_that_start_alike_are_both_written(monkeypatch):
+    """A run's array parts become curves named by the call's label and the part cut to 10 characters: two parts that
+    start alike (a pore pressure and its mud-weight form) took one name, and the second replaced the first. The second
+    keeps its whole part name."""
+    from petroharness.agent.library import api as A
+    f = formation_of(CASES["hw3"])
+    n = int(f.view.mask.sum())
+
+    class Fake(A.Fn):
+        def call(self):
+            return lambda: {"pore_pressure": np.full(n, 1.0), "pore_pressure_mud_weight": np.full(n, 2.0)}
+    monkeypatch.setattr(A, "lookup", lambda name, verb=None: Fake("pp_test", "petrophys.test", "calculate",
+                                                                  "A test.", {}))
+    r = A.run(f, "calculate", "pp_test", {}, "PP")
+    assert "written as PP_PORE_PRESS;" in r.text and "written as PP_PORE_PRESSURE_MUD_WEIGHT;" in r.text, r.text
+    assert np.allclose(f.view.values("PP_PORE_PRESS"), 1.0)
+    assert np.allclose(f.view.values("PP_PORE_PRESSURE_MUD_WEIGHT"), 2.0)
+
+
+def test_a_curve_of_the_question_never_takes_a_name_the_record_holds():
+    """register is the one place a curve of the question gets its name: a name the record holds gets _LIB (a lookup
+    reads the record's curve first, so the new one would be hidden), and a curve computed on request before keeps its
+    name (computed again, it is replaced). Before, calculate clay_volume method gr wrote VCL_GR into a record that
+    holds VCL_GR and every lookup went on reading the record's; check, classify and calibrate each had a rule of its
+    own (none, _LIB, _EL)."""
+    from petroharness.agent.library import register
+    f = formation_of(CASES["hw3"])
+    rec = next(c for c in f.inv.curves if c not in f.view.calculated and f.view.prep.curve(c) is not None
+               and np.isfinite(f.view.values(c)).any())
+    before = np.asarray(f.view.values(rec), dtype=float).copy()
+    full = np.full(np.asarray(f.view.prep.depth).size, 0.123)
+    name = register(f, rec, full, "a test curve", "", "test (on request)")
+    assert name == f"{rec}_LIB" and np.allclose(f.view.values(name), 0.123)
+    assert np.array_equal(np.asarray(f.view.values(rec), dtype=float), before, equal_nan=True)   # the record's, kept
+    assert register(f, rec, 2 * full, "a test curve", "", "test (on request)") == name           # computed again
+    assert np.allclose(f.view.values(name), 0.246)
+    assert register(f, "SHARED_POINTS_NEW", full, "a test curve", "", "test (on request)") == "SHARED_POINTS_NEW"
+
+
 @pytest.mark.parametrize("case", WELLS)
 def test_every_lithology_parameter_is_filled_by_one_rule(case):
     """Every parameter of the registry Petrophys declares to take the rock's lithology, whatever its default (one,
-    None, or required), is filled by the one rule (library_api._record_lithology): each sample's rock from the record,
+    None, or required), is filled by the one rule (library.api._record_lithology): each sample's rock from the record,
     taken to an option by Petrophys (lithology_choice); an option of the parameter, per sample where the record holds
     several, or Petrophys's default said when no option names the rock. Before, a label matched an option by
     substring ("ss" in "massive"; SHALY SANDSTONE never took shaly_sandstone; HALITE took sandstone)."""
-    from petroharness.agent import library_api as A
+    from petroharness.agent.library import api as A
     f = formation_of(CASES[case])
     seen = 0
     for fn in A.registry():
@@ -405,7 +445,8 @@ def test_a_result_not_one_per_sample_is_given_for_each_lithology():
     """A function whose result is not one value per sample (Archie defaults by formation type) on a well of several
     lithologies: each lithology's result is given, and the model reads the one it needs (G6). Before, code ran it on
     the most common lithology alone."""
-    from petroharness.agent import library as L, library_api as A
+    from petroharness.agent import library as L
+    from petroharness.agent.library import api as A
     f = formation_of(CASES["hw3"])
     fn = A.lookup("default_archie_params")
     _, counts, _, _ = L.sample_lithology(f, [str(c).lower() for c in fn.kinds["formation_type"].choices])
@@ -550,7 +591,7 @@ def test_a_range_with_a_units_top_and_base_is_that_unit_named_with_its_depths():
     and the answer named a bare range. A range whose top and base are a unit's own (within half a sample) is that unit,
     on its samples, named "Ness Fm. (2841-2865 m)", for a scope and a tool's zones alike (selection._item)."""
     from types import SimpleNamespace as NS
-    from petroharness.agent import loop, selection
+    from petroharness.agent import selection, read as RD
     f = formation_of(CASES["brent"])
     u = next(x for x in f.view.units if x.name.upper().startswith("NESS"))
     rng = f"{u.top:g}-{u.base:g} m"
@@ -558,7 +599,7 @@ def test_a_range_with_a_units_top_and_base_is_that_unit_named_with_its_depths():
     by_name = selection.resolve(f, [u.name], force=True)[0]
     assert selection.same_samples(on.view, by_name.view) and on.view.selection == f"{u.name} ({rng})"
     s = NS(f=f, scope=[], scope_note="", scope_merged="", scope_by_user=False, frame=None)
-    loop.apply_scope(s, [rng])
+    RD.apply_scope(s, [rng])
     assert s.scope == [f"{u.name} ({rng})"], s.scope
     d = np.asarray(f.view.prep.depth, dtype=float) * f.view.depth_scale        # X18: the unit's last sample for its
     last = float(d[(d < u.base)][-1]) if not u.closed else float(d[d <= u.base][-1])   # base: its samples, that unit
@@ -576,7 +617,7 @@ def test_every_name_the_harness_writes_for_a_stretch_selects_that_stretch(case):
     stretch (a scope's label, a result's header with its depths, the interval's name) selects the samples it names,
     for every unit of every well with a tops file."""
     from types import SimpleNamespace as NS
-    from petroharness.agent import loop, selection
+    from petroharness.agent import selection, read as RD
     f = formation_of(CASES[case])
     unit = f.view.report_unit
     checked = 0
@@ -586,7 +627,7 @@ def test_every_name_the_harness_writes_for_a_stretch_selects_that_stretch(case):
         except Exception:
             continue                                     # a unit with no sample here, listed twice, or a zone's name
         s = NS(f=f, scope=[], scope_note="", scope_merged="", scope_by_user=False, frame=None)
-        loop.apply_scope(s, [f"{u.top:g}-{u.base:g} {unit}"])
+        RD.apply_scope(s, [f"{u.top:g}-{u.base:g} {unit}"])
         written = list(s.scope) + [f"{u.name} {u.top:g}-{u.base:g} {unit}", f"{u.name} ({u.top:g}-{u.base:g} {unit})"]
         for w in written:
             on = selection.resolve(f, [w], force=True)[0]
@@ -717,7 +758,7 @@ def test_the_claim_check_names_holders_for_every_number_it_flags_after_citing(mo
     were looked up for the first pass's numbers only. Holders are read for every number the final pass flags."""
     import re as _re
     from petroharness.agent.claims import Claims
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.config import given_settings
     from _wells import task_cfg
     task, cfg, data = task_cfg(CASES["brent"], "c")
@@ -821,8 +862,8 @@ def test_a_difference_of_numbers_stated_elsewhere_is_named_for_the_repair():
 def test_a_step_that_writes_one_curve_of_values_gives_its_range_here(case):
     """Question suite X06: the record's temperature range is the whole well's, and the answer gave no temperature for
     the unit asked. A step that writes one curve of values (temperature, rw, rmf, bvw, ...) gives its range in this
-    interval among its facts (catalog.interval_facts), equal to numpy's; a step that writes several gives none."""
-    from petroharness.record.catalog import interval_facts
+    interval among its facts (card.interval_facts), equal to numpy's; a step that writes several gives none."""
+    from petroharness.record.card import interval_facts
     from petroharness.well.summary import curve_kind
     f = formation_of(CASES[case])
     seen = 0
@@ -862,6 +903,22 @@ def test_arithmetic_written_out_is_given_its_value_and_a_product_or_a_mean_is_de
     assert worked["0.5277"] == ("wrong", "0.1417 / 0.2688", "0.5272") and worked["481"] == ("wrong", "4640 - 3159", "1481")
     ask = _repair_ask(bad, [], [], [], text, (), worked)
     assert "0.1417 / 0.2688 is 0.5272, write 0.5272" in ask and "4640 - 3159 is 1481, write 1481" in ask, ask
+
+
+@pytest.mark.parametrize("text,flagged,want", [
+    ("BVW is 0.2 x (1 - 0.35) = 0.13 v/v.", "0.13", None),                     # the whole expression, not "(1 - 0.35)"
+    ("Hydrocarbon share 1 - 0.35 x 0.8 = 0.72.", "0.72", None),                # x before -, not left to right
+    ("Z1 holds (0.2 + 0.3) / 2 = 0.25 v/v.", "0.25", None),
+    ("BVW is 0.2 x 0.5 = 0.2 v/v.", "0.2", ("wrong", "0.2 x 0.5", "0.1")),     # a real slip is still named
+    ("BVW is 0.2 x (1 - 0.35 = 0.13 v/v.", "0.13", None),                      # does not parse: no value named
+])
+def test_arithmetic_written_out_is_computed_whole_with_precedence(text, flagged, want):
+    """The repair request read the nearest "a op b = c" left to right: in "0.2 x (1 - 0.35) = 0.13" it took
+    "(1 - 0.35) = 0.13" and asked for 0.65, and "1 - 0.35 x 0.8 = 0.72" it computed as (1 - 0.35) x 0.8; the writer
+    was right both times. The whole expression before the "=" is evaluated with precedence (the ledger's calculator),
+    and an expression that does not parse names no value."""
+    from petroharness.agent.checks import derivations
+    assert derivations(text, "", [], [flagged]).get(flagged) == want
 
 
 # --- the condition grammar reads what the harness writes, and the usual ways of writing a condition -------------------
@@ -929,7 +986,7 @@ def test_a_condition_written_with_symbols_words_or_a_chain_is_its_plain_grammar(
 def test_a_verb_asked_for_a_tool_by_name_runs_that_tool_and_a_next_item_of_two_calls_is_two():
     """Question suite B05: {"check": {"what": "threshold_exceedance", ...}} was refused ("no check"), and
     {"stats": {...}, "check": {...}} ran stats only (check read as its argument, ignored)."""
-    from petroharness.agent.loop import split_actions
+    from petroharness.agent.replies import split_actions
     from petroharness.agent.schemas import call
     f = formation_of(CASES["brent"])
     direct = call(f, "threshold_exceedance", {"curve": "RHOB", "threshold": 2.5})
@@ -960,10 +1017,10 @@ def test_the_basis_of_a_value_is_one_text_every_prompt_that_states_numbers_reads
     it; the basis rule was the writer's only. One text (C4 basis), in the brief the claims are written under and in
     both writer prompts."""
     from petroharness.agent import components as C
-    from petroharness.agent import loop
+    from petroharness.agent import prompts as PR
     basis = C.text("C4", "basis")
-    assert "whole line" in basis and "{basis}" not in loop.brief()
-    assert basis in loop.brief() and basis in C.prompt("C9", "write")
+    assert "whole line" in basis and "{basis}" not in PR.brief()
+    assert basis in PR.brief() and basis in C.prompt("C9", "write")
     assert basis in C.prompt("C9", "reply_brief")
     assert all("{basis}" in C.text(c, e) for c, e in (("C1", "brief"), ("C9", "write"), ("C9", "reply_brief")))
     assert not any("whole line" in C.text(c, e) for c, e in (("C1", "brief"), ("C9", "write"), ("C9", "reply_brief")))
@@ -972,7 +1029,7 @@ def test_the_basis_of_a_value_is_one_text_every_prompt_that_states_numbers_reads
 def test_a_search_sent_as_an_action_of_its_own_is_the_verbs_search():
     """Benchmark hw-7 (N1, N3, N4): a direct step's lookups were all {"search": ...} sent bare, none read, and the
     question went to an investigation (W 39-77 where the reference's direct reply scored 76-90)."""
-    from petroharness.agent.loop import VERBS_RUN, coerce_action, split_actions
+    from petroharness.agent.replies import VERBS_RUN, coerce_action, split_actions
     assert coerce_action({"search": "density correction", "where": "calculate"}) == \
         ("tool", "calculate", {"search": "density correction"})
     assert coerce_action({"search": {"calibrate": "core porosity"}}) == ("tool", "calibrate", {"search": "core porosity"})
@@ -989,7 +1046,7 @@ def test_a_search_sent_as_an_action_of_its_own_is_the_verbs_search():
 def test_a_call_named_by_what_it_calls_is_that_call():
     """Benchmark N3/N4: 88 lookups unread, each naming its call by a tool's name under run or search, a Petrophys
     function under run without its verb, a verb's object as the key, a get's id inside a dict or several ids."""
-    from petroharness.agent.loop import coerce_action, split_actions
+    from petroharness.agent.replies import coerce_action, split_actions
     assert coerce_action({"search": "core_vs_log"}) == ("tool", "core_vs_log", {})
     assert coerce_action({"run": "core_vs_log", "args": {"zones": ["Z1", "Z2"]}}) == \
         ("tool", "core_vs_log", {"zones": ["Z1", "Z2"]})
@@ -1007,7 +1064,7 @@ def test_a_call_named_by_what_it_calls_is_that_call():
         ("tool", "check", {"what": "held_readings", "curves": ["DTC"]})
     assert coerce_action({"get": "hydrocarbon.gas_detection"}) == ("tool", "section", {"key": "hydrocarbon.gas_detection"})
     assert split_actions([{"get": "E3, E5", "find": "Z1"}]) == [{"get": "E3", "find": "Z1"}, {"get": "E5", "find": "Z1"}]
-    from petroharness.agent.library_api import registry
+    from petroharness.agent.library.api import registry
     fn = next(fn for fn in registry() if fn.verb == "calculate")
     assert coerce_action({"run": fn.name, "args": {}}) == ("tool", "calculate", {"run": fn.name, "args": {}})
 

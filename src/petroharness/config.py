@@ -85,12 +85,13 @@ class DataPaths(_Strict):
     # The petrophys batch interpreter that is this data's workflow of record, as "module:function" or
     # "/path/adapter.py:function" (the contract of
     # petrophys process_las_directory_with_workflow: (input_dir, output_dir, well_names=...) -> one BatchLasResult per
-    # well). Null: the policy's engine, or the installed library with the policy's corrections.
+    # well). Null: data.interpret, else the policy's engine, else petrophys.interpret with the library's settings.
     interpreter: Optional[str] = None
     # Options for petrophys.interpret, which then interprets each LAS: e.g. {context_profile: NAME} (a name
     # petrophys.reporting.context_profiles.list_context_profiles() gives) for a well of a petrophys context package
     # (interpreted as that package's context does), or {} for the library's defaults. Null:
-    # data.interpreter, else the policy's engine, else the installed library with the policy's corrections.
+    # data.interpreter, else the policy's engine, else petrophys.interpret with the library's settings and the policy's
+    # cutoffs.
     interpret: Optional[dict[str, Any]] = None
     # The unit depths, thicknesses and zone limits are shown in: m, ft, or "las" for each LAS's own depth unit. Null: the
     # policy's depth_unit (metres).
@@ -108,7 +109,7 @@ class DataPaths(_Strict):
     zone_layout: Literal["lithology_runs", "formation"] = "lithology_runs"
     # The zone rule, where a user changes it (petroharness.well.settings: the web UI's interpretation settings). Null:
     # the policy's (zones.min_thickness_m, zones.fallback_vcl_bands). A lithology run thinner than the minimum (metres)
-    # is not a zone; the bands are the VCL edges that zone a well without a lithology log.
+    # is not a zone; the bands are the VCL edges that zone a well with neither a lithology log nor a solved lithology.
     zone_min_thickness_m: Optional[float] = None
     zone_vcl_bands: Optional[list[float]] = None
     # The statistics' bases: "all" (each zone, the zones pooled, and the whole interval where it differs, with what the
@@ -122,7 +123,7 @@ class DataPaths(_Strict):
     # conventions: how its own reports name or group what the record holds (a benchmark's convention, set in its data
     # file). Empty: none, and no prompt changes.
     conventions: list[str] = Field(default_factory=list)
-    # What a tool's zones may name (docs/designs/zones-and-intervals.md): "well", anywhere in the well (a unit of the
+    # What a tool's zones may name (docs/ARCHITECTURE.md): "well", anywhere in the well (a unit of the
     # tops file, a depth range, besides the zones of the interval asked about), or "focus", the interval's zones only
     # (a benchmark's convention, set in its data file: its questions are about the interval).
     reach: Literal["focus", "well"] = "well"
@@ -130,7 +131,7 @@ class DataPaths(_Strict):
     # base, closed, unit, line}, in the file's unit (None: the LAS's own). Read under reach "well".
     units: list[dict] = Field(default_factory=list)
     # The tops file's rows left out of the units (a row whose base is not below its top), each {name, line, top, base,
-    # unit, why}: a question naming one is asked back, the row to fix (agent.loop.ask_back), not told the unit is absent.
+    # unit, why}: a question naming one is asked back, the row to fix (agent.read.ask_back), not told the unit is absent.
     units_left_out: list[dict] = Field(default_factory=list)
     # The user's zones (set by a question from its zones file, petroharness.ask: well.user_zones.read_zones), each
     # {name, top, base, closed, unit, line} in the file's unit: they frame the question in place of the lithology
@@ -154,10 +155,7 @@ class EvalPaths(_Strict):
 
     questions: Optional[Path] = None
     reference_context_dir: Optional[Path] = None
-    category_context_dir: Optional[Path] = None        # the reference context per category (evaluation only)
     gt_dir: Optional[Path] = None
-    v0_repo: Optional[Path] = None
-    v0_artifacts: Optional[Path] = None                # the benchmark's artifacts (judge/, runs/)
 
 
 class ModelConfig(_Strict):

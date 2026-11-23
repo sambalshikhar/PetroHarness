@@ -4,7 +4,6 @@ settings set the statistics' bases and the reporting conventions (docs/BENCHMARK
 
     .venv/bin/python -m pytest tests/agent/test_writer_evidence.py -q
 """
-import json
 import sys
 from pathlib import Path
 
@@ -14,41 +13,22 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(Path(__file__).resolve().parent)]
 from petroharness.agent import components as C  # noqa: E402
 from petroharness.agent import writer as W  # noqa: E402
+from _support.model import ScriptedModel  # noqa: E402
 
 QUESTION = "Where is porosity highest in the formation?"
 CLAIM = "Porosity is uniform: no zone stands out"
 
 
-class Stub:
-    """A model by stage: READ, the step replies in order, settle, and the writer (which writes a number a result shows
-    and one no result shows); every call is recorded."""
-
-    def __init__(self, steps):
-        self.steps, self.sent = list(steps), []
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        self.sent.append({"stage": stage, "messages": messages})
-        usage.log.append({"stage": stage, "prompt_tokens": sum(len(m["content"]) for m in messages) // 4})
-        if stage.startswith("read"):
-            r = {"topics": ["porosity"], "named": ["porosity"]}
-        elif stage.startswith("step_"):
-            r = self.steps.pop(0) if self.steps else {"edits": [], "next": [], "done": True}
-            r = r(messages) if callable(r) else r
-        elif stage.startswith("settle"):
-            r = {"edits": [], "done": True}
-        else:
-            r = "## Answer\nPorosity is highest in the upper zone, 0.987654 v/v.\n\n{{ZONE_TABLE}}"
-        return r if isinstance(r, str) else json.dumps(r)
-
-    def calls(self, stage):
-        return [c for c in self.sent if c["stage"].startswith(stage)]
+def model(steps) -> ScriptedModel:
+    """READ, the step replies in order (then done), settle, and the writer (which writes a number a result shows and
+    one no result shows)."""
+    return ScriptedModel({"read*": {"topics": ["porosity"], "named": ["porosity"]}, "step_*": list(steps),
+                          "settle*": {"edits": [], "done": True}},
+                         default="## Answer\nPorosity is highest in the upper zone, 0.987654 v/v.\n\n{{ZONE_TABLE}}")
 
 
 def _formation():
-    from test_b2_tools import F
+    from _support.formations import F
     got = next(((t, f) for t, f in F() if "PHIE" in f.inv.curves and len(f.view.zones) >= 2), None)
     if got is None:
         pytest.skip("no formation with PHIE and two zones")
@@ -58,7 +38,7 @@ def _formation():
 def _run(monkeypatch, conventions=()):
     from petroharness.agent import graph
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.agent.map import render
     t, f = _formation()
     t = t.model_copy(update={"question": QUESTION})
@@ -70,7 +50,7 @@ def _run(monkeypatch, conventions=()):
               "next": [{"stats": {"curves": ["PHIE"]}}], "done": False},
              lambda messages: {"edits": [{"op": "revise", "id": "C1", "text": CLAIM, "ev": ["E1"], "grade": "moderate",
                                           "means": "the zones share one porosity level"}], "next": [], "done": True}]
-    llm = Stub(steps)
+    llm = model(steps)
     out = graph.answer(t, "k2-horizon-7b", 1, 4, "open", "profile", llm_factory=lambda cfg: llm)
     assert not out["trace"].get("error"), out["trace"].get("traceback")
     return s, llm, out
@@ -102,17 +82,39 @@ def test_the_checker_checks_the_answer_against_the_results(monkeypatch):
     assert llm.calls("repair_")                                     # and the repair is asked of the same writer
 
 
-def test_the_results_are_cut_at_the_budget():
+def _results_over_the_budget(digest) -> tuple:
+    """(items, the RESULTS block, table, shape) of the writer's prompt for 79 results of 1000 characters each, more
+    than RESULTS_CHARS, on a ledger whose digest of a result is digest(result)."""
     from types import SimpleNamespace as NS
     items = [NS(id=f"E{i}", text="x" * 1000) for i in range(1, 80)]
     view = NS(reg=NS(shape_for=lambda intent: "direct_value"), policy=None, conventions=[])
-    s = NS(f=NS(view=view, inv=NS(curves={})), intent="quantify", ledger=NS(items=items), claims=NS(points=[], claims={}),
-           map="MAP", task=NS(question="How porous is it?", well="W"), card="")
+    s = NS(f=NS(view=view, inv=NS(curves={})), intent="quantify", ledger=NS(items=items, digest=digest),
+           claims=NS(points=[], claims={}), map="MAP", task=NS(question="How porous is it?", well="W"), card="")
     from unittest import mock
     with mock.patch.object(W, "claims_block", lambda c, confidence=False: ""), \
             mock.patch.object(W.vocabulary, "note", lambda s: ""), mock.patch.object(W, "curve_card", lambda s: ""):
         system, user, table, shape = W.prompt(s, fmt="default")
     body = user.split("RESULTS (everything the investigation computed, by id):\n", 1)[1].split("\n\nWHAT THE CURVES")[0]
+    return items, body, table, shape
+
+
+def test_over_the_budget_the_newest_results_stay_whole_and_the_oldest_are_digests():
+    """Results longer than RESULTS_CHARS: every result is still there, the newest whole and the oldest uncited as
+    their digests, within the budget; nothing is cut."""
+    digest = lambda e: f"[{e.id}] digest"
+    items, body, table, shape = _results_over_the_budget(digest)
+    parts = body.split("\n\n")
+    assert len(parts) == len(items) and len(body) <= W.RESULTS_CHARS and "... (cut)" not in body
+    whole = [p == f"[{e.id}] {e.text}" for p, e in zip(parts, items)]
+    k = whole.index(True)                                            # the first result shown whole
+    assert 0 < k and all(whole[k:]) and parts[:k] == [digest(e) for e in items[:k]]
+    assert len(body) + 2 * 1100 > W.RESULTS_CHARS                    # as many whole as the budget holds
+    assert table == "" and shape == "direct_value"
+
+
+def test_results_whose_digests_are_over_the_budget_are_cut_at_it():
+    """The last guard: when the digests themselves do not fit, the results text is cut at RESULTS_CHARS, and says so."""
+    items, body, table, shape = _results_over_the_budget(lambda e: f"[{e.id}] {e.text}")
     assert body.endswith("\n... (cut)") and len(body) == W.RESULTS_CHARS + len("\n... (cut)")
     assert table == "" and shape == "direct_value"
 
@@ -151,7 +153,7 @@ def test_a_comparison_gives_the_mean_difference_against_its_spread():
 @pytest.mark.data
 def test_the_provenance_card_states_limits_and_constants_from_the_values():
     from petroharness.agent import engine as E
-    from test_b2_tools import F
+    from _support.formations import F
     for t, f in F():
         card = E.provenance(f, list(f.inv.curves)[:40])
         if "a limit or a default value" in card or "constant:" in card:
@@ -176,7 +178,7 @@ def test_the_zones_basis_leaves_the_whole_interval_out_of_the_tools_only(monkeyp
     from petroharness.agent import engine as E
     from petroharness.agent import tools
     from petroharness.well import summary as S
-    from test_b2_tools import F
+    from _support.formations import F
     got = next(((t, f) for t, f in F() if S.outside(f.view) > 0 and "GR" in f.inv.curves), None)
     if got is None:
         pytest.skip("no formation with samples outside the zones")

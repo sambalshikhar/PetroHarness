@@ -402,7 +402,7 @@ def test_k10_graded_claims_do_not_read_as_hypotheses(text, flagged):
 
 def _dead_screen():
     from b5_traps import screen_not_run
-    from test_b2_tools import F
+    from _support.formations import F
     for t, f in F():
         ctx = screen_not_run(f)
         if ctx:

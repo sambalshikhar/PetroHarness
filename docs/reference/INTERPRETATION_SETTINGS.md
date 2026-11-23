@@ -52,7 +52,7 @@ What a setting does on GeoLink 30/6-5, Brent Group (2841-2958 m), read back from
 | Ways to set | `ask(..., interpretation=)`, `Conversation.start(..., interpretation=)`, the web UI's settings panel, `/set` in `petroharness chat`, `Conversation.adopt`, a field notes file; a settings file's `data.interpret` and `data.zone_*` | section 8 |
 | Checks | `settings.validate` (kind, choice, range), then Petrophys's `DynamicWorkflowConfig` | `well.settings.validate` |
 | Effect | a Petrophys setting re-interprets the well (another cache entry); a zone setting re-zones the same interpreted well | `prepare._cache_path`, `FormationView.build` |
-| Refused with | a context profile (`--profile`) or a data interpreter, for Petrophys settings | `ask._interpretation` |
+| Refused with | a context profile (`--profile`) or a data interpreter, for Petrophys settings | `interval._interpretation` |
 | Field notes | `name`, `settings`, `notes`; at most 20 notes of 300 characters | `well.notes` |
 
 </details>
@@ -86,7 +86,7 @@ flowchart TD
    Field notes' settings sit under any given at the start (`ask.ask`, `Conversation.start`).
 3. **The check.** `settings.validate` checks each value's kind and range and passes Petrophys's settings through
    `DynamicWorkflowConfig`; any problem stops the run before Petrophys interprets.
-4. **The split.** `settings.split` separates Petrophys's options from the zone rule. `ask._interpretation` puts
+4. **The split.** `settings.split` separates Petrophys's options from the zone rule. `interval._interpretation` puts
    Petrophys's over `data.interpret` (over the policy's cutoffs) and the zone rule into `data.zone_*`.
 5. **The policy.** `view.user_cutoffs` makes the policy's cutoffs follow `vcl_cutoff`, `sw_cutoff` and
    `phie_cutoff`, so the cutoff check and the record quote the cutoffs Petrophys used.
@@ -134,7 +134,7 @@ Example: two fields as the sheet gives them (real output).
  "common": true, "petrophys": true, "heading": "Gamma-ray clay volume"}
 {"key": "zone_vcl_bands", "label": "Shale-volume bands", "kind": "bands", "unit": "v/v", "choices": [],
  "default": [0.3, 0.6],
- "help": "For a well without a lithology log: the VCL edges of the clean, shaly and shale-prone bands that zone it.",
+ "help": "For a well with neither a lithology log nor a solved lithology: the VCL edges of the clean, shaly and shale-prone bands that zone it.",
  "more": "Below the first edge a sample is clean, between the edges shaly, above the second shale-prone.",
  "common": true, "petrophys": false, "heading": "Zones"}
 ```
@@ -186,7 +186,7 @@ Petrophys's step records):
 
 | Petrophys used | 30/6-5, Brent Group | HW-3, KHARAIB-2: defaults | HW-3, KHARAIB-2: carbonate set |
 |---|---|---|---|
-| Zones from | the lithology log `LITHOLOGY_GEOLINK`: 20 zones | shale-volume bands: 1 zone, clean | shale-volume bands: 1 zone, clean |
+| Zones from | the lithology log `LITHOLOGY_GEOLINK`: 20 zones | Petrophys's mineral solver, clastic domain: 8 zones, 7 sandstone and 1 dolomite | Petrophys's mineral solver, carbonate domain: 9 zones, 8 limestone and 1 dolomite |
 | `lithology_domain`, `matrix_type` | clastic, sandstone | clastic, sandstone | carbonate, limestone |
 | `rho_ma` | per lithology-log group (sandstone 2.65, limestone 2.71, coal 1.35) | 2.65 | 2.71 |
 | Lithology step | `canonical_multi_mineral_solver` | `canonical_multi_mineral_solver` | `generic_calcite_dolomite_density_closure` |
@@ -204,11 +204,13 @@ CC BY (HW-3).
 How the interval is split into zones: the unit every answer reports on. These three are the harness's own (section
 5). Shown first: all three.
 
+<!-- generated: settings_zones (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `zone_min_thickness_m` | number | `2.0` | A run of one lithology (or one shale-volume band) no thicker than this is not a zone; its samples stay in the whole-interval statistics as samples outside the zones. | - | m | Minimum zone thickness |
-| `zone_vcl_bands` | bands | `[0.3, 0.6]` | For a well without a lithology log: the VCL edges of the clean, shaly and shale-prone bands that zone it. | - | v/v | Shale-volume bands |
+| `zone_vcl_bands` | bands | `[0.3, 0.6]` | For a well with neither a lithology log nor a solved lithology: the VCL edges of the clean, shaly and shale-prone bands that zone it. | - | v/v | Shale-volume bands |
 | `zone_layout` | choice | `lithology_runs` | Split the interval into runs of one lithology, or keep it as one zone. | `lithology_runs`, `formation` | - | Zone layout |
+<!-- end generated: settings_zones -->
 
 Example: a finer zone rule for a thin-bedded interval.
 
@@ -220,8 +222,10 @@ Notes:
 
 - On 30/6-5, Brent Group (a lithology log), the default rule gives 20 zones covering 83.4 m of the 117.0 m interval;
   a 1.0 m minimum gives 31 (98.9 m), a 3.0 m minimum 11 (61.0 m), and `zone_layout: formation` one zone (real runs).
-- The bands zone only a well without a lithology log. On Taranaki `tuhua-7`, McKee Formation, bands of `[0.25, 0.5]`
-  give 8 zones instead of 6; on its Mount Messenger Formation, 5 instead of 6 (real runs). Data: Taranaki Basin
+- The bands zone only a well with neither a lithology log nor a solved lithology. Taranaki `tuhua-7` has a solved
+  lithology, so the bands leave its zones as they are: its McKee Formation has 11 zones at the default edges and at
+  `[0.25, 0.5]` (real runs). Called directly on that formation's VCL (`formation.vcl_band_labels`, then
+  `formation.segment_zones`), the bands give 6 zones at the default edges and 8 at `[0.25, 0.5]`. Data: Taranaki Basin
   Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.
 - A run exactly as thick as the minimum is dropped too: a zone needs base minus top strictly above it
   (`formation.segment_zones`).
@@ -234,6 +238,7 @@ Notes:
 How shale volume (VCL) is computed from the gamma ray, SP and density-neutron. Shown first: `gr_method`, `gr_min`,
 `gr_max`.
 
+<!-- generated: settings_clay (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `gr_method` | choice | `linear` | Transform: "linear", "larionov_tertiary", "larionov_older", "stieber" (stored as "steiber") or "clavier". | `linear`, `larionov_tertiary`, `larionov_older`, `steiber`, `clavier` | - | GR to shale volume |
@@ -242,6 +247,7 @@ How shale volume (VCL) is computed from the gamma ray, SP and density-neutron. S
 | `sp_min` | number | from the data | Shale SP baseline, mV: the line of least SP deflection. | - | mV | SP shale (sp_min) |
 | `sp_max` | number | from the data | Clean-sand SP line (static SP), mV: the line of greatest deflection. | - | mV | SP clean (sp_max) |
 | `rho_cl` | number | from the data | Clay density, g/cm3, used by the carbonate mineral solve and the neutron-density hydrocarbon correction. | - | g/cm³ | Clay density |
+<!-- end generated: settings_clay -->
 
 Example: the values Petrophys took on 30/6-5, Brent Group.
 
@@ -259,8 +265,9 @@ Notes:
 - Unset, `sp_min` (the shale baseline) is P95 of the SP log and `sp_max` (the clean-sand line) P5; on 30/6-5 the
   vclay record shows both picked automatically (`sp_min_source` and `sp_max_source` `auto`), and the SP not in the
   VCL (`sp_in_vcl` false). Petrophys's help: VCL_SP joins the minimum-of-indicators VCL only when both are set.
-- The shale-volume bands, and so the zones of a well without a lithology log, follow VCL: setting `gr_min` and `gr_max`
-  moves them.
+- The shale-volume bands, and so the zones of a well with neither a lithology log nor a solved lithology, follow VCL:
+  setting `gr_min` and `gr_max` moves them. The mineral solver reads VCL too: it is among the lithology step's
+  inputs.
 
 </details>
 
@@ -269,6 +276,7 @@ Notes:
 
 The matrix and fluid properties the porosity equations use. Shown first: `matrix_type`, `rho_ma`.
 
+<!-- generated: settings_porosity (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `matrix_type` | choice | from the data | "auto" (resolved from lithology evidence) or a mineral name such as "sandstone", "limestone" or "dolomite"; see petrophys.model.constants.MatrixProperties.names. | `auto`, `anhydrite`, `calcite`, `calcium_carbonate`, `carnallite`, `coal`, `dolo`, `dolomite`, `gypsum`, `halite`, `kainite`, `lime`, `limestone`, `ls`, `polyhalite`, `quartz`, `salt`, `sand`, `sandstone`, `shale`, `silica`, `sio2`, `ss`, `sylvite` | - | Matrix |
@@ -282,6 +290,7 @@ The matrix and fluid properties the porosity equations use. Shown first: `matrix
 | `hc_type` | choice | `oil` | Hydrocarbon type, "oil" or "gas": the fluid of the neutron-density hydrocarbon correction and, under "current", the PHIT rule in neutron-density crossover (PHID > PHIN + 0.05): the root-mean-square of PHID and PHIN (Gaymard and Poupon, 1968) for gas, density porosity for oil. | `oil`, `gas` | - | Hydrocarbon type |
 | `rho_hc` | number | from the data | Hydrocarbon density in the flushed zone, g/cm3, for the hydrocarbon correction and the core matrix-density check of auto lithology. | - | g/cm³ | Hydrocarbon density (ρhc) |
 | `hc_hydrogen_index` | number | from the data | Hydrogen index of the hydrocarbon for the neutron hydrocarbon correction. | - | - | Hydrocarbon hydrogen index |
+<!-- end generated: settings_porosity -->
 
 Example: the values Petrophys took on 30/6-5, Brent Group (values only).
 
@@ -307,12 +316,14 @@ Notes:
 
 Rw: given, from salinity, or estimated from the data. Shown first: `rw`, `salinity_ppm`.
 
+<!-- generated: settings_water (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `rw` | number | from the data | Formation water resistivity Rw, ohm.m, at rw_meas_temp_f. | - | ohm.m | Rw |
 | `salinity_ppm` | number | from the data | Formation water salinity, ppm NaCl equivalent: another way to give the formation water. | - | ppm | Water salinity |
 | `rw_meas_temp_f` | number | from the data | Temperature of rw, degF. | - | °F | Rw temperature |
 | `allow_default_rw` | switch | `true` | Use a 0.05 ohm.m default Rw when no Rw source is found (the warnings say so). | - | - | Default Rw if none found |
+<!-- end generated: settings_water -->
 
 Example: Rw given with its temperature.
 
@@ -336,6 +347,7 @@ Notes:
 
 The saturation model and its parameters. Shown first: `sw_model`, `a`, `m`, `n`.
 
+<!-- generated: settings_saturation (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `sw_model` | choice | `auto` | "auto" (routed per sample by clay content) or one of "archie", "simandoux" (Sw in the clay term, Bardon-Pied), "modified_simandoux" (sand term over 1 - Vcl), "indonesia", "dual_water", "waxman_smits", "north_sea", "nigeria_schlumberger". | `auto`, `archie`, `north_sea`, `nigeria_schlumberger`, `simandoux`, `modified_simandoux`, `indonesia`, `dual_water`, `waxman_smits` | - | Saturation model |
@@ -350,6 +362,7 @@ The saturation model and its parameters. Shown first: `sw_model`, `a`, `m`, `n`.
 | `vsh_exp` | number | `1.6` | Shale exponent of the North Sea model. | - | - | Shale-volume exponent |
 | `shale_exp` | number | `1.6` | Shale exponent of the Nigeria-Schlumberger model. | - | - | Shale exponent |
 | `sw_routing_vcl_cutoff` | number | from the data | Clay volume, v/v, from which sw_model="auto" uses a shaly-sand equation rather than Archie. | - | v/v | Shaly-sand model above VCL |
+<!-- end generated: settings_saturation -->
 
 Example: the values Petrophys took on 30/6-5, Brent Group (values only), and a change.
 
@@ -387,6 +400,7 @@ Notes:
 
 The permeability transform and the irreducible water saturation. Shown first: `perm_method`.
 
+<!-- generated: settings_permeability (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `perm_method` | choice | `auto` | Permeability method. | `auto`, `timur`, `coates`, `wyllie_rose`, `lith_vcl` | - | Permeability transform |
@@ -394,6 +408,7 @@ The permeability transform and the irreducible water saturation. Shown first: `p
 | `swirr` | number | from the data | Irreducible water saturation, v/v, for the permeability equations. | - | v/v | Irreducible Sw |
 | `swirr_flag_phi_cl` | choice | `workflow` | Clay porosity behind the PHIE that picks the SWIRR_APP samples, i.e. the reservoir flag built before permeability when the well has no RESFLAG or NET_RES curve. | `workflow`, `all_shale_phit` | - | Swirr reservoir flag |
 | `use_peer_core` | switch | `false` | Calibrate permeability with core data from peer_wells, under the conditions given there; without peer_wells it has no effect. | - | - | Use core from peer wells |
+<!-- end generated: settings_permeability -->
 
 Example: a change, and what Petrophys read back on 30/6-5, Brent Group.
 
@@ -419,12 +434,14 @@ Notes:
 
 The cutoffs that flag net reservoir and net pay. Shown first: `vcl_cutoff`, `phie_cutoff`, `sw_cutoff`.
 
+<!-- generated: settings_pay (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `vcl_cutoff` | number | `0.3` | Maximum clay volume for net rock, v/v. | - | v/v | VCL cutoff |
 | `phie_cutoff` | number | `0.08` | Minimum effective porosity for net reservoir, v/v. | - | v/v | PHIE cutoff |
 | `sw_cutoff` | number | `0.7` | Maximum water saturation for net pay, v/v. | - | v/v | SW cutoff |
 | `reuse_input_resflag` | switch | `false` | Reuse a RESFLAG or NET_RES curve already on the well as the reservoir flag that picks the SWIRR_APP samples before permeability. | - | - | Reuse the LAS reservoir flag |
+<!-- end generated: settings_pay -->
 
 Example: the cutoffs Petrophys used on 30/6-5, Brent Group, at the defaults, and with a change.
 
@@ -440,7 +457,7 @@ interpretation = {"sw_cutoff": 0.6, "phie_cutoff": 0.1}   # read back: sw_cutoff
 Notes:
 
 - `vcl_cutoff` and `sw_cutoff` default to the policy's 0.30 and 0.70, which `petroharness` passes to Petrophys
-  (`ask.POLICY_CUTOFFS`). Unset, `phie_cutoff` is Petrophys's lithology-family standard: 0.08 clastic, 0.045
+  (`interval.POLICY_CUTOFFS`). Unset, `phie_cutoff` is Petrophys's lithology-family standard: 0.08 clastic, 0.045
   carbonate, the policy's values too.
 - With a lithology log, Petrophys applies that standard per depth: on 30/6-5 the net-pay step records `phie_cutoff` as
   `lithology_dependent`, with 0.08 for 20,393 clastic samples and 0.045 for 1,783 carbonate ones of the whole well
@@ -457,12 +474,14 @@ Notes:
 
 The temperature profile Rw and Rmf are corrected along. Shown first: `bht_f`.
 
+<!-- generated: settings_temperature (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `bht_f` | number | from the data | Bottom-hole temperature, degF. | - | °F | Bottom-hole temperature |
 | `surface_temp_f` | number | `68.0` | Surface (mean annual) temperature, degF, at depth 0 of the linear temperature profile (offshore, the sea surface rather than the seabed). | - | °F | Surface temperature |
 | `td_ft` | number | from the data | Total depth for the BHT, in feet. | - | ft | Total depth for BHT |
 | `gradient_f_per_100ft` | number | from the data | Geothermal gradient, degF/100 ft (1 degC/100 m is 0.549 degF/100 ft), from surface_temp_f at depth 0. | - | - | Geothermal gradient |
+<!-- end generated: settings_temperature -->
 
 Example: the values Petrophys took on 30/6-5, Brent Group.
 
@@ -487,6 +506,7 @@ Notes:
 
 Mud type and filtrate properties (Rmf, Rm). Shown first: `mud_type`.
 
+<!-- generated: settings_mud (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `mud_type` | choice | `WBM` | "WBM" (water-based) or "OBM" (oil-based) mud. | `WBM`, `OBM` | - | Mud type |
@@ -498,6 +518,7 @@ Mud type and filtrate properties (Rmf, Rm). Shown first: `mud_type`.
 | `rmf_chlorides_mg_l` | number | from the data | Mud-filtrate chlorides (Cl-), mg/l, as on the mud report and the LAS header CLFL. | - | mg/l | Filtrate chlorides |
 | `rm` | number | from the data | Mud resistivity Rm at rm_meas_temp_f, ohm.m (Rmf is derived from it). | - | ohm.m | Rm |
 | `rm_meas_temp_f` | number | from the data | Temperature at which rm was measured, degF. | - | °F | Rm temperature |
+<!-- end generated: settings_mud -->
 
 Example: an oil-based mud.
 
@@ -517,12 +538,14 @@ Notes:
 
 The interpretation domain and the mineral solve. Shown first: `lithology_domain`.
 
+<!-- generated: settings_lithology (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `lithology_domain` | choice | from the data | Broad interpretation domain: "clastic" (the default when unset), "carbonate", "evaporite" or "auto". | `auto`, `clastic`, `carbonate`, `evaporite` | - | Interpretation domain |
 | `lithology_source` | choice | `auto` | Lithology source. | `auto`, `external`, `vendor`, `computed`, `config` | - | Lithology source |
 | `carbonate_calibration` | choice | from the data | Calibration of the carbonate-domain mineral solve, which takes calcite and dolomite from bulk density and closure. | `generic`, `costa` | - | Carbonate calibration |
 | `mineral_solver_version` | integer | `1` | Mineral solver for the clastic mineral step. | - | - | Mineral solver version |
+<!-- end generated: settings_lithology -->
 
 Example: the values Petrophys took on 30/6-5, Brent Group, and a carbonate domain on COSTA HW-3, KHARAIB-2.
 
@@ -554,11 +577,13 @@ Notes:
 
 How the LAS curves are read and checked. No setting is shown first.
 
+<!-- generated: settings_input (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
 | `standardize_input` | switch | from the data | Standardize curve aliases and units before interpretation: vendor mnemonics get canonical aliases, units such as kg/m3 or percent porosity are converted and implausible values are screened, with a warning. | - | - | Standardize curves and units |
 | `rename_input_curves` | switch | `false` | Rename vendor mnemonics to canonical names instead of adding aliases. | - | - | Rename vendor mnemonics |
 | `calculation_profile` | choice | `current` | Interpretation configuration. | `current`, `geolink` | - | Calculation profile |
+<!-- end generated: settings_input -->
 
 Example: renaming vendor mnemonics instead of aliasing them.
 
@@ -626,7 +651,7 @@ check and the record quote what Petrophys used.
 | `vcl_cutoff` | setting | policy `vcl_max` 0.30 | replaces `cutoffs.vcl_max` | `view.user_cutoffs` |
 | `sw_cutoff` | setting | policy `sw_max` 0.70 | replaces `cutoffs.sw_max` | `view.user_cutoffs` |
 | `phie_cutoff` | setting | policy `phie_min_clastic` 0.08, `phie_min_carbonate` 0.045 | replaces both porosity cutoffs | `view.user_cutoffs` |
-| `POLICY_CUTOFFS` | table | `{vcl_cutoff: vcl_max, sw_cutoff: sw_max}` | the policy's cutoffs `petroharness` passes to `petrophys.interpret`, under the user's | `ask.POLICY_CUTOFFS` |
+| `POLICY_CUTOFFS` | table | `{vcl_cutoff: vcl_max, sw_cutoff: sw_max}` | the policy's cutoffs `petroharness` passes to `petrophys.interpret`, under the user's | `interval.POLICY_CUTOFFS` |
 | check | rule | tolerance `1e-12` | net pay's recorded `vcl_cutoff`, `sw_cutoff` and `phie_cutoff` must equal the view's policy; a cutoff recorded as text (per depth by lithology, `lithology_dependent`) is not compared | `prepare._check_engine_cutoffs` |
 
 Example: the view's policy cutoffs with `phie_cutoff: 0.1` (real output).
@@ -693,7 +718,7 @@ Notes:
 
 ## 8. Passing settings
 
-Every way in ends in the same `interpretation` table, `{setting: value}`, which `ask._interpretation` applies. The
+Every way in ends in the same `interpretation` table, `{setting: value}`, which `interval._interpretation` applies. The
 same change, four ways, on 30/6-5 Brent:
 
 ```python
@@ -734,7 +759,7 @@ defaults.
 | web UI settings panel | JSON | Petrophys defaults | `interpretation` of `POST /api/ask` and `POST /api/preview` | `ui.adapter.arguments` |
 | `/set name=value` | chat command | | `Conversation.adopt`, from the next question on | `session.chat.command` |
 | `Conversation.adopt(changes)` | Python | | as `/set`; `None` takes a setting back to its default | `Conversation.adopt` |
-| settings file `data.interpret`, `data.zone_*` | YAML | none | Petrophys options and the zone rule of every question run with the file; not checked by the sheet | `ask._settings` |
+| settings file `data.interpret`, `data.zone_*` | YAML | none | Petrophys options and the zone rule of every question run with the file; not checked by the sheet | `interval._settings` |
 
 Notes:
 
@@ -847,7 +872,7 @@ prompt:  Settings changed before question 3 (by the user): m the default -> 1.8.
 | `by` | text | `user` | who asked, in the log and the prompts | `Conversation.adopt` |
 | returns | list | | `[{key, from, to}]`; `[]` when the settings asked for are those in force (nothing logged) | `Conversation.adopt` |
 | check | rule | | `settings.validate` on the merged settings; Petrophys settings refused when the conversation has a profile; refused for a conversation on prepared tasks | `Conversation.adopt` |
-| `_apply(after, n, made)` | method | | stores the settings in `inputs["interpretation"]`, prepares and checks the interval again (`ask.prepare`, `ask.check`), and moves the live session to the re-interpreted well (`Session.rewell`) | `Conversation._apply` |
+| `_apply(after, n, made)` | method | | stores the settings in `inputs["interpretation"]`, prepares and checks the interval again (`interval.prepare`, `ask.check`), and moves the live session to the re-interpreted well (`Session.rewell`) | `Conversation._apply` |
 | log | event | | `settings`: the question it takes effect at, `changes`, `by`, `interpretation` (in force after), `interval`, `zones` | `Conversation.adopt` |
 
 Example: the change above in Python (real output).
@@ -873,7 +898,7 @@ What a change does to the well, the results and the record.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| next generation | rule | | the well interpreted again under the settings in force; every later question reads it | `agent.loop.Session.rewell` |
+| next generation | rule | | the well interpreted again under the settings in force; every later question reads it | `agent.state.Session.rewell` |
 | ledger | rule | | ids go on; every result opened before is marked and the same call asked again is computed anew | `agent.ledger.Ledger.rewell` |
 | re-read result | text | | `[E3] (opened before the settings change before question 2 (m the default -> 1.8): these values rest on the earlier settings; <call>) <text>` | `agent.ledger.Ledger.show` |
 | trace | block | | `settings`: `turn`, `in_force`, `sources`, `changes`, `changed` | `session.graph` |
@@ -951,11 +976,11 @@ Notes:
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
 | settings | rule | | `{**notes.settings, **interpretation}`: the notes' settings, under those given at the start | `ask.ask`, `Conversation.start`, `ui.adapter.preview` |
-| statement | text | `""` without notes | `(The user's field notes for this field, <name>: <notes>)`, each note ending with a full stop, appended to every question | `notes.statement`, `ask.task_for` |
+| statement | text | `""` without notes | `(The user's field notes for this field, <name>: <notes>)`, each note ending with a full stop, appended to every question | `notes.statement`, `interval.task_for` |
 | sources | table | | `{setting: "field notes" \| "user"}`: the notes' when the value is theirs and nobody changed it | `notes.sources`, `Conversation.sources` |
 | answer header | line | | `- **Field notes:** <name> (<settings>); <n> notes with the question` | `ask._settings_lines` |
 | trace and log | record | | the trace's `ask.field_notes` (`name`, `sha256`, `settings`, `notes`); a conversation's log keeps them in its inputs, so a resume does not read the file again | `ask.ask_record`, `Conversation.start` |
-| profile | rule | | notes with Petrophys settings are refused with a context profile (web UI); with `ask`, `_interpretation` refuses them | `ui.adapter.arguments`, `ask._interpretation` |
+| profile | rule | | notes with Petrophys settings are refused with a context profile (web UI); with `ask`, `_interpretation` refuses them | `ui.adapter.arguments`, `interval._interpretation` |
 | benchmark | rule | | a benchmark run never reads field notes | `well.notes` |
 
 Example: a conversation on 30/6-5, Brent Group, started with the file above and `interpretation={"rw": 0.05}`, then
@@ -988,7 +1013,7 @@ Notes:
 | Unknown setting name | `ValueError` (`not a setting this panel knows`); UI 400 | `settings.validate` |
 | Value of the wrong kind, a choice not listed, bad bands, thickness at or below 0 | `ValueError` naming each setting; UI 400 | `settings.validate` |
 | Value Petrophys's configuration refuses | `ValueError` with Petrophys's line | `settings.validate` |
-| Petrophys settings with `--profile` or `data.interpreter` | `ValueError`: drop one | `ask._interpretation`, `Conversation.adopt`, `ui.adapter.arguments` |
+| Petrophys settings with `--profile` or `data.interpreter` | `ValueError`: drop one | `interval._interpretation`, `Conversation.adopt`, `ui.adapter.arguments` |
 | Unknown option in a settings file's `data.interpret` | `ValueError: WHAT: data.interpret names settings Petrophys does not have: <names>. ...`; exit status 2 | `prepare._interpret_with_petrophys`, `prepare.unknown_interpret_options` |
 | Invalid value in a settings file's `data.interpret` | Petrophys's `ValueError`; exit status 2 | `petrophys.interpret` |
 | `adopt` on a conversation of prepared tasks | `ValueError` | `Conversation.adopt` |

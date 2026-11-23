@@ -53,10 +53,10 @@ The stages do not change from well to well; what `build` finds does, and the map
 | Well and interval | The case | What `build` gives |
 |---|---|---|
 | GeoLink 30/6-5, Brent Group | A lithology log, core, a tops file | 20 zones from `LITHOLOGY_GEOLINK` (sand, silt, coal, cross-bedded sand); 768 samples |
-| Taranaki cheal-1, Moki Formation | No lithology log | 50 zones of shale-volume bands (clean below VCL 0.3, shaly to 0.6, shale-prone above); 3,359 samples |
+| Taranaki cheal-1, Moki Formation | No lithology log | 37 lithology zones from Petrophys's mineral solver (shale and sandstone); 3,359 samples |
 | GeoLink 16/7-1, 2133.5–2568.45 m, by depth | No neutron and no PEF log; evaporites | 2 zones from the lithology log, anhydrite and halite; the map names the missing logs (below) |
 | COSTA HW-3, Kharaib-2 | A carbonate logged in feet; one tops table for many wells | The HW-3 row of the table: 7805–8020 ft, 431 samples, reported in feet |
-| Teapot 17-WX-21, no interval given | An old well in feet; a whole-log question | The whole log, 0–5649.5 ft: 11,300 samples; 123 shale-volume-band zones and a last one, 5626.5–5649.5 ft, labelled NO_LITHOLOGY_DATA |
+| Teapot 17-WX-21, no interval given | An old well in feet; a whole-log question | The whole log, 0–5649.5 ft: 11,300 samples; 102 lithology zones from Petrophys's mineral solver, the first (0–500 ft) and the last (5641–5649.5 ft) labelled NO_LITHOLOGY_DATA |
 | Taranaki tuhua-7, Manganui | A name its tops file lists twice | Stopped before any model call (below) |
 
 Data: GeoLink, CC BY-SA 4.0. Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals),
@@ -96,9 +96,9 @@ A conversation adds three parts, none of which changes how its first question is
 
 | Part | Package | What it does |
 |---|---|---|
-| session | `petroharness.session` | The session graph: `open → turn → project → figures → commit`, one run per question; the session log is the record ([SESSION_GRAPH](SESSION_GRAPH.md)) |
+| session | `petroharness.session` | The session graph: `open → turn → project → figures → commit`, one run per question; the session log is the record ([GRAPH](GRAPH.md#the-session-graph)) |
 | evidence | `petroharness.evidence` | The evidence graph rebuilt from the session log; the audit trail and the report ([EVIDENCE](EVIDENCE.md)) |
-| core | `petroharness.core` | The setup record: what answers a question, under one hash ([SETUP](SETUP.md)) |
+| core | `petroharness.core` | The setup record: what answers a question, under one hash ([EVIDENCE](EVIDENCE.md#the-setup-record)) |
 
 ## The trace
 
@@ -128,12 +128,13 @@ be replayed with no server ([GRAPH](GRAPH.md#reproducing-a-run-tapes)).
 - `prepare.py` reads the LAS and has Petrophys interpret it. The data config chooses how: `interpret` (options for
   `petrophys.interpret`, such as a context profile), `interpreter` (a Petrophys batch interpreter), or, with neither,
   the policy (`resources/policy/reference_v2.yaml`): the pinned engine it names, run in a subprocess by `runner.py`,
-  or the installed library with the policy's corrections. The cutoffs the interpretation used are checked against the
-  policy's. Prepared wells are cached by the LAS content, the interpretation settings and the Petrophys build.
+  or, when it names none, `petrophys.interpret` with the policy's cutoffs. The cutoffs the interpretation used are
+  checked against the policy's. Prepared wells are cached by the LAS content, the interpretation settings and the Petrophys build.
 - `formation.py` finds the interval: a formation named in the tops table (the named top down to the next deeper top),
   or a depth interval; with neither, the whole well. It zones the interval by the lithology log: runs of one
-  lithology, runs thinner than the zone minimum dropped. A well without a lithology log is zoned by shale-volume
-  bands. With `zone_layout: formation` the interval is one zone.
+  lithology, runs thinner than the zone minimum dropped. A well without a lithology log is zoned by the lithology
+  Petrophys's mineral solver wrote, and a well with neither by shale-volume bands. With `zone_layout: formation` the
+  interval is one zone.
 - `view.py` is the interval view every later layer reads: samples, zones, curves, units, formatting. Depths are shown
   in the policy's unit, or the one the data config sets.
 - `derived.py`, `calculations.py`, `stats.py`: the curves the analyzers derive, the calculations the well was
@@ -182,7 +183,7 @@ convention: the model chooses and says why.
 <details>
 <summary>The map</summary>
 
-`inventory.py`, `map.py`, `notes.py`, `routes.py`. The inventory is the model of the interval's input and record:
+`agent/inventory.py`, `agent/map.py`, `agent/notes.py`, `record/routes.py`. The inventory is the model of the interval's input and record:
 curves, units, steps, sections, zones (code only, no model calls). The map writes it as plain facts: the interval and
 its zones; the raw input curves and what each one is; the workflow's steps with their methods, inputs and outputs; its
 sections; notes on the interval's record (routes, fallbacks, cutoffs), scoped to the analyzer families of the topics
@@ -193,7 +194,7 @@ the model chose.
 <details>
 <summary>The tools</summary>
 
-`engine.py`, `tools.py`, `compute.py`, `toolset.py`, `schemas.py`. Each tool is defined once, a `Tool` in
+`engine/`, `tools.py`, `compute.py`, `toolset.py`, `schemas.py`. Each tool is defined once, a `Tool` in
 `toolset.py` (`petroharness.tools.spec`): its function, arguments, description, group and how a call of it is listed;
 every list of tools is read from the definitions ([TOOLS](TOOLS.md), [Extending](reference/EXTENDING.md)). What the
 model can ask for:
@@ -205,8 +206,8 @@ model can ask for:
 | On the ledger | `get` (an item, or its lines matching a term), `find` (a term across every item), `calc` (arithmetic on shown numbers, kept as an item of its own so the result can be cited) |
 | Over Petrophys | the verbs `calculate`, `what_if`, `estimate`, `check`, `classify`, `summarize` and `calibrate`, each with its shortcuts, and `search` and `run` over every public Petrophys function |
 
-The Petrophys verbs live in `library.py`, `library_check.py`, `library_classify.py`, `library_summarize.py`,
-`library_calibrate.py` and `library_api.py`. `calculate` recomputes a property with Petrophys's workflow step under
+The Petrophys verbs live in `library.py`, `library/check.py`, `library/classify.py`, `library/summarize.py`,
+`library/calibrate.py` and `library/api.py`. `calculate` recomputes a property with Petrophys's workflow step under
 another method or parameters, with the steps that read its outputs. The registry is generated from the installed
 library; one binder reads the inputs the model names as Petrophys declares them (curves, conditions as masks,
 numbers, choices), adds the question's scope (the prepared well, the interval's limits), and turns the outputs into
@@ -269,7 +270,7 @@ analyzer families it reads and its key curves for the first look.
 <details>
 <summary>The graph</summary>
 
-`graph.py`, `loop.py`. A LangGraph state graph: `build`, `read`, `first_look`, then the steps (`ask`, `plan` at step
+`graph.py`, and the investigation's modules `state.py` (the session), `prompts.py` (the brief), `read.py` (the READ call, the scope, the question back), `replies.py` (reading the model's replies) and `settle.py`. A LangGraph state graph: `build`, `read`, `first_look`, then the steps (`ask`, `plan` at step
 1, `decide`, `act`), `close`, `settle`, then the writer (`write`, `verify`, `repair`, `finalize`). Code nodes route;
 the model never judges its own completion. Every node, state field and route: [GRAPH](GRAPH.md), drawn from the code
 in `docs/graph.mmd`.
@@ -323,6 +324,36 @@ The checker reads the draft as delivered this way, so what it flags is what the 
 
 </details>
 
+<a id="stretches-of-the-well"></a>
+<details>
+<summary>Stretches of the well: focus, reach, frame and scope</summary>
+
+Petrophys interprets the whole LAS once; every stretch of it is read from that one interpretation, and reaching
+another stretch computes nothing new.
+
+- **The focus** is the interval the question is asked about (a unit of the tops file, a top and base, or the whole
+  well). It is what a tool reports on when a call names no stretch, and what the map, the first look and the zone
+  table describe.
+- **The reach** (`data.reach`) says what a tool's `zones` may name. `well`, the default: a zone of the focus, a
+  lithology, a unit of the tops file, a depth range, or several of them (`agent/selection.py`); one stretch is read as
+  a view of its own (`FormationView.stretch`), several as one row each. `focus` (a benchmark's data config): only the
+  focus's zones.
+- **The frame** is the set of zones the answer is reported by: your zones when you give them (`--zones`, in place of
+  the lithology zones, which stay available as `L1..`), else the lithology zones (lithology-log runs, else runs of
+  Petrophys's solved lithology, else shale-volume bands). Every summary reports each zone of the frame, the zones
+  pooled, and the whole selection.
+- **The scope** is the stretches a question is about, read from its words by the READ call (units, your zones, depth
+  ranges, the whole well) and used by every call of that question; a name the tops file lists more than once, or a
+  name close to several units, is asked back instead (status `ask_user`). In a conversation, `/scope`, `/frame` and
+  `/zones` set them for the next questions ([SESSIONS.md](SESSIONS.md)); each change is logged and named in the
+  prompts.
+
+The model never changes the scope or the frame on its own (G8): a change comes from the user's words or commands, and
+code applies it.
+
+</details>
+
+<a id="reporting-settings"></a>
 <details>
 <summary>Reporting settings</summary>
 
@@ -363,9 +394,11 @@ span by span to its components. A change touches one component, so its version s
 <details>
 <summary>Switches</summary>
 
-`agent/options.py` holds the switches under test. A switch exists only while a comparison needs it: it defaults off,
-and once measured it becomes the default or goes. None is defined: `depth` (the direct route for every question:
-[GRAPH](GRAPH.md#the-direct-route)) was measured on the whole benchmark with both models and is the code. `PETROHARNESS_SET` sets switches for one run, and every trace records the options in force.
+`options.py` holds the switches under test. A switch exists only while a comparison needs it: it defaults off,
+and once measured it becomes the default or goes. Two are defined, `tight_numbers` and `cell_thickness`
+([EXTENDING](reference/EXTENDING.md#12-make-a-behaviour-change-a-switch)); `depth` (the direct route for every
+question: [GRAPH](GRAPH.md#the-direct-route)) was measured on the whole benchmark with both models and is the code.
+`PETROHARNESS_SET` sets switches for one run, and every trace records the options in force.
 
 </details>
 
@@ -376,9 +409,8 @@ and once measured it becomes the default or goes. None is defined: `depth` (the 
 
 - `policy/`: the interpretation policy (the engine, the cutoffs, the depth unit, the lithology code table, the zone
   rules, the report style it uses);
-- `profiles/report_style.yaml`: the answer format, never a basis or a conclusion. The code reads one key of it, the
-  zone table's style (`format.zone_table`: one row per interval); its sections, length and limitations rule reach no
-  prompt;
+- `profiles/report_style.yaml`: the answer format, never a basis or a conclusion: the zone table's style
+  (`format.zone_table`: one row per interval);
 - `rules/`: the registries (curves, judgements, shapes, checks, catalog, topics, relations);
 - `topics.yaml`: the topic areas;
 - `skills/`: the skill libraries (`researched/` the default; the format in `skills/README.md`);
@@ -394,7 +426,7 @@ and once measured it becomes the default or goes. None is defined: `depth` (the 
   from the log by code ([Conversations](SESSIONS.md)).
 - **The later-question graph** is the question graph without `build`, with one more route: after settling, the
   writer node follows the answer length the model chose in step 1. Step 1 is asked for the length only where the READ
-  call does not read the route (`--investigate`) ([SESSION_GRAPH](SESSION_GRAPH.md)).
+  call does not read the route (`--investigate`) ([GRAPH](GRAPH.md#the-later-question-graph)).
 - **What comes after an answer** hangs on the session graph: the projections (the methods and parameters, the number
   links) are code, and the figures are one model call plus Petrophys' own plots. Neither can change an answer's text.
 - **The evidence graph** needs only the session folder ([EVIDENCE](EVIDENCE.md)).

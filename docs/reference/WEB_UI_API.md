@@ -51,6 +51,8 @@ flowchart TD
 | [`GET /api/run/ID/conversation`](#get-apirunidconversation) | every question of the run's conversation |
 | [`GET /api/run/ID/lineage`](#get-apirunidlineage) | what the answer rests on (JSON) |
 | [`GET /api/run/ID/audit`](#get-apirunidaudit) | the answer's audit trail (Markdown) |
+| [`GET /api/run/ID/logview`](#get-apirunidlogview-and-logdata) | the log viewer: every curve it can show, the tracks, the zones |
+| [`GET /api/run/ID/logdata`](#get-apirunidlogview-and-logdata) | the log viewer: curves in a depth window |
 | [`POST /api/rate/ID`](#post-apirateid) | records a rating of the run |
 
 A question from a script, on the GeoLink sample well 30/6-5:
@@ -152,72 +154,10 @@ PetroHarness UI on http://127.0.0.1:7931
 Both lines go to standard error (the host, the served model's name and the folder are replaced here). The endpoints
 come from `--model-url` or `PETROHARNESS_MODEL_URL`; `python -m petroharness.ui.server` runs the same command.
 
-<details>
-<summary>Flags of <code>petroharness ui</code></summary>
-
-The flags configure where the server listens, where runs are kept, how many questions run at once and which model
-answers.
-
-| Name | Type | Default | Meaning | Defined in |
-|---|---|---|---|---|
-| `--host ADDRESS` | text | `127.0.0.1` | The address to listen on. `localhost` opens one server on `127.0.0.1` and, where the machine has IPv6, a second on `::1`. An address containing `:` is served over IPv6 (`_Server6`). `0.0.0.0` listens on every interface. | `ui.server.parser`, `ui.server.make_servers` |
-| `--port N` | integer | `7860` | The port. For `localhost`, the `::1` server takes the port the first server bound. | `ui.server.parser` |
-| `--allow-host NAME` | text, repeatable | none | A further host name a server on a loopback address (`--host` `localhost`, `127.0.0.1` or `::1`) answers, for a proxy that keeps its own host name. Names are compared in lower case. Without it, such a server answers API requests only for the host names `localhost`, `127.0.0.1` and `::1`. | `ui.server.parser`, `ui.server.make_servers`, `Handler._refused` |
-| `--runs DIR` | path | `petroharness-ui-runs` (relative to the current folder) | The folder for saved runs, uploads and the shared cache. It is created when missing and resolved to an absolute path. | `ui.server.parser`, `ui.store.Store` |
-| `--workers N` | integer | `4` | Questions answered at once; values below 1 become 1. | `ui.server.parser`, `ui.server.App` |
-| `--model NAME` | text | none (the default model card) | Any chat model by its served name; selects the generic card unless `--model-card` is given. | `ui.server.parser`, `models.card_file` |
-| `--model-card CARD` | YAML path or packaged card name | none (the default card, K2-Horizon-7B) | A model card ([MODELS.md](../MODELS.md)). | `ui.server.parser`, `models.card_file` |
-| `--model-url URLS` | comma-separated URLs | from the environment (below) | The OpenAI-compatible endpoints, each ending in `/v1`. Empty entries are dropped; a trailing `/` is removed. | `ui.server.parser`, `ui.server.Endpoints` |
-
-```bash
-export PETROHARNESS_MODEL_URL=http://localhost:8000/v1,http://localhost:8001/v1
-petroharness ui --port 8080 --workers 2 --runs /srv/petroharness-ui-runs
-python -m petroharness.ui.server --host localhost --model Qwen/Qwen3-32B
-```
-
-</details>
-
-<details>
-<summary>Start-up messages and exit status</summary>
-
-- Both start-up lines are printed on standard error. With no endpoint, the second line ends with
-  `none (set PETROHARNESS_MODEL_URL or --model-url)`; the server still starts, and every question then fails with the
-  `no model endpoint` error ([section 15](#15-limits-and-errors)).
-- With a `--host` that is not a loopback address (`localhost`, `127.0.0.1`, `::1`), a line between the two says
-  `listening on <host>: anyone who can reach this port can ask questions and read the files this server can read;
-  listen on 127.0.0.1 and forward the port where you can`.
-- Exit status: 0 after Ctrl+C; 2 when the model card is missing or wrong (`petroharness ui: <message>`), or when the
-  address cannot be bound (`petroharness ui: cannot listen on HOST:PORT (...). FIX: choose another --port.`).
-- A model card that names no model (`--model-card generic`) without `--model` is refused at start:
-  `petroharness ui: WHAT: the model card generic.yaml names no model. FIX: give the served model's name (--model NAME,
-  as the server lists it at /v1/models).`, exit status 2 (`served_model`).
-- Only requests for `/` and `/index.html` are logged to standard error (`Handler.log_message`); the polling is not.
-
-</details>
-
-<details>
-<summary>Environment variables</summary>
-
-The server reads these variables, directly or through the harness it runs.
-
-| Name | Type | Default | Meaning | Defined in |
-|---|---|---|---|---|
-| `PETROHARNESS_MODEL_URL` | comma-separated URLs | unset | The model endpoints when `--model-url` is not given. | `models.env_urls`, `models.URL_ENVS` |
-| `PETROHARNESS_API_KEY` | text | `EMPTY` | The API key sent to the endpoints; a model card can name another variable (`api_key_env`). | `config.ModelConfig.api_key_env`, `config.HarnessConfig.api_key` |
-| `PETROHARNESS_DATA` | path | unset | A data settings file whose `data` section is the base of every question's settings (`ask._settings`). Its value is shown in `GET /api/config` as `settings_env`. | `config.DATA_FILE_ENV` |
-| `PETROHARNESS_SKILLS` | folder or `none` | unset (the packaged library) | The skill library a question uses when its inputs say `default` or nothing. Shown as `skills_env`. | `config.SKILLS_ENV`, `config.skills_setting` |
-| `PETROHARNESS_SET` | `name=value,...` | unset | Switches under test ([EXTENDING.md](EXTENDING.md#10-make-a-behaviour-change-a-switch)); no switch is defined. | `agent.options.ENV` |
-| `PETROHARNESS_COMPONENTS` | folder | the packaged `agent/components` | Another copy of the component texts the model reads. | `agent.components.HERE` |
-| `LANGSMITH_TRACING`, `LANGSMITH_TRACING_V2`, `LANGCHAIN_TRACING`, `LANGCHAIN_TRACING_V2` | `true`/`1` or other | unset | When any is `true` or `1`, importing the question graph raises `WHAT: hosted tracing is switched on ...`, so every question fails with that error. | `agent.graph.no_hosted_tracing` |
-
-```bash
-export PETROHARNESS_MODEL_URL=http://localhost:8000/v1
-export PETROHARNESS_SKILLS=/path/to/my_library      # shown as skills_env in GET /api/config
-unset PETROHARNESS_DATA                             # each question's settings are built from its LAS file
-petroharness ui
-```
-
-</details>
+Every flag of `petroharness ui`, what it prints at start and its exit status:
+[CLI.md](CLI.md#8-petroharness-ui). The environment variables the server reads (the model endpoints, the API key, the
+data settings, the skill library, the switches): [CONFIGURATION.md](CONFIGURATION.md#10-environment-variables);
+`GET /api/config` shows the ones in force ([section 5](#5-routes-the-page-configuration-and-settings)).
 
 ## 4. Responses and errors
 
@@ -283,6 +223,7 @@ server answers in HTTP/1.0 (the standard library's default) with `Server: PetroH
 What the page loads first: itself and its images, the server's configuration, and the contents of its settings panel,
 which a preview of the interpretation fills with what Petrophys made of the well.
 
+<a id="get--and-get-indexhtml"></a>
 <details>
 <summary>GET / and GET /index.html</summary>
 
@@ -298,6 +239,7 @@ curl -s localhost:7860/ | head -c 200
 
 </details>
 
+<a id="get-imgname"></a>
 <details>
 <summary>GET /img/NAME</summary>
 
@@ -315,6 +257,7 @@ curl -s -o mark.png localhost:7860/img/petroharness_mark.png      # 200, image/p
 
 </details>
 
+<a id="get-apiconfig"></a>
 <details>
 <summary>GET /api/config</summary>
 
@@ -331,7 +274,7 @@ queue, the defaults and the tool groups.
 | `running` | integer | Jobs in memory whose status is `running`. | `App.config` |
 | `queued` | integer | Jobs waiting in the queue. | `App.config` |
 | `runs` | string | The runs folder, absolute. | `App.config` |
-| `max_steps` | integer | The default step cap, 8. | `agent.loop.MAX_STEPS` |
+| `max_steps` | integer | The default step cap, 8. | `agent.state.MAX_STEPS` |
 | `profiles` | list of strings | Petrophys's context profiles (`petrophys.reporting.context_profiles.list_context_profiles()`); empty when the installed Petrophys lists none. | `adapter.context_profiles` |
 | `topics` | object | Topic area name to its `when` line (`resources/topics.yaml`). | `agent.direction.areas` |
 | `verbs` | object | Tool name to its group as the brief heads it, capitalized (`Describe`, `Compare and group`, `Check`, `Calculate`, `Classify`, `Summarize`, `Calibrate`). | `server.verbs`, `agent.toolset.TOOLSET.by_group` |
@@ -345,7 +288,7 @@ The server of [section 3](#3-command-line-and-environment), one endpoint up and 
 model's name and the runs folder replaced):
 
 ```json
-{"version": "1.5.0", "model": "<served model name>", "label": "K2-Horizon-7B",
+{"version": "2.0.0", "model": "<served model name>", "label": "K2-Horizon-7B",
  "endpoints": [{"url": "http://HOST:8000/v1", "ok": true, "models": ["<served model name>"], "ms": 6, "busy": 0},
                {"url": "http://localhost:8001/v1", "ok": false, "models": [],
                 "error": "URLError: <urlopen error [Errno 111] Connection refused>", "busy": 0}],
@@ -368,6 +311,7 @@ Here `topics` names 14 topic areas and `verbs` 30 tools.
 
 </details>
 
+<a id="get-apisettings"></a>
 <details>
 <summary>GET /api/settings</summary>
 
@@ -417,6 +361,7 @@ On the published Petrophys build the groups hold 3, 6, 11, 4, 12, 5, 4, 4, 9, 4 
 
 </details>
 
+<a id="post-apipreview"></a>
 <details>
 <summary>POST /api/preview</summary>
 
@@ -433,7 +378,7 @@ Response fields:
 | Name | Type | Meaning | Defined in |
 |---|---|---|---|
 | `interval` | object | `name`, `top`, `base`, `unit`, `samples` and `from` (where the interval came from). | `ask.check` (`Prepared.used`) |
-| `lithology` | object | How the zones were read: `{"source": "lithology log", "curve", "how": "named" \| "detected"}`, `{"source": "shale-volume bands", "curve": "VCL", "bands"}` or `{"source": "none", "curve": null}`. | `ask.check` (`Prepared.litho`) |
+| `lithology` | object | How the zones were read: `{"source": "lithology log", "curve", "how": "named" \| "detected"}`; without a lithology log, `{"source": "mineral solver", "curve", "method", "domain", "inputs", "decisions", "solved", "samples"}` (the lithology Petrophys's mineral solver wrote); with neither, `{"source": "shale-volume bands", "curve": "VCL", "bands"}`; or `{"source": "none", "curve": null}`. | `ask.check` (`Prepared.litho`) |
 | `unit` | string | The depth unit of the zones. | `adapter.preview` |
 | `zones` | list | `{"zone", "lithology", "top", "base"}` per zone, depths rounded to 4 decimals. | `adapter.preview` |
 | `zoned` | number | The summed thickness of the zones. | `adapter.preview` |
@@ -464,7 +409,8 @@ curl -s -X POST localhost:7931/api/preview -H 'Content-Type: application/json' -
 The response names 20 zones and 25 settings. It took 6.1 s; the same preview again took 0.3 s, from the cache.
 
 A preview shows what a setting changes before any question. The COSTA carbonate well HW-3, Kharaib-2 (in feet, no
-lithology log, so one zone of shale-volume bands), previewed with no settings and then as a limestone:
+lithology log, so its zones are runs of the lithology Petrophys's mineral solver gives), previewed with no settings
+and then as a limestone:
 
 ```bash
 HW3=$(python -c "import petrophys; print(petrophys.sample('HW-3'))")
@@ -477,18 +423,24 @@ curl -s -X POST localhost:7931/api/preview -H 'Content-Type: application/json' -
 ```json
 {"interval": {"name": "KHARAIB-2", "top": 7805.0, "base": 8020.0, "unit": "ft", "samples": 431,
               "from": "tops file formations_costa.csv, base: stated base"},
- "lithology": {"source": "shale-volume bands", "curve": "VCL", "bands": [0.3, 0.6]},
- "unit": "ft", "zones": [{"zone": "Z1", "lithology": "CLEAN (VCL BAND)", "top": 7805.0, "base": 8020.0}],
- "zoned": 215.0, "interval_thickness": 215.0, "min_thickness": 6.5617,
+ "lithology": {"source": "mineral solver", "curve": "LITHO", "method": "generic_calcite_dolomite_density_closure",
+               "domain": "carbonate", "inputs": ["RHOB", "VCL", "PHIE"],
+               "decisions": ["No lithology curve or lithology intervals were available -> inferred LITHO from mineral volumes", […]],
+               "solved": 410, "samples": 431},
+ "unit": "ft", "zones": [{"zone": "Z1", "lithology": "LIMESTONE", "top": 7805.0, "base": 7844.5},
+                         {"zone": "Z2", "lithology": "LIMESTONE", "top": 7845.5, "base": 7854.5}, […]],
+ "zoned": 179.0, "interval_thickness": 215.0, "min_thickness": 6.5617,
  "used": {"vcl_cutoff": {"value": 0.3, "step": "net_pay"}, "phie_cutoff": {"value": 0.045, "step": "net_pay"}, […],
           "lithology_domain": {"value": "carbonate", "step": "vclay"}, "matrix_type": {"value": "limestone", "step": "porosity"},
           "nphi_ma": {"value": 0.0, "step": "porosity"}, "rho_ma": {"value": 2.71, "step": "porosity"}, […],
           "dt_ma": {"value": 47.6, "step": "porosity"}, […], "carbonate_calibration": {"value": "generic", "step": "lithology"}, […]}}
 ```
 
-With no settings the same well is read as `clastic` with a `sandstone` matrix (`rho_ma` 2.65, `nphi_ma` -0.02,
-`dt_ma` 55.5) and a `phie_cutoff` of 0.08. The minimum zone thickness, 2 m in the policy, is reported in the well's
-feet. Data: Costa Gomes, Geiger and Arnold (2022), COSTA model, Heriot-Watt University, CC BY.
+The response names 9 zones, limestone and one dolomite. With no settings the same well is read as `clastic` with a
+`sandstone` matrix (`rho_ma` 2.65, `nphi_ma` -0.02, `dt_ma` 55.5) and a `phie_cutoff` of 0.08; the solver, in its
+clastic domain (`canonical_multi_mineral_solver`), then labels 8 zones, sandstone and one dolomite, 187 ft zoned. The
+minimum zone thickness, 2 m in the policy, is reported in the well's feet. Data: Costa Gomes, Geiger and Arnold (2022),
+COSTA model, Heriot-Watt University, CC BY.
 
 - The preview runs on the request's own thread and can take as long as an interpretation of the well. The
   interpreted well is kept in the runs folder's shared `.cache`, so the question that follows reuses it.
@@ -503,6 +455,7 @@ The page reads each input as it is given: a LAS file's header, the formations of
 field notes file. A file the server cannot read by path is uploaded first, and the path the upload returns is used
 from then on.
 
+<a id="get-apisamples"></a>
 <details>
 <summary>GET /api/samples</summary>
 
@@ -518,10 +471,11 @@ and the folders are Petrophys's.
 | `well`, `top`, `base`, `unit`, `curves` | | The `WELL` header, the `STRT` and `STOP` depths, the depth unit (`m`, `ft` or null) and the number of curves besides depth. | `adapter.samples` |
 | `tops` | object or null | `{"path", "name", "formations"}`: a tops sample of Petrophys with rows for this well (a well column naming it, or, without one, a file name that holds the well's), and the number of names the tops reader finds for it. | `adapter.samples`, `read_tops` |
 
-A sample that cannot be read is left out; a Petrophys without bundled samples gives `[]`.
+A sample that cannot be read is left out.
 
 </details>
 
+<a id="get-apilas"></a>
 <details>
 <summary>GET /api/las</summary>
 
@@ -537,8 +491,8 @@ Response fields:
 |---|---|---|---|
 | `path`, `name` | string | The resolved path and the file name. | `adapter.las_info` |
 | `well`, `uwi` | string | The `WELL` and `UWI` header items, or `""`. | `adapter.las_info` |
-| `names` | list | The names the well goes by: the file stem, then `WELL`, `UWI`, `API`, `APIN` where set. | `ask._las_header` |
-| `depth_unit` | `m`, `ft` or null | The depth unit read from the first curve's unit. | `ask._las_header`, `well.tops.depth_unit_name` |
+| `names` | list | The names the well goes by: the file stem, then `WELL`, `UWI`, `API`, `APIN` where set. | `interval._las_header` |
+| `depth_unit` | `m`, `ft` or null | The depth unit read from the first curve's unit. | `interval._las_header`, `well.tops.depth_unit_name` |
 | `depth_unit_raw` | string | The first curve's unit as written. | `adapter.las_info` |
 | `top`, `base` | number or null | The first and last finite depth of the log. | `adapter.las_info` |
 | `step` | number or null | The median depth step, rounded to 6 decimals. | `adapter.las_info` |
@@ -597,6 +551,7 @@ Data: Kansas Geological Survey (kgs.ku.edu).
 
 </details>
 
+<a id="get-apitops"></a>
 <details>
 <summary>GET /api/tops</summary>
 
@@ -692,6 +647,7 @@ Data: Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals
 
 </details>
 
+<a id="get-apizones"></a>
 <details>
 <summary>GET /api/zones</summary>
 
@@ -743,6 +699,7 @@ curl -s "localhost:7931/api/zones?path=$ZONES&las=$LAS"
 
 </details>
 
+<a id="get-apinotes"></a>
 <details>
 <summary>GET /api/notes</summary>
 
@@ -783,6 +740,7 @@ notes:
 
 </details>
 
+<a id="post-apiupload"></a>
 <details>
 <summary>POST /api/upload</summary>
 
@@ -827,6 +785,7 @@ curl -s -X POST 'localhost:7931/api/upload?kind=tops' -H 'X-Filename: formations
 A question is asked with `POST /api/ask` and followed with `GET /api/job/ID`; once it has finished, its record, files,
 conversation, lineage and audit trail are read by the run routes, which serve a saved run as well as one in memory.
 
+<a id="post-apiask"></a>
 <details>
 <summary>POST /api/ask</summary>
 
@@ -839,7 +798,7 @@ waits for a worker (`App.submit`, `adapter.arguments`).
 | `question` | string | required | The question, at most 8000 characters after trimming. | `adapter.arguments`, `MAX_QUESTION` |
 | `interval` | object | `{"mode": "whole"}` | `{"mode": "whole"}`; `{"mode": "tops", "tops": PATH, "formation": NAME[, "unit": "m" \| "ft"][, "top": D]}`, where `top` is the top of the row meant, as the file writes it, for a name the file lists twice ([`GET /api/tops`](#get-apitops)); or `{"mode": "depths", "top": D, "base": D[, "unit": "m" \| "ft"][, "name": LABEL]}`. | `adapter.arguments`, `TopsTable.interval` |
 | `lithology_curve` | string | detected | The lithology log's mnemonic. | `adapter.arguments` |
-| `formation_lithology` | string | none | The formation's lithology as the user knows it; it reaches the model with the question, marked as the user's statement. | `adapter.arguments`, `ask.task_for` |
+| `formation_lithology` | string | none | The formation's lithology as the user knows it; it reaches the model with the question, marked as the user's statement. | `adapter.arguments`, `interval.task_for` |
 | `profile` | string | none | A Petrophys context profile; must be one of `GET /api/config`'s `profiles` when that list is not empty. | `adapter.arguments` |
 | `skills` | string | `default` | `default` (the server's `PETROHARNESS_SKILLS`, else the packaged library), `none`, or a library folder on the server. | `adapter.arguments` |
 | `max_steps` | integer | 8 | The investigation's step cap, 1 to 30. | `adapter.arguments`, `MAX_STEPS_LIMIT` |
@@ -876,6 +835,7 @@ depths, `"interval": {"mode": "depths", "top": T, "base": B, "unit": "m", "name"
 
 </details>
 
+<a id="get-apijobid"></a>
 <details>
 <summary>GET /api/job/ID</summary>
 
@@ -893,6 +853,7 @@ Response: the fields of the run record ([section 10](#10-the-run-record)) with t
 | `events` | list | The events from index `since` on. | `Job.view`, `App.job_view` |
 | `n_events` | integer | The number of events so far: the next `since`. | `Job.view` |
 | `queue_position` | integer or null | 1-based place in the queue while waiting; `null` otherwise. Present only for a job held in memory. | `App.position` |
+| `live` | object | The model call in flight as the server streams it, present only while one streams: `{"n", "stage", "thinking", "thinking_chars", "reply_chars"}`, `thinking` the last 6,000 characters of its reasoning so far; updated at most every 0.25 s and never saved (the call's `reply` event carries what is kept). | `Job.set_live`, `progress.Observed` |
 | `answer`, `result` | string, object | `""` and `null` until the record is saved. | `Job.view` |
 | `finished` | string or null | Present only when the run is read from disk (a job no longer in memory). | `App.job_view` |
 
@@ -915,6 +876,7 @@ had already taken the job off the queue.
 
 </details>
 
+<a id="get-apiruns"></a>
 <details>
 <summary>GET /api/runs</summary>
 
@@ -948,6 +910,7 @@ first (`App.runs`, `store.brief`).
 
 </details>
 
+<a id="get-apirunid"></a>
 <details>
 <summary>GET /api/run/ID</summary>
 
@@ -966,6 +929,7 @@ curl -s localhost:7860/api/run/RUN_1 | python -m json.tool | head -40
 
 </details>
 
+<a id="get-apirunidanswermd-and-get-apirunidtracejson"></a>
 <details>
 <summary>GET /api/run/ID/answer.md and GET /api/run/ID/trace.json</summary>
 
@@ -997,6 +961,7 @@ Content-Disposition: inline; filename="RUN_1-answer.md"
 
 </details>
 
+<a id="get-apirunidfiguresname"></a>
 <details>
 <summary>GET /api/run/ID/figures/NAME</summary>
 
@@ -1016,6 +981,7 @@ curl -s -o fig.png localhost:7860/api/run/RUN_1/figures/figure_3_buckles.png
 
 </details>
 
+<a id="get-apirunidconversation"></a>
 <details>
 <summary>GET /api/run/ID/conversation</summary>
 
@@ -1055,6 +1021,7 @@ Read from the first question, after the follow-up was answered:
 
 </details>
 
+<a id="get-apirunidlineage"></a>
 <details>
 <summary>GET /api/run/ID/lineage</summary>
 
@@ -1098,6 +1065,33 @@ For the first Brent question: 9 claims, 300 numbers, 10 results, 34 curves and 8
 
 </details>
 
+<a id="get-apirunidlogview-and-logdata"></a>
+<details>
+<summary>GET /api/run/ID/logview and logdata</summary>
+
+The log viewer's two reads of a run (`App.logs`, `ui/wellplot.py`). The run's well is read from the runs' shared cache,
+as Petrophys interpreted it under the run's settings (`adapter.view_of`); the last six runs asked for stay open.
+
+`GET /api/run/ID/logview?extent=interval|well` (`wellplot.log_index`): what the viewer can show of the extent, the
+question's interval (the default) or the whole well.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `extent`, `unit`, `top`, `base`, `samples`, `step` | | the extent, its depth unit and range, its samples and their spacing |
+| `curves` | list | every curve with a value there: `name`, `unit`, `about`, `source` (`LAS`: measured, in the LAS file; `Petrophys`: computed), `family`, `kind` (`curve`, `flag`, `classes`), `log` (reads better on a log scale) and `scale` (left and right edge values to start from) |
+| `tracks` | list | the tracks the page starts with: `title`, `log`, `curves` (names) |
+| `flags` | list | the flag curves shown as strips |
+| `lithology`, `zones` | lists | the lithology runs and the zones (`zone`, `lithology`, `top`, `base`) |
+| `made`, `cutoffs` | objects | how the zones were made, and the net-pay step's cutoffs, as the `well` event gives them |
+
+`GET /api/run/ID/logdata?top=T&base=B&curves=A,B&points=N&extent=...` (`wellplot.log_window`): the named curves between
+two depths, at most `N` samples each (default 1,500): `depth` and `values` (`{curve: [...]}`), `samples` (the window's
+samples) and `every` (1: every sample; k: every k-th, a flag keeping a set sample of each k). A name the well lacks is
+left out. `top` or `base` missing or not a number, or an unknown `extent`: 400.
+
+</details>
+
+<a id="get-apirunidaudit"></a>
 <details>
 <summary>GET /api/run/ID/audit</summary>
 
@@ -1134,6 +1128,7 @@ Returns the audit trail of the run's answer as Markdown (`evidence.audit.markdow
 
 </details>
 
+<a id="post-apirateid"></a>
 <details>
 <summary>POST /api/rate/ID</summary>
 
@@ -1252,7 +1247,7 @@ Every event is a JSON object appended to `Job.events` by `Job.emit`, saved in `r
 |---|---|---|---|---|
 | `t` | number | | Seconds since the job started, rounded to 0.1; before the job starts (the `queued` event), seconds since it was created. | `Job.emit` |
 | `kind` | string | | `phase`, `well`, `display`, `settings`, `scope`, `call`, `results` or `reply`. | `Job.emit` callers |
-| Delivery | polling | every 1.5 s | The page calls `GET /api/job/<id>?since=<n>`, appends the events, sets `since` to `n_events`, and stops when the status is no longer `queued` or `running`. | `index.html` (`tick`) |
+| Delivery | polling | every 1.5 s; 0.6 s while a call streams (`live`) | The page calls `GET /api/job/<id>?since=<n>`, appends the events, sets `since` to `n_events`, shows `live` in the call in flight, and stops when the status is no longer `queued` or `running`. | `index.html` (`tick`) |
 | Replay | saved events | `speed` 8 | `#replay=<id>&speed=N` loads `GET /api/run/<id>` and shows the events up to a time that advances `0.1 * speed` seconds every 100 ms; `speed=0` holds it at the start. `window.__replay.open(id, 0)` and `__replay.seek(t)` drive it from the console. | `index.html` (`openReplay`, `replaySeek`) |
 
 ```bash
@@ -1287,7 +1282,7 @@ Each kind, who emits it, and its fields beyond `t` and `kind`.
 | `scope` | stretch list | | `{"scope": [...]}` on a follow-up that carries `scope`, after the `well` and `display` events and before the question is read: the stretches as the conversation set them for this question (`Conversation.set_scope(..., chosen=True)`). From the tuhua-7 choice: `{"t": 2.6, "kind": "scope", "scope": ["874.014-1250.75 m"]}`. | `adapter.run`, `Conversation.set_scope` |
 | `call` | model call | | `{"stage", "type", "n"}` before a request; `number` for a step or a repair; `findings` (the checker's request, at most 4000 characters) for a repair. | `progress.Observed.chat` |
 | `results` | results | | `{"stage", "items": [{"id", "title", "text", "digest"}]}`: results that appear in this request's prompts for the first time, or more fully than before, in id order; emitted just before the request's `call` event. `title` is the first line (at most 200 characters); `digest` is `true` for a shortened result. | `progress.Observed._scan`, `progress.results_in` |
-| `reply` | model reply | | `{"stage", "type", "n", "seconds"}`, the usage fields `prompt_tokens`, `completion_tokens`, `finish_reason`, `discarded` where the client logged them, and what the reply says ([Stage types](#stage-types)); or `error` (at most 400 characters) when the call raised. | `progress.Observed.chat` |
+| `reply` | model reply | | `{"stage", "type", "n", "seconds"}`, the usage fields `prompt_tokens`, `completion_tokens`, `finish_reason`, `discarded` where the client logged them, and what the reply says ([Stage types](#stage-types)); `thinking` and `thinking_chars` when the server returned reasoning for the call (`LLM.last_reasoning`: the text, whole up to 12,000 characters, else its first 4,000 and last 8,000 with the count left out between; and its full length); or `error` (at most 400 characters) when the call raised. | `progress.Observed.chat` |
 
 From the Brent question: the first `results` event, the `call` of the repair round of the follow-up, and the `reply`
 of step 2.
@@ -1314,6 +1309,7 @@ of step 2.
 
 </details>
 
+<a id="stage-types"></a>
 <details>
 <summary>Stage types</summary>
 
@@ -1323,7 +1319,7 @@ of step 2.
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
 | `read` | stage starting `read` | | Reply fields: `topics`, `named`, and `depth` where the reply states one; or `{"unreadable": true, "text"}`. | `progress.kind_of`, `read_reply_of` |
-| `step` | `step_<k>` | `number` = k | `edits`, `focus` (300 characters), `next` (each action as one line of text), `done`, and where present `points` (6 at most, 240 characters each), `asks`, `intent` (240 characters each), and `salvaged: true` when the reply was not one JSON object and the loop read it from its complete edits and actions; or `{"empty": true}` / `{"unreadable": true, "text"}`. | `progress.read_reply_of`, `edit_view`, `loop.complete_salvage` |
+| `step` | `step_<k>` | `number` = k | `edits`, `focus` (300 characters), `next` (each action as one line of text), `done`, and where present `points` (6 at most, 240 characters each), `asks`, `intent` (240 characters each), and `salvaged: true` when the reply was not one JSON object and the loop read it from its complete edits and actions; or `{"empty": true}` / `{"unreadable": true, "text"}`. | `progress.read_reply_of`, `edit_view`, `replies.complete_salvage` |
 | `settle` | `settle`, or `step_0_...` (the settle step's reply repair) | | `edits` (and `salvaged`, as for a step); or `empty` / `unreadable`. | `progress.kind_of` |
 | `writer` | stage starting `writer` | | `{"draft", "chars"}`: the first 1200 characters (`TEXT_CHARS`) and the length. | `progress.read_reply_of` |
 | `repair` | `repair_<k>` | `number` = k | `{"draft", "chars"}`. | `progress.read_reply_of` |
@@ -1340,6 +1336,7 @@ of step 2.
 
 </details>
 
+<a id="the-well-events-plot-payload"></a>
 <details>
 <summary>The well event's plot payload</summary>
 
@@ -1353,7 +1350,8 @@ of step 2.
 | `scale` | pair | | The conventional scale (`SCALES`) when 9 in 10 values fall on it, else the values' P1 to P99 in the conventional direction. | `wellplot._scale` |
 | `flags` | list | | Up to 4 (`FLAGS_SHOWN`) flag curves of the curve registry with data: `{"name", "values"}`, each window's maximum kept when thinned. | `wellplot.FLAGS_SHOWN` |
 | `lithology` | list | | `{"lithology", "top", "base"}` for each run of one lithology label, extended half a depth step beyond its first and last sample. | `wellplot.payload` |
-| `lithology_curve`, `zone_bands` | string or null, list or null | | The lithology log used, or the shale-volume band edges. | `wellplot.payload` |
+| `lithology_curve`, `zone_bands` | string or null, list or null | | The lithology log the zones come from, and the shale-volume band edges when the zones are bands; both null where the zones come from a solved lithology, which `made` names. | `wellplot.payload` |
+| `made` | object | | How the interval was interpreted and zoned, as the page says it under the plot: `run` (`{"kind": "dynamic workflow"}`, or `context profile`, `interpreter` or `engine` with its `name`), `steps` (the workflow steps Petrophys ran), `lithology` (`{"source": "lithology log", "curve", "codes"}`; `{"source": "mineral solver", "curve", "method", "domain", "inputs", "decisions", "solved", "samples"}`; `{"source": "shale-volume bands", "bands", "method"}`; or `{"source": "none"}`) and `zone_rule` (`layout`, `user`, `file`, and `min_thickness` in the reporting unit). | `wellplot.made` |
 | `zones` | list | | `{"zone", "lithology", "top", "base", "thickness", "samples", "stats"}`; `stats` holds the mean of `VCL`, `PHIE`, `SW` (`MEANS`), the median of `PERM` (`MEDIANS`) and, per flag, the percentage of samples set. | `wellplot.MEANS`, `MEDIANS` |
 | `means`, `medians` | list | | `["VCL", "PHIE", "SW"]` and `["PERM"]`. | `wellplot.payload` |
 | `cutoffs`, `cutoff_step` | object, string | | The numeric `<curve>_cutoff` parameters of the `net_pay` step (`CUTOFF_STEP`), by curve, for curves with data. | `wellplot.CUTOFF_STEP` |
@@ -1375,11 +1373,25 @@ The Brent Group's 768 samples are fewer than 1500, so nothing is thinned. Its `p
  "flags": [{"name": "NET_ROCK", "values": […]}, {"name": "NET_RES", "values": […]}, {"name": "NET_PAY", "values": […]}, {"name": "RESFLAG", "values": […]}],
  "lithology": [{"lithology": "SHALE", "top": 2840.9, "base": 2841.2}, {"lithology": "SAND", "top": 2841.2, "base": 2845.8}, […]],
  "lithology_curve": "LITHOLOGY_GEOLINK", "zone_bands": null,
+ "made": {"run": {"kind": "dynamic workflow"}, "steps": ["normalization", "input_context", […], "net_pay"],
+          "lithology": {"source": "lithology log", "curve": "LITHOLOGY_GEOLINK", "codes": 36},
+          "zone_rule": {"layout": "lithology_runs", "user": false, "file": null, "min_thickness": 2.0}},
  "zones": [{"zone": "Z1", "lithology": "SAND", […]}, […],
            {"zone": "Z4", "lithology": "CROSSBEDDED SAND", "top": 2865.9, "base": 2869.4, "thickness": 3.5054,
             "samples": 24, "stats": {"VCL": 0.15634, "PHIE": 0.18894, "SW": 0.41102, "PERM": 43.725,
                                      "NET_ROCK": 95.833, "NET_RES": 95.833, "NET_PAY": 95.833, "RESFLAG": 95.833}}, […]],
  "means": ["VCL", "PHIE", "SW"], "medians": ["PERM"], "cutoffs": {"VCL": 0.3, "SW": 0.7}, "cutoff_step": "net_pay"}
+```
+
+On Taranaki tuhua-7, McKee Formation, which has no lithology log, `lithology_curve` and `zone_bands` are null and
+`made.lithology` is the solver's record (`wellplot.made` on the prepared interval, abridged; Data: Taranaki Basin
+Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.):
+
+```json
+{"source": "mineral solver", "curve": "LITHO", "method": "canonical_multi_mineral_solver", "domain": "clastic",
+ "inputs": ["RHOB", "VCL", "NPHI", "PHIE", "PEF", "DTC"],
+ "decisions": ["No lithology curve or lithology intervals were available -> inferred LITHO from mineral volumes", […]],
+ "solved": 13418, "samples": 13652}
 ```
 
 </details>
@@ -1423,6 +1435,7 @@ record, its events and answer cut:
 
 </details>
 
+<a id="result-summary-fields"></a>
 <details>
 <summary>Result summary fields</summary>
 
@@ -1449,7 +1462,7 @@ record, its events and answer cut:
 | `zone_table` | string | `""` | The zone table the writer was given. | `adapter.summary` |
 | `usage` | object | | `calls`, `prompt_tokens`, `completion_tokens`, `seconds`, and `log` (`stage`, tokens, seconds per call). | `adapter.summary` |
 | `error`, `traceback` | | | From the trace. | `adapter.summary` |
-| `ask` | object or null | `null` | For `ask_user` and `outside` only: `text` (the harness's reply, the trace's `ask_user`), `outside` (boolean) and `choices`, each `{"label", "question"}` and, for a stretch, `"scope": [...]` (the trace's `ask_choices`, from `agent.loop.ask_back`). | `adapter.summary` |
+| `ask` | object or null | `null` | For `ask_user` and `outside` only: `text` (the harness's reply, the trace's `ask_user`), `outside` (boolean) and `choices`, each `{"label", "question"}` and, for a stretch, `"scope": [...]` (the trace's `ask_choices`, from `agent.read.ask_back`). | `adapter.summary` |
 | `notes` | list of strings | `[]` | What the reader should know before the answer, one sentence each, worded from the trace's `reader_notes` (`agent.vocabulary.facts`): a measurement the record does not hold or holds with no value in the interval, a unit the tops file lacks, the user's zones with no sample here. A run whose trace has no `reader_notes` gives the lines the model was given (`question_notes`). | `adapter._notes` |
 | `scope` | object | | The stretches the answer computed on, when not the interval: `used` (as applied, `[]` for the interval), `by` (`your choice` when chosen in answer to a question back, `user` for a scope the user set, else `the question`), `merged` (what the items became when one is part of another) and `note` (why a stretch read was not used). | `adapter.summary` |
 | `figures` | list | | `{"caption", "file", "kind", "source"}`; `file` is the name under the run's `figures/`. | `adapter.run` |
@@ -1538,6 +1551,7 @@ interval and settings, starting from the results already opened (`App.submit`, `
 
 </details>
 
+<a id="changing-interpretation-settings"></a>
 <details>
 <summary>Changing interpretation settings</summary>
 
@@ -1574,6 +1588,7 @@ The same change asked again returns `[]`: the settings asked for are those in fo
 
 </details>
 
+<a id="answering-a-question-back"></a>
 <details>
 <summary>Answering a question back</summary>
 
@@ -1581,7 +1596,7 @@ A question that names a unit the tops file lists twice, a unit whose row cannot 
 file lists, or a bare name several units share is not answered: the harness asks the user back (`result.status`
 `ask_user`). A request outside what the harness does gets a reply saying what it does (`outside`). Either run reads the
 question, makes no other model call and computes nothing; its status is `done`, and `result.ask` holds the reply and
-the choices the page shows as buttons (`agent.loop.ask_back`, `agent.graph.ask_user`, `adapter.summary`).
+the choices the page shows as buttons (`agent.read.ask_back`, `agent.graph.ask_user`, `adapter.summary`).
 
 On tuhua-7, with McKee as the interval, "What is the mean gamma ray of the Manganui?" (written `RUN_ASK` here) ended
 after 19.1 s, with one model call, with this `result.ask`:
@@ -1789,7 +1804,7 @@ Wrong inputs answer 400 before a question is queued; what goes wrong while a que
 | Port in use | Exit 2 with `cannot listen on HOST:PORT (...). FIX: choose another --port.` | `ui.server.main` |
 | Input that cannot be used | 400 before queueing, with WHAT / FIX | `adapter.arguments`, `App.submit` |
 | Interval with no samples, lithology curve without data | The job ends `error` with the message from `ask.check` | `adapter.run` |
-| A question naming a unit the tops file lists twice, cannot use, lacks but nearly has, or shares among several units; a request outside what the harness does | The job ends `done` with `result.status` `ask_user` or `outside` and `result.ask`; nothing is computed | `agent.loop.ask_back`, `adapter.summary` |
+| A question naming a unit the tops file lists twice, cannot use, lacks but nearly has, or shares among several units; a request outside what the harness does | The job ends `done` with `result.status` `ask_user` or `outside` and `result.ask`; nothing is computed | `agent.read.ask_back`, `adapter.summary` |
 | Question over 8000 characters | 400 `WHAT: the question has N characters. FIX: keep it under 8000.` | `adapter.arguments` |
 | `max_steps` outside 1 to 30 | 400 | `adapter.arguments` |
 | Upload over 1024 MiB, JSON over 2 MiB | 400 `WHAT: the upload is N MB. FIX: keep it under L MB.` | `Handler._body` |

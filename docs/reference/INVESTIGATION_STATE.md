@@ -33,13 +33,13 @@ flowchart TB
 
 | Part | What it is | Key limits | Where |
 |---|---|---|---|
-| Session | the state of one question or conversation: interval, map, ledger, claims, topics, guides read | one per question | `loop.Session` ([loop.py](../../src/petroharness/agent/loop.py)) |
+| Session | the state of one question or conversation: interval, map, ledger, claims, topics, guides read | one per question | `state.Session` ([state.py](../../src/petroharness/agent/state.py)) |
 | Ledger | every opened result, kept whole, with an id `E1`, `E2`, ... | digest 700 (section 1,600); `get` 9,000; `find` 6,000 characters | `ledger.Ledger` ([ledger.py](../../src/petroharness/agent/ledger.py)) |
 | Points | what the answer must settle, written by the model at step 1 | 6, of 240 characters | `Session.points`, `graph.plan` |
 | Claims | findings that cite ledger ids, each with a grade | grades `hypothesis`, `low`, `moderate`, `high`, `not indicated`, `undetermined` | `claims.Claims`, `claims.Claim` ([claims.py](../../src/petroharness/agent/claims.py)) |
 | Flags | facts code shows under a claim, K1 to K11 | never change a claim's text, grade or verdict | `Claims.check`, `C2_guardrails/flags.json` |
 | Step loop | READ, first look, look or investigation steps, settle | 8 steps; 6 lookups, 2 guides, 3 calcs a step; 2 look steps of 4 | [graph.py](../../src/petroharness/agent/graph.py) |
-| Prompt budgets | NEW, OPENED, ALL RESULTS, the writer's RESULTS | 12,000; 6,000; 24,000; 60,000 characters | `loop.NEW_CHARS`, `loop.OPENED_CHARS`, `writer.OPEN_CHARS`, `writer.RESULTS_CHARS` |
+| Prompt budgets | NEW, OPENED, ALL RESULTS, the writer's RESULTS | 12,000; 6,000; 24,000; 60,000 characters | `state.NEW_CHARS`, `state.OPENED_CHARS`, `writer.OPEN_CHARS`, `writer.RESULTS_CHARS` |
 | Done rule | code, not the model, ends the investigation | every point settled, no hypothesis, no flag; or the cap; or 2 rephrasing steps | `Claims.done_issues`, `graph.decide`, `graph.act` |
 
 On 30/6-5 Brent, the conversation's first question took the READ call, 8 steps and settle: 10 results (`E1` to
@@ -51,10 +51,10 @@ one of its steps.
 ```mermaid
 flowchart TB
     build["build<br/>Session.build: view, store,<br/>inventory, map, empty ledger"]:::code
-    read["read<br/>loop.read_question:<br/>topics, named, depth"]:::model
+    read["read<br/>read.read_question:<br/>topics, named, depth"]:::model
     first["first_look<br/>brief, head, one stats call (E1)"]:::code
     look["look (direct)<br/>at most 2 steps of 4 lookups"]:::model
-    ask["ask<br/>prompt rebuilt from the state;<br/>one call; loop.parse"]:::model
+    ask["ask<br/>prompt rebuilt from the state;<br/>one call; replies.parse"]:::model
     skip["skip<br/>unreadable reply"]:::code
     plan["plan (step 1)<br/>points, intent, Claims"]:::code
     decide["decide<br/>Claims.apply; actions read;<br/>done rule"]:::code
@@ -87,25 +87,25 @@ flowchart TB
 
 1. **Build.** `graph.build` calls `Session.build`: view, workflow store, inventory (`inventory.from_view`), map
    (`map.render`), an empty `Ledger`, and the skill library `direction.plugged(cfg)`.
-2. **Read.** `loop.read_question`: one to four topic areas, what the question names and, unless the run asked for
+2. **Read.** `read.read_question`: one to four topic areas, what the question names and, unless the run asked for
    `--investigate`, whether it is `direct`. `Session.choose` keeps the topics, their families and the scoped map.
-3. **First look.** `graph.first_look` builds the brief (`loop.brief`) and the prompt head, and opens one `stats` call
+3. **First look.** `graph.first_look` builds the brief (`prompts.brief`) and the prompt head, and opens one `stats` call
    over the topics' key curves, the named curves and the reservoir curves (`E1` on a first question).
 4. **Look steps (direct questions only).** `graph.look`: at most 2 steps of 4 lookups, then the writer's short answer,
    or the investigation when the model asks for it or its reply cannot be read.
-5. **Ask.** `graph.ask` rebuilds step k's prompt and makes one call; `loop.parse` reads the reply, salvages its
+5. **Ask.** `graph.ask` rebuilds step k's prompt and makes one call; `replies.parse` reads the reply, salvages its
    complete edits and actions, or asks the model to fix its own JSON.
 6. **Plan (step 1).** `graph.plan` takes the points, the intent and what the question asks, and creates the `Claims`.
-7. **Decide.** `graph.decide` applies the edits (`Claims.apply`), reads the actions (`loop.coerce_action`), adds what a
+7. **Decide.** `graph.decide` applies the edits (`Claims.apply`), reads the actions (`replies.coerce_action`), adds what a
    newly read guide opens, and applies the done rule (`Claims.done_issues`).
 8. **Act.** `graph.act` runs the actions (`Session.run`), builds NEW within `NEW_CHARS` and withholds what does not
    fit, re-checks every claim (`Claims.refresh`) and tests convergence.
-9. **Close and settle.** `graph.close` writes the record; `loop.settle` shows every result and makes the claims final;
+9. **Close and settle.** `graph.close` writes the record; `settle.settle` shows every result and makes the claims final;
    the writer follows ([WRITER_AND_CHECKER.md](WRITER_AND_CHECKER.md)).
 
 ## 3. The session
 
-`loop.Session` is the state of one question, a dataclass every node reads and changes in place. Its `run` method is
+`state.Session` is the state of one question, a dataclass every node reads and changes in place. Its `run` method is
 the one door for actions: each kind returns the text NEW shows and the item it shows whole, or `None`. On the Brent
 ledger (`E1` to `E10` opened):
 
@@ -145,7 +145,7 @@ ledger (`E1` to `E10` opened):
 | `fetched` | `list[str]` | `[]` | the ids a direct question's look steps were shown (its writer reads them) |
 | `got` | `dict[str, list[str]]` | `{}` | the lines a get or find showed beyond each result's text (a list's kept lines, a class line asked by zone); the writer and settle read them under the result (`writer.result_text`) |
 
-Defined in `loop.Session`.
+Defined in `state.Session`.
 
 | Method | Does |
 |---|---|
@@ -157,7 +157,7 @@ Defined in `loop.Session`.
 | `next_turn(task, earlier)` | a later question: the ledger and its ids stay, the question's own state restarts |
 | `rewell(task, cfg, change)` | a settings change: the well interpreted again, the ledger marks older items |
 
-Each is `loop.Session.<method>`.
+Each is `state.Session.<method>`.
 
 - The domain state lives outside LangGraph's state on purpose: the run context `graph.Run` holds the session and the
   trace, and nodes change them in place ([GRAPH.md](../GRAPH.md), "Run context and state").
@@ -469,7 +469,7 @@ under a new id:
 
 | Name | Meaning | Defined in |
 |---|---|---|
-| `Session.next_turn(task, earlier)` | `turn` + 1; `turn_start` and `ledger.turn_start` = the item count; claims, points, intent, reply, depth, fetched, guides, topics, families, reading and card start again | `loop.Session.next_turn` |
+| `Session.next_turn(task, earlier)` | `turn` + 1; `turn_start` and `ledger.turn_start` = the item count; claims, points, intent, reply, depth, fetched, guides, topics, families, reading and card start again | `state.Session.next_turn` |
 | `Ledger._supersede(curves, by)` | after a call of a later question recomputes curves under the same names, each earlier item that names one is marked, and its key is removed so the same call is computed anew | `ledger.Ledger._supersede` |
 
 - A recomputed curve is detected by a changed object in `view.calculated` across the call; only items before
@@ -484,7 +484,7 @@ under a new id:
 
 | Name | Type | Meaning | Defined in |
 |---|---|---|---|
-| `Session.rewell(task, cfg, change)` | method | rebuilds the view, store, inventory and map from the newly prepared well, then calls `Ledger.rewell` | `loop.Session.rewell` |
+| `Session.rewell(task, cfg, change)` | method | rebuilds the view, store, inventory and map from the newly prepared well, then calls `Ledger.rewell` | `state.Session.rewell` |
 | `Ledger.rewell(f, change)` | method | `f` replaced; every existing id gets `before[id] = change` (first change kept); `_keys` cleared | `ledger.Ledger.rewell` |
 | `change` | `str` | the change in words: `the settings change before question <n> (<description>)` | `session.conversation.Conversation` |
 
@@ -772,7 +772,7 @@ What `first_look` returns to start step 1:
 | done waits | rule | | `done` while results are withheld (and not the last step): no actions run, the withheld results come first in NEW, and C8 `done_waits` says why | `graph.decide` |
 | finish | rule | | on `done`, no actions, or the last step: finished when there are no done issues, done was already refused once, or it is the last step | `graph.decide` |
 | refusal | rule | once | otherwise NEW starts with C2 `not_done` (`NOT DONE (you set done): ...`, or `NOT DONE (no actions): ...`); with `done` set, the step's actions are dropped | `graph.decide` |
-| convergence | rule | `POLISH_STEPS` = 2 | a step that starts settled, ends with no done issues, opens nothing new and has no `add` or `drop` edit counts; two in a row finish with `stopped: converged` | `graph.act`, `loop.POLISH_STEPS` |
+| convergence | rule | `POLISH_STEPS` = 2 | a step that starts settled, ends with no done issues, opens nothing new and has no `add` or `drop` edit counts; two in a row finish with `stopped: converged` | `graph.act`, `state.POLISH_STEPS` |
 | step cap | rule | `MAX_STEPS` = 8 | step 8 asks for no actions (C5 `step_last`) and `decide` always finishes it, so `act` never runs at the cap | `graph.decide`, `graph.after_act` |
 
 - `decide` checks `settled_before` (no done issues before this step's edits) to feed the convergence count.
@@ -790,10 +790,10 @@ How `decide` turns a reply's `next` list into the actions `act` runs.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `ACTIONS` | `int` | `6` | lookups (tool calls, `get`, `find`) run per step; the brief states the same number | `loop.ACTIONS` |
-| `MAX_GUIDES` | `int` | `2` | guide reads per step, outside the 6 | `loop.MAX_GUIDES` |
-| `MAX_CALCS` | `int` | `3` | `calc` actions per step, outside the 6 | `loop.MAX_CALCS` |
-| `MAX_GUIDE_STATS` | `int` | `2` | `stats` calls a newly read guide opens | `loop.MAX_GUIDE_STATS` |
+| `ACTIONS` | `int` | `6` | lookups (tool calls, `get`, `find`) run per step; the brief states the same number | `state.ACTIONS` |
+| `MAX_GUIDES` | `int` | `2` | guide reads per step, outside the 6 | `state.MAX_GUIDES` |
+| `MAX_CALCS` | `int` | `3` | `calc` actions per step, outside the 6 | `state.MAX_CALCS` |
+| `MAX_GUIDE_STATS` | `int` | `2` | `stats` calls a newly read guide opens | `settle.MAX_GUIDE_STATS` |
 | order | rule | | guides, then calculations, then what guides open, then the first 6 lookups | `graph.decide` |
 | left out | message | | lookups beyond 6: C8 `actions_left_out` (`Only the first 6 actions ran (2 left out): one focus, at most 6 actions a step.`); guides or calculations beyond their caps: C8 `extra_left_out` | `graph.decide` |
 | unread | message | | an action no tool reads: C8 `not_run` with the first three, `Not run (not an action this harness reads): ...` | `graph.decide` |
@@ -823,7 +823,7 @@ How `act` builds NEW within its budget from results only.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `NEW_CHARS` | `int` | `12000` | NEW's results at most (read through `loop.new_chars()`) | `loop.NEW_CHARS` |
+| `NEW_CHARS` | `int` | `12000` | NEW's results at most, read at each step | `state.NEW_CHARS` |
 | order | rule | | `decide`'s notes; `Edits not applied:` with one `- message` per edit; the results withheld last step; this step's results | `graph.act` |
 | budget | rule | | a result with an item is shown whole while the running total stays within 12,000; one that does not fit is withheld; notes, `get` with a find, `find` output and errors are always shown | `graph.act.place` |
 | repeat | rule | | an item already shown in this NEW is replaced by C8 `shown_above` (`[E2] shown above in this NEW`) | `graph.act.place` |
@@ -842,7 +842,7 @@ How `act` builds NEW within its budget from results only.
 ## 10. Budgets and limits
 
 The budgets are module constants. The graph reads the step budgets through the `loop` module at call time
-(`L.ACTIONS`, `L.MAX_GUIDES`, `L.MAX_CALCS`, `L.DIRECT_ACTIONS`, `L.DIRECT_STEPS`, `L.POLISH_STEPS`, `L.new_chars()`),
+(`L.ACTIONS`, `L.MAX_GUIDES`, `L.MAX_CALCS`, `L.DIRECT_ACTIONS`, `L.DIRECT_STEPS`, `L.POLISH_STEPS`, `L.NEW_CHARS`),
 so a test that sets one of them changes the run.
 
 <details>
@@ -850,24 +850,24 @@ so a test that sets one of them changes the run.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `MAX_STEPS` | `int` | `8` | investigation steps; `--max-steps` and `answer(max_steps=)` override | `loop.MAX_STEPS` |
-| `DIRECT_STEPS` | `int` | `2` | look steps of a direct question | `loop.DIRECT_STEPS` |
-| `DIRECT_ACTIONS` | `int` | `4` | lookups in one look step | `loop.DIRECT_ACTIONS` |
+| `MAX_STEPS` | `int` | `8` | investigation steps; `--max-steps` and `answer(max_steps=)` override | `state.MAX_STEPS` |
+| `DIRECT_STEPS` | `int` | `2` | look steps of a direct question | `state.DIRECT_STEPS` |
+| `DIRECT_ACTIONS` | `int` | `4` | lookups in one look step | `state.DIRECT_ACTIONS` |
 | `ACTIONS`, `MAX_GUIDES`, `MAX_CALCS` | `int` | `6`, `2`, `3` | per step ([section 9](#9-the-step-loop)) | `loop` |
-| `POLISH_STEPS` | `int` | `2` | rephrasing steps that end the investigation | `loop.POLISH_STEPS` |
-| `NEW_CHARS` | `int` | `12000` | NEW's results | `loop.NEW_CHARS` |
-| `OPENED_CHARS` | `int` | `6000` | OPENED's digests (the listing of every item is not counted) | `loop.OPENED_CHARS` |
+| `POLISH_STEPS` | `int` | `2` | rephrasing steps that end the investigation | `state.POLISH_STEPS` |
+| `NEW_CHARS` | `int` | `12000` | NEW's results | `state.NEW_CHARS` |
+| `OPENED_CHARS` | `int` | `6000` | OPENED's digests (the listing of every item is not counted) | `state.OPENED_CHARS` |
 | `WIDE_CHARS` | `int` | `9000` | a tool result's shown text (`engine.max_chars()`); cut rows stay in the item | `engine.WIDE_CHARS` |
 | `DIGEST_CHARS`, `SECTION_DIGEST_CHARS` | `int` | `700`, `1600` | an older result's digest | `ledger` |
 | `GET_CHARS`, `FIND_CHARS` | `int` | `6000`, `6000` | `get` (cap 9,000 through `max_chars()`) and `find` | `ledger` |
 | `OPEN_CHARS` | `int` | `24000` | ALL RESULTS in the settle step: items whole while this lasts, digests after | `writer.OPEN_CHARS` |
 | `RESULTS_CHARS` | `int` | `60000` | the writer's RESULTS, cut with `... (cut)` | `writer.RESULTS_CHARS` |
-| `BOOK_ITEMS` | `int` | `12` | uncited results the settle step lists by name; the rest counted | `loop.BOOK_ITEMS` |
-| `CORE_CURVES` | `tuple` | `VCL`, `PHIE`, `SW`, `PERM` | the reservoir curves every first look adds | `loop.CORE_CURVES` |
-| `MINERAL_VOLUMES` | `tuple` | `VCL`, `VQUAR`, `VCALC`, `VDOLO`, `VANHY`, `VSAND`, `VSILT`, `VSHALE`, `VCOAL` | added to the first look when `lithology_mineralogy` (`MINERAL_TOPIC`) is a topic | `loop.MINERAL_VOLUMES` |
-| `CORE_LOOK_CAP` | `int` | `14` | the first look's curves: the curves other than the reservoir and mineral curves are cut to `max(14 - <their count>, 8)` | `loop.CORE_LOOK_CAP` |
+| `BOOK_ITEMS` | `int` | `12` | uncited results the settle step lists by name; the rest counted | `settle.BOOK_ITEMS` |
+| `CORE_CURVES` | `tuple` | `VCL`, `PHIE`, `SW`, `PERM` | the reservoir curves every first look adds | `prompts.CORE_CURVES` |
+| `MINERAL_VOLUMES` | `tuple` | `VCL`, `VQUAR`, `VCALC`, `VDOLO`, `VANHY`, `VSAND`, `VSILT`, `VSHALE`, `VCOAL` | added to the first look when `lithology_mineralogy` (`MINERAL_TOPIC`) is a topic | `prompts.MINERAL_VOLUMES` |
+| `CORE_LOOK_CAP` | `int` | `14` | the first look's curves: the curves other than the reservoir and mineral curves are cut to `max(14 - <their count>, 8)` | `prompts.CORE_LOOK_CAP` |
 | first look | rule | 8 + named, 12 | at most 8 topic overview curves, then the named curves, 12 in all, before the core curves and twins are added | `graph.first_look` |
-| READ reply | schema | 1 to 4 topics; 12 names | `topics` from the topic areas; `named` strings | `loop.read_schema` |
+| READ reply | schema | 1 to 4 topics; 12 names | `topics` from the topic areas; `named` strings | `read.read_schema` |
 | `NAME_CHARS` | `int` | `80` | a name as the absent note shows it | `vocabulary.NAME_CHARS` |
 | `EARLIER_CHARS` | `int` | `6000` | EARLIER IN THIS SESSION; `OPENING_CHARS` 600, `QUESTION_CHARS` 300, `CLAIM_CHARS` 240 | `session/earlier.py` |
 | `RECURSION_LIMIT` | `int` | `200` | LangGraph supersteps of one question | `graph.RECURSION_LIMIT` |
@@ -883,9 +883,9 @@ The output caps come from the model card ([MODELS.md](../MODELS.md)).
 |---|---|---|---|---|
 | `max_tokens_spec` | `int` | `3000` in `ModelConfig`; `16384` in `generic.yaml`; `32768` in the default model card | READ, look and investigation steps, the points request, settle, figures | `config.ModelConfig` |
 | `max_tokens_writer` | `int` | `6000`; `16384`; `32768` | the writer and each repair | `config.ModelConfig` |
-| fix call | `int` | `min(max_tokens_spec, len(reply) // 2 + 3000)` | the call that fixes a reply's JSON syntax; sent with the card's retry settings | `loop.parse` |
+| fix call | `int` | `min(max_tokens_spec, len(reply) // 2 + 3000)` | the call that fixes a reply's JSON syntax; sent with the card's retry settings | `replies.parse` |
 | empty reply | rule | one retry | a step, look or writer call that returns nothing is sent again with `retry=True` (`step_k_retry`, `writer_retry`) | `graph.ask`, `graph.look`, `graph._write` |
-| READ retry | rule | one | an unreadable READ reply is sent again as `read_retry` (same settings) | `loop.read_question` |
+| READ retry | rule | one | an unreadable READ reply is sent again as `read_retry` (same settings) | `read.read_question` |
 
 The output caps in the packaged `generic.yaml` card:
 
@@ -904,9 +904,9 @@ What the trace keeps of long texts.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `read.reply` | `str` | 3000 characters | the READ reply | `loop.read_question` |
-| step `reply` | `str` | 6000 characters | each step's reply, also the settle reply | `graph.ask`, `graph.look`, `loop.settle` |
-| `repaired.broken` | `str` | 20000 characters | an unreadable reply, with `error` (200) and `by` (`salvage`, `fix` or `salvage, incomplete`) | `loop.parse` |
+| `read.reply` | `str` | 3000 characters | the READ reply | `read.read_question` |
+| step `reply` | `str` | 6000 characters | each step's reply, also the settle reply | `graph.ask`, `graph.look`, `settle.settle` |
+| `repaired.broken` | `str` | 20000 characters | an unreadable reply, with `error` (200) and `by` (`salvage`, `fix` or `salvage, incomplete`) | `replies.parse` |
 | `focus` | `str` | 300 characters | the step's focus | `graph.decide` |
 | `unread` | `list[str]` | 200 characters each | actions no tool reads | `graph.decide`, `graph.look` |
 | `errors` | `list[str]` | 200 characters each | the ledger's rejected calls | `graph.close` |
@@ -976,18 +976,18 @@ Question 1: What are the porosity, water saturation and permeability of the Bren
 <details>
 <summary>Prompts by stage</summary>
 
-How each call's user message is assembled; the system message is `loop.brief(library)` except where noted.
+How each call's user message is assembled; the system message is `prompts.brief(library)` except where noted.
 
 | Stage | Shown | User message, in order | Defined in |
 |---|---|---|---|
-| `read` | once | C5 `read` (or `read_depth`), `QUESTION:`, earlier questions, `THE MAP` (notes unscoped), `TOPIC AREAS:` with `name - when` per area | `loop.read_question` |
+| `read` | once | C5 `read` (or `read_depth`), `QUESTION:`, earlier questions, `THE MAP` (notes unscoped), `TOPIC AREAS:` with `name - when` per area | `read.read_question` |
 | `step_1` (look) | direct | head, `YOUR TOPICS: ...`, `FIRST LOOK (...)`, C5 `direct_step` | `graph.look` |
 | `step_k` (look, k > 1) | direct | head, `OPENED (fetch exact lines with get or find):`, `NEW (from step k-1):`, C5 `direct_step` | `graph.look` |
 | `step_1` | investigation | head, `YOUR TOPICS: ...`, `FIRST LOOK (...)`, C5 `step1`, C5 `points_scope`; later questions add C5 `step1_later` (and `step1_reply` when depth is not read) | `graph.ask` |
 | `step_k` (k > 1) | investigation | head, `YOUR POINTS:`, `YOUR ANSWER (after step k-1 of N):`, `OPENED (...)`, `GUIDES (...)`, `NEW (from step k-1):`, C5 `step_next` (or `step_last` at the cap) and C5 `step_settled_check` when no done issue is left | `graph.ask` |
 | `step_1_points` | at most once | the step 1 messages, the step 1 reply as an assistant turn, then C5 `points_ask` | `graph.plan` |
-| `step_k_fix`, `settle_fix` | unreadable JSON | one user message: C2 `fix` with the parse error and the reply; no system message | `loop.parse` |
-| `settle` | once | `QUESTION:`, absent note, earlier questions, `THE MAP`, `YOUR POINTS:`, `YOUR ANSWER:`, `ALL RESULTS:`, `BOOKKEEPING (...)` lists, C5 `settle`, C10 `settle_weaknesses`, `- ` and C9 `aspects_rule` | `loop.settle` |
+| `step_k_fix`, `settle_fix` | unreadable JSON | one user message: C2 `fix` with the parse error and the reply; no system message | `replies.parse` |
+| `settle` | once | `QUESTION:`, absent note, earlier questions, `THE MAP`, `YOUR POINTS:`, `YOUR ANSWER:`, `ALL RESULTS:`, `BOOKKEEPING (...)` lists, C5 `settle`, C10 `settle_weaknesses`, `- ` and C9 `aspects_rule` | `settle.settle` |
 
 - The first look's header reads `FIRST LOOK (each zone's key curves for the topics you chose: <topics>; opened for
   you):`, or `FIRST LOOK (each zone's key curves, opened for you):` with no topics.
@@ -998,25 +998,25 @@ How each call's user message is assembled; the system message is `loop.brief(lib
   earlier; its Compare calls: ...`) and those read at the last step whole; it is empty before a guide is read.
 - The settle step's ALL RESULTS is `writer.opened_results`: every item, as digests at first; then, while 24,000
   characters last, the cited items and the newest are upgraded to their whole text; a whole item carries the lines
-  get or find fetched beyond its text. Its BOOKKEEPING lists (`loop.bookkeeping`, C5 `settle_lists`) name what the
+  get or find fetched beyond its text. Its BOOKKEEPING lists (`settle.bookkeeping`, C5 `settle_lists`) name what the
   READ call named that no claim reaches, the opened results no claim cites (not `calc` items; at most 12), the claims
   still graded `hypothesis`, and the graded claims whose text was written before results their point's claims now
-  cite (`loop.written_before`, from `Claim.text_at`: an order fact, not a check of content); nothing waits on them.
+  cite (`settle.written_before`, from `Claim.text_at`: an order fact, not a check of content); nothing waits on them.
 
 </details>
 
 <details>
 <summary>The brief</summary>
 
-The system message of the READ call, every step and the settle step (`loop.brief`).
+The system message of the READ call, every step and the settle step (`prompts.brief`).
 
 | Part | Shown | What it holds | Defined in |
 |---|---|---|---|
 | C1 `brief` | always | the role, what each step shows, the reply format, the keys, grades and number rules | `C1_system/brief.md` |
-| `{direction}`, `{guide_action}` | with a library | C1 `brief_direction`, C1 `brief_guide`; empty with none | `loop.brief` |
-| `{TOOLS}` | always | `loop.tools_text`: C4 `library`, then each group's tools (`{"name": {"arg": ..., ...}}   description`), then the zone selector line | `loop.tools_text` |
-| `{ACTIONS}` | always | `6` | `loop.brief` |
-| C10 `brief_weaknesses`, `brief_levels` | always | how readings, caveats, negatives, levels and rankings are read | `loop.BRIEF_WEAKNESSES`, `loop.BRIEF_LEVELS` |
+| `{direction}`, `{guide_action}` | with a library | C1 `brief_direction`, C1 `brief_guide`; empty with none | `prompts.brief` |
+| `{TOOLS}` | always | `prompts.tools_text`: C4 `library`, then each group's tools (`{"name": {"arg": ..., ...}}   description`), then the zone selector line | `prompts.tools_text` |
+| `{ACTIONS}` | always | `6` | `prompts.brief` |
+| C10 `brief_weaknesses`, `brief_levels` | always | how readings, caveats, negatives, levels and rankings are read | `prompts.BRIEF_WEAKNESSES`, `prompts.BRIEF_LEVELS` |
 
 One tool line of `{TOOLS}`, cut here after its first sentence:
 
@@ -1057,15 +1057,15 @@ Raw input (the LAS as given, before the workflow)
   ...
 ```
 
-Without a lithology log the zones are runs of one shale-volume band. Taranaki tuhua-7, McKee Formation (tops file
-`formations_tuhua-7.csv`):
+Without a lithology log the zones are runs of the lithology Petrophys's mineral solver gives. Taranaki tuhua-7, McKee
+Formation (tops file `formations_tuhua-7.csv`):
 
 ```text
 WELL tuhua-7, FORMATION McKee
-Interval: 1935.0228-2017.776 m (gross 82.7532 m); 544 samples every 0.1524 m
-Zones: 6, covering 65.2272 m (79% of the interval)
-  Z1 SHALY (VCL BAND)_GROUP_3 1938.0708-1944.3192 m (6.2484 m)
-  Z2 SHALY (VCL BAND)_GROUP_7 1948.1292-1958.7972 m (10.668 m)
+...
+Zones: 11, covering 58.2168 m (70% of the interval)
+  Z1 SHALE_GROUP_1 1936.3944-1940.3568 m (3.9624 m)
+  Z2 SANDSTONE_GROUP_3 1941.576-1944.7764 m (3.2004 m)
   ...
 ```
 
@@ -1165,7 +1165,7 @@ With the packaged registry:
 [('shear sonic', ['DTS']), ('gamma ray', ['GR'])]
 ```
 
-- `loop.named_curves` gives the first look the curves with data that the READ reply's names stand for.
+- `prompts.named_curves` gives the first look the curves with data that the READ reply's names stand for.
 - `trace["absent"]` records the absent items as `{"name", "curves"}`; for the 16/7-1 question above,
   `vocabulary.absent` gives `[('neutron porosity', ['NPHI']), ('photoelectric factor', ['PEF'])]`.
 
@@ -1193,13 +1193,13 @@ The JSON shape of every reply the harness reads.
 
 | Stage | Type | Shape | Defined in |
 |---|---|---|---|
-| `read` | JSON schema | `{"topics": [area, ...], "named": [str, ...]}`, with `"depth": "direct" or "investigate"` when depth is read | `loop.read_schema`, `loop._reading` |
-| `step_1` | object | `asks`, `points`, `intent`, `focus`, `edits`, `next`, `done`; a later question may add `"reply": "brief" or "full"` | C1 `brief.md`, `loop.read_reply` |
-| `step_k` | object | `focus`, `edits`, `next`, `done` | `loop.read_reply` |
+| `read` | JSON schema | `{"topics": [area, ...], "named": [str, ...]}`, with `"depth": "direct" or "investigate"` when depth is read | `read.read_schema`, `read._reading` |
+| `step_1` | object | `asks`, `points`, `intent`, `focus`, `edits`, `next`, `done`; a later question may add `"reply": "brief" or "full"` | C1 `brief.md`, `replies.read_reply` |
+| `step_k` | object | `focus`, `edits`, `next`, `done` | `replies.read_reply` |
 | look step | object | `{"done": true}`, `{"next": [...], "done": false}`, or `{"depth": "investigate"}` | C5 `direct_step.md`, `graph.look` |
 | `step_1_points` | object | `{"points": [...], "intent": "..."}` | C5 `points_ask.md`, `graph.plan` |
-| `settle` | object | `{"edits": [...], "done": true}` | C5 `settle.md`, `loop.settle` |
-| `step_k_fix`, `settle_fix` | object | the same object with only its syntax fixed | C2 `fix.md`, `loop.parse` |
+| `settle` | object | `{"edits": [...], "done": true}` | C5 `settle.md`, `settle.settle` |
+| `step_k_fix`, `settle_fix` | object | the same object with only its syntax fixed | C2 `fix.md`, `replies.parse` |
 | writer, repair | markdown | the answer; a direct question's writer may reply `INVESTIGATE` | [WRITER_AND_CHECKER.md](WRITER_AND_CHECKER.md) |
 | `figures` | JSON schema | `{"figures": ["F2", "F1"]}`, at most 3 | `figures.schema` |
 
@@ -1209,11 +1209,11 @@ The READ reply of the first Brent question:
 {"topics": ["porosity", "water_saturation", "permeability_rock_quality", "hydrocarbon_detection"], "named": ["porosity", "water saturation", "permeability", "Brent Group", "hydrocarbon-bearing"], "depth": "investigate"}
 ```
 
-How a reply is read (`loop.read_reply`, `loop.parse`):
+How a reply is read (`replies.read_reply`, `replies.parse`):
 - The reply's step object is the last JSON object holding a step key (`asks`, `points`, `intent`, `focus`, `edits`,
   `next`, `done`); an object wrapped under `step`, `reply`, `response`, `answer`, `output` or `result` is unwrapped.
 - `edits` and `next` given as one object become a list; `done` given as `"true"`, `"yes"` or `"1"` is true.
-- When the object closes before edits or actions that follow it, the reply is unreadable. `loop.salvage` then keeps
+- When the object closes before edits or actions that follow it, the reply is unreadable. `replies.salvage` then keeps
   every complete inner edit and action. A salvage is accepted when it is complete and, at step 1, holds points;
   otherwise the model is asked once to fix its own syntax (`step_k_fix`); an incomplete salvage is the last resort.
   Steps 1 and 5 of the first Brent question were read by salvage.
@@ -1255,7 +1255,7 @@ Defined in `claims.coerce_edit`.
 <details>
 <summary>Actions</summary>
 
-An action in the shapes models write, read by `loop.coerce_action` into one of five kinds.
+An action in the shapes models write, read by `replies.coerce_action` into one of five kinds.
 
 | Name | Type | Meaning |
 |---|---|---|
@@ -1265,7 +1265,7 @@ An action in the shapes models write, read by `loop.coerce_action` into one of f
 | `guide` | `("guide", name)` | `{"guide": "porosity"}` (also `facet`, `name`); `None` with no skill library |
 | `calc` | `("calc", expression)` | `{"calc": "78.8 + 58.4"}`, or `{"calc": {"expression": ...}}` |
 
-Defined in `loop.coerce_action`.
+Defined in `replies.coerce_action`.
 
 ```python
 >>> coerce_action({"stats": ["SW"]}), coerce_action({"compare": ["PHIE", "PHIE_CC"]})
@@ -1390,14 +1390,14 @@ At step 4, `act` showed `E4` first (`carried: ["E4"]`). The step's record in `tr
 
 | Situation | What happens | Where |
 |---|---|---|
-| The READ reply is unreadable twice | no topics and no names: the general first look, the index in its own order, unscoped notes; `trace["read"]["parse"] = "failed"` | `loop.read_question` |
-| A topic in the READ reply is not an area | it is ignored; a reply with no valid topic is unreadable | `loop._reading` |
+| The READ reply is unreadable twice | no topics and no names: the general first look, the index in its own order, unscoped notes; `trace["read"]["parse"] = "failed"` | `read.read_question` |
+| A topic in the READ reply is not an area | it is ignored; a reply with no valid topic is unreadable | `read._reading` |
 | A step reply is empty | one retry (`step_k_retry`) with the card's retry settings | `graph.ask` |
-| A step reply is not readable JSON | salvage, then one fix call (`step_k_fix`), then an incomplete salvage; else the step is skipped | `loop.parse`, `graph.skip` |
+| A step reply is not readable JSON | salvage, then one fix call (`step_k_fix`), then an incomplete salvage; else the step is skipped | `replies.parse`, `graph.skip` |
 | Step 1 cannot be read | the investigation closes with no claims and the question fails (`the investigation produced no answer state`) | `graph.after_skip`, `graph.no_answer` |
 | More than 6 lookups | the first 6 run; NEW says how many were left out | `graph.decide` |
 | An action no tool reads | not run; NEW names it (first three) | `graph.decide` |
-| A guide call with no library | not an action; said back as not run | `loop.coerce_action`, `graph.decide` |
+| A guide call with no library | not an action; said back as not run | `replies.coerce_action`, `graph.decide` |
 | An unknown guide name | `GUIDE no facet '<name>'; facets: ...` in NEW | `direction.Library.guide` |
 | An unknown tool or bad arguments | `<tool> not run: <message>`; recorded in `ledger.errors` | `Ledger.open`, `schemas.call` |
 | A call opened before | its item again, whole, marked `(opened before: ...)`; no new id | `Ledger.open`, `Ledger.show` |

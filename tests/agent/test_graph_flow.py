@@ -1,4 +1,5 @@
-"""The question graph (docs/GRAPH.md): the graph's shape against the blueprint, and hosted tracing refused.
+"""The question graph (docs/GRAPH.md, "The question graph"): the graph's shape against the blueprint, and hosted
+tracing refused.
 
     .venv/bin/python -m pytest tests/agent/test_graph_flow.py -q
 """
@@ -13,10 +14,10 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(Path(__file__).resolve().paren
 
 
 def test_graph_matches_the_blueprint():
-    """Every node of the question graph is in docs/GRAPH.md's node table, and every route the code has is in its route
-    table (from, to)."""
+    """Every node of the question graph is in the node table of docs/GRAPH.md's question graph section, and every route
+    the code has is in its route table (from, to)."""
     from petroharness.agent.graph import GRAPH
-    doc = (ROOT / "docs" / "GRAPH.md").read_text()
+    doc = (ROOT / "docs" / "GRAPH.md").read_text().split("\n## The question graph\n", 1)[1].split("\n## ", 1)[0]
     g = GRAPH.get_graph()
     nodes = {n for n in g.nodes if not n.startswith("__")}
     table = set(re.findall(r"^\| `(\w+)` \| (?:code|model)", doc, re.M))

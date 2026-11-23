@@ -66,7 +66,7 @@ flowchart TD
     req --> ok{"All equal?"}
     ok -- "yes" --> done["Merge"]
     ok -- "no" --> bug["The difference named is the bug"]
-    meant -- "yes" --> switch["A switch, off by default<br/>(agent/options.py)"]
+    meant -- "yes" --> switch["A switch, off by default<br/>(options.py)"]
     switch --> measure["Measure end to end<br/>(AGENTS.md rule 8)"]
     measure --> rerecord["Adopt: re-record the mini set,<br/>the golden tapes and the fixture"]
 ```
@@ -103,6 +103,7 @@ flowchart TD
 | [As CI runs it](#the-suite-as-ci-runs-it) | Every test with nothing set: the data tests skip | Nothing |
 | [The code lint](#the-code-lint-ruff) | `ruff check src tests`: what must never land | The `dev` extra |
 
+<a id="the-fast-suite"></a>
 <details>
 <summary>The fast suite</summary>
 
@@ -126,6 +127,7 @@ Runs every test that needs no data files, in parallel; it is what to run on each
 
 </details>
 
+<a id="the-full-suite"></a>
 <details>
 <summary>The full suite</summary>
 
@@ -135,7 +137,7 @@ Runs every test, with every input the tests can use.
 |---|---|---|---|---|
 | `PETROHARNESS_DATA` | path | `configs/data.local.yaml` | The data config of a dataset with reference files (`eval.*`); its `data.tops_csv` must have a `form` column for the lint's formation names. | `config.DATA_FILE_ENV`, `tests/test_lint.py` |
 | `WELLLOGBENCH` | folder | unset | The folder of `<dataset>.yaml` data configs for the golden tapes and the calibration and check tests. | `tests/agent/test_golden_tapes.py` |
-| `PETROHARNESS_SAMPLE_LAS` | folder | `sample_las` (relative) | A folder holding the Petrophys sample wells the tests name. | `tests/ui/test_ui_runs.py` and others |
+| `PETROHARNESS_SAMPLE_LAS` | folder | none: Petrophys's own files | A folder of the sample wells the tests name, read first where it holds the file. | `tests/ui/test_ui_runs.py` and others |
 | `PETROHARNESS_RUNS` | glob | unset | Saved benchmark run folders, for the saved-run tests. | `tests/test_citations.py`, `tests/agent/test_b7_writer.py` |
 
 ```bash
@@ -144,14 +146,15 @@ PETROHARNESS_DATA=/path/to/data.yaml WELLLOGBENCH=/path/to/configs PETROHARNESS_
 ```
 
 - The sample wells the tests use are `tuhua-7.las` with `formations_tuhua-7.csv`, `1046123714.las` with
-  `1046123714_formation_tops.csv`, and `teapot_17-wx-21.las`. Petrophys ships them in different folders of its
-  `datasets` package, so `PETROHARNESS_SAMPLE_LAS` is a folder you assemble (copies or links,
-  [section 5](#5-environment-variables)); a test whose file is missing skips.
+  `1046123714_formation_tops.csv`, and `teapot_17-wx-21.las`, read from Petrophys's `datasets` package
+  (`tests/_wells.SAMPLES`), so they run with no setup; `PETROHARNESS_SAMPLE_LAS` names a folder to read them from
+  instead ([section 5](#5-environment-variables)).
 - The prompt fixture comparison also needs a data config for each dataset beside the one in `PETROHARNESS_DATA`,
-  named `<dataset>.yaml` ([section 7](#the-prompt-fixture)).
+  named `<dataset>.yaml` ([section 7](../../tests/gate/README.md#the-prompt-fixture)).
 
 </details>
 
+<a id="the-suite-as-ci-runs-it"></a>
 <details>
 <summary>The suite as CI runs it</summary>
 
@@ -185,6 +188,7 @@ env -u PETROHARNESS_DATA -u WELLLOGBENCH -u PETROHARNESS_SAMPLE_LAS -u PETROHARN
 
 </details>
 
+<a id="the-code-lint-ruff"></a>
 <details>
 <summary>The code lint (ruff)</summary>
 
@@ -245,7 +249,7 @@ What each absent input does, and the reason pytest prints.
 | No sample wells | skip | `no sample wells at <folder> (PETROHARNESS_SAMPLE_LAS)` or `no sample wells (PETROHARNESS_SAMPLE_LAS)`. | the sample-well tests ([section 6](#6-test-layout)) |
 | `PETROHARNESS_RUNS` unset | `skipif` | `PETROHARNESS_RUNS is not set (a glob of saved run folders)`; `no responses in the PETROHARNESS_RUNS folders` when the glob finds none. | `tests/test_citations.py`, `tests/agent/test_b7_writer.py` |
 | No recorded mini set | `skipif` | `no recorded mini set in this checkout (tests/gate/record_mini.py)`. | `tests/gate/test_mini.py` |
-| Another Petrophys version or build | skip | Another version: `recorded with Petrophys <version@build>; this is <version@build>: the curves, and so the prompts, differ`. The same version, another build: `recorded with another build of Petrophys <version> (<version@build>; this is <version@build>): its curves may differ`. | `tests/gate/test_mini.py`, `record_mini.other_build` |
+| Another Petrophys version or build | skip (fail where `PETROHARNESS_GATE_REQUIRED` is set, as in CI) | Another version: `recorded with Petrophys <version@build>; this is <version@build>: the curves, and so the prompts, differ`. The same version, another build: `recorded with another build of Petrophys <version> (<version@build>; this is <version@build>): its curves may differ`. | `tests/gate/test_mini.py`, `record_mini.other_build` |
 | No benchmark question files | skip | `the benchmark's QA pairs are not here` (`test_no_benchmark_overlap`). | `tests/test_generality.py` |
 | `PETROHARNESS_SKILLS=none` | skip | `no skill library plugged (PETROHARNESS_SKILLS=none)`. | `test_read.py`, `test_skills.py`, `test_b4_direction.py` (whole module) |
 
@@ -300,135 +304,25 @@ well, GeoLink `30/6-5`, and its tops file `formations_30_6-5.csv` the same way, 
 
 ## 6. Test layout
 
-Counts are tests collected with no data config, in a checkout that holds the golden tapes and the prompt fixture.
+Helpers the tests share live in `tests/_support/`: `model.py` holds the one scripted model (`ScriptedModel` replies by
+stage and keeps every call; `in_turn` replies from a list whatever the stage), `formations.py` the configured dataset's
+formations, built once, and `sessions.py` a built session on a formation with net pay. A test that needs a model writes
+its replies, not a model class.
 
-| Folder | Modules | Tests | Without `data` | What it covers |
-|---|---|---|---|---|
-| [`tests/`](#top-level-tests-testspy) | 31 (4 skip at collection) | 571 | 536 | Whole-harness and cross-cutting tests |
-| [`tests/agent`](#testsagent) | 53 (11 skip at collection) | 1020 | 692 | The inventory and map, the tools, the ledger, the guides, the loop, the claims, the writer, the verbs |
-| [`tests/session`](#testssession) | 7 | 62 | 16 | Conversations: follow-ups, settings changes, scope and zones changes, field notes, depth, the session graph |
-| [`tests/ui`](#testsui) | 4 | 79 | 70 | The web UI server, its progress events and its plot |
-| [`tests/gate`](#testsgate-and-testsgolden) | 2 | 5 | 5 | The public mini set and the request gate's comparison |
-| [`tests/basis`, `core`, `evidence`, `figures`](#testsbasis-testscore-testsevidence-testsfigures) | 1 each | 5, 9, 5, 8 | 4, 7, 2, 4 | The parts a conversation adds |
+| Folder | What it covers |
+|---|---|
+| `tests/` | Whole-harness and cross-cutting tests: the generality contract, the lint, the Petrophys integration, the interval and its inputs, labels, tool texts, the rules at shared points, the generated doc tables |
+| `tests/agent` | The harness's own parts: the inventory and map, the tools, the ledger, the guides, the loop, the claims, the writer, the verbs, the components |
+| `tests/session` | Conversations: follow-ups, settings changes, scope and zones changes, field notes, depth, the session graph |
+| `tests/ui` | The web UI server, its progress events and its plot |
+| `tests/gate` | The public mini set and the request gate's comparison |
+| `tests/basis`, `core`, `evidence`, `figures` | The parts a conversation adds |
+| `tests/_support` | The scripted model, the dataset's formations and the sessions built on them |
 
-The "Type" column of each module table says what the module needs, and "Tests" how many it collects with no data
-config.
-
-<details>
-<summary>Top-level tests (<code>tests/*.py</code>)</summary>
-
-Whole-harness and cross-cutting tests.
-
-| Name | Type | Tests | Meaning | Defined in |
-|---|---|---|---|---|
-| `test_audit_fixes.py` | Petrophys sample wells | 17 | Fixes from the audits of names, reach, advice and traces: SP clay volume equals the record's VCL_SP, Petrophys messages whole, a fallback method not called the record's, number inputs, misplaced actions, `runs.limit`, stretches in `where`, flow roles without permeability, a selection's flag. | `tests/test_audit_fixes.py` |
-| `test_call_door.py` | Petrophys sample wells | 37 | `zones` read at the call door for every tool and `where` for a verb's run (reach well): every tool on a unit outside the focus, two units and a range; Pickett on the water leg against the raw arrays; calls that differ only at the door are two results. | `tests/test_call_door.py` |
-| `test_citations.py` | none; saved runs for one test | 98 | Every citation form models produce is removed before delivery; numbers and tables survive. | `tests/test_citations.py` |
-| `test_class_tables.py` | sample wells for 3 | 5 | The analyzers' class tables: the packaged policy uses the library's current set, and a data settings file may name a context package's set (`data.analyzer_class_tables`). | `tests/test_class_tables.py` |
-| `test_core_reference.py` | data config (module) | skipped at collection | The core reference taken from a core-corrected LAS curve where there are no plug samples, and the porosity step's parameters on demand. | `tests/test_core_reference.py` |
-| `test_encoding.py` | none | 2 | Text the harness reads and writes is UTF-8 whatever the machine's locale: every text read and write names the encoding, and the session log keeps text under any locale. | `tests/test_encoding.py` |
-| `test_engine.py` | data config (module) | skipped at collection | A policy that names a pinned interpretation engine runs it on the raw LAS. | `tests/test_engine.py` |
-| `test_formation_zone_layout.py` | none | 6 | `data.zone_layout: formation` makes the interval one zone; the default layout is unchanged. | `tests/test_formation_zone_layout.py` |
-| `test_generality.py` | data for 2 tests | 12 | The generality contract, G1 to G8 ([section 8](#the-generality-tests)). | `tests/test_generality.py` |
-| `test_interpret_option.py` | none | 14 | `data.interpret`: `petrophys.interpret` interprets the LAS and its step record is the well's. | `tests/test_interpret_option.py` |
-| `test_interpretation_settings.py` | none | 27 | The interpretation settings: every Petrophys setting offered once or left out on purpose, Petrophys's own choices and help, the policy's defaults, per-setting errors, and that a run's settings reach Petrophys and the zone rule. | `tests/test_interpretation_settings.py` |
-| `test_interval_units.py` | sample wells for 1 | 2 | An interval given in feet on a log in metres (or the other way) holds the samples its limits name. | `tests/test_interval_units.py` |
-| `test_intervals.py` | data config (module) | skipped at collection | Tasks load without reference fields, and intervals match the reference formation bounds. | `tests/test_intervals.py` |
-| `test_label_fixes.py` | Petrophys sample wells (`data`) | 29 | Labels read from the record as data, one rule each: one-value curves, the invasion pair the record used, the analyzers' run descriptions, a class curve's code labels, NET_EXCLUSION and the net-pay split, the VCL rule, parameter notes, a held value for any curve, the temperature's source, functions for an absent derived quantity, the plugs beside the core-calibrated curves, Petrophys's advice at the call door. | `tests/test_label_fixes.py` |
-| `test_lint.py` | data for 1 test (via the conftest skip) | 5 | No well, formation or dataset names and no depth literals in code, rules or prompts ([section 8](#the-lint)). | `tests/test_lint.py` |
-| `test_llm.py` | none | 11 | The client's plumbing for any model family: template variables, truncated replies of reasoning models, the reasoning field. | `tests/test_llm.py` |
-| `test_model_names.py` | none | 3 | The default model's registry key and packaged card carry its public name, the endpoints come from `PETROHARNESS_MODEL_URL` alone, and no working names are left in the package or the docs. | `tests/test_model_names.py` |
-| `test_petrophys_integration.py` | none | 2 | Every catalog computation and toolset tool reaches Petrophys or is a listed generic data operation or record reader ([section 8](#the-petrophys-integration-test)). | `tests/test_petrophys_integration.py` |
-| `test_prepare_cutoffs.py` | none | 3 | A cutoff Petrophys sets per depth by lithology is recorded as text; only single-number cutoffs are compared with the policy's. | `tests/test_prepare_cutoffs.py` |
-| `test_provenance.py` | none | 34 | Where a curve comes from, read from the step record and the LAS, never assumed. | `tests/test_provenance.py` |
-| `test_reach_text.py` | Petrophys sample wells | 6 | The brief and the map under reach well: the reach line, the units of the tops file, the zones line. | `tests/test_reach_text.py` |
-| `test_runs_intervals.py` | Petrophys sample wells | 9 | `runs` under reach well: every interval top to base, uncut by zones, with each zone's thickness, against the raw arrays. | `tests/test_runs_intervals.py` |
-| `test_scope.py` | Petrophys sample wells | 10 | A question's scope (reach well): the READ call's `scope`, applied as every lookup's default zones; a call's own zones win; reach focus unchanged. | `tests/test_scope.py` |
-| `test_selection.py` | Petrophys sample wells | 130 | Selections: units, depth ranges in m and ft, several items, refusals, each tool's output against the raw arrays, and the reach focus snapshot. | `tests/test_selection.py` |
-| `test_smoke.py` | data for 1 test (via the conftest skip) | 3 | The installed Petrophys is version 3; the configuration loads; the Petrophys build is Petrophys's own. | `tests/test_smoke.py` |
-| `test_stretch.py` | Petrophys sample wells | 54 | `FormationView.stretch` and the focus snapshot: any stretch of the well gets its own zones; the benchmark's focus views are byte for byte. | `tests/test_stretch.py` |
-| `test_stretch_synthetic.py` | Petrophys sample wells | 16 | Synthetic wells and tops files through the real pipeline: stretches, open and stated bases, a bottom-up LAS (strict xfail). | `tests/test_stretch_synthetic.py` |
-| `test_tape_rules.py` | none | 10 | The rules of `tape.compare_run`: removed switches pass only at their value fixed in code, a new switch must be off, the `calls` key is skipped when only the replay has it, and the version stamps and the setup's hash and commit do not decide behaviour ([section 9](#9-component-versions-and-the-golden-tests)). | `tests/test_tape_rules.py` |
-| `test_trace_identity.py` | none | 4 | What a trace says about the harness and the model: the package version and the model's name as people read it, never a registry key or endpoints; an empty answer is an error, not `ok`. | `tests/test_trace_identity.py` |
-| `test_user_zones.py` | Petrophys sample wells | 22 | The user's zones file: reading (CSV, TSV, Excel, several wells, refusals), the frame (Z ids, names), lithology zones as L ids and `by`, the way in (CLI, prepare, conversation). | `tests/test_user_zones.py` |
-| `test_zones.py` | data config (module) | skipped at collection | Zone segmentation reproduces the reference zone names and bounds. | `tests/test_zones.py` |
-
-```bash
-.venv/bin/python -m pytest -o addopts= -q tests/test_generality.py tests/test_petrophys_integration.py
-```
-
-`tests/_reference.py` gives tests read-only access to reference material (`CFG = HarnessConfig()` at import, so
-every module that imports it needs the data config). The harness never imports it (AGENTS.md rule 1).
-
-</details>
-
-<details>
-<summary><code>tests/agent</code></summary>
-
-The harness's own parts: the inventory and map, the tools, the ledger, the guides, the investigation loop, the claims,
-the writer and the verbs over Petrophys.
-
-| Name | Type | Tests | Meaning | Defined in |
-|---|---|---|---|---|
-| `test_absence.py` | data for 2 | 19 | What a question names resolves to curves; a measurement the record lacks is detected generally. | `tests/agent/test_absence.py` |
-| `test_ask.py` | sample wells for 2 | 57 | `petroharness.ask` and the default command: the tops reader, interval rules, settings built from the LAS, model cards, the command line. | `tests/agent/test_ask.py` |
-| `test_b0_inventory.py` | data config (module) | skipped at collection | The inventory on every formation of the configured dataset, with mutations of real wells. | `tests/agent/test_b0_inventory.py` |
-| `test_b1_map.py` | data config (module) | skipped at collection | The map on every formation. | `tests/agent/test_b1_map.py` |
-| `test_b1_notes.py` | data for 6 | 21 | The map's notes against the record's provenance facts and references computed from the curves. | `tests/agent/test_b1_notes.py` |
-| `test_b2_compute.py` | data for 14 | 26 | The catalog's computations as named tools. | `tests/agent/test_b2_compute.py` |
-| `test_b2_dense.py` | data config (module) | skipped at collection | Dense tool checks on every formation. | `tests/agent/test_b2_dense.py` |
-| `test_b2_tools.py` | data config (module) | skipped at collection | The tools against an independent reference (`b2_reference.py`) on every formation. | `tests/agent/test_b2_tools.py` |
-| `test_b3_ledger.py` | data config (module) | skipped at collection | The ledger on every formation. | `tests/agent/test_b3_ledger.py` |
-| `test_b4_direction.py` | data for 4; skipped with no library | 19 | The guide index and the guides: Compare lines that parse and render, sizes, sources. | `tests/agent/test_b4_direction.py` |
-| `test_b4_trap_rules.py` | none | 39 | The rules the trap script `b4_traps.py` judges claims by, on hand-written claims. | `tests/agent/test_b4_trap_rules.py` |
-| `test_b5_calls.py` | data for 31 | 108 | The shapes of tool calls models send, read as meant; `calc` arithmetic on shown numbers. | `tests/agent/test_b5_calls.py` |
-| `test_b5_citations.py` | none | 6 | Citation bookkeeping and the lookups-per-step limit. | `tests/agent/test_b5_citations.py` |
-| `test_b5_loop.py` | data for 19 | 70 | The investigation loop: action and reply shapes, and the control flow under a scripted model. | `tests/agent/test_b5_loop.py` |
-| `test_b5_traps.py` | data for 1 | 34 | The trap rules of `b5_traps.py` on hand-written claims. | `tests/agent/test_b5_traps.py` |
-| `test_b6_claims.py` | data for 10 | 113 | The claims: checks, grades, edits; with `-m data`, claims built from every formation's real results. | `tests/agent/test_b6_claims.py` |
-| `test_b7_writer.py` | data for 18; saved runs for 1 | 51 | The writer: its prompt, its rules, the repair rounds under a scripted model, the replay's rebuild on saved traces. | `tests/agent/test_b7_writer.py` |
-| `test_components.py` | `WELLLOGBENCH` and golden tapes for 3 | 22 | Component entries load as exact bytes, templates fill in one pass, versions follow the files, every character of every call is attributed. | `tests/agent/test_components.py` |
-| `test_compose.py` | none | 6 | The zone table placed once: a writer table that repeats it is left out, one with a column of its own stays; an empty heading is left out. | `tests/agent/test_compose.py` |
-| `test_crossplot.py` | data config (module) | skipped at collection | The crossplot lookup against numpy. | `tests/agent/test_crossplot.py` |
-| `test_curve_catalog.py` | data for 2 | 11 | The curve catalog and the step records in plain words. | `tests/agent/test_curve_catalog.py` |
-| `test_fetched_lines.py` | Petrophys sample wells (`data`) | 5 | What get and find show beyond a result's text is kept for the question and read under the result by the writer and settle (a scripted direct question through the writer). | `tests/agent/test_fetched_lines.py` |
-| `test_flex.py` | data config (module) | skipped at collection | Tools on any zone layout; the harness's tool names in the workflow's messages. | `tests/agent/test_flex.py` |
-| `test_golden_tapes.py` | `WELLLOGBENCH` and golden tapes | 36 cases in a checkout that has them | The golden tapes ([section 7](#the-golden-tapes)). | `tests/agent/test_golden_tapes.py` |
-| `test_graph_flow.py` | none | 2 | The question graph's shape against its blueprint; hosted tracing refused. | `tests/agent/test_graph_flow.py` |
-| `test_guide_sections.py` | data for 6 | 6 | A guide read the first time opens the workflow sections it names, beside the model's action cap. | `tests/agent/test_guide_sections.py` |
-| `test_lag.py` | data config (module) | skipped at collection | `lag_correlation` and the guide that names it. | `tests/agent/test_lag.py` |
-| `test_levels_and_rankings.py` | data config (module) | skipped at collection | The workflow's flow roles pass through; the zone table adds a geometric mean by the shape of the values. | `tests/agent/test_levels_and_rankings.py` |
-| `test_library_api.py` | sample wells for 12 | 19 | The registry of Petrophys functions, search and run, and the binder; every function run as the model may call it, with no harness fault and no change to the record. | `tests/agent/test_library_api.py` |
-| `test_library_calibrate.py` | sample wells, `WELLLOGBENCH` | 10 | The `calibrate` verb. | `tests/agent/test_library_calibrate.py` |
-| `test_library_check.py` | sample wells, `WELLLOGBENCH` | 6 | The `check` verb. | `tests/agent/test_library_check.py` |
-| `test_library_classify.py` | sample wells | 9 | The `classify` verb. | `tests/agent/test_library_classify.py` |
-| `test_library_summarize.py` | sample wells | 4 | The `summarize` verb. | `tests/agent/test_library_summarize.py` |
-| `test_library_tools.py` | sample wells for 11, Petrophys's bundled 16/7-1 for 1 | 19 | `calculate`, `estimate` and `what_if`: the catalog read as menus, calls checked, downstream steps. | `tests/agent/test_library_tools.py` |
-| `test_measured_build.py` | data for 8 | 18 | Six behaviours of the investigation and the writer that are fixed in code, each asserted. | `tests/agent/test_measured_build.py` |
-| `test_options.py` | none | 16 | The switch framework: no switch is defined; an unknown name raises. | `tests/agent/test_options.py` |
-| `test_plumbing.py` | data for 8 | 18 | The plumbing between the tools, the ledger and the prompts. | `tests/agent/test_plumbing.py` |
-| `test_read.py` | data for 10 | 23 | The READ call and what its topics key, with a stub model. | `tests/agent/test_read.py` |
-| `test_recipes.py` | none | 18 | Every test a guide's Consider or Decide line describes has its Compare call (`fixtures/guide_recipes.yaml`). | `tests/agent/test_recipes.py` |
-| `test_section_zones.py` | data config (module) | skipped at collection | A section lookup ends with its classes per zone, pooled and over the interval. | `tests/agent/test_section_zones.py` |
-| `test_settle.py` | data for 2 | 2 | The settle step. | `tests/agent/test_settle.py` |
-| `test_settle_lists.py` | data for 3 | 4 | The lists the settle prompt shows. | `tests/agent/test_settle_lists.py` |
-| `test_shape.py` | data for 12 | 15 | The summary layer reads a curve's shape (codes, flags, log-normal) from its values. | `tests/agent/test_shape.py` |
-| `test_skill_library.py` | data for 15 (12 are the prompt fixture) | 27 | The pluggable skill library, and the prompt fixture ([section 7](#the-prompt-fixture)). | `tests/agent/test_skill_library.py` |
-| `test_skills.py` | none; skipped with no library | 55 | The plugged library: generic, canonical files, provenance of every line. | `tests/agent/test_skills.py` |
-| `test_summary.py` | data for 32 | 35 | One summary layer under every summarising tool: each zone, pooled, whole interval. | `tests/agent/test_summary.py` |
-| `test_tool_lines.py` | data for 15 | 22 | What the tools show. | `tests/agent/test_tool_lines.py` |
-| `test_tool_registration.py` | none | 14 | Every list of tools follows the definitions in `agent/toolset.py`. | `tests/agent/test_tool_registration.py` |
-| `test_views_and_scope.py` | data config (module) | skipped at collection | What the tools and the writer show zone by zone, and what the model's topics scope. | `tests/agent/test_views_and_scope.py` |
-| `test_writer_evidence.py` | data for 7 | 11 | The writer reads the points, every opened result and the provenance card. | `tests/agent/test_writer_evidence.py` |
-| `test_writer_sources.py` | sample wells for 3 | 4 | The checker accepts the numbers the writer was shown (the map without its notes, the points, the limits), and the limits leave out empty weakness notes. | `tests/agent/test_writer_sources.py` |
-| `test_written_before.py` | Petrophys sample wells (`data`) | 2 | Settle lists the claims whose text came before results their point's claims cite (unit cases; a scripted investigation). | `tests/agent/test_written_before.py` |
-| `test_zone_fill.py` | data for 1 | 10 | The analyzers' derived curves and how the formation view reads them. | `tests/agent/test_zone_fill.py` |
-
-```bash
-.venv/bin/python -m pytest -o addopts= -q tests/agent/test_tool_registration.py tests/agent/test_options.py
-```
-
-</details>
+Each test module says in its docstring what it covers and what it needs (a test that reads benchmark data is marked
+`data`; [section 4](#4-markers-and-skips)). `tests/_reference.py` gives tests read-only access to reference material
+(`CFG = HarnessConfig()` at import, so a module that imports it needs the data config); the harness never imports it
+(AGENTS.md rule 1).
 
 <details>
 <summary>Scripts and fixtures in <code>tests/agent</code></summary>
@@ -437,9 +331,9 @@ Files pytest does not collect: recorders, replays, live-model scripts and fixed 
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `record_golden.py` | recorder | | Records the golden tapes (`live`) or rewrites their results (`replay`). | [section 7](#the-golden-tapes) |
-| `prompt_fixture.py` | renderer | | Renders the prompt fixture. | [section 7](#the-prompt-fixture) |
-| `replay.py` | replay | | The ledger replay of saved investigations. | [section 7](#the-ledger-replay) |
+| `record_golden.py` | recorder | | Records the golden tapes (`live`) or rewrites their results (`replay`). | [section 7](../../tests/gate/README.md#the-golden-tapes) |
+| `prompt_fixture.py` | renderer | | Renders the prompt fixture. | [section 7](../../tests/gate/README.md#the-prompt-fixture) |
+| `replay.py` | replay | | The ledger replay of saved investigations. | [section 7](../../tests/gate/README.md#the-ledger-replay) |
 | `b2_reference.py` | module | | An independent reference of what each tool should return, used by the tool tests. | `tests/agent/b2_reference.py` |
 | `b4_traps.py`, `b5_traps.py` | live scripts | | Trap scenarios run with a live model (`PETROHARNESS_MODEL_URL`) on real formations; their final claims are checked by rule. `python tests/agent/b4_traps.py OUT.json [--root WORKTREE] [--per 8] [--only NAME]`. | the files' docstrings |
 | `b5_traces.py` | script | | Measures of the investigation loop on saved runs' traces: `python tests/agent/b5_traces.py OUT.json PREFIX [PREFIX ...]`. | `tests/agent/b5_traces.py` |
@@ -454,84 +348,6 @@ PETROHARNESS_DATA=/path/to/data.yaml PETROHARNESS_MODEL_URL=http://localhost:800
 
 </details>
 
-<details>
-<summary><code>tests/basis</code>, <code>tests/core</code>, <code>tests/evidence</code>, <code>tests/figures</code></summary>
-
-One module each, for the parts a conversation adds.
-
-| Name | Type | Tests | Meaning | Defined in |
-|---|---|---|---|---|
-| `basis/test_basis.py` | data for 1 | 5 | The methods and parameters an answer rests on (`petroharness.basis`). | `tests/basis/test_basis.py` |
-| `core/test_setup.py` | data for 2 | 9 | The setup record and its hash (`petroharness.core.setup`): the same in every process, the command with `PETROHARNESS_DATA` and with `--las`, and the harness's own commit. | `tests/core/test_setup.py` |
-| `evidence/test_evidence.py` | data for 3 | 5 | The evidence graph, the number links and the audit trail. | `tests/evidence/test_evidence.py` |
-| `figures/test_figures.py` | data for 4 | 8 | Figures: the harness draws nothing itself, candidates, binding, the model's choice, captions. | `tests/figures/test_figures.py` |
-
-```bash
-.venv/bin/python -m pytest -o addopts= -q tests/basis tests/core tests/evidence tests/figures
-```
-
-</details>
-
-<details>
-<summary><code>tests/session</code></summary>
-
-Conversations: follow-up questions, settings changes, field notes, depth and the session graph.
-
-| Name | Type | Tests | Meaning | Defined in |
-|---|---|---|---|---|
-| `test_adopt.py` | sample wells (module marked `data`) | 8 | Changing a setting in a conversation (`Conversation.adopt`). | `tests/session/test_adopt.py` |
-| `test_chat_command.py` | sample wells (module marked `data`) | 2 | `petroharness chat` stops with exit status 2 and a WHAT / FIX line on a skill library that cannot be used or a missing questions file, before any question. | `tests/session/test_chat_command.py` |
-| `test_conversation.py` | data for 5 | 8 | A conversation on one interval; the log rebuilds it. | `tests/session/test_conversation.py` |
-| `test_depth.py` | data for 14 | 17 | The direct route: the READ call's depth, look steps, a short answer. | `tests/session/test_depth.py` |
-| `test_field_notes.py` | sample wells for 7 | 14 | Field notes: per-entry errors, settings in force from the start, notes with every question. | `tests/session/test_field_notes.py` |
-| `test_scope_conversation.py` | Petrophys sample wells | 10 | The scope adapts during a conversation: each question's own scope, the user's `/scope`, `/frame lithology`, `/zones` mid-conversation and a bad file, the log and resume, reach focus. | `tests/session/test_scope_conversation.py` |
-| `test_session_graph.py` | none | 3 | The session graph and the later-question graph against their blueprints. | `tests/session/test_session_graph.py` |
-
-```bash
-PETROHARNESS_SAMPLE_LAS=$PWD/sample_las .venv/bin/python -m pytest -o addopts= -q tests/session
-```
-
-</details>
-
-<details>
-<summary><code>tests/ui</code></summary>
-
-The web UI server, its progress events and its plot ([WEB_UI_API.md](WEB_UI_API.md)).
-
-| Name | Type | Tests | Meaning | Defined in |
-|---|---|---|---|---|
-| `test_ui_server.py` | none | 45 | The server without a model: the page, uploads, LAS headers, tops listings, input checks, the refused requests (403), endpoint health and choice, the command. | `tests/ui/test_ui_server.py` |
-| `test_ui_progress.py` | none | 23 | `progress.Observed` passes calls through unchanged and reports them; results and replies read with the harness's parsers. | `tests/ui/test_ui_progress.py` |
-| `test_ui_wellplot.py` | none | 2 | The plot's scales and thinning. | `tests/ui/test_ui_wellplot.py` |
-| `test_ui_runs.py` | sample wells (module marked `data`) | 9 | Questions through the API end to end with the stand-in model on `tuhua-7`: interval forms, events, saved runs, rating, queue, follow-ups, figures, lineage, audit. | `tests/ui/test_ui_runs.py` |
-| `ui_stub.py` | stand-in model | | `StubModel`: replies by stage (READ, step 1, step 2, settle, writer, repair); records every call; an optional gate holds calls. | `tests/ui/ui_stub.py` |
-
-```bash
-PETROHARNESS_SAMPLE_LAS=$PWD/sample_las .venv/bin/python -m pytest -o addopts= -q tests/ui
-```
-
-</details>
-
-<details>
-<summary><code>tests/gate</code> and <code>tests/golden</code></summary>
-
-The recorded runs the regression gates replay.
-
-| Name | Type | Tests | Meaning | Defined in |
-|---|---|---|---|---|
-| `gate/test_mini.py` | none | 3 | Two unit tests of the request gate's comparison and reply rebuilding, and one replay per recorded mini set. | [section 7](#the-public-mini-set) |
-| `gate/test_record_mini.py` | none | 2 | The recorder: a live recording that fails leaves the earlier one as it was; a set recorded with another Petrophys build is a reason to skip. | `tests/gate/test_record_mini.py` |
-| `gate/record_mini.py` | recorder | | Records the mini set live or rewrites its expectations by replay. | [section 7](#the-public-mini-set) |
-| `gate/request_gate.py` | maintainer tool | | Hashes every request built for saved runs, and compares two hash files. | [section 7](#the-request-gate) |
-| `gate/mini/<name>/` | data, shipped | | `set.json` and `turns/NN.tape.jsonl.gz`, `turns/NN.answer.md` per question; the one set is `brent`. | `record_mini.py` |
-| `golden/<dataset>/` | data, not in the public repository | | `selection.json`, `<task>.tape.jsonl.gz`, `<task>.result.json.gz`. | `record_golden.py` |
-
-```bash
-.venv/bin/python -m pytest -o addopts= -q tests/gate
-```
-
-</details>
-
 ## 7. Regression gates
 
 Each gate answers "did this change alter what it should not?" at a different reach.
@@ -539,10 +355,10 @@ Each gate answers "did this change alter what it should not?" at a different rea
 | Gate | Kind | Runs | What it replays and compares | Defined in |
 |---|---|---|---|---|
 | [Public mini set](#the-public-mini-set) | pytest | everywhere | A three-question conversation on the Brent Group of GeoLink 30/6-5, a Petrophys sample well, replayed request for request, with answers, opened results, number links, steps, figures, the interval display and the audit trail. | `tests/gate/test_mini.py` |
-| [Golden tapes](#the-golden-tapes) | pytest, `data` | needs `WELLLOGBENCH` and the tapes | First questions of benchmark datasets replayed through the question graph: requests, answer, status and trace equal. | `tests/agent/test_golden_tapes.py` |
-| [Prompt fixture](#the-prompt-fixture) | pytest, `data` | needs the fixture and the dataset configs | Five prompts of each of 12 tasks rendered with a stub model, compared byte for byte. | `tests/agent/test_skill_library.py` |
-| [Ledger replay](#the-ledger-replay) | script | needs saved runs and the data config | Saved investigations rebuilt through the ledger with no model: the same opened results and claim flags. | `tests/agent/replay.py` |
-| [Request gate](#the-request-gate) | script | needs saved runs and the data config | Every request of every saved run of a reference build rebuilt and hashed; two builds compared. | `tests/gate/request_gate.py` |
+| [Golden tapes](../../tests/gate/README.md#the-golden-tapes) | pytest, `data` | needs `WELLLOGBENCH` and the tapes | First questions of benchmark datasets replayed through the question graph: requests, answer, status and trace equal. | `tests/agent/test_golden_tapes.py` |
+| [Prompt fixture](../../tests/gate/README.md#the-prompt-fixture) | pytest, `data` | needs the fixture and the dataset configs | Five prompts of each of 12 tasks rendered with a stub model, compared byte for byte. | `tests/agent/test_skill_library.py` |
+| [Ledger replay](../../tests/gate/README.md#the-ledger-replay) | script | needs saved runs and the data config | Saved investigations rebuilt through the ledger with no model: the same opened results and claim flags. | `tests/agent/replay.py` |
+| [Request gate](../../tests/gate/README.md#the-request-gate) | script | needs saved runs and the data config | Every request of every saved run of a reference build rebuilt and hashed; two builds compared. | `tests/gate/request_gate.py` |
 
 ```bash
 # anyone
@@ -554,7 +370,7 @@ WELLLOGBENCH=/path/to/configs .venv/bin/python -m pytest -o addopts= -q -m data 
 
 Re-record by replay when the change is to what is done with the model's replies and every request is unchanged.
 Re-record live when the requests change on purpose, after the change is measured
-([EXTENDING.md](EXTENDING.md#11-keep-the-gates-green)).
+([EXTENDING.md](EXTENDING.md#13-keep-the-gates-green)).
 
 ### The public mini set
 
@@ -657,142 +473,9 @@ In the set `brent`, `interval` is `{"name": "BRENT GP.", "top": 2841.0, "base": 
 
 </details>
 
-<details>
-<summary>The golden tapes</summary>
-
-Recorded first questions from three benchmark datasets, 12 each, replayed through the question graph with no server
-(`tests/agent/test_golden_tapes.py`, `tests/agent/record_golden.py`). They are kept with the benchmark data, not in the
-public repository; without them the test has no cases.
-
-| Name | Type | Default | Meaning | Defined in |
-|---|---|---|---|---|
-| `selection.json` | JSON | | `questions` (`task_id`, `qa_id`, `category`), `model` (the model registry key the tapes were recorded with), `code`, `commit`, `recorded` (`live` or `replay`), `tapes_from` (`code`, `commit` of the live recording). | `record_golden.main` |
-| `<task>.tape.jsonl.gz` | gzip JSON lines | | One line per call: `{"n", "request", "reply": {"content", "tool_calls", "finish_reason", "reasoning", "usage"}}`. | `tape.record` |
-| `<task>.result.json.gz` | gzip JSON | | `{"answer", "status", "trace"}` as `graph.answer` returned it. | `record_golden.one` |
-| Test | pytest, `data` | one case per question | Sets `PETROHARNESS_DATA=$WELLLOGBENCH/<dataset>.yaml` and `PETROHARNESS_SET=""`, loads the task, replays the tape through `graph.answer(..., llm_factory=Taped)` and compares with `tape.compare_run(..., versions=False)`; a difference in version stamps only is a warning. | `test_golden_tape_replays_identically` |
-| `record_golden.py replay [DATASET ...]` | recorder | all datasets | Keeps every tape and rewrites each result from it; exits with `<dataset> <task>: <error>` when the code makes a request the tape does not hold, or `N recorded calls never made`. | `record_golden.one` |
-| `record_golden.py live [--workers N] DATASET ...` | recorder | `--workers 12` | Records new tapes and results from the model at `PETROHARNESS_MODEL_URL`, N questions at a time. | `record_golden.one` |
-
-```bash
-WELLLOGBENCH=/path/to/configs .venv/bin/python -m pytest -o addopts= -q -m data -n 12 tests/agent/test_golden_tapes.py
-WELLLOGBENCH=/path/to/configs PYTHONPATH=src:tests/agent .venv/bin/python tests/agent/record_golden.py replay
-WELLLOGBENCH=/path/to/configs PETROHARNESS_MODEL_URL=http://localhost:8000/v1 PYTHONPATH=src:tests/agent \
-    .venv/bin/python tests/agent/record_golden.py live --workers 12 <dataset>
-```
-
-- What `tape.compare_run` compares, in order: a `TapeMismatch` error in the replay; calls left on the tape; the
-  answer; the status; then the trace without its volatile keys (`VOLATILE`: `harness`, `commit`, `seconds`,
-  `traceback`) and without the usage log's `seconds`. The setup is compared by its parts (`setup_parts` less
-  `harness` and `commit`); its hash, which covers the commit, is left out.
-- Switches: a switch the recording does not know must be off (`trace.options: new switches on: [...]`); a switch the
-  code no longer has passes only when the recording ran it at the value now fixed in code (`fixed`).
-- Keys of `ADDED` (`calls`, `components`, `draft_chars`) that only the replay has are skipped.
-- Each question builds its formation, about 10 s each, so run the test with `-n`.
-- `record_golden.py` records the checkout's commit (`git rev-parse --short HEAD`) in `selection.json`: record from a
-  clean checkout of the commit the tapes are for.
-
-</details>
-
-<details>
-<summary>The prompt fixture</summary>
-
-Five rendered prompts for each of 12 tasks, compared byte for byte with the packaged skill library plugged
-(`tests/agent/fixtures/prompts.json.gz`, `tests/agent/test_skill_library.py`, `tests/agent/prompt_fixture.py`). Like
-the golden tapes it is recorded on benchmark wells and is not in the public repository.
-
-| Name | Type | Default | Meaning | Defined in |
-|---|---|---|---|---|
-| `STRINGS` | tuple | `brief`, `read`, `step1`, `direction`, `step2` | The brief (system prompt); the READ prompt; the step-1 user prompt with its first look; the DIRECTION index; the step-2 user prompt after step 1 read two guides and one action the harness does not read. | `prompt_fixture.STRINGS` |
-| Fixture file | gzip JSON | | `{"rendered_by": LABEL, "tasks": [{"dataset", "qa_id", "task_id", "brief", "read", "step1", "direction", "step2"}]}`; 6 tasks of the first dataset, 3 of each other. | `prompt_fixture.main` |
-| `test_the_prompt_fixture` | pytest | | Checks the fixture's shape and its `rendered_by` label. | `test_skill_library.py` |
-| `test_with_the_researched_library_plugged_the_prompts_are_the_fixtures` | pytest, `data` | one case per task | Renders each task with `prompt_fixture.render` (a stub model, no call) and fails at the first differing character, showing 60 characters each side. | `test_skill_library.py` |
-| Rendering | script | | `PYTHONPATH=<src> PETROHARNESS_DATA=<a dataset's yaml> python tests/agent/prompt_fixture.py IDS_DIR OUT.json.gz LABEL`; `IDS_DIR` holds `smoke_ids_<dataset>.json` (`{"qa_ids": [...]}`), and each dataset's config is `<dataset>.yaml` beside `PETROHARNESS_DATA`. | `prompt_fixture.main` |
-
-```bash
-PETROHARNESS_DATA=/path/to/configs/<dataset>.yaml \
-    .venv/bin/python -m pytest -o addopts= -q -m data tests/agent/test_skill_library.py
-```
-
-- The tasks are rendered with each dataset's default reporting settings (`data.basis: all`, no conventions), so the
-  general and the benchmark data files render the same fixture.
-- When re-rendering, keep the label `test_the_prompt_fixture` expects, or update the test with the fixture.
-
-</details>
-
-<details>
-<summary>The ledger replay</summary>
-
-Rebuilds saved investigations through the ledger with no model call, to show that the tools still open the same
-results and the claim checks still flag the same claims (`tests/agent/replay.py`).
-
-| Name | Type | Default | Meaning | Defined in |
-|---|---|---|---|---|
-| `PREFIX` | argument | required | Saved runs under the repository's `runs/`: every `runs/PREFIX_*/traces/*.json`. | `replay.main` |
-| `OUT.json` | argument | required | Where the rows are written. | `replay.main` |
-| `--baseline` | switch | off | Measure the traced answers: no settle step and no writer, so no model call. Without it, the settle step and the writer run on each rebuilt session (endpoints from `PETROHARNESS_MODEL_URL`, the default model card). | `replay.main` |
-| `--variant NAME` | text | `""` | The writer variant to run. | `replay.main` |
-| `--format` | `profile` or `default` | `profile` | The answer format. | `replay.main` |
-| `--limit N` | integer | 0 (all) | Only the first N traces. | `replay.main` |
-| `rebuild(trace, task, cfg)` | function | | Opens the traced first look and every traced action in order (a call that failed then fails now; one that runs now but failed then is dropped), restores the claims and re-checks them. Reports `opened_equal`, `flags_equal`, `n_opened`. | `replay.rebuild` |
-| `metrics(s, answer, trace)` | function | | The writer's per-answer checks (untraced numbers, claim coverage, notes, points, absence said, confidence, tables, unknown names, zone naming, format, verdict clauses, contradictions). | `replay.metrics` |
-
-```bash
-PETROHARNESS_DATA=/path/to/data.yaml .venv/bin/python tests/agent/replay.py <prefix> out/replay.json --baseline
-```
-
-```text
-<prefix> variant=(current) baseline=True: rebuilt exactly N of M
-{ "n": M, ... }
-```
-
-- Each output row is `{"task_id", "topics", "rebuild", "answer", "metrics", "verify_rounds", "settle"}`.
-- A change that should not alter the investigation keeps "rebuilt exactly" at its value on the reference runs.
-- The data config must hold the question file (`eval.questions`) and the LAS folder the runs used.
-
-</details>
-
-<details>
-<summary>The request gate</summary>
-
-Rebuilds every request of every saved run of a reference build and hashes it, so two builds can be compared over far
-more questions than the golden tapes hold (`tests/gate/request_gate.py`).
-
-| Name | Type | Default | Meaning | Defined in |
-|---|---|---|---|---|
-| `record --runs RUNS` | folder | required | Saved runs, laid out as the benchmark runner writes them: `RUNS/<PREFIX>_<category>/traces/<task id>.json`. | `request_gate.record` |
-| `--prefix PREFIX` | text | required | The runs' prefix (`<arm>_<model>` of benchmark mode). | `request_gate.main` |
-| `--ids IDS.json` | file | required | `{"qa_ids": [...]}`: the questions to replay. | `request_gate.record` |
-| `--card CARD` | model card | required | The card the runs were made with (`models.register` with an unused URL). | `request_gate.record` |
-| `--writer` | text | `open` | The writer's repair rounds the runs used. | `request_gate.main` |
-| `--out FILE` | path | required | The hash file: one JSON line per run, `{"task_id", "calls": [[stage, [message hashes], schema hash, max_tokens, temperature, retry], ...], "status", "answer"}` (answer hashed). | `request_gate.record` |
-| `--workers N` | integer | 1 | Replays per process. Keep 1: replays in several threads of one process are not fully deterministic. | `request_gate.main` |
-| `--investigate` | switch | off | The runs gave every question the full investigation. | `request_gate.main` |
-| `compare BASE NEW [BASE2 NEW2 ...]` | files | pairs | Counts every difference by kind (number of calls, stage, messages, parameters, status, answer, run missing, file missing) and prints up to 10 examples; exits 0 only when every run is equal. | `request_gate.compare` |
-
-```bash
-# on the reference build
-PETROHARNESS_DATA=/path/to/data.yaml PYTHONPATH=/path/to/reference/src python tests/gate/request_gate.py record \
-    --runs RUNS --prefix PREFIX --ids IDS.json --card CARD --out base/PREFIX.jsonl
-# on the changed code
-PETROHARNESS_DATA=/path/to/data.yaml PYTHONPATH=src python tests/gate/request_gate.py record \
-    --runs RUNS --prefix PREFIX --ids IDS.json --card CARD --out new/PREFIX.jsonl
-python tests/gate/request_gate.py compare base/PREFIX.jsonl new/PREFIX.jsonl
-```
-
-```text
-PREFIX           N/N identical
-
-N/N runs identical (calls, messages, parameters, status, answer)
-```
-
-- A replay is not the run again: a step's reply is rebuilt from the fields its trace kept (`step_reply`), and the
-  writer's and a repair's reply is the run's final answer (`Replies`). Both builds get the same replies, which is what
-  the gate compares.
-- `record` exits 1 when any replay raised (its status is `ERROR ...`), and prints
-  `PREFIX: N runs, M calls, K replay errors`.
-- Start one process per run set to use several cores.
-
-</details>
+The golden tapes, the prompt fixture, the ledger replay and the request gate need the benchmark's data, which is not
+in the public repository; maintainers run them, as [tests/gate/README.md](../../tests/gate/README.md#gates-that-need-the-benchmarks-data)
+describes.
 
 ## 8. Static guards
 
@@ -808,6 +491,7 @@ Three tests read the code rather than run it:
 .venv/bin/python -m pytest -o addopts= -q tests/test_lint.py tests/test_generality.py tests/test_petrophys_integration.py
 ```
 
+<a id="the-lint"></a>
 <details>
 <summary>The lint</summary>
 
@@ -836,6 +520,7 @@ PETROHARNESS_DATA=/path/to/data.yaml .venv/bin/python -m pytest -o addopts= -q t
 
 </details>
 
+<a id="the-generality-tests"></a>
 <details>
 <summary>The generality tests</summary>
 
@@ -850,7 +535,7 @@ two rules are guarded by other files.
 | G4 | `test_no_question_patterns`, `test_the_zone_table_follows_no_question_wording` (`data`), `test_no_question_form_or_scope_rules` | Outside `agent/vocabulary.py`, no `re.search`, `match`, `fullmatch` or `findall` over the question text in the agent's code (an AST scan, itself probed); the writer's zone table is the same whatever statistic the question names; no question-form rules, asked-absent stand-ins or point scopes exist. | `tests/test_generality.py` |
 | G5 | `test_no_benchmark_words`, `test_no_benchmark_overlap` | No `benchmark`, `judge`, `reference answer`, `references` or `GT` in model-facing text; no 6-gram of a model-facing text in a benchmark question or reference answer (curve-list 6-grams exempt; `OVERLAP_ALLOWED` lists textbook phrases with reasons). The overlap test skips without the question files. | `tests/test_generality.py` |
 | G6 | `test_no_preference_phrases`, `test_the_one_guideline_reaches_the_settle_step` | None of the `NO_PREFERENCE` phrases (a basis or convention chosen for the model) in model-facing text, the report style or the strings of `agent/`, `record/` and `well/` code; one guideline for bases (`C9` `aspects_rule`) shared by the settle step; the report style holds only `format`. | `tests/test_generality.py` |
-| G7 | other files | `tests/test_zones.py`, `tests/test_formation_zone_layout.py`, `tests/agent/test_section_zones.py`, and the per-zone tests of `tests/agent/test_summary.py`. | [DESIGN.md](../DESIGN.md#g7-lithology-zones-are-the-unit-of-analysis) |
+| G7 | other files | `tests/test_zones.py`, `tests/test_formation_zone_layout.py`, `tests/agent/test_section_zones.py`, and the per-zone tests of `tests/agent/test_summary.py`. | [DESIGN.md](../DESIGN.md#g7-the-zones-in-force-are-the-unit-of-analysis) |
 | G8 | `test_the_checks_are_the_approved_fact_checks`, `test_no_overrides` (`data`), `test_no_question_form_or_scope_rules` | The claim flags (`FACT_FLAGS`) and repair texts (`REPAIRS`) are the approved fact checks (`APPROVED_FACT_CHECKS`); claims and an answer a verdict-pushing check would change reach the settle step and the answer unchanged, unflagged and unrepaired. | `tests/test_generality.py` |
 
 ```bash
@@ -861,6 +546,7 @@ A claim flag needs its check id in `APPROVED_FACT_CHECKS` first; another repair 
 
 </details>
 
+<a id="the-petrophys-integration-test"></a>
 <details>
 <summary>The Petrophys integration test</summary>
 
@@ -870,10 +556,10 @@ record reader.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `MODULES` | dict | 12 modules | `record/catalog.py`, `record/sections.py`, `record/card.py`, `well/view.py`, `well/stats.py`, `well/formation.py`, `well/prepare.py`, `record/store.py`, `well/summary.py`, `agent/tools.py`, `agent/compute.py`, `agent/engine.py`: the call graph is built over them from their ASTs. | `test_petrophys_integration.MODULES` |
+| `MODULES` | dict | 12 modules | `record/catalog.py`, `record/sections.py`, `record/card.py`, `well/view.py`, `well/stats.py`, `well/formation.py`, `well/prepare.py`, `record/store.py`, `well/summary.py`, `agent/tools.py`, `agent/compute.py`, `agent/engine/`: the call graph is built over them from their ASTs. | `test_petrophys_integration.MODULES` |
 | `ANALYZER_ENTRIES` | set | `zone_results`, `zone_classes_raw` | Reaching either runs a Petrophys analyzer; so does a function that names `_ANALYZERS`. | `test_petrophys_integration.ANALYZER_ENTRIES` |
-| `GENERIC` | dict | 7 entries | Generic data operations with their reason: `correlation`, `adjacent_jumps`, `zone_relation`, `zone_contrast`, `threshold_exceedance`, `depth_trend`, `spike_flags`. | `test_petrophys_integration.GENERIC` |
-| `RECORD_READERS` | dict | `provenance`, `step` | Tools that render the workflow's step record. | `test_petrophys_integration.RECORD_READERS` |
+| `GENERIC` | dict | 6 entries | Generic data operations with their reason: `adjacent_jumps`, `zone_contrast`, `threshold_exceedance`, `spike_flags`, `values_at`, `lag_correlation`. | `test_petrophys_integration.GENERIC` |
+| `RECORD_READERS` | dict | `step`, `section` | Tools that render the workflow's step record. | `test_petrophys_integration.RECORD_READERS` |
 | `test_every_tool_reaches_petrophys_or_is_a_listed_data_operation` | test | | Every name in `record.catalog.CATALOG` and every non-verb tool of `agent.toolset.TOOLSET` reaches a `petrophys` import or an analyzer, or is in `GENERIC` or `RECORD_READERS`; an entry naming no tool fails as stale. | `tests/test_petrophys_integration.py` |
 | `test_the_graph_sees_library_calls` | test | | The checker itself: ten tools known to call Petrophys are found to, and `formation.segment_zones` is not. | `tests/test_petrophys_integration.py` |
 
@@ -907,17 +593,17 @@ still passes; the golden tapes pass with a warning until they are re-recorded by
 |---|---|---|---|
 | `component.yaml` | file | `texts` (entry to file) and `frames` (globs of package files whose output the component frames). | `components.meta` |
 | `version(cid)` | 12 hex digits | SHA-1 over the component's `component.yaml`, its text files and its frame files, each path then its bytes, sorted by path. | `components.version` |
-| Frames | file globs | C2: `agent/claims.py`, `agent/checks.py`. C3: `agent/ledger.py`, `agent/claims.py`, `session/earlier.py`. C4: `agent/schemas.py`, `agent/toolset.py`, `tools/spec.py`, `agent/engine.py`. C5: `agent/graph.py`, `agent/loop.py`. C6: `resources/topics.yaml`, `agent/direction.py`. C7: `agent/tools.py`, `agent/compute.py`, `agent/map.py`, `agent/inventory.py`, `agent/notes.py`, `agent/routes.py`. C8: `agent/graph.py`. C9: `agent/writer.py`, `resources/rules/shapes.yaml`, `resources/profiles/*.yaml`. C10: `agent/vocabulary.py`. C1: none. | `agent/components/C*/component.yaml` |
+| Frames | file globs | C2: `agent/claims.py`, `agent/checks.py`. C3: `agent/ledger.py`, `agent/claims.py`, `session/earlier.py`. C4: `agent/schemas.py`, `agent/toolset.py`, `tools/spec.py`, `agent/engine/`. C5: `agent/graph.py`, `agent/state.py`, `agent/prompts.py`, `agent/read.py`, `agent/replies.py`, `agent/settle.py`. C6: `resources/topics.yaml`, `agent/direction.py`. C7: `agent/tools.py`, `agent/compute.py`, `agent/map.py`, `agent/inventory.py`, `agent/notes.py`, `record/routes.py`. C8: `agent/graph.py`. C9: `agent/writer.py`, `resources/rules/shapes.yaml`, `resources/profiles/*.yaml`. C10: `agent/vocabulary.py`. C1: none. | `agent/components/C*/component.yaml` |
 | `trace["components"]` | object | Component id to version, for the run. | `components.versions` |
 | `trace["calls"][].messages[].segments` | list | `[component, version, start, end]` spans covering every character of every message. | `components.attribute`, `record_call` |
-| `setup.components` | object | The same versions in the setup record, whose hash changes with them ([SETUP.md](../SETUP.md)). | `core.setup` |
+| `setup.components` | object | The same versions in the setup record, whose hash changes with them ([EVIDENCE.md](../EVIDENCE.md#the-setup-record)). | `core.setup` |
 
 </details>
 
 <details>
 <summary>What a pure-comment change in a frame file does</summary>
 
-A comment edited in a frame file (for example `agent/loop.py`, a C5 frame) changes no request, but it changes the
+A comment edited in a frame file (for example `agent/state.py`, a C5 frame) changes no request, but it changes the
 bytes the version hashes.
 
 | Name | Type | Default | Meaning | Defined in |
@@ -959,7 +645,7 @@ The three met most often: no data config (tests and 15 modules skip), a request 
 | The replay makes fewer calls than the tape | `the replay made fewer model calls than the recording` (mini set), `N recorded calls never made` (golden) | `test_mini.py`, `tape.compare_run` |
 | Same behaviour, other version stamps | Golden test passes with a warning | `test_golden_tapes.py` |
 | A switch the recording does not know, on in a replay | Golden comparison fails: `trace.options: new switches on: [...]` | `tape.compare_run` |
-| Petrophys version differs from the mini set's | The mini set skips, naming both builds | `test_mini.py`, `record_mini.other_build` |
+| Petrophys version differs from the mini set's | The mini set skips, naming both builds (in CI, with `PETROHARNESS_GATE_REQUIRED`, it fails) | `test_mini.py`, `record_mini.other_build` |
 | Same Petrophys version, different build | The mini set skips: `recorded with another build of Petrophys <version> (...): its curves may differ` | `test_mini.py`, `record_mini.other_build` |
 | `record_mini.py --replay` meets a request not on the tape | Exits `<name> question N: the code no longer builds the recorded requests (...); nothing written. Record it again live.` | `record_mini.replay` |
 | A live mini-set recording fails mid-way | Exits `<name>: question N failed (...); the earlier recording is kept`; the set's folder is unchanged | `record_mini.record` |
@@ -980,5 +666,5 @@ The three met most often: no data config (tests and 15 modules skip), a request 
 - [DESIGN.md](../DESIGN.md): the generality contract G1 to G8.
 - [EXTENDING.md](EXTENDING.md): recipes for extending the harness, with the tests each needs.
 - [WEB_UI_API.md](WEB_UI_API.md): the server the `tests/ui` tests exercise.
-- [SETUP.md](../SETUP.md): the setup record and its hash.
+- [EVIDENCE.md](../EVIDENCE.md#the-setup-record): the setup record and its hash.
 - [GRAPH.md](../GRAPH.md#reproducing-a-run-tapes): tapes in the question graph.

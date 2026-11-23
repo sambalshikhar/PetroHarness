@@ -1,4 +1,4 @@
-"""Brick 1 on synthetic wells (docs/designs/zones-and-intervals.md 4.1): a stand-in prepared well of depths and codes
+"""On synthetic wells: a stand-in prepared well of depths and codes
 chosen by hand (tests/_synthetic.py), so every zone a view or a stretch must hold is typed here. Library codes: 1 and
 2 SAND, 3 CROSSBEDDED SAND, 5 SILT, 7 SHALE, 9 LIMESTONE. The zone minimum is 2 m, kept only when strictly thicker.
 
@@ -115,8 +115,8 @@ def test_the_formation_layout_makes_one_zone_of_any_stretch_with_its_majority_li
     assert [(z.zone_id, z.lithology, z.n_samples, z.top, z.base) for z in s.zones] == [("Z1", "LIMESTONE", 11, 9.0, 14.0)]
 
 
-@pytest.mark.xfail(strict=True, reason="a LAS stored bottom-up (depth decreasing) is not reordered, and its zones come "
-                                       "out empty: found by a synthetic well; fixed where the well is read (open)")
+@pytest.mark.xfail(strict=True, reason="the view assumes depth increasing: a LAS stored bottom up is refused where it "
+                                       "is read (well.prepare.depth_order), so no question reaches a view like this")
 def test_a_well_stored_bottom_up_has_the_same_zones_as_stored_top_down():
     v = view(DEPTH[::-1].copy(), lithology=CODES[::-1].copy())
     assert [(z.lithology, z.top, z.base) for z in v.zones] == [("SHALE", 2.5, 5.0), ("SAND", 5.5, 8.5),

@@ -1,12 +1,27 @@
-# The question graph
+# The three graphs
 
-PetroHarness answers a question as a LangGraph state graph. This page is its blueprint: every node, state field and
-route below exists under the same name in `src/petroharness/agent/graph.py`, `docs/graph.mmd` is the graph drawn from
-the code, and `tests/agent/test_graph_flow.py` keeps both equal to the code.
+PetroHarness answers a question as a LangGraph state graph, and a conversation ([Conversations](SESSIONS.md)) with two
+more. This page is their blueprint: every node, state field and route below exists under the same name in
+`src/petroharness/agent/graph.py` and `src/petroharness/session/graph.py`; `docs/graph.mmd`, `docs/graph_later.mmd`
+and `docs/graph_session.mmd` are the graphs drawn from the code, and `tests/agent/test_graph_flow.py` and
+`tests/session/test_session_graph.py` keep this page and those files equal to the code.
+
+| Graph | Runs | Entry | Drawn from the code |
+|---|---|---|---|
+| [Question graph](#the-question-graph) | A single question, or the first question of a conversation: the well is built, read, investigated, settled, written and checked | `agent.graph.GRAPH` | `graph.mmd` |
+| [Later-question graph](#the-later-question-graph) | Every later question, on the session the earlier ones left | `agent.graph.LATER` | `graph_later.mmd` |
+| [Session graph](#the-session-graph) | One question of a conversation, from the message to its committed record; one of the other two runs inside its `turn` node | `session.graph.SESSION` | `graph_session.mmd` |
+
+The question graph is the measured one. Nothing in the other two changes it: the first question of a conversation
+sends exactly the requests a single `petroharness` run sends.
+
+## The question graph
 
 ```mermaid
 flowchart TB
-    S(["start"]):::ends --> build --> read --> first_look
+    S(["start"]):::ends --> build --> read
+    read -.-> first_look
+    read -.->|"asked back"| ask_user
     first_look -.->|direct| look
     first_look -.->|investigate| ask
     look -.->|"k + 1"| look
@@ -38,9 +53,10 @@ flowchart TB
     verify -.-> finalize
     finalize --> E(["end"]):::ends
     no_answer --> E
+    ask_user --> E
 
     class read,look,ask,settle,write,write_brief,repair model
-    class build,first_look,skip,plan,decide,act,close,no_answer,verify,finalize code
+    class build,first_look,ask_user,skip,plan,decide,act,close,no_answer,verify,finalize code
     classDef model fill:#e6ecf4,stroke:#011e3f,color:#011e3f
     classDef code fill:#ffffff,stroke:#9aa0aa,color:#1c2433
     classDef ends fill:#fdeee4,stroke:#ef6719,color:#7a3410
@@ -51,7 +67,7 @@ Blue nodes are model calls, white nodes code. A solid arrow is always taken; a d
 decides. The model never judges its own completion: `decide` (the claims' done rule) and `verify` (the number check)
 are code, and they route.
 
-## A real path
+### A real path
 
 The first question of the Brent Group conversation on GeoLink 30/6-5 ("What are the porosity, water saturation and
 permeability of the Brent Group, and is any of it hydrocarbon-bearing?"), as its trace records it:
@@ -67,7 +83,7 @@ permeability of the Brent Group, and is any of it hydrocarbon-bearing?"), as its
 
 Twelve model calls in the graph: READ, eight steps, settle, the writer and one repair.
 
-## Why a graph
+### Why a graph
 
 - **Branches and retries:** a step can be unreadable and skipped, refused as done, converged, or capped; the answer
   can go round the repair loop.
@@ -77,7 +93,7 @@ Twelve model calls in the graph: READ, eight steps, settle, the writer and one r
 
 Each stopping decision is a route that can be read, tested and logged on its own.
 
-## Run context and state
+### Run context and state
 
 The domain state (the interval, the ledger, the claims, the trace) lives in the run context, outside the graph state,
 on purpose: a checkpoint cannot restore it, and a node must not be retried, so the tapes, not LangGraph's checkpoints,
@@ -110,7 +126,7 @@ are how a run is reproduced. The graph state is the control data that routes, an
 | `withheld` | overwrite | ids the last step opened or asked again that NEW's budget left out: first in the next step's NEW |
 | `guides_new` | overwrite | the guides the last step read: whole in the next prompt's GUIDES block, short after that |
 | `refused`, `polish` | overwrite | done refused once by the done rule; steps in a row that only rephrased a settled answer |
-| `text`, `user`, `reply`, `call_errors` | overwrite | this step's reply as recorded, its prompt, its step object (None: unreadable), call messages |
+| `text`, `user`, `reply` | overwrite | this step's reply as recorded, its prompt, its step object (None: unreadable) |
 | `rec` | overwrite | this step's record |
 | `steps` | append | the step records |
 | `acts`, `notes`, `msgs`, `raw_edits`, `settled_before` | overwrite | `decide`'s hand-off to `act` |
@@ -121,7 +137,7 @@ are how a run is reproduced. The graph state is the control data that routes, an
 
 </details>
 
-## Nodes
+### Nodes
 
 Seven nodes call the model: `read`, `look`, `ask`, `settle`, `write`, `write_brief` and `repair` (`plan` adds one call
 at step 1 when the reply's edits number points it does not list). The others are code.
@@ -149,7 +165,7 @@ Named but not in this well's record: neutron (NPHI); photoelectric (PEF)
 | `decide` | code | apply the claim edits; read the actions; a guide read the first time opens what bears on the READ's first topic: its sections of that topic's families and, for a guide on that topic, the workflow curves it names (no topics: nothing; with no skill library a guide call is said back as not run); the done check |
 | `act` | code | run the actions into the ledger; build NEW within its budget from results only: the results the last step withheld first, a call opened before and a `get` without a term shown whole again, a result that does not fit withheld for the next step; a guide read goes to GUIDES, outside NEW; the convergence check |
 | `close` | code | the investigation's record (steps, points, opened, claims) |
-| `ask_user` | code | the question back to the user, nothing computed: a unit the tops file lists more than once, a unit whose row the tops reader cannot use, a name close to several units, or a bare name several units share (which one is meant is the user's to say, status `ask_user`, with the choices); or a request outside what the harness does (status `outside`, with example questions)
+| `ask_user` | code | the question back to the user, nothing computed: a unit the tops file lists more than once, a unit whose row the tops reader cannot use, a name close to several units, or a bare name several units share (which one is meant is the user's to say, status `ask_user`, with the choices); or a request outside what the harness does (status `outside`, with example questions) |
 | `no_answer` | code | the question fails: step 1 was unreadable, so there are no claims to write from |
 | `settle` | model | the final step with every opened result; the claims made final |
 | `write` | model | the writer's draft from the question's points and the limits the settled claims found (their weakness notes; the claims themselves are not in the prompt), every opened result, the provenance card of the curves they and the claims name, the zone table and the map without its notes; a retry after an empty reply, and the working-notes check |
@@ -160,7 +176,7 @@ Named but not in this well's record: neutron (NPHI); photoelectric (PEF)
 
 </details>
 
-## The direct route
+### The direct route
 
 The READ call also says what kind of answer the question asks for: `direct` for a value, a setting, a count, a depth or
 a yes or no that one or two lookups will state, `investigate` for an interpretation that takes several results weighed
@@ -206,7 +222,7 @@ effort was seen to deny a fact its results stated.
 
 </details>
 
-## Routes
+### Routes
 
 Every route is a function of the state that code evaluates; the table lists each with its condition.
 
@@ -247,7 +263,7 @@ Every route is a function of the state that code evaluates; the table lists each
 
 </details>
 
-## Reproducing a run: tapes
+### Reproducing a run: tapes
 
 What the model sees is logged, so a run can be reconstructed from its log.
 
@@ -257,3 +273,95 @@ What the model sees is logged, so a run can be reconstructed from its log.
   server. Every request must equal the recorded one field by field: the same prompts, in the same order, with the same
   parameters. The answer, the status and the trace (timings aside) must also equal the recording.
 - A change to a node that should not alter behaviour is accepted only when every tape replays.
+
+## The later-question graph
+
+The question graph without `build` (the well is not prepared again; the ledger and its ids go on), entered at `read`,
+with one more route: after an investigation, a later question can also be answered in the short form.
+
+| From | Route | To |
+|---|---|---|
+| `close` | `after_close_later`: as the question graph's `after_close`; where that goes to the full writer, `reply_form` picks the node | `no_answer`, `settle`, `write`, `write_brief` |
+| `settle` | `reply_form`: the answer length the model chose in step 1 (`"reply": "brief"` or `"full"`) | `write`, `write_brief` |
+
+The length is the model's decision, said in step 1 of a later question; the route only carries it to the writer node.
+Where the READ call reads the route ([The direct route](#the-direct-route): the default for every question; off with
+`--investigate`), step 1 is not asked for the length. Every node and every other route is the question graph's.
+
+## The session graph
+
+```mermaid
+flowchart TB
+    M(["a question"]):::ends --> open --> turn["turn<br/>the question graph, first question;<br/>the later-question graph, after it"]
+    turn -.->|answered| project
+    turn -.->|"no answer"| commit
+    project -.->|"figures on"| figures
+    project -.->|"figures off, or prepared tasks"| commit
+    figures --> commit --> R(["its record committed"]):::ends
+
+    class figures model
+    class open,project,commit code
+    class turn sub
+    classDef model fill:#e6ecf4,stroke:#011e3f,color:#011e3f
+    classDef code fill:#ffffff,stroke:#9aa0aa,color:#1c2433
+    classDef sub fill:#f0eeea,stroke:#9aa0aa,color:#1c2433
+    classDef ends fill:#fdeee4,stroke:#ef6719,color:#7a3410
+```
+
+Grey is a graph run inside a node. What comes after the answer cannot change it.
+
+**Run context** (`Ctx`): the conversation. Its log, its live session (the interval, the ledger, the claims) and its
+list of questions are the domain state, changed in place by the nodes. Nothing is checkpointed: the log is how a
+conversation is resumed.
+
+**State**: the question (`task`, `question`, `sent`), what the first node sets (`n`, `folder`, `start`, `shown`), what
+the question graph's node returns (`got`, `items`, `settled`, `cited`), then `rests`, `shows`, `figs` and the
+committed `out`.
+
+### Nodes
+
+| Node | Kind | What it does |
+|---|---|---|
+| `open` | code | Logs the setup when it differs from the last one logged, then the question, and moves the session to it with the earlier questions as the prompts will show them |
+| `turn` | graph | Runs the question graph (first question) or the later-question graph; logs each result it opened, and the well's record when it changed; reads its settled claims |
+| `project` | code | Reads off the answer what the reader and the evidence graph need: the steps and parameters it rests on, and which results show each number it states |
+| `figures` | model | One call chooses among the plots Petrophys can draw from what the answer rests on; Petrophys draws them |
+| `commit` | code | Writes the question's files and its `turn_end` event, and adds it to the conversation |
+
+### Routes
+
+| From | Route | To |
+|---|---|---|
+| `open` | always | `turn` |
+| `turn` | `after_turn`: the question has an answer | `project`, else `commit` |
+| `project` | `after_project`: the conversation draws figures | `figures`, else `commit` |
+| `figures` | always | `commit` |
+
+`project` and `figures` read the answer and its results, and the answer's text is never passed back through the model.
+A conversation on prepared tasks (a benchmark run) takes no model call and no plot from them.
+
+### Two questions on the Brent Group
+
+The conversation on GeoLink 30/6-5, Brent Group, as its session log records it. Question 1 asks for the porosity,
+water saturation and permeability, and whether any of it is hydrocarbon-bearing; question 2 asks which zone has the
+best reservoir quality, and how the log permeability compares with the core.
+
+| Node | Question 1 | Question 2 |
+|---|---|---|
+| open | The setup logged (hash `d70dbbf039dd`), then the question | The question only: the setup had not changed |
+| turn | The question graph; 10 results logged (E1–E10) and the well's record | The later-question graph on the same ledger; 8 more results (E11–E18) |
+| project | The steps and parameters the answer rests on; the results behind each number | The same |
+| figures | Two log displays and a Buckles plot | A crossplot of PERM_CC against PERM and two log displays |
+| commit | `turns/01/`: `answer.md`, `trace.json`, `figures/`; a `turn_end` event | `turns/02/`, the same |
+
+![Core-calibrated against log permeability in the Brent Group](images/geolink-30_6-5-brent-perm-crossplot.png "A figure the figures node chose for question 2: core-calibrated permeability (PERM_CC) against the uncalibrated log permeability (PERM) in the 12 zones where both exist, 343 samples, with the 1:1 line. Drawn by Petrophys from result E17. Data: GeoLink, CC BY-SA 4.0.")
+
+What each answer rests on, read from this log alone: [Audit an answer](EVIDENCE.md).
+
+## Where additions attach
+
+| A feature that | Attaches as |
+|---|---|
+| reads an answer (an export, a check list, a sensitivity table) | a node of the session graph after `turn`, with its own route |
+| changes how a later question is answered | a node or a route of the later-question graph |
+| changes how the first question is answered | nothing: the question graph takes no additions; a change to it is a measured change ([DEVELOPMENT](DEVELOPMENT.md)) |

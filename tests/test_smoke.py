@@ -13,7 +13,7 @@ def test_petrophys_3_is_the_imported_library():
     assert out.stdout.strip().startswith("3.")
 
 
-def test_config_loads_with_defaults():
+def test_config_loads_with_defaults(plain_settings):
     from petroharness.config import HarnessConfig
 
     cfg = HarnessConfig.load()

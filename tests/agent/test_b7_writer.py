@@ -17,8 +17,11 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(Path(__file__).resolve().parent)]
 from petroharness.llm import Usage  # noqa: E402
 from petroharness.agent import writer  # noqa: E402
+from petroharness.agent.graph import write_answer  # noqa: E402
 from petroharness.agent.claims import Claim  # noqa: E402
 from petroharness.agent.writer import claims_block, opened_results, prompt  # noqa: E402
+from _support.model import in_turn  # noqa: E402
+from _support.sessions import runs_total  # noqa: E402
 
 MEANS = "so the zone holds the formation's hydrocarbon-bearing rock"
 
@@ -137,7 +140,7 @@ def test_the_w6_metric_reads_grades_in_words(text, n):
 # --- on a real formation --------------------------------------------------------------------------------------------
 
 def _session(points, claims):
-    from test_b5_loop import _session as b5
+    from _support.sessions import pay_session as b5
     from petroharness.agent.claims import Claims
     s = b5()
     s.ledger.open("runs", {"condition": "NET_PAY"})
@@ -151,9 +154,9 @@ def _session(points, claims):
 
 
 def _real_claims(s):
-    total = re.search(r"all zones: ([\d.]+)", s.ledger.items[0].text).group(1)
+    total = runs_total(s.ledger.items[0].text)
     return [_claim("C1", 1, "NET_PAY is set in the zones listed by the runs", ev=("E1",)),
-            _claim("C2", 2, f"NET_PAY totals {total} {s.f.inv.depth_unit} over all zones", ev=("E1",), weak="from the log model alone"),
+            _claim("C2", 2, f"NET_PAY totals {total} {s.f.inv.depth_unit} in the interval", ev=("E1",), weak="from the log model alone"),
             _claim("C3", 1, "SW and PHIE in the net pay are as the stats give them", ev=("E2",)),     # names table curves
             _claim("C4", 2, "Pay may be thicker in the lower zones", "hypothesis")]
 
@@ -194,21 +197,6 @@ def test_the_zone_table_names_zones_by_their_record_names(real):
     assert f"| {named[0].zone_id} ({named[0].name}) |" in table
 
 
-class _Writer:
-    """A writer model that replies from a list; records what it was sent."""
-
-    def __init__(self, replies):
-        self.replies, self.sent = list(replies), []
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, retry=False):
-        self.sent.append((stage, messages))
-        usage.log.append({"stage": stage})
-        return self.replies.pop(0) if self.replies else ""
-
-
 def _cfg():
     from types import SimpleNamespace
     return SimpleNamespace(model=SimpleNamespace(max_tokens_writer=4000))
@@ -218,32 +206,32 @@ def _cfg():
 @pytest.mark.parametrize("variant,rounds", [("", 1), ("open", 2)])
 def test_untraced_numbers_get_the_variant_s_repair_rounds(real, variant, rounds):
     bad = "## Answer\nNet pay is 987.654 m thick [E1].\n\n{{ZONE_TABLE}}\n\n## Conclusions\nPay holds 987.654 m."
-    llm = _Writer([bad] * 4)
+    llm = in_turn([bad] * 4, then="")
     trace = {}
-    text, status = writer.write(llm, real, _cfg(), Usage(), trace, variant=variant)
-    assert [st for st, _ in llm.sent] == ["writer"] + [f"repair_{r}" for r in range(1, rounds + 1)]
+    text, status = write_answer(llm, real, _cfg(), Usage(), trace, variant=variant)
+    assert llm.stages() == ["writer"] + [f"repair_{r}" for r in range(1, rounds + 1)]
     assert status == "unresolved_numbers" and len(trace["verify_rounds"]) == rounds + 1
-    assert "987.654" in llm.sent[-1][1][-1]["content"] and "[E1]" not in text and \
+    assert "987.654" in llm.sent[-1]["messages"][-1]["content"] and "[E1]" not in text and \
         ("| Depth Interval (" in text or "| Zone |" in text)        # the profile's table, or the writer's own
 
 
 @pytest.mark.data
 def test_a_repair_that_traces_every_number_ends_the_rounds(real):
-    total = re.search(r"all zones: ([\d.]+)", real.ledger.items[0].text).group(1)
+    total = runs_total(real.ledger.items[0].text)
     bad = "## Answer\nNet pay is 987.654 m thick [E1].\n\n## Conclusions\nok"
     good = f"## Answer\nNet pay totals {total} {real.f.inv.depth_unit} [E1].\n\n## Conclusions\nok"
-    llm = _Writer([bad, good, bad])
+    llm = in_turn([bad, good, bad], then="")
     trace = {}
-    text, status = writer.write(llm, real, _cfg(), Usage(), trace, variant="open")
+    text, status = write_answer(llm, real, _cfg(), Usage(), trace, variant="open")
     assert status == "ok" and len(llm.sent) == 2 and total in text and trace["verify_rounds"][-1]["unsupported"] == []
 
 
 @pytest.mark.data
 def test_a_repair_that_drops_most_of_the_answer_is_refused(real):
     bad = "## Answer\nNet pay is 987.654 m thick [E1]. " + "The zones are described below. " * 20 + "\n\n## Conclusions\nok"
-    llm = _Writer([bad, "## Answer\nshort"])
+    llm = in_turn([bad, "## Answer\nshort"], then="")
     trace = {}
-    text, _ = writer.write(llm, real, _cfg(), Usage(), trace, variant="open")
+    text, _ = write_answer(llm, real, _cfg(), Usage(), trace, variant="open")
     assert trace["verify_rounds"][-1].get("kept_draft") and "described below" in text and len(llm.sent) == 2
 
 
@@ -251,10 +239,10 @@ def test_a_repair_that_drops_most_of_the_answer_is_refused(real):
 def test_process_words_are_repaired_with_the_numbers(real):
     draft = "## Answer\nPay is in the listed zones; thresholds are not shown in the opened record.\n\n## Conclusions\nok [C1]."
     fixed = "## Answer\nPay is in the listed zones; the record gives no thresholds for this interval.\n\n## Conclusions\nok [C1]."
-    llm = _Writer([draft, fixed])
+    llm = in_turn([draft, fixed], then="")
     trace = {}
-    text, status = writer.write(llm, real, _cfg(), Usage(), trace, variant="open")
-    assert "opened record" in llm.sent[1][1][-1]["content"] and trace["verify_rounds"][-1]["process"] == []
+    text, status = write_answer(llm, real, _cfg(), Usage(), trace, variant="open")
+    assert "opened record" in llm.sent[1]["messages"][-1]["content"] and trace["verify_rounds"][-1]["process"] == []
     assert "opened" not in text and "[C1]" not in text and text.endswith("## Conclusions\nok.")
     assert text.index("| Depth") < text.index("## Conclusions")          # the zone table after the first section
 
@@ -264,18 +252,18 @@ def test_working_notes_inside_the_answer_are_repaired(real):
     """A self-correction left in the text ("SIL... wait,") is shown to the model in a repair round."""
     draft = "## Answer\nPay is in the SIL... wait, SILT zones.\n\n## Conclusions\nok [C1]."
     fixed = "## Answer\nPay is in the SILT zones.\n\n## Conclusions\nok [C1]."
-    llm = _Writer([draft, fixed])
+    llm = in_turn([draft, fixed], then="")
     trace = {}
-    text, status = writer.write(llm, real, _cfg(), Usage(), trace, variant="")
-    assert trace["verify_rounds"][0]["leaks"] and "working notes" in llm.sent[1][1][-1]["content"]
-    assert "SIL... wait" in llm.sent[1][1][-1]["content"] and trace["verify_rounds"][-1]["leaks"] == []
+    text, status = write_answer(llm, real, _cfg(), Usage(), trace, variant="")
+    assert trace["verify_rounds"][0]["leaks"] and "working notes" in llm.sent[1]["messages"][-1]["content"]
+    assert "SIL... wait" in llm.sent[1]["messages"][-1]["content"] and trace["verify_rounds"][-1]["leaks"] == []
     assert "wait" not in text and "SILT zones" in text
 
 
 @pytest.mark.data
 def test_working_notes_in_the_draft_are_removed(real):
-    llm = _Writer(["The user wants the pay. Let me check.\n\n## Answer\nPay is in the listed zones.\n\n## Conclusions\nok"])
-    text, status = writer.write(llm, real, _cfg(), Usage(), {}, variant="open")
+    llm = in_turn(["The user wants the pay. Let me check.\n\n## Answer\nPay is in the listed zones.\n\n## Conclusions\nok"], then="")
+    text, status = write_answer(llm, real, _cfg(), Usage(), {}, variant="open")
     assert text.startswith("## Answer") and "Let me" not in text and status == "ok"
 
 
@@ -294,7 +282,7 @@ def test_the_replay_rebuilds_saved_investigations_and_its_prompt_holds_them():
     from replay import rebuild
     from dataclasses import asdict
 
-    from petroharness.agent import options
+    from petroharness import options
     cfg = HarnessConfig()
     tasks, _ = load_tasks(cfg.eval.questions, cfg.data.las_dir)
     by_id = {t.task_id: t for t in tasks}
@@ -320,7 +308,7 @@ def test_the_replay_rebuilds_saved_investigations_and_its_prompt_holds_them():
 # --- curves with the same values (PERM = PERM_CC where the workflow passed the core-calibrated curve through) ---------
 
 def _twin_formation():
-    from test_b2_tools import F
+    from _support.formations import F
     from petroharness.agent.engine import same_as
     for t, f in F():
         for c in f.inv.curves:
@@ -356,7 +344,7 @@ def test_the_map_says_same_values_on_both_curves():
 def test_the_zone_table_gives_curves_with_the_same_values_one_row():
     from petroharness.agent.claims import Claims
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.agent.map import render
     from petroharness.agent.writer import zone_table
     found = _twin_formation()
@@ -422,7 +410,7 @@ def _wsession(f, question, opened=()):
 
 
 def _first(pred):
-    from test_b2_tools import F
+    from _support.formations import F
     for t, f in F():
         if pred(f):
             return f
@@ -489,3 +477,69 @@ def test_table_core_starts_with_the_topics_key_curves(real):
     assert key and f"Mean {key[0]}" in head
     assert head.count("|") - 1 <= 2 + 9
 
+
+
+def _many(s) -> list:
+    """Results for every key curve the formation holds, on the session's ledger: their ids."""
+    for curve in ("SW", "PHIE", "VCL", "RDEP", "NPHI", "RHOB", "GR", "PERM"):
+        if curve in s.f.inv.curves:
+            s.ledger.open("profile", {"curve": curve})
+    return [e.id for e in s.ledger.items]
+
+
+def _results(user: str) -> str:
+    return user.split("RESULTS (everything the investigation computed, by id):\n", 1)[1]
+
+
+@pytest.mark.data
+def test_the_cited_and_newest_results_stay_whole_over_the_budget(monkeypatch):
+    """Over the writer's budget the claims' results and the newest stay whole and the oldest uncited ones become
+    digests: the results text is not cut, and every result is still listed."""
+    from petroharness.agent import writer as W
+    s = _session(["Where is net pay?"], [_claim("C1", 1, "NET_PAY is set in the zones listed by the runs", ev=("E1",))])
+    ids = _many(s)
+    whole = "\n\n".join(W.result_text(s, e) for e in s.ledger.items)
+    monkeypatch.setattr(W, "RESULTS_CHARS", len(whole) * 2 // 3)
+    newest = s.ledger.items[-1]
+    got = _results(W.prompt(s, "default")[1])
+    assert "... (cut)" not in got and W.result_text(s, newest) in got                # the newest whole
+    assert W.result_text(s, s.ledger.items[0]) in got                                 # the cited E1 whole
+    assert all(f"[{i}]" in got for i in ids)                                         # every result, some as a digest
+    assert not all(W.result_text(s, e) in got for e in s.ledger.items)               # over the budget: not all whole
+
+
+@pytest.mark.data
+def test_a_later_question_lists_and_settles_on_its_own_results():
+    """A later question's OPENED listing, the settle step's results and its bookkeeping read this question's results
+    and the earlier ones it cites, not every result of the conversation."""
+    from petroharness.agent.claims import Claims
+    from petroharness.agent.settle import bookkeeping
+    s = _session(["Where is net pay?"], [])
+    _many(s)
+    earlier = [e.id for e in s.ledger.items]
+    listed = lambda: s.opened(set()).split("\n\n", 1)[0]
+    assert all(f"  {i} " in listed() for i in earlier)                                 # the first question: every result
+    s.next_turn(s.task, "")
+    s.ledger.open("stats", {"curves": ["SW"], "where": "NET_PAY"})
+    own = s.ledger.items[-1].id
+    s.points = ["How saturated is the pay?"]
+    s.claims = Claims(s.points, s.ledger, s.map, s.task.question, s.f.view, (s.task.well,))
+    s.claims.claims["C1"] = _claim("C1", 1, "SW in the pay is as the stats give it", ev=(own, earlier[1]))
+    s.claims._n = 1
+    assert [x.id for x in s.read_items()] == [earlier[1], own]                         # the cited earlier one and its own
+    assert f"  {own} " in listed() and f"  {earlier[0]} " not in listed()
+    assert not re.search(rf"\b{earlier[0]}\b", bookkeeping(s))
+
+
+@pytest.mark.data
+def test_a_number_the_datas_conventions_state_is_shown(monkeypatch):
+    """The writer is shown the data's conventions, and the checker reads the prompt the writer got: an answer
+    following a stated convention keeps its number, and a number the prompt does not hold is still unsupported."""
+    from petroharness.agent import writer as W
+    s = _session(["Where is net pay?"], [])
+    monkeypatch.setattr(s.f.view, "conventions", ["Net pay is reported with a 0.0725 v/v porosity floor."],
+                        raising=False)
+    W.prompt(s, "default")
+    assert "0.0725" in s.writer_shown
+    assert W.unsupported("## Answer\nNet pay uses the 0.0725 v/v porosity floor.", s) == []
+    assert W.unsupported("## Answer\nNet pay uses the 0.0731 v/v porosity floor.", s) == ["0.0731"]

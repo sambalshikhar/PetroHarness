@@ -17,7 +17,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(ROOT / "tests" / "agent"), str(Path(__file__).resolve().parent)]
 from petroharness.agent import components as C  # noqa: E402
-from petroharness.agent import options  # noqa: E402
+from petroharness import options  # noqa: E402
 from test_conversation import Q2, Model, first_steps, formation, later_steps  # noqa: E402,F401
 
 SIMPLE = "What is the average effective porosity?"
@@ -34,12 +34,12 @@ class Direct(Model):
         self.light = bool(on)
         self.lights.append(bool(on))
 
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
+    def reply(self, stage, messages):
         if stage.startswith("read"):
-            self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages)), "schema": json_schema,
-                              "light": self.light})
-            usage.log.append({"stage": stage, "prompt_tokens": 1})
-            return json.dumps({"topics": ["porosity"], "named": ["porosity"], "depth": self.depth})
+            return {"topics": ["porosity"], "named": ["porosity"], "depth": self.depth}
+        return super().reply(stage, messages)
+
+    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
         out = super().chat(stage, messages, usage, max_tokens, json_schema, temperature, retry)
         self.sent[-1]["light"] = self.light
         return out
@@ -55,18 +55,18 @@ def test_every_question_reads_its_route_unless_the_run_asks_for_the_investigatio
     import inspect
     from petroharness import cli
     from petroharness.agent import graph as G
-    from petroharness.agent import loop as L
+    from petroharness.agent import read as RD, direction
     assert "depth" not in options.as_dict()                           # the measured switch is the code now
     for fn in (G.turn, G.answer):
         assert inspect.signature(fn).parameters["depth"].default is True
     assert inspect.signature(cli.answer).parameters["direct"].default is True           # benchmark mode too
-    assert "depth" not in L.read_schema()["properties"] and L.read_schema()["required"] == ["topics", "named"]
-    reply = json.dumps({"topics": [next(iter(L.direction.areas()))], "named": [], "depth": "direct"})
-    assert "depth" not in L._reading(reply)                           # said unasked: not read
-    schema = L.read_schema(True)
+    assert "depth" not in RD.read_schema()["properties"] and RD.read_schema()["required"] == ["topics", "named"]
+    reply = json.dumps({"topics": [next(iter(direction.areas()))], "named": [], "depth": "direct"})
+    assert "depth" not in RD._reading(reply)                           # said unasked: not read
+    schema = RD.read_schema(True)
     assert schema["properties"]["depth"] == {"enum": ["direct", "investigate"]} and "depth" in schema["required"]
-    assert L._reading(reply, True)["depth"] == "direct"
-    assert L._reading(reply.replace("direct", "quick"), True)["depth"] == "investigate"    # anything else: investigate
+    assert RD._reading(reply, True)["depth"] == "direct"
+    assert RD._reading(reply.replace("direct", "quick"), True)["depth"] == "investigate"    # anything else: investigate
     import inspect
     from petroharness import ask as A
     from petroharness.session import Conversation
@@ -124,7 +124,7 @@ def test_a_direct_question_takes_look_steps_no_settle_and_the_short_writer_at_no
     tr = turn.trace
     assert tr["read"]["depth"] == "direct" and [s["direct"] for s in tr["steps"]] == [True, True]
     assert tr["steps"][0]["actions"] == ['stats {"curves": ["VCL"]}'] and tr["steps"][1]["done"] is True
-    assert tr["options"] == {} and tr["reads_depth"] is True and tr["claims"] == [] and "settle" not in tr
+    assert not any(tr["options"].values()) and tr["reads_depth"] is True and tr["claims"] == [] and "settle" not in tr
     assert [e.id for e in c.live.ledger.items] == ["E1", "E2"]
 
 
@@ -269,7 +269,7 @@ def test_a_run_that_asks_for_the_investigation_takes_the_3_5_6_route(formation, 
     c = Conversation.on_tasks(tmp_path / "s", "k2-horizon-7b", llm_factory=lambda cfg: llm, max_steps=4)
     turn = c.ask_task(formation.model_copy(update={"question": SIMPLE}))
     assert [x["stage"] for x in llm.sent] == ["read", "step_1", "writer"] and turn.status == "ok"
-    assert turn.trace["reads_depth"] is True and turn.trace["options"] == {}
+    assert turn.trace["reads_depth"] is True and not any(turn.trace["options"].values())
     assert c.setup.depth is True and c.log.events("setup")[0]["depth"] is True
     plain = Direct(first_steps(), depth="direct")                      # the same model, a run not reading the route
     c2 = Conversation.on_tasks(tmp_path / "t", "k2-horizon-7b", llm_factory=lambda cfg: plain, max_steps=4, direct=False)

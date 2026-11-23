@@ -10,6 +10,7 @@ import numpy as np
 from petroharness.record.catalog import CATALOG, Evidence, EvidenceError, fmt
 
 from petroharness.agent import engine as E
+from petroharness.agent.map import num
 from petroharness.agent.engine import Formation, Result, ToolError
 from petroharness.well import summary as S
 
@@ -132,7 +133,7 @@ def zone_contrast(f: Formation, curve: str, inputs=None, zones=None) -> Result:
 
 
 def _order_written(f: Formation, curves, relation):
-    """An order written as a chain of curves ("RSHA > RMED > RDEP", benchmark N3/N4: 6 calls): its curves, in its
+    """An order written as a chain of curves ("RSHA > RMED > RDEP", 6 calls): its curves, in its
     order, and its relation (all '>' decreasing, all '<' increasing); one sign alone (">") is the relation of the curves
     in the order given. (curves, relation) as given otherwise."""
     r = str(relation or "").strip()
@@ -212,7 +213,7 @@ def spikes(f: Formation, curves, ks: list, baseline: str, zones=None, scale: str
     E.no_codes(f, "a spike screen", *cs)
     d = f.depth
     out = E.Out(f)
-    kt = " and ".join(E.num(k) for k in ks)
+    kt = " and ".join(num(k) for k in ks)
     if window:
         basis = f"a centred rolling median and MAD of {window} samples inside each zone (std = 1.4826 MAD)"
     else:
@@ -221,7 +222,7 @@ def spikes(f: Formation, curves, ks: list, baseline: str, zones=None, scale: str
                  "interval": "the mean and std of every sample in the interval"}[baseline]
     out.add(f"Spike screen: samples beyond mean +/- {kt} std of {basis}" + (f" ({source})" if source else "")
             + ("; on log10 values (bounds shown in curve units)" if scale == "log10" else "; on the curves' values")
-            + f"; adjacent jumps beyond {E.num(max(ks))} std of the jumps, within zones")
+            + f"; adjacent jumps beyond {num(max(ks))} std of the jumps, within zones")
     zone_of = np.full(d.size, -1)
     for i, z in enumerate(f.view.zones):
         zone_of[np.asarray(z.indices)] = i
@@ -279,9 +280,9 @@ def spikes(f: Formation, curves, ks: list, baseline: str, zones=None, scale: str
             text = (f"  {where}, {c}: n {row.i(int(ok.sum()))}, {'median' if window else 'mean'} {row.v(back(mu))}"
                     + (f", std of log10 {row.v(sd)}" if log else f", {'robust std' if window else 'std'} {row.v(sd)}")
                     + ("" if window else "; bounds " + "; ".join(
-                        f"at {E.num(k)} std {bound(row, mu - k * sd, True)} to {bound(row, mu + k * sd, False)}" for k in ks)
+                        f"at {num(k)} std {bound(row, mu - k * sd, True)} to {bound(row, mu + k * sd, False)}" for k in ks)
                         + (f" {unit}" if unit else ""))
-                    + "; beyond: " + ", ".join(f"{row.i(int(hits[k].sum()))} at {E.num(k)} std" for k in ks))
+                    + "; beyond: " + ", ".join(f"{row.i(int(hits[k].sum()))} at {num(k)} std" for k in ks))
             if low.any():
                 worst = sorted(np.flatnonzero(low), key=lambda i: -abs(dev[i]))[:3]
                 text += "; largest: " + ", ".join(
@@ -293,7 +294,7 @@ def spikes(f: Formation, curves, ks: list, baseline: str, zones=None, scale: str
                 for zz in zs:
                     zi = np.isin(idx, np.asarray(zz.indices))
                     per.append(f"{zz.zone_id} " + "/".join(str(int((hits[k] & zi).sum())) for k in ks))
-                each = f"  each zone, {c} samples beyond {' / '.join(E.num(k) for k in ks)} std: " + "; ".join(per)
+                each = f"  each zone, {c} samples beyond {' / '.join(num(k) for k in ks)} std: " + "; ".join(per)
                 zi = np.isin(idx, np.flatnonzero(np.asarray(f.view.zoned)))
                 pooled_hits = [int((hits[k] & zi).sum()) for k in ks]
         tail = []
@@ -312,9 +313,9 @@ def spikes(f: Formation, curves, ks: list, baseline: str, zones=None, scale: str
                              + (" (log10 std)" if log else "") + ": " + "; ".join(parts), brow))
             prow = out.child()
             tail.append((f"  {S.pooled_label(f.view, zs)}, {c}: beyond: "
-                         + ", ".join(f"{prow.i(totals[k])} samples at {E.num(k)} std" for k in ks)
-                         + (f"; none beyond {E.num(min(ks))} std in {len(quiet)} zones: {_ids(quiet)}" if quiet
-                            else f"; every zone has samples beyond {E.num(min(ks))} std" if not sparse else "")
+                         + ", ".join(f"{prow.i(totals[k])} samples at {num(k)} std" for k in ks)
+                         + (f"; none beyond {num(min(ks))} std in {len(quiet)} zones: {_ids(quiet)}" if quiet
+                            else f"; every zone has samples beyond {num(min(ks))} std" if not sparse else "")
                          + (f"; too few values to screen in {len(sparse)} zones: {_ids(sparse)}" if sparse else ""), prow))
             wrow = out.child()
             tail.append((f"  {_whole(f, wrow, outside)}, {c}: "
@@ -329,7 +330,7 @@ def spikes(f: Formation, curves, ks: list, baseline: str, zones=None, scale: str
             elif pooled_hits:
                 prow = out.child()
                 before.append((f"  {S.pooled_label(f.view, zs)}, {c}: beyond: "
-                               + ", ".join(f"{prow.i(n)} samples at {E.num(k)} std" for n, k in zip(pooled_hits, ks)), prow))
+                               + ", ".join(f"{prow.i(n)} samples at {num(k)} std" for n, k in zip(pooled_hits, ks)), prow))
             for t, r in before:
                 out.add(t, r)
             out.fit(rows, used0 + share - 120 - sum(len(t) + 1 for t, _ in after), what="zones", label=c)
@@ -349,7 +350,7 @@ def spikes(f: Formation, curves, ks: list, baseline: str, zones=None, scale: str
         if np.isfinite(dy).sum() >= 3:
             sdj, kj = float(np.nanstd(dy)), max(ks)
             jumps = np.flatnonzero(np.isfinite(dy) & (dy > kj * sdj)) if sdj > 0 else np.array([], dtype=int)
-            text = (f"  {S.pooled_label(f.view, zs)}, {c}: adjacent jumps within zones beyond {E.num(kj)} std of the "
+            text = (f"  {S.pooled_label(f.view, zs)}, {c}: adjacent jumps within zones beyond {num(kj)} std of the "
                     f"jumps: {out.i(len(jumps))}")
             if len(jumps):
                 top = sorted(jumps, key=lambda i: -dy[i])[:3]
@@ -372,7 +373,7 @@ def _whole(f: Formation, row, outside: int) -> str:
 
 def num_short(x: float) -> str:
     """A baseline value as the map writes numbers (the shared line keeps them short)."""
-    return E.num(float(f"{x:.4g}"))
+    return num(float(f"{x:.4g}"))
 
 
 def _rolling(y: np.ndarray, window: int) -> tuple:

@@ -34,8 +34,8 @@ class Case:
 CASES = {
     "brent": Case("30/6-5", "formations_30_6-5.csv", "BRENT GP.", what="lithology log, tops, metres"),
     "1671": Case("16/7-1", top=2000.0, base=2560.0, unit="m", what="by depth; no neutron or PEF log; evaporites"),
-    "cheal": Case("cheal-1", "formations_cheal-1.csv", "Moki", what="no lithology log: shale-volume bands"),
-    "tuhua": Case("tuhua-7", "formations_tuhua-7.csv", "McKee", what="no lithology log (shale-volume bands), Taranaki"),
+    "cheal": Case("cheal-1", "formations_cheal-1.csv", "Moki", what="no lithology log: Petrophys's solved lithology"),
+    "tuhua": Case("tuhua-7", "formations_tuhua-7.csv", "McKee", what="no lithology log (Petrophys's solved lithology), Taranaki"),
     "hw3": Case("HW-3", "formations_costa.csv", "KHARAIB-2", what="carbonate, a tops table of many wells, feet"),
     "teapot": Case("teapot_17-wx-21", what="the whole log, feet"),
     "brent_formation": Case("30/6-5", "formations_30_6-5.csv", "BRENT GP.", data=(("zone_layout", "formation"),),
@@ -53,6 +53,24 @@ def sample(name: str) -> Path:
         return Path(name)
     import petrophys
     return Path(petrophys.sample(name))
+
+
+class _SampleFiles:
+    """Petrophys's sample files by file name, read like a folder (SAMPLES / "tuhua-7.las"): the file in the folder
+    PETROHARNESS_SAMPLE_LAS names when it is there, else the one Petrophys ships; a name Petrophys does not have is a
+    path that does not exist (the test skips)."""
+
+    def __truediv__(self, name: str) -> Path:
+        folder = os.environ.get("PETROHARNESS_SAMPLE_LAS")
+        if folder and (Path(folder) / name).exists():
+            return Path(folder) / name
+        try:
+            return sample(Path(name).stem)
+        except (FileNotFoundError, ValueError, KeyError):
+            return Path(folder or "sample_las") / name
+
+
+SAMPLES = _SampleFiles()
 
 
 def task_cfg(case: Case, prefix: str = "w"):
@@ -98,8 +116,8 @@ def focus_view(case: Case):
 @lru_cache(maxsize=None)
 def formation_of(case: Case):
     """The question's session formation (agent.engine.Formation: inventory, view, analyzer sections) of the case, built
-    as a question builds it (agent.loop.Session.build): for calling tools."""
-    from petroharness.agent.loop import Session
+    as a question builds it (agent.state.Session.build): for calling tools."""
+    from petroharness.agent.state import Session
     from petroharness.config import given_settings
     task, cfg, data = task_cfg(case, "s")
     with given_settings({"data": data, "eval": {}}):

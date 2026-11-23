@@ -8,7 +8,7 @@ from typing import Optional
 
 import numpy as np
 
-from petroharness.well.view import FormationView, fmt
+from petroharness.well.view import FormationView, fmt, sig
 
 
 # ---------------------------------------------------------------------------
@@ -610,9 +610,9 @@ def sxo_route(view: FormationView, idx=None) -> str:
 
 def invasion_route(view: FormationView) -> str:
     """Which resistivity pairs INVASION_RATIO is in this interval, read from the computed curves against the pairs the
-    invasion step's record names (petroharness.agent.routes; the record's fallback text can describe the well
+    invasion step's record names (petroharness.record.routes; the record's fallback text can describe the well
     elsewhere): "RESM/RESD at 544 samples (a medium resistivity, where no shallow log is)"; "" when none is read."""
-    from petroharness.agent.routes import _pairs, invasion_counts
+    from petroharness.record.routes import _pairs, invasion_counts
     c = invasion_counts(view)
     return _pairs(c) if c and c["n"] > c.get("other", 0) else ""
 
@@ -651,3 +651,42 @@ def provenance_facts(view: FormationView) -> list[str]:
     return [f for f in facts if f]
 
 
+# A step's record lines describe the whole well's run; they are shown as written, under one label, and the interval's
+# own facts come from the step's output curves (interval_facts), not from rewriting the lines.
+RECORD_LABEL = "record (the whole well's run; its counts are the well's)"
+
+
+def interval_facts(view: FormationView, outputs) -> tuple[list[str], list[float]]:
+    """What a step's output curves hold in this interval, read from the curves: each flag's samples set here (and
+    their thickness); the range here of a step's one curve of values (a temperature, an Rw: the record's is the whole
+    well's); an output with values at only part of the interval's samples; and, where the analyzers filled
+    an output the step left empty (the view's values against its own_values), the step's samples and the analyzers'
+    apart: the record may say the step did not compute a curve the interval holds. (lines, their numbers)."""
+    from petroharness.well.summary import curve_kind
+    n_all, step, unit = int(view.mask.sum()), float(view.step), view.depth_unit
+    lines, nums = [], []
+    outs = [str(o) for o in dict.fromkeys(outputs or ()) if view.available(str(o))]
+    values = [c for c in outs if curve_kind(view, c).kind == "values"]
+    if len(values) == 1:                               # a step that writes one curve of values (a temperature, an
+        c = values[0]                                  #   Rw): its range here, as a flag gives its count (question
+        x = np.asarray(view.values(c), dtype=float)    #   the record's range is the whole well's)
+        if np.isfinite(x).any():
+            lo, hi, u = float(np.nanmin(x)), float(np.nanmax(x)), (view.unit(c) or "").strip()
+            lines.append(f"{c} from {fmt(sig(lo))} to {fmt(sig(hi))}{' ' + u if u else ''}")
+            nums += [sig(lo), sig(hi)]
+    for c in dict.fromkeys(str(o) for o in outputs or ()):
+        if not view.available(c):
+            continue
+        x = np.asarray(view.values(c), dtype=float)
+        have = int(np.isfinite(x).sum())
+        own = view.own_values(c)
+        k = have if own is None else int(np.isfinite(np.asarray(own, dtype=float)).sum())
+        added = f" ({k} from the step; the analyzers add {have - k} where the step left it empty)" if have > k else ""
+        if curve_kind(view, c).kind == "flag":         # by the shape of its values, as every tool reads it
+            n = int(np.nansum(x > 0.5))
+            lines.append(f"{c} set at {n} of {have} samples ({fmt(n * step)} {unit})" + added)
+            nums += [n, have, sig(n * step)] + ([k, have - k] if added else [])
+        elif 0 < have < n_all or added:
+            lines.append(f"{c} has values at {have} of {n_all} samples" + added)
+            nums += [have, n_all] + ([k, have - k] if added else [])
+    return lines, nums

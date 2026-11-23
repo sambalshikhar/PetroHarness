@@ -1,4 +1,4 @@
-"""What a tool's `zones` names, anywhere in the well (docs/designs/zones-and-intervals.md, 4.2).
+"""What a tool's `zones` names, anywhere in the well (docs/ARCHITECTURE.md).
 
 An item is, first match wins: a zone id of the focus (Z3), ALL, a lithology of the focus's zones (SAND, SIL*), a unit
 of the tops file (matched as the focus's name is: case, spaces and punctuation ignored), a depth range TOP-BASE (m or
@@ -30,17 +30,6 @@ _ROW = re.compile(r"^R\d+$", re.IGNORECASE)
 # stretch (by_unit labels, _named, interval_name); read back by its depths, so every name the harness writes selects
 _NAMED = re.compile(r"^(?P<name>.*\S)\s+\(?(?P<range>\d+(?:\.\d+)?\s*(?:-|–|—|to)\s*\d+(?:\.\d+)?\s*[A-Za-z]*)\)?$",
                     re.IGNORECASE)
-
-
-@dataclass(frozen=True)
-class Unit:
-    """A unit of the tops file in reach: its name as the file writes it, top and base in the reporting unit, the
-    file's line, and whether the base is the unit's own (stated, included) or the next unit's top."""
-    name: str
-    top: float
-    base: float
-    line: int = 0
-    closed: bool = True
 
 
 @dataclass(frozen=True)
@@ -146,7 +135,7 @@ def units_named(f: Formation, written: str) -> list:
     """The units of the tops file (and the user's zones) a name as a user writes it means: by the file's matching
     (_key: case, spaces, punctuation, a rank word written out, abbreviated or plural), else by the name alone, without
     its rank word or pick marker (_core), a rank word given choosing among units of that name. Users write names in
-    their own convention (user, 2026-11-20); several units of different names is the user's to choose between."""
+    their own convention; several units of different names is the user's to choose between."""
     units = list(getattr(f.view, "units", None) or [])
     key = _key(written)
     hits = [u for u in units if _key(u.name) == key]
@@ -181,7 +170,7 @@ def _offer(f: Formation) -> str:
             + f"; or a depth range TOP-BASE within the well's {_g(lo)} to {_g(hi)} {unit}")
 
 
-WHOLE_WELL_ITEM = "the whole well"                      # a scope item: the well's own span (agent.loop.scope_items)
+WHOLE_WELL_ITEM = "the whole well"                      # a scope item: the well's own span (agent.read.scope_items)
 # a depth range as a scope item is typed: TOP-BASE with an optional unit (parse_range reads it)
 RANGE_PATTERN = r"^[0-9]+(\.[0-9]+)? ?- ?[0-9]+(\.[0-9]+)?( ?(m|ft))?$"
 
@@ -242,7 +231,7 @@ def _item(f: Formation, asked: str) -> _Item:
     named = _NAMED.match(w)
     if named:                                            # a stretch as the harness writes it, a name with its depths
         return _item(f, named.group("range"))            # ("UNIT (TOP-BASE m)", "UNIT TOP-BASE m"): the depths are
-        #                                                  the stretch (question suite B10, T01, X20)
+        #                                                  the stretch
     if _ROW.match(w):
         raise ToolError(f"{w.upper()} is a row of an earlier result, not a zone of the focus: select it by its depths, "
                         "TOP-BASE")
@@ -251,7 +240,7 @@ def _item(f: Formation, asked: str) -> _Item:
 
 def _units_at(f: Formation, top: float, base: float, rtop: float = None, rbase: float = None) -> list:
     """The units of the tops file a range is written by: its top and base the unit's own, each within half a sample,
-    or its samples (limits rounded to them: rtop, rbase) exactly the unit's (question suite B01, B10: the model wrote
+    or its samples (limits rounded to them: rtop, rbase) exactly the unit's (the model wrote
     a unit's depths, as the map lists them, for the unit; X18: the unit's last sample for its base)."""
     half = 0.5 * float(getattr(f.view, "step", 0.0) or 0.0) + 1e-9 * max(1.0, abs(base))
     d = np.asarray(f.view.prep.depth, dtype=float) * f.view.depth_scale
@@ -341,7 +330,7 @@ def _named(f: Formation, it) -> str:
 def _union(f: Formation, picked: list) -> tuple:
     """A selection's items as the disjoint stretches of their union, in depth order: an item inside another (or the
     same stretch) is part of it; items that overlap join into the range they cover together. (items, notes saying
-    each merge). One rule for a question's scope and a tool's zones (question suite F2: a unit with its own range, the
+    each merge). One rule for a question's scope and a tool's zones (a unit with its own range, the
     interval with its units, a unit with the zones inside it were refused as overlapping and the scope dropped)."""
     out, notes, unit = [], [], f.view.report_unit
     d = np.asarray(f.view.prep.depth, dtype=float) * f.view.depth_scale
@@ -362,7 +351,7 @@ def _union(f: Formation, picked: list) -> tuple:
                 if span[id(it)] != span[id(last)]:
                     notes.append(f"{n_it} is part of {n_last}")
                 elif not (n_it.startswith(n_last) or n_last.startswith(n_it)):    # a unit and its own depths: one
-                    notes.append(f"{n_it} and {n_last} hold the same samples: one row")   # name, said once (suite B05:
+                    notes.append(f"{n_it} and {n_last} hold the same samples: one row")   # name, said once (not
                 continue                               #   "UNIT (TOP-BASE m) is part of UNIT")
             joined = _Item(f"{_g(last.top)}-{_g(it.base)} {unit}", last.top, it.base, it.closed)
             span[id(joined)] = (span[id(last)][0], b)
@@ -444,16 +433,12 @@ def resolve(f: Formation, asked, force: bool = False, notes: list = None) -> tup
     return _formation(f, replace(span, zones=rows, selection=said)), None
 
 
-# tools whose result rests on what the workflow computed for the focus only (its analyzer sections, classes and roles):
-# a selection elsewhere is refused with the tools that read any stretch
-FOCUS_ONLY: dict = {"section": "the workflow's analyzer sections",
-                    "zone_classes": "the workflow's analyzer classes, zone by zone"}
-# tools whose result is the same for any stretch (the well's record of a workflow step): zones do not apply
-WHOLE_WELL = ("step", "values_at")      # values_at: the depths it is asked, wherever they lie
-
-
 def refuse_focus_only(tool: str, f: Formation) -> None:
-    reason = FOCUS_ONLY.get(tool)
+    """A tool that rests on what the workflow computed for the focus (Tool.stretch "focus_only"), given a stretch
+    elsewhere: refused, with what it reads and the tools that read any stretch."""
+    from petroharness.agent.toolset import TOOLSET
+    t = TOOLSET.get(tool)
+    reason = t.focus_reason if t is not None and t.stretch == "focus_only" else ""
     if reason:
         raise ToolError(f"{tool} reads {reason}, computed for the focus ({f.view.interval.formation}) only: for a unit "
                         "or a depth range elsewhere, use stats, profile, runs, compare, crossplot or lithology_stats")
@@ -505,7 +490,7 @@ def by(f: Formation, frame) -> Formation:
 def listed_more_than_once(f: Formation, texts) -> list:
     """The units the tops file lists more than once whose name the texts use, in any convention (_said_in): [(name,
     [(line, top, base), ...])]. Such a name is no one stretch; which one is meant is the user's to say, or the tops
-    file's to fix (user, 2026-11-20: ask the user to select one or fix the file; question suite T01)."""
+    file's to fix (ask the user to select one or fix the file)."""
     units = list(getattr(f.view, "units", None) or [])
     by = {}
     for u in units:
@@ -554,7 +539,7 @@ def _said_in(name: str, texts) -> bool:
 def shared_names_unread(f: Formation, texts) -> list:
     """Bare names the texts use that several differently named units share (_core), with nothing in the texts that
     picks one (a rank word or the name as the file lists it): [(the bare name, [units])]. Which one is meant is the
-    user's to say (question suite N5: a bare name shared by a group and a formation in the file was answered over the
+    user's to say (a bare name shared by a group and a formation in the file was answered over the
     whole well)."""
     units = list(getattr(f.view, "units", None) or [])
     groups = {}
@@ -578,7 +563,7 @@ def shared_names_unread(f: Formation, texts) -> list:
 
 def left_out_named(f: Formation, texts) -> list:
     """The tops file's rows left out of the units (data.units_left_out: a base not below the top) whose name the texts
-    use, in any convention: a question about one is asked back with the row to fix (question suite U05 was told the
+    use, in any convention: a question about one is asked back with the row to fix (not told the
     unit is absent)."""
     return [r for r in getattr(f.view, "units_left_out", None) or [] if _said_in(str(r.get("name", "")), texts)]
 
@@ -591,7 +576,7 @@ _UNIT_PHRASE = re.compile(r"((?:[A-Za-z][A-Za-z'\-]*\s+){0,3}[A-Za-z][A-Za-z'\-]
 def unit_names_unread(f: Formation, texts) -> list:
     """Units the texts name (a name before a rank word) that are no unit of the tops file, by any of its shorter
     endings and in any convention (units_named): [(the name as written, the file's units close to it)], each once.
-    A name close to units is likely misspelt: the question is asked back (question suite U02: a misspelt name was answered
+    A name close to units is likely misspelt: the question is asked back (a misspelt name was answered
     as the interval); one close to none is a unit the file does not have, said under the question."""
     import difflib
     units = list(getattr(f.view, "units", None) or [])
@@ -633,7 +618,7 @@ def _names_stretches(f: Formation, items: list) -> bool:
 
 def _listed_twice(f: Formation, text: str) -> str:
     """The selection's own message when the text is a unit the tops file lists more than once ("NAME is listed 2
-    times ... select the one you mean by its depths"), else "" (suite T01: where naming a unit listed twice got the condition grammar's
+    times ... select the one you mean by its depths"), else "" (where naming a unit listed twice got the condition grammar's
     refusal, which says nothing of the unit or its two stretches)."""
     try:
         _item(f, text)
@@ -704,7 +689,7 @@ def where_names_stretches(f: Formation, where, zones=None) -> None:
 def where_view(f: Formation, condition: str) -> Formation:
     """A verb's run under `where`: the formation on the samples where the condition holds (the view's mask restricted
     to them; each zone keeps its id, restricted to its samples that pass). Its samples are not in depth order, so a
-    function that reads the well or a depth window is refused there (library_api.run)."""
+    function that reads the well or a depth window is refused there (library.api.run)."""
     sel = np.asarray(E.select(f, condition).mask, dtype=bool)
     if not sel.any():
         raise ToolError(f"no sample here where {condition}: nothing to run on")

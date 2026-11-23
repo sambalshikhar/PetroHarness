@@ -8,6 +8,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from petroharness.core.files import write_atomic
+
 
 class SessionLog:
     def __init__(self, folder: Path):
@@ -33,11 +35,13 @@ class SessionLog:
         return out if kind is None else [e for e in out if e["type"] == kind]
 
     def blob(self, text: str) -> str:
-        """Keep a text once; -> its SHA-256 (the name events refer to it by)."""
-        sha = hashlib.sha256(text.encode()).hexdigest()
+        """Keep a text once; -> its SHA-256 (the name events refer to it by). It is written aside and moved into place
+        whole, so a crash never leaves a blob cut short under its name (one left so before is written again)."""
+        data = text.encode("utf-8")
+        sha = hashlib.sha256(data).hexdigest()
         path = self.folder / "blobs" / sha
-        if not path.exists():
-            path.write_text(text, encoding="utf-8")
+        if not path.is_file() or path.stat().st_size != len(data):
+            write_atomic(path, data)
         return sha
 
     def read(self, sha: str) -> str:

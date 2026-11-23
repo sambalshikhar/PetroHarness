@@ -1,6 +1,6 @@
 id: C8
 name: middleware
-purpose: 'what the hooks around each call say: actions left out, results held for the next step, edits not applied'
+purpose: 'the hooks around each call: actions left out, results withheld, edits not applied'
 texts:
   not_run: not_run.md
   not_run_guide: not_run_guide.md         # with a skill library only

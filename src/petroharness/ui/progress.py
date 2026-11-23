@@ -4,8 +4,12 @@
 through unchanged: the same arguments in, the same reply out. Around each call it emits two events: `call` when the
 request leaves and `reply` when the answer is back, with its timing and token counts and what the reply holds, read
 with the harness's own parsers (the READ call's topics; a step's focus, actions and claim edits; the settle step's
-edits; the writer's draft). The prompts are also read for the results they show the model: each opened result is
-emitted once, as the model read it (`results` events).
+edits; the writer's draft). A reply also carries the model's reasoning for the call when the server returns it
+(`thinking`: the model's working notes, which the page shows beside the step; no check reads them). While a call
+runs, the harness's client streams it, and what it has said so far goes to `live` (not an event: the page reads it
+while the run goes on, and it is not saved). The prompts are
+also read for the results they show the model: each opened result is emitted once, as the model read it (`results`
+events).
 """
 
 from __future__ import annotations
@@ -18,6 +22,9 @@ from typing import Any
 
 TEXT_CHARS = 1200          # a draft or an unreadable reply, in an event
 EDIT_CHARS = 280           # a claim edit's text, in an event
+THINK_HEAD, THINK_TAIL = 4000, 8000     # a call's reasoning in an event: its start, and its end (where it decides)
+LIVE_CHARS = 6000          # a call in flight: the last characters of its reasoning the page is given
+LIVE_EVERY = 0.25          # a call in flight: seconds between two updates
 
 # A result block in a prompt: "[E7] <its text>" at the start of a message, after a blank line, or right under the
 # header that lists results (the first look, NEW, ALL RESULTS). It runs to the next blank line.
@@ -74,7 +81,7 @@ def _better(new: tuple, old: tuple) -> bool:
 
 
 def _action_text(action) -> str:
-    from petroharness.agent.loop import action_text, coerce_action
+    from petroharness.agent.replies import action_text, coerce_action
     got = coerce_action(action, True)
     if got is None:
         return f"(not an action: {str(action)[:120]})"
@@ -93,12 +100,12 @@ def edit_view(e) -> dict:
 
 
 def read_reply_of(stage: str, text: str) -> dict:
-    """What a reply says, for the page: read with the harness's own parsers (petroharness.agent.loop)."""
-    from petroharness.agent import loop as L
+    """What a reply says, for the page: read with the harness's own parsers (petroharness.agent.replies)."""
+    from petroharness.agent import read as RD, replies as RP
     kind, _ = kind_of(stage)
     text = text or ""
     if kind == "read":
-        got = L._reading(text, '"depth"' in text)             # the depth, where the reply says one
+        got = RD._reading(text, '"depth"' in text)             # the depth, where the reply says one
         if not got:
             return {"unreadable": True, "text": text[:TEXT_CHARS]}
         out = {"topics": got["topics"], "named": got["named"]}
@@ -110,9 +117,9 @@ def read_reply_of(stage: str, text: str) -> dict:
             return {"empty": True}
         salvaged = False
         try:
-            obj = L.read_reply(text)
+            obj = RP.read_reply(text)
         except ValueError:            # read as the loop reads it: its salvage when that holds the whole reply
-            obj = L.complete_salvage(text, first=stage == "step_1")
+            obj = RP.complete_salvage(text, first=stage == "step_1")
             if obj is None:
                 return {"unreadable": True, "text": text[:TEXT_CHARS]}
             salvaged = True
@@ -134,12 +141,23 @@ def read_reply_of(stage: str, text: str) -> dict:
     return {"text": text[:TEXT_CHARS]}
 
 
+def clip_thinking(text: str) -> str:
+    """A call's reasoning as an event carries it: whole up to THINK_HEAD + THINK_TAIL characters, else its start and
+    its end with the count left out between them."""
+    text = text.strip()
+    if len(text) <= THINK_HEAD + THINK_TAIL:
+        return text
+    left = len(text) - THINK_HEAD - THINK_TAIL
+    return f"{text[:THINK_HEAD].rstrip()}\n\n[… {left:,} characters left out …]\n\n{text[-THINK_TAIL:].lstrip()}"
+
+
 class Observed:
     """The harness's model client with every call reported to `emit` (an event dict), behaviour unchanged."""
 
-    def __init__(self, inner, emit: Callable[[dict], None], numbers=None):
+    def __init__(self, inner, emit: Callable[[dict], None], numbers=None, live: Callable[[dict], None] | None = None):
         self.inner = inner
         self.emit = emit
+        self.live = live                            # what the call in flight has said so far (None: not followed)
         self.numbers = numbers                      # a shared counter, when one run uses several clients
         self.calls = 0
         self.results: dict = {}                     # id -> (text, digest): the best seen so far
@@ -163,12 +181,19 @@ class Observed:
         self.emit(event)
         logged = len(getattr(usage, "log", []) or [])
         t0 = time.perf_counter()
+        streams = self.live is not None and hasattr(self.inner, "stream_to")     # the harness's LLM streams to it
+        if streams:
+            self.inner.stream_to = self._listener(n, stage)
         try:
             text = self.inner.chat(stage, messages, usage, max_tokens, *args, **kwargs)
         except Exception as exc:                    # reported, then raised unchanged
             self.emit({"kind": "reply", "stage": stage, "type": kind, "n": n, "seconds": round(time.perf_counter() - t0, 1),
                        "error": f"{type(exc).__name__}: {str(exc)[:400]}"})
             raise
+        finally:
+            if streams:
+                self.inner.stream_to = None
+                self.live({})
         reply = {"kind": "reply", "stage": stage, "type": kind, "n": n, "seconds": round(time.perf_counter() - t0, 1)}
         log = getattr(usage, "log", []) or []
         if len(log) > logged:
@@ -180,8 +205,29 @@ class Observed:
             reply.update(read_reply_of(stage, text))
         except Exception as exc:  # noqa: BLE001  (the page's reading of a reply never fails the run)
             reply["unreadable"] = f"{type(exc).__name__}: {exc}"
+        thinking = getattr(self.inner, "last_reasoning", "")
+        if isinstance(thinking, str) and thinking.strip():
+            reply["thinking"], reply["thinking_chars"] = clip_thinking(thinking), len(thinking)
         self.emit(reply)
         return text
+
+    def _listener(self, n: int, stage: str) -> Callable[[str, str], None]:
+        """The call in flight as it streams, to `live` at most every LIVE_EVERY seconds: the last LIVE_CHARS of its
+        reasoning, how long the reasoning is so far, and how much of the reply has come."""
+        now = {"n": n, "stage": stage, "thinking": "", "thinking_chars": 0, "reply_chars": 0}
+        last = [0.0]
+
+        def heard(kind: str, text: str) -> None:
+            if kind == "reasoning":
+                now["thinking"] = (now["thinking"] + text)[-LIVE_CHARS:]
+                now["thinking_chars"] += len(text)
+            else:
+                now["reply_chars"] += len(text)
+            t = time.perf_counter()
+            if t - last[0] >= LIVE_EVERY:
+                last[0] = t
+                self.live(dict(now))
+        return heard
 
     def _scan(self, stage: str, messages: list) -> None:
         """New or fuller results in this request's prompts, emitted once each."""

@@ -1,4 +1,4 @@
-"""calibrate (docs/TOOLS_DESIGN.md): the log against core, and the rock-physics relations, by Petrophys.
+"""calibrate (docs/TOOLS.md): the log against core, and the rock-physics relations, by Petrophys.
 
 porosity, permeability and saturation give Petrophys's calibration fit of a log curve to the core plugs the LAS
 carries (R2, bias, RMSE and the regression line, zones pooled and each zone with plugs); core_vs_log gives the core
@@ -8,14 +8,14 @@ gives the dynamic elastic properties.
 """
 from __future__ import annotations
 
+import re
 import warnings
 
 import numpy as np
 
 from petroharness.agent import engine as E
 from petroharness.agent.engine import Formation, Out, Result, ToolError
-from petroharness.agent.library import _curve, _full, _method, _zone_mask, register, scratch_well
-from petroharness.well import summary as S
+from petroharness.agent.library import _curve, _full, _zone_mask, register, scratch_well
 
 OBJECTS = {
     "porosity": "the fit of a log porosity (PHIE, or the curve named) to core porosity (PHIC, CPOR): R2, bias, RMSE "
@@ -155,19 +155,19 @@ def _poro_perm(f: Formation, keep: np.ndarray) -> Result:
         raise ToolError(f"Petrophys fit_poro_perm_transform: {str(e)[:300]}") from None
     _, phie = _curve(f, "PHIE")
     perm_pp = np.asarray(t.predict(phie), dtype=float)
-    register(f, "PERM_PP", _full(f, perm_pp), f"permeability from the poro-perm transform fitted on {basis.split(' (')[0]}",
-             "mD", "poro-perm transform (on request)")
+    pp_name = register(f, "PERM_PP", _full(f, perm_pp), "permeability from the poro-perm transform fitted on "
+                       f"{basis.split(' (')[0]}", "mD", "poro-perm transform (on request)")
     out = Out(f)
     row = out.child()
     out.add(f"poro-perm transform fitted on {basis} (Petrophys fit_poro_perm_transform): log10(K) = A * porosity + B "
             f"with A {row.v(t.A)}, B {row.v(t.B)}; R2 {row.v(t.r_squared)}, RMSE {row.v(t.rmse)} (log10 mD), n "
-            f"{row.i(t.n_points)}. Written: PERM_PP (the transform applied to PHIE).", row)
+            f"{row.i(t.n_points)}. Written: {pp_name} (the transform applied to PHIE).", row)
     if basis.startswith("core") and "PERM" in f.inv.curves:
         perm = np.asarray(f.view.values("PERM"), dtype=float)
         ok = keep & np.isfinite(perm) & (perm > 0) & np.isfinite(perm_pp) & (perm_pp > 0)
         if ok.any():
             r2 = out.child()
-            out.add(f"  against the record's PERM over {r2.i(int(ok.sum()))} samples: geometric means PERM_PP "
+            out.add(f"  against the record's PERM over {r2.i(int(ok.sum()))} samples: geometric means {pp_name} "
                     f"{r2.v(10 ** np.mean(np.log10(perm_pp[ok])))}, PERM {r2.v(10 ** np.mean(np.log10(perm[ok])))} mD",
                     r2)
     return out.result()
@@ -186,7 +186,7 @@ def _shear(f: Formation, keep: np.ndarray) -> Result:
         vs_from_vp_greenberg_castagna,
     )
     dn, dtc = _slowness(f, "DTC")
-    from petroharness.agent import library_api as A
+    from petroharness.agent.library import api as A
     fn = A.lookup("vs_from_vp_greenberg_castagna")
     vp = slowness_to_velocity(dtc)
     lith, said = A._record_lithology(f, fn, "lithology")             # the binder's fill (one rule)
@@ -196,12 +196,12 @@ def _shear(f: Formation, keep: np.ndarray) -> Result:
     vs = np.asarray(vs, dtype=float)
     with np.errstate(divide="ignore", invalid="ignore"):
         dts_gc = np.where(vs > 0, 304800.0 / vs, np.nan)
-    register(f, "DTS_GC", _full(f, dts_gc), f"shear slowness predicted from {dn} (Greenberg-Castagna; lithology {said})",
-             "us/ft", "shear prediction (on request)")
+    gc_name = register(f, "DTS_GC", _full(f, dts_gc), f"shear slowness predicted from {dn} (Greenberg-Castagna; "
+                       f"lithology {said})", "us/ft", "shear prediction (on request)")
     out = Out(f)
     row = out.child()
     out.add(f"shear slowness predicted from {dn} by Petrophys vs_from_vp_greenberg_castagna, lithology {said} "
-            f"(brine-saturated rock assumed). Written: DTS_GC (us/ft); median, us/ft: "
+            f"(brine-saturated rock assumed). Written: {gc_name} (us/ft); median, us/ft: "
             f"{E.over_bases(f, np.where(keep, dts_gc, np.nan), row)}.", row)
     if "DTS" in f.inv.curves and f.view.available("DTS"):
         _, dts = _slowness(f, "DTS")
@@ -210,7 +210,7 @@ def _shear(f: Formation, keep: np.ndarray) -> Result:
             ok = idx[np.isfinite(dts[idx]) & np.isfinite(dts_gc[idx])]
             if ok.size:
                 d = dts_gc[ok] - dts[ok]
-                parts.append(f"{label}: n {r.i(ok.size)}, mean DTS_GC {r.v(np.mean(dts_gc[ok]))} vs DTS "
+                parts.append(f"{label}: n {r.i(ok.size)}, mean {gc_name} {r.v(np.mean(dts_gc[ok]))} vs DTS "
                              f"{r.v(np.mean(dts[ok]))}, mean difference {r.v(np.mean(d))} us/ft")
         out.add("  against the measured DTS: " + ("; ".join(parts) or "no samples with both"), r)
     else:
@@ -227,9 +227,9 @@ def _elastic(f: Formation, keep: np.ndarray) -> Result:
     if "DTS" in f.inv.curves and f.view.available("DTS"):
         _, dts = _slowness(f, "DTS")
         shear = "the measured DTS"
-    elif "DTS_GC" in f.view.calculated:
-        dts = np.asarray(f.view.values("DTS_GC"), dtype=float)
-        shear = "DTS_GC (predicted in this question)"
+    elif predicted := [n for n in f.view.calculated if re.fullmatch(r"DTS_GC(?:_LIB\d*)?", n)]:    # calibrate shear's
+        dts = np.asarray(f.view.values(predicted[-1]), dtype=float)
+        shear = f"{predicted[-1]} (predicted in this question)"
     else:
         dts, shear = None, ""
     p = calculate_elastic_properties(rhob, dtc, dts)
@@ -246,9 +246,8 @@ def _elastic(f: Formation, keep: np.ndarray) -> Result:
     written = []
     for base, attr, unit, meaning in fields:
         x = np.asarray(getattr(p, attr), dtype=float)
-        name = base if base not in f.inv.curves or base in f.view.calculated else f"{base}_EL"
-        register(f, name, _full(f, x), f"{meaning} (Petrophys calculate_elastic_properties)", unit,
-                 "elastic properties (on request)")
+        name = register(f, base, _full(f, x), f"{meaning} (Petrophys calculate_elastic_properties)", unit,
+                        "elastic properties (on request)")
         written.append(name)
         row = out.child()
         zs = "; ".join(f"{lab} {row.v(np.nanmedian(x[idx]))}" for lab, idx in _scopes(f, keep)

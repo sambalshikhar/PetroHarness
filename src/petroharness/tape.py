@@ -18,6 +18,42 @@ def _plain(obj: Any) -> Any:
     return json.loads(json.dumps(obj, default=str))
 
 
+STREAMING = ("stream", "stream_options")      # how a reply travels, not what is asked: no part of a recorded request
+
+
+def _asked(kwargs: dict) -> Any:
+    """A request as the tape keeps and compares it: plain, without the streaming settings (the web UI streams its
+    calls; a replay of its tape need not)."""
+    return _plain({k: v for k, v in kwargs.items() if k not in STREAMING})
+
+
+def _streamed_reply(chunks: list) -> dict:
+    """A streamed reply put together as _reply records a whole one."""
+    content, reasoning, finish, u = [], [], None, None
+    for ch in chunks:
+        u = getattr(ch, "usage", None) or u
+        for c in getattr(ch, "choices", None) or []:
+            finish = c.finish_reason or finish
+            d = c.delta
+            content.append(getattr(d, "content", None) or "")
+            reasoning.append(getattr(d, "reasoning", None) or getattr(d, "reasoning_content", None)
+                             or (getattr(d, "model_extra", None) or {}).get("reasoning") or "")
+    return {"content": "".join(content), "tool_calls": [], "finish_reason": finish, "reasoning": "".join(reasoning) or None,
+            "usage": None if u is None else {"prompt_tokens": u.prompt_tokens, "completion_tokens": u.completion_tokens,
+                                             "total_tokens": getattr(u, "total_tokens", None)}}
+
+
+def _chunks(rec: dict):
+    """A recorded reply served as a stream: its reasoning, its content, then the finish reason and the usage."""
+    r, u = rec["reply"], rec["reply"].get("usage")
+    delta = lambda **kw: SimpleNamespace(**({"content": None, "reasoning": None, "reasoning_content": None} | kw))
+    if r.get("reasoning"):
+        yield SimpleNamespace(choices=[SimpleNamespace(delta=delta(reasoning=r["reasoning"]), finish_reason=None)], usage=None)
+    yield SimpleNamespace(choices=[SimpleNamespace(delta=delta(content=r.get("content") or ""), finish_reason=r.get("finish_reason"))],
+                          usage=None)
+    yield SimpleNamespace(choices=[], usage=None if u is None else SimpleNamespace(**u))
+
+
 def _reply(resp) -> dict:
     ch = resp.choices[0]
     msg = ch.message
@@ -46,13 +82,25 @@ def record(llm, path: Path) -> list:
     path.parent.mkdir(parents=True, exist_ok=True)
     calls, lock, create = [], threading.Lock(), llm.client.chat.completions.create
 
-    def recorded(**kwargs):
-        resp = create(**kwargs)
-        rec = {"n": len(calls), "request": _plain(kwargs), "reply": _reply(resp)}
+    def keep(kwargs: dict, reply: dict) -> None:
         with lock:
+            rec = {"n": len(calls), "request": _asked(kwargs), "reply": reply}
             calls.append(rec)
             with path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(rec) + "\n")
+
+    def kept_as_it_streams(stream, kwargs: dict):          # recorded once the stream is read to its end
+        seen = []
+        for chunk in stream:
+            seen.append(chunk)
+            yield chunk
+        keep(kwargs, _streamed_reply(seen))
+
+    def recorded(**kwargs):
+        resp = create(**kwargs)
+        if kwargs.get("stream"):
+            return kept_as_it_streams(resp, kwargs)
+        keep(kwargs, _reply(resp))
         return resp
 
     llm.client.chat.completions.create = recorded
@@ -110,15 +158,15 @@ class Replayer:
             raise TapeMismatch(f"call {self.i}: the replay sent a request the recording does not have "
                                f"({kwargs.get('model')}, {len(kwargs.get('messages') or [])} messages)")
         rec = self.tape[self.i]
-        d = _diff(_plain(kwargs), rec["request"])
+        d = _diff(_asked(kwargs), rec["request"])
         if d and not self.collect:
             raise TapeMismatch(f"call {self.i}: {d}")
         if d:
             self.diffs.append((self.i, d))
         if self.collect:
-            self.sent.append(_plain(kwargs))
+            self.sent.append(_asked(kwargs))
         self.i += 1
-        return _response(rec)
+        return _chunks(rec) if kwargs.get("stream") else _response(rec)
 
     def left(self) -> int:
         return len(self.tape) - self.i

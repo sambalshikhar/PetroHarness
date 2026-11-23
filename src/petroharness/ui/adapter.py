@@ -59,12 +59,9 @@ def samples() -> tuple:
     name. Petrophys names its samples; the harness names none (tests/test_lint.py). Read once per server."""
     import lasio
 
-    from petroharness.ask import _las_header
+    from petroharness.interval import _las_header
     from petroharness.well.tops import read_tops
-    try:
-        from petrophys.datasets import list_samples, sample
-    except ImportError:                                        # a Petrophys without bundled samples: none offered
-        return ()
+    from petrophys.datasets import list_samples, sample
     tops = []
     for name in list_samples("geology"):
         try:
@@ -112,7 +109,7 @@ def las_info(path) -> dict:
     import lasio
     import numpy as np
 
-    from petroharness.ask import _las_header
+    from petroharness.interval import _las_header
     from petroharness.well.formation import LITHOLOGY_LOG
     from petroharness.well.prepare import read_depth
 
@@ -150,7 +147,7 @@ def tops_info(path, las=None, unit: str | None = None) -> dict:
     """The formations a tops file names, as the tops reader finds them (petroharness.well.tops), each with the
     interval a question about it would use. With a LAS file, a table with a well column is read for that well only,
     and depths with no stated unit are in the LAS's unit."""
-    from petroharness.ask import _las_header
+    from petroharness.interval import _las_header
     from petroharness.well.formation import FormationNotFound
     from petroharness.well.tops import read_tops
 
@@ -190,7 +187,7 @@ def zones_info(path, las=None) -> dict:
     """The user's zones a zones file gives (petroharness.well.user_zones, read as Petrophys reads tops), each with its
     depths, and what is wrong in them before a question is asked: zones that overlap (each sample belongs to one
     zone) and zones beyond the log (they get no sample, and are said with every answer)."""
-    from petroharness.ask import _las_header
+    from petroharness.interval import _las_header
     from petroharness.well.user_zones import read_zones
     p = _file(path, "zones file")
     names = _las_header(_file(las, "LAS file"))[1] if las else []
@@ -234,8 +231,8 @@ MAX_SCOPE = 12
 
 def _fits_log(rows: list, las, las_unit) -> dict | None:
     """Whether the formations fall on the log: each one wholly beyond the log's depths is marked (outside), and when
-    most are, whether their depths read in the other unit would fit it (a file in feet labelled metres, question suite
-    U18: its interval had no sample and the question was refused only after it was asked)."""
+    most are, whether their depths read in the other unit would fit it (a file in feet labelled metres: its
+    interval had no sample and the question was refused only after it was asked)."""
     from petroharness.well.tops import convert
     try:
         info = las_info(las)
@@ -317,7 +314,7 @@ def arguments(inputs: dict) -> dict:
         kw.update(tops=tops, formation=formation, depth_unit=_unit(iv.get("unit")))
         if row is not None:
             kw["top"] = row
-        from petroharness.ask import _las_header
+        from petroharness.interval import _las_header
         from petroharness.well.tops import read_tops
         las_unit, names = _las_header(las)
         try:
@@ -402,7 +399,7 @@ def arguments(inputs: dict) -> dict:
 
 
 PREPARE_KEYS = ("formation", "tops", "top", "base", "depth_unit", "lithology_curve", "formation_lithology", "profile",
-                "skills", "interpretation")
+                "skills", "interpretation", "field_notes")
 
 
 def notes_info(path) -> dict:
@@ -416,20 +413,29 @@ def notes_info(path) -> dict:
     return {k: n[k] for k in ("path", "name", "settings", "notes")}
 
 
+def view_of(inputs: dict, cache: Path):
+    """The interval's view for a run's inputs: the well as Petrophys interpreted it under the run's settings (read from
+    `cache`, the runs' shared cache, where the run left it), the interval and its zones. For the log viewer."""
+    from petroharness import interval as I
+    kw = arguments({**inputs, "question": "(the logs)"})
+    las = kw.pop("las")
+    p = I.prepare(las, "logs", I.Inputs.of({k: v for k, v in kw.items() if k in PREPARE_KEYS}).loaded(), cache=cache)
+    I.check(p, I.task_for(p, "(the interval)")[0])
+    return p.view
+
+
 def preview(inputs: dict, cache: Path) -> dict:
     """What Petrophys makes of this well under these settings, before any question: the interval, its zones under the
     zone rule, how the zones were read (the lithology log, or shale-volume bands), and the value each setting took
     ({setting: {"value", "step"}}: the defaults the data decides, for this well). The interpreted well is kept in
     `cache` (the runs' shared cache), so the question that follows reuses it."""
-    from petroharness import ask as A
+    from petroharness import interval as I
     from petroharness.well import settings as T
     kw = arguments({**inputs, "question": "(a preview of the interpretation)"})
     las = kw.pop("las")
-    if kw.get("field_notes"):                    # the field notes' settings, under the ones set here
-        from petroharness.well.notes import load
-        kw["interpretation"] = {**load(kw["field_notes"])["settings"], **(kw.get("interpretation") or {})}
-    p = A.prepare(las, "preview", cache=cache, **{k: v for k, v in kw.items() if k in PREPARE_KEYS})
-    A.check(p, A.task_for(p, "(the interval)")[0])
+    inputs = I.Inputs.of({k: v for k, v in kw.items() if k in PREPARE_KEYS}).loaded()   # field notes' settings under
+    p = I.prepare(las, "preview", inputs, cache=cache)                                # the ones set here
+    I.check(p, I.task_for(p, "(the interval)")[0])
     view = p.view
     zones = view.zones
     thick = [float(z.base - z.top) for z in zones]
@@ -492,12 +498,17 @@ class Job:
         self.root = run_id                 # the run that started this conversation (itself, for a first question)
         self.conversation: dict = {}       # {root, turn, thread: [{turn, question, run}]}, once the question ran
         self.saved = False                 # its finished record is on disk (the server sets it after saving)
+        self.live: dict = {}               # the model call in flight as it streams (progress.Observed); never saved
         self._lock = threading.Lock()
 
     def emit(self, event: dict) -> None:
         t0 = self.started or self.created
         with self._lock:
             self.events.append({"t": round(max(time.time() - t0, 0.0), 1), **event})
+
+    def set_live(self, now: dict) -> None:
+        with self._lock:
+            self.live = now
 
     def elapsed(self) -> float:
         if self.started is None:
@@ -510,13 +521,14 @@ class Job:
         with self._lock:
             events = self.events[since:]
             n = len(self.events)
+            live = dict(self.live) if self.finished is None else {}
         finished = self.finished is not None and (self.saved if final is None else final)
         status = self.status if finished or self.finished is None else "running"
         return {"id": self.id, "status": status, "inputs": self.inputs, "label": interval_label(self.inputs),
                 "created": _iso(self.created), "elapsed": self.elapsed(), "endpoint": self.endpoint,
                 "events": events, "n_events": n, "answer": self.answer if finished else "",
                 "result": self.result if finished else None, "error": self.error, "rating": self.rating,
-                "conversation": self.conversation or {"root": self.root}}
+                "conversation": self.conversation or {"root": self.root}, **({"live": live} if live else {})}
 
     def record(self) -> dict:
         return self.view(0, final=True) | {"finished": _iso(self.finished) if self.finished else None}
@@ -565,7 +577,7 @@ def run(job: Job, out: Path, model_url: str | None, model_factory: Callable | No
         kw = dict(job.kwargs)
         question = kw.pop("question")
         numbers = itertools.count(1)                         # one numbering for the run's calls (the question's client
-        factory = lambda cfg: Observed(base(cfg), job.emit, numbers)   # and the figures call's)
+        factory = lambda cfg: Observed(base(cfg), job.emit, numbers, live=job.set_live)   # and the figures call's)
         session = (root_out or out) / "session"
         with _asking(session):
             if root_out is None:
@@ -672,7 +684,7 @@ def summary(trace: dict, interval: dict, status: str) -> dict:
                   "log": [{k: u.get(k) for k in ("stage", "prompt_tokens", "completion_tokens", "seconds")} for u in usage]},
         "error": trace.get("error"), "traceback": trace.get("traceback"),
         # the question back to the user (or a request outside the well's logs) and the answers to pick: the page's
-        # buttons, each a question to send and, for a stretch, the scope set first (agent.loop.ask_back)
+        # buttons, each a question to send and, for a stretch, the scope set first (agent.read.ask_back)
         "ask": {"text": trace.get("ask_user") or "", "outside": bool(trace.get("outside")),
                 "choices": [c for c in trace.get("ask_choices") or [] if isinstance(c, dict) and c.get("question")]}
                if status in ("ask_user", "outside") else None,

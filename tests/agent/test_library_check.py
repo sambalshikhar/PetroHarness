@@ -1,8 +1,8 @@
-"""The check verb (src/petroharness/agent/library_check.py): held readings, the parts of bad hole
+"""The check verb (src/petroharness/agent/library/check.py): held readings, the parts of bad hole
 and the core-to-log depth shift, each from Petrophys, the flags written as curves of the question; on the sample wells
 (data) and on a benchmark well that carries core plugs (data, $WELLLOGBENCH).
 
-    .venv/bin/python -m pytest tests/agent/test_library_check.py -q
+    .venv/bin/python -m pytest tests/agent/test_library.check.py -q
 """
 import hashlib
 import os
@@ -21,7 +21,7 @@ from test_library_tools import SAMPLES, _session
 
 from petroharness.agent import schemas
 from petroharness.agent.engine import ToolError
-from petroharness.agent.library_check import OBJECTS, check
+from petroharness.agent.library.check import OBJECTS, check
 
 
 def test_the_checks_and_what_they_take():
@@ -89,7 +89,7 @@ def test_no_core_no_depth_shift(topeka):
 def _cored_session():
     """A benchmark well whose LAS carries core porosity (the first, by name, of the data config's LAS folder)."""
     import petroharness.ask as A
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.config import (
         DataPaths,
         HarnessConfig,

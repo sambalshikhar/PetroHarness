@@ -2,7 +2,7 @@
 
     .venv/bin/python -m pytest tests/agent/test_b2_dense.py -q   (PETROHARNESS_DATA selects the dataset)
 
-T9  generated queries against b2_reference (its own parser, run finder and statistics)
+T9  generated queries against b2_reference (its own parser, interval finder, thickness rule and statistics)
 T10 invariants over every generated output
 T11 hand-written edge and adversarial cases
 T12 mutations of real wells
@@ -25,7 +25,8 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__fil
                 str(Path(__file__).resolve().parent)]
 import b2_reference as R  # noqa: E402
 from petroharness.well.summary import code_labels, curve_kind  # noqa: E402
-from test_b2_tools import F, Mutated  # noqa: E402
+from _support.formations import F  # noqa: E402
+from test_b2_tools import Mutated  # noqa: E402
 from petroharness.agent.engine import max_chars  # noqa: E402
 from petroharness.agent.map import num  # noqa: E402
 from petroharness.agent.schemas import call  # noqa: E402
@@ -328,67 +329,106 @@ def check_classes(c, head, ln, xs, labels=None) -> list:
     return out
 
 
+def listed_by_default(f) -> int:
+    """The intervals a runs list shows when the call gives no limit: 20, or 200 where a view reaches the whole well."""
+    return 200 if getattr(f.view, "reach", "focus") == "well" else 20
+
+
 def ref_runs(f, kw) -> list:
-    """(top depth, base depth, samples, thickness, zone position) as runs() should list them, depth order."""
-    zs = asked(f, kw)
-    d = f.view.depth
+    """(top depth, base depth, samples, thickness, [zone ids it touches], a sample outside every zone, top index, base
+    index) for each interval runs() should give, top to base: the stretches of consecutive samples where the condition
+    holds, zone boundaries aside (inside the zones asked, when the call names zones), each as thick as its share of
+    the interval's samples; the thickness filters read that thickness."""
+    d = np.asarray(f.view.depth, dtype=float)
+    mask = ref_mask(f, kw["condition"])
+    if kw.get("zones"):
+        inside = np.zeros(d.size, dtype=bool)
+        for z in asked(f, kw):
+            inside[np.asarray(z.indices)] = True
+        mask = mask & inside
+    owner = {int(i): z.zone_id for z in f.view.zones for i in np.asarray(z.indices).tolist()}
+    gross = R.gross(d)
     out = []
-    for a, b, k in R.zone_runs(ref_mask(f, kw["condition"]), zs):
-        n = int(b - a + 1)
-        out.append((float(d[a]), float(d[b]), n, R.thickness(zs[k], n), k))
+    for a, b in R.interval_runs(mask):
+        n = b - a + 1
+        ids = list(dict.fromkeys(owner[i] for i in range(a, b + 1) if i in owner))
+        out.append((float(d[a]), float(d[b]), n, gross * n / d.size, ids, any(i not in owner for i in range(a, b + 1)),
+                    a, b))
     lo, hi = kw.get("min_thickness"), kw.get("max_thickness")
     if lo is not None or hi is not None:
         out = [r for r in out if (lo or 0.0) <= r[3] <= (math.inf if hi is None else hi)]
-    return sorted(out, key=lambda r: r[0])                                # depth order (ties among the longest too)
+    return out
 
 
 def check_runs(f, kw, r) -> list:
     bad = []
     zs = asked(f, kw)
+    d = np.asarray(f.view.depth, dtype=float)
+    gross = R.gross(d)
     want = ref_runs(f, kw)
     got = R.runs_output(r.text)
     if got["count"] != len(want):
         bad.append(("count", got["count"], len(want)))
-    if not kw.get("zones") and kw.get("min_thickness") is None and kw.get("max_thickness") is None:
-        mask = ref_mask(f, kw["condition"])
-        n_all = int(mask.sum())
-        w = got["whole"]
-        if not (mask & ~np.asarray(f.view.zoned)).any():          # the whole interval only where it differs
-            if w is not None:
-                bad.append(("whole shown where it is the zones", w))
-        elif w is None or not R.agrees(w[0], f.inv.gross * n_all / f.view.depth.size) or abs(w[1] - 100 * n_all / f.view.depth.size) > 0.0501:
-            bad.append(("whole", w, n_all))
-    total = 0.0
-    for k, z in enumerate(zs):
-        n = sum(w[2] for w in want if w[4] == k)
-        th, share = R.thickness(z, n), 100 * n / z.n_samples
-        total += th
+    if not want:                                                   # none: said, with no list
+        return bad + ([] if got["none"] and not got["listed"] else [("no interval, not said", r.text[:80])])
+    total = math.fsum(w[3] for w in want)
+    if not R.agrees(got["total"], total):
+        bad.append(("total", got["total"], total))
+    if got["share"] is None or abs(got["share"] - 100 * total / gross) > 0.05 + 1e-9:
+        bad.append(("share", got["share"], 100 * total / gross))
+    # the whole interval's own line: only where the zones asked leave samples of the condition out
+    inside = np.zeros(d.size, dtype=bool)
+    for z in zs:
+        inside[np.asarray(z.indices)] = True
+    w = got["whole"]
+    if not (kw.get("zones") and (ref_mask(f, kw["condition"]) & ~inside).any()):
+        if w is not None:
+            bad.append(("whole shown where the zones asked leave nothing out", w))
+    else:
+        every = ref_runs(f, {k: v for k, v in kw.items() if k != "zones"})
+        wt = math.fsum(e[3] for e in every)
+        if (w is None or w[0] != len(every) or not R.agrees(w[1], wt) or abs(w[2] - 100 * wt / gross) > 0.05 + 1e-9
+                or not R.agrees(w[3], max(wt - total, 0.0))):
+            bad.append(("whole", w, len(every), wt, wt - total))
+    on = np.zeros(d.size, dtype=bool)                              # each zone's thickness of the intervals
+    for x in want:
+        on[x[6]:x[7] + 1] = True
+    if set(got["zones"]) != {z.zone_id for z in zs}:
+        bad.append(("zones named", sorted(got["zones"]), [z.zone_id for z in zs]))
+    for z in zs:
+        k = int(on[np.asarray(z.indices)].sum())
+        th, share = R.thickness(z, k), 100 * k / z.n_samples
         g = got["zones"].get(z.zone_id)
         if g is None or not R.agrees(g[0], th) or abs(g[1] - share) > 0.05 + 1e-9:
             bad.append(("zone", z.zone_id, g, th, share))
-    if got["total"] is None or not R.agrees(got["total"], total):
-        bad.append(("total", got["total"], total))
-    base = sum(z.base - z.top for z in zs) if kw.get("zones") else f.view.zoned_thickness
-    zshare = 100 * total / base if base else 0.0
-    if got["share"] is None or abs(got["share"] - zshare) > 0.05 + 1e-9:
-        bad.append(("share", got["share"], zshare))
-    if want:
-        m = re.search(rf"shallowest top ({R.NUM}) \S+ \((Z\d+)\); deepest base ({R.NUM}) \S+ \((Z\d+)\)", r.text)
-        first, last = min(want, key=lambda w: w[0]), max(want, key=lambda w: w[1])
-        if not m or not R.agrees(float(m.group(1)), first[0]) or not R.agrees(float(m.group(3)), last[1]):
-            bad.append(("first/last", m.groups() if m else None, first[0], last[1]))
-    limit = kw.get("limit", 20)
-    listed = sorted(sorted(want, key=lambda w: -w[2])[:limit], key=lambda w: w[0])
+    limit = kw.get("limit", listed_by_default(f))                 # the thickest, top to base
+    listed = sorted(sorted(want, key=lambda x: -x[2])[:limit], key=lambda x: x[0])
     if len(got["listed"]) != len(listed):
         bad.append(("listed", len(got["listed"]), len(listed)))
     else:
-        for g, w in zip(got["listed"], listed):
-            if not (R.agrees(g[0], w[0]) and R.agrees(g[1], w[1]) and R.agrees(g[2], w[3]) and g[3] == zs[w[4]].zone_id):
-                bad.append(("run", g, w))
+        for g, x in zip(got["listed"], listed):
+            if not (R.agrees(g[0], x[0]) and R.agrees(g[1], x[1]) and R.agrees(g[2], x[3]) and g[3] == x[4]
+                    and g[4] == x[5]):
+                bad.append(("interval", g, x[:6]))
                 break
-    if len(want) > limit and got["of"] != (limit, len(want)):
-        bad.append(("of", got["of"], limit, len(want)))
+    if got["of"] != (len(listed), len(want)):
+        bad.append(("of", got["of"], len(listed), len(want)))
+    if len(want) > limit:                                          # the others: kept for a get, or counted
+        head = next((ln for ln, _ in r.rows if ln.startswith("  thickest intervals, top to base (")), "")
+        kept = sum(len(ln.split(": ", 1)[1].split(", ")) for ln, _ in r.rows if ln.startswith("  other intervals in "))
+        m = re.search(r"; the other (\d+), each at most ", head)
+        if kept + (int(m.group(1)) if m else 0) != len(want) - limit:
+            bad.append(("others", kept, m and m.group(1), len(want) - limit))
     return bad
+
+
+def zone_part(out: dict, zid: str) -> tuple:
+    """A zone's (thickness, share %) in a runs text read back: 0 where the text says there is no interval at all."""
+    return (0.0, 0.0) if out["none"] else out["zones"][zid]
+
+
+def zone_share(out: dict, zid: str) -> float:
+    return zone_part(out, zid)[1]
 
 
 def check_compare(f, kw, r) -> list:
@@ -553,9 +593,9 @@ def test_t9_every_section_and_step():
                 if not rs:
                     continue
                 out = R.runs_output(runs(f, f"{s.key}:{label}").text)
-                want = sum(x.thickness for x in rs)
-                if out["total"] is None or abs(out["total"] - want) > max(0.01 * want, f.inv.step):
-                    bad.append((t.well, s.key, label, "class runs", out["total"], want))
+                want = sum(x.thickness for x in rs)                    # the analyzer's runs, zone by zone
+                if not out["zones"] or abs(out["zoned"] - want) > max(0.01 * want, f.inv.step):
+                    bad.append((t.well, s.key, label, "class runs", out["zoned"], want))
         from petroharness.record.card import plain_inputs         # a fallback input in plain words
         for m in f.inv.methods:
             text = step(f, m.step).text
@@ -613,16 +653,22 @@ def test_t10_invariants():
         if tool == "runs":
             got = R.runs_output(r.text)
             zones = {z.zone_id: z for z in f.view.zones}
+            d = np.asarray(f.view.depth, dtype=float)
             prev = None
-            for top, base, th, zid in got["listed"]:
-                z = zones[zid]
-                if not (z.top - 1e-6 <= top <= base <= z.base + 1e-6):
-                    bad.append((t.well, "run outside its zone", top, base, zid))
+            for top, base, th, ids, _ in got["listed"]:                # depths are shown to 4 decimals
+                if not (d.min() - 1e-4 <= top <= base <= d.max() + 1e-4):
+                    bad.append((t.well, "interval outside the formation", top, base, float(d.min()), float(d.max())))
+                if any(zones[i].top > base + 1e-6 or zones[i].base < top - 1e-6 for i in ids):
+                    bad.append((t.well, "interval names a zone it does not touch", top, base, ids))
                 if prev is not None and top <= prev:
-                    bad.append((t.well, "runs overlap or unsorted", prev, top))
+                    bad.append((t.well, "intervals overlap or unsorted", prev, top))
                 prev = base
+            if math.fsum(x[2] for x in got["listed"]) > got["total"] + 1e-4 * max(len(got["listed"]), 1):
+                bad.append((t.well, "listed intervals thicker than their total", got["total"]))
+            if got["share"] is not None and not (0 <= got["share"] <= 100 and got["total"] <= R.gross(d) + 1e-4):
+                bad.append((t.well, "total beyond the gross", got["total"], got["share"]))
             for zid, (th, share) in got["zones"].items():
-                if not (0 <= share <= 100) or th > zones[zid].base - zones[zid].top + 1e-6:
+                if not (0 <= share <= 100) or th > R.thickness(zones[zid], zones[zid].n_samples) + 1e-4:
                     bad.append((t.well, "zone share", zid, th, share))
         if tool == "compare" and same_scale(f, kw["a"].upper(), kw["b"].upper()):
             back = compare(f, kw["b"], kw["a"], tolerance=kw.get("tolerance"), zones=kw.get("zones"), where=kw.get("where"))
@@ -640,7 +686,8 @@ def test_t10_invariants():
 
 @pytest.mark.data
 def test_t10_complements_add_up():
-    """'X op t' and its complement cover exactly the zone samples where X has a value."""
+    """'X op t' and its complement cover exactly the samples where X has a value: zone by zone, and over the
+    interval."""
     pairs = [("<", ">="), ("<=", ">"), ("==", "!=")]
     bad = []
     for t, f in F():
@@ -652,8 +699,12 @@ def test_t10_complements_add_up():
             a, b = R.runs_output(runs(f, f"{c} {op} {th}").text), R.runs_output(runs(f, f"{c} {back} {th}").text)
             for z in f.view.zones:
                 have = int(np.isfinite(values(f)(c)[z.indices]).sum())
-                if abs(a["zones"][z.zone_id][1] + b["zones"][z.zone_id][1] - 100 * have / z.n_samples) > 0.11:
-                    bad.append((t.well, c, op, th, z.zone_id, a["zones"][z.zone_id], b["zones"][z.zone_id], have))
+                if abs(zone_share(a, z.zone_id) + zone_share(b, z.zone_id) - 100 * have / z.n_samples) > 0.11:
+                    bad.append((t.well, c, op, th, z.zone_id, a["zones"].get(z.zone_id), b["zones"].get(z.zone_id), have))
+            x = values(f)(c)
+            whole = R.gross(f.view.depth) * int(np.isfinite(x).sum()) / x.size
+            if abs(a["total"] + b["total"] - whole) > 1.1e-4:          # two shown numbers, each to 4 decimals
+                bad.append((t.well, c, op, th, "interval", a["total"], b["total"], whole))
     assert not bad, bad[:10]
 
 
@@ -736,12 +787,15 @@ def test_t11_large_and_tiny_values_print_without_exponents():
 def test_t11_conditions_that_never_and_always_hold():
     t, f = first(lambda f: "PHIE" in f.inv.curves)
     x = values(f)("PHIE")
-    never = R.runs_output(runs(f, f"PHIE > {float(np.nanmax(x)) + 1}").text)
-    assert never["count"] == 0 and never["total"] == 0 and "shallowest" not in runs(f, f"PHIE > {float(np.nanmax(x)) + 1}").text
+    text = runs(f, f"PHIE > {float(np.nanmax(x)) + 1}").text
+    never = R.runs_output(text)
+    assert never["count"] == 0 and never["total"] == 0 and not never["listed"] and not never["zones"]
+    assert text.startswith("No interval where PHIE > ")
     always = R.runs_output(runs(f, f"PHIE >= {float(np.nanmin(x))}").text)
     for z in f.view.zones:
         have = np.isfinite(x[z.indices]).mean() * 100
-        assert abs(always["zones"][z.zone_id][1] - have) <= 0.05
+        assert abs(zone_share(always, z.zone_id) - have) <= 0.05
+    assert R.agrees(always["total"], R.gross(f.view.depth) * int(np.isfinite(x).sum()) / x.size)
 
 
 @pytest.mark.data
@@ -766,13 +820,55 @@ def test_t11_and_binds_before_or():
     assert a == b
 
 
+def joined_zones(f, c):
+    """Two zones next to each other in the samples (no sample between them) with a value of c on both sides of their
+    edge, or None."""
+    x = values(f)(c)
+    for a, b in zip(f.view.zones, f.view.zones[1:]):
+        i, j = int(np.asarray(a.indices)[-1]), int(np.asarray(b.indices)[0])
+        if j == i + 1 and np.isfinite(x[i]) and np.isfinite(x[j]):
+            return a, b
+    return None
+
+
 @pytest.mark.data
-def test_t11_runs_stop_at_zone_edges():
-    t, f = first(lambda f: len(f.view.zones) >= 2 and "PHIE" in f.inv.curves)
+def test_t11_intervals_run_across_zone_edges():
+    """A zone boundary does not end an interval: where the condition holds on both sides of an edge, one interval
+    holds both samples and names both zones."""
+    t, f = first(lambda f: "PHIE" in f.inv.curves and joined_zones(f, "PHIE") is not None)
+    a, b = joined_zones(f, "PHIE")
     out = R.runs_output(runs(f, f"PHIE >= {float(np.nanmin(values(f)('PHIE')))}", limit=10_000).text)
-    zones = {z.zone_id: z for z in f.view.zones}
-    for top, base, th, zid in out["listed"]:
-        assert zones[zid].top - 1e-6 <= top and base <= zones[zid].base + 1e-6
+    assert out["of"] == (out["count"], out["count"]) and len(out["listed"]) == out["count"]
+    over = [r for r in out["listed"] if r[0] <= a.base + 1e-6 and r[1] >= b.top - 1e-6]
+    assert len(over) == 1 and {a.zone_id, b.zone_id} <= set(over[0][3]), (a.zone_id, b.zone_id, over)
+    d = np.asarray(f.view.depth, dtype=float)
+    for top, base, th, ids, _ in out["listed"]:                    # each as thick as its samples' share of the gross
+        n = int(((d >= top - 1e-4) & (d <= base + 1e-4)).sum())            # depths are shown to 4 decimals
+        assert R.agrees(th, R.gross(d) * n / d.size), (top, base, th, n)
+
+
+@pytest.mark.data
+def test_t11_thickness_is_first_to_last_sample_and_n_steps_under_the_switch():
+    """The interval's gross and each zone's thickness are first to last sample (base minus top), the reference's span
+    of their samples. Under the cell_thickness switch each sample is its own cell: n samples are n steps, one more."""
+    from petroharness import options
+    for t, f in F():
+        d = np.asarray(f.view.depth, dtype=float)
+        assert abs(f.inv.gross - R.gross(d)) <= 1e-9 * max(1.0, R.gross(d)), t.well
+        assert abs(f.inv.gross - (d.max() - d.min())) <= 1e-9 * max(1.0, f.inv.gross), t.well
+        for z in f.view.zones:
+            assert abs(z.thickness - R.thickness(z, z.n_samples)) <= 1e-9 * max(1.0, z.thickness), (t.well, z.zone_id)
+            assert abs(z.thickness - (z.base - z.top)) <= 1e-9 * max(1.0, z.thickness), (t.well, z.zone_id)
+        with options.use(cell_thickness=True):
+            assert abs(f.view.gross - R.gross(d)) <= 1e-9 * max(1.0, R.gross(d)), t.well
+            if d.size > 1:
+                step = (d.max() - d.min()) / (d.size - 1)
+                assert abs(f.view.gross - (d.max() - d.min()) - step) <= 1e-9 * f.view.gross, t.well
+            for z in f.view.zones:
+                assert abs(z.thickness - R.thickness(z, z.n_samples)) <= 1e-9 * max(1.0, z.thickness), (t.well, z.zone_id)
+                if z.n_samples > 1:
+                    step = (z.base - z.top) / (z.n_samples - 1)
+                    assert abs(z.thickness - z.n_samples * step) <= 1e-9 * max(1.0, z.thickness), (t.well, z.zone_id)
 
 
 @pytest.mark.data
@@ -801,7 +897,7 @@ def test_t11_curve_against_curve():
     out = R.runs_output(runs(f, "NPHI < PHID").text)
     want = R.condition_mask("NPHI < PHID", values(f))
     for z in f.view.zones:
-        assert abs(out["zones"][z.zone_id][1] - 100 * want[z.indices].mean()) <= 0.05
+        assert abs(zone_share(out, z.zone_id) - 100 * want[z.indices].mean()) <= 0.05
 
 
 @pytest.mark.data
@@ -832,11 +928,13 @@ def test_t11_single_equals_is_equality():
 @pytest.mark.data
 def test_t11_names_as_terms():
     t, f = first(lambda f: {"NET_PAY", "PHIE", "RDEP"} <= set(f.inv.curves))
-    a = R.runs_output(runs(f, "NET_PAY and PHIE > 0.1").text)["total"]
+    a = R.runs_output(runs(f, "NET_PAY and PHIE > 0.1").text)
     want = R.condition_mask("NET_PAY and PHIE > 0.1", values(f), lambda c: c in f.view.reg.flags)
-    assert R.agrees(a, sum(R.thickness(z, int(want[z.indices].sum())) for z in f.view.zones))
+    assert R.agrees(a["total"], R.gross(f.view.depth) * int(want.sum()) / want.size)
+    for z in f.view.zones:                                         # and zone by zone, in the zones' convention
+        assert R.agrees(zone_part(a, z.zone_id)[0], R.thickness(z, int(want[z.indices].sum()))), z.zone_id
     cover = runs(f, "RDEP").text
-    assert cover.startswith("Runs where RDEP has a value")
+    assert cover.startswith("Intervals where RDEP has a value")
 
 
 @pytest.mark.data
@@ -1013,7 +1111,7 @@ def test_t12_doubling_doubles_means_and_keeps_rank_correlations():
 def test_t12_a_nan_gap_splits_a_run():
     t, f = first(lambda f: "PHIE" in f.inv.curves)
     base = ref_runs(f, {"condition": f"PHIE >= {float(np.nanmin(values(f)('PHIE')))}"})
-    top, bot, n, th, k = max(base, key=lambda r: r[2])
+    top, bot, n = max(base, key=lambda r: r[2])[:3]
     if n < 5:
         pytest.skip("no run of five samples")
     i = int(np.flatnonzero(np.isclose(f.view.depth, top))[0]) + n // 2
@@ -1032,8 +1130,10 @@ def test_t12_values_at_the_threshold_move_between_lt_and_le():
     t, f = first(lambda f: "SW" in f.inv.curves)
     g = mutate(f, "SW", lambda x: np.where(np.isfinite(x), 0.5, np.nan))
     assert R.runs_output(runs(g, "SW < 0.5").text)["total"] == 0
-    have = sum(R.thickness(z, int(np.isfinite(values(f)("SW")[z.indices]).sum())) for z in f.view.zones)
-    assert R.agrees(R.runs_output(runs(g, "SW <= 0.5").text)["total"], have)
+    le, x = R.runs_output(runs(g, "SW <= 0.5").text), values(f)("SW")
+    assert R.agrees(le["total"], R.gross(f.view.depth) * int(np.isfinite(x).sum()) / x.size)
+    for z in f.view.zones:                                         # and zone by zone, in the zones' convention
+        assert R.agrees(zone_part(le, z.zone_id)[0], R.thickness(z, int(np.isfinite(x[z.indices]).sum()))), z.zone_id
 
 
 @pytest.mark.data
@@ -1094,13 +1194,18 @@ def need_best_zone(f, c):
 
 
 def need_first_last(f, cond):
-    text = runs(f, cond).text
+    """The shallowest top and the deepest base: the first and last interval of the list. A list cut to the thickest
+    names how many there are; the call with that limit lists every one."""
+    out = R.runs_output(runs(f, cond).text)
     want = ref_runs(f, {"condition": cond})
     if not want:
-        return "shallowest" not in text, ("none",)
-    m = re.search(rf"shallowest top ({R.NUM}) \S+ \(Z\d+\); deepest base ({R.NUM})", text)
+        return out["none"] and not out["listed"], ("none",)
+    if out["of"] is not None and out["of"][0] < out["of"][1]:
+        out = R.runs_output(runs(f, cond, limit=out["of"][1]).text)
+    got = (out["listed"][0][0], out["listed"][-1][1]) if out["listed"] else None
     top, base = min(w[0] for w in want), max(w[1] for w in want)
-    return bool(m) and R.agrees(float(m.group(1)), top) and R.agrees(float(m.group(2)), base), (m and m.groups(), top, base)
+    return (got is not None and len(out["listed"]) == len(want) and R.agrees(got[0], top)
+            and R.agrees(got[1], base)), (got, top, base)
 
 
 def need_log_vs_core(f, a, b):

@@ -66,10 +66,10 @@ def _on_interval(f: Formation, depth, flag) -> np.ndarray:
     return (out > 0.5).astype(float)[f.view.mask]
 
 
-def _write(f: Formation, name: str, flag: np.ndarray, meaning: str, step: str) -> None:
+def _write(f: Formation, name: str, flag: np.ndarray, meaning: str, step: str) -> str:
     full = np.full(np.asarray(f.view.prep.depth).size, np.nan)
     full[f.view.mask] = flag
-    register(f, name, full, meaning, "flag", step)
+    return register(f, name, full, meaning, "flag", step)
 
 
 def _runs_text(out: Out, f: Formation, flag: np.ndarray) -> str:
@@ -124,8 +124,7 @@ def held_readings(f: Formation, curves, zones, threshold) -> Result:
         if not flag.any():
             clean.append(c)
             continue
-        name = f"HELD_{c}"
-        _write(f, name, flag, f"{c} held (stuck or padded) reading, Petrophys find_held_readings", "held readings (on request)")
+        name = _write(f, f"HELD_{c}", flag, f"{c} held (stuck or padded) reading, Petrophys find_held_readings", "held readings (on request)")
         vals = np.asarray(f.view.values(c), dtype=float)
         first = [a for a, _ in flag_runs(np.asarray(f.depth, dtype=float), flag)]
         held_at = sorted({round(float(vals[a]), 6) for a in first if np.isfinite(vals[a])})
@@ -190,9 +189,9 @@ def bad_hole(f: Formation, curves, zones, threshold) -> Result:
         if not flag.any():
             out.add(f"  {name}: none here ({what})")
             continue
-        _write(f, name, flag, f"{what} (Petrophys)", "bad hole parts (on request)")
+        written = _write(f, name, flag, f"{what} (Petrophys)", "bad hole parts (on request)")
         out.add(f"  {name}: {row.pct(100.0 * float(flag.mean()))} of the interval ({what}); {_runs_text(row, f, flag)}; "
-                f"by zone: {_zone_shares(row, f, flag, zones)}; written: {name}", row)
+                f"by zone: {_zone_shares(row, f, flag, zones)}; written: {written}", row)
     if "BAD_HOLE" in f.inv.curves:
         rec = np.asarray(f.view.values("BAD_HOLE"), dtype=float)
         row = out.child()

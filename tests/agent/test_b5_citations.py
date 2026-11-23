@@ -1,4 +1,4 @@
-"""The loop's checks L6 and L7: the citation bookkeeping (autocite) and the lookups-per-step limit (loop.ACTIONS),
+"""The loop's checks L6 and L7: the citation bookkeeping (autocite) and the lookups-per-step limit (state.ACTIONS),
 on stub items and the real prompt texts.
 
     .venv/bin/python -m pytest tests/agent/test_b5_citations.py -q
@@ -55,7 +55,7 @@ def test_l6_autocite_three_holders():
 
 @pytest.mark.parametrize('n', [6])
 def test_l7_the_prompt_states_the_limit_the_loop_applies(n):
-    from petroharness.agent.loop import brief, step1 as step1_text
+    from petroharness.agent.prompts import brief, step1 as step1_text
     b = brief()
     step1 = step1_text()                                            # the plugged library's
     assert "{ACTIONS}" not in b and "{ACTIONS}" not in step1

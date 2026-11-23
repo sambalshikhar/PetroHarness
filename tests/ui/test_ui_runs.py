@@ -6,7 +6,6 @@ or show a result other than the one the model read.
     PETROHARNESS_SAMPLE_LAS=<folder of tuhua-7.las> python -m pytest tests/ui -q
 """
 import json
-import os
 import sys
 import threading
 import time
@@ -20,7 +19,7 @@ from ui_stub import StubModel
 
 from petroharness.ui import server as U
 
-SAMPLES = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "sample_las"))   # a folder of sample wells; tests skip without it
+from _wells import SAMPLES  # noqa: E402  (Petrophys's sample files; PETROHARNESS_SAMPLE_LAS for a folder of them)
 LAS, TOPS = SAMPLES / "tuhua-7.las", SAMPLES / "formations_tuhua-7.csv"
 QUESTION = "How does porosity vary in this interval, and how shaly is it?"
 WINDOW = {"mode": "depths", "top": 600, "base": 700, "unit": "m", "name": "test window"}
@@ -183,6 +182,35 @@ def test_a_run_is_listed_rated_and_replayable(ui):
         assert status == 200 and kind.startswith(ctype) and body
 
 
+def test_the_log_viewer_reads_a_run(ui):
+    """The log viewer's two reads of a run (/logview, /logdata): every curve with a value, told apart as measured (in
+    the LAS) or computed by Petrophys; the tracks to start with; a depth window thinned to the points asked for, and in
+    full detail once it is narrow; the whole well beside the interval."""
+    app, c = ui
+    got, events, view = ask(c, WINDOW)
+    rid = got["id"]
+    status, idx = c.json(f"/api/run/{rid}/logview")
+    assert status == 200, idx
+    assert idx["extent"] == "interval" and idx["unit"] == "m" and 600 <= idx["top"] < 601 and 699 < idx["base"] <= 700
+    names = {x["name"]: x for x in idx["curves"]}
+    assert {x["source"] for x in idx["curves"]} == {"LAS", "Petrophys"}            # both kinds, each marked
+    assert names["VCL"]["source"] == "Petrophys" and names["VCL"]["kind"] == "curve" and len(names["VCL"]["scale"]) == 2
+    assert names["NET_PAY"]["kind"] == "flag" and "DEPT" not in names
+    assert any(t["log"] for t in idx["tracks"]) and all(n in names for t in idx["tracks"] for n in t["curves"])
+    assert idx["zones"] and idx["lithology"] and idx["made"]["lithology"]["source"]
+    measured = next(x["name"] for x in idx["curves"] if x["source"] == "LAS" and x["kind"] == "curve")
+    status, coarse = c.json(f"/api/run/{rid}/logdata?top={idx['top']}&base={idx['base']}&points=50&curves={measured},VCL,NET_PAY,NO_SUCH")
+    assert status == 200 and coarse["samples"] == idx["samples"] and coarse["every"] > 1
+    assert len(coarse["depth"]) <= 51 and set(coarse["values"]) == {measured, "VCL", "NET_PAY"}        # an unknown name left out
+    assert all(len(v) == len(coarse["depth"]) for v in coarse["values"].values())
+    status, fine = c.json(f"/api/run/{rid}/logdata?top=650&base=652&points=1500&curves=VCL")
+    assert status == 200 and fine["every"] == 1 and len(fine["depth"]) == fine["samples"] > 5            # every sample
+    assert all(650 <= d <= 652 for d in fine["depth"]) and fine["depth"] == sorted(fine["depth"])
+    status, well = c.json(f"/api/run/{rid}/logview?extent=well")
+    assert status == 200 and well["top"] < idx["top"] and well["base"] > idx["base"] and well["samples"] > idx["samples"]
+    assert c.json(f"/api/run/{rid}/logdata?top=x&base=1")[0] == 400 and c.json(f"/api/run/{rid}/logview?extent=moon")[0] == 400
+
+
 def test_the_queue(env, tmp_path):
     gate = threading.Event()
     app = U.App(tmp_path / "runs", workers=1, model_factory=lambda cfg: StubModel(cfg, gate=gate))
@@ -230,16 +258,16 @@ def test_the_ui_changes_no_prompt(env):
 def test_the_results_shown_are_the_ledger_items(env, monkeypatch):
     """Each opened result the page shows is the ledger's item as the model read it: its whole text, or its digest
     when the model only ever saw that."""
-    from petroharness.agent import loop
+    from petroharness.agent import state as ST
     from petroharness.ui.progress import Observed
     sessions, clients = [], []
-    build = loop.Session.build
+    build = ST.Session.build
 
     def capture(task, cfg):
         s = build(task, cfg)
         sessions.append(s)
         return s
-    monkeypatch.setattr(loop.Session, "build", staticmethod(capture))
+    monkeypatch.setattr(ST.Session, "build", staticmethod(capture))
 
     def factory(cfg):
         clients.append(Observed(StubModel(cfg), lambda e: None))
@@ -260,12 +288,8 @@ def test_the_results_shown_are_the_ledger_items(env, monkeypatch):
 class FigureStub(StubModel):
     """The stand-in model, choosing the first candidate figure when asked."""
 
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        if stage == "figures":
-            with self._lock:
-                self.sent.append({"stage": stage, "messages": json.loads(json.dumps(messages))})
-            return '{"figures": ["F1"]}'
-        return super().chat(stage, messages, usage, max_tokens, json_schema, temperature, retry)
+    def reply(self, stage, messages):
+        return '{"figures": ["F1"]}' if stage == "figures" else super().reply(stage, messages)
 
 
 def test_a_follow_up_is_the_next_question_of_the_runs_conversation(env, tmp_path):

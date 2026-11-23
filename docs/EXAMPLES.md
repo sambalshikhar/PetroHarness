@@ -23,7 +23,7 @@ w() { python -c "import petrophys, sys; print(petrophys.sample(sys.argv[1]))" "$
 ```
 
 Every answer also comes with its trace: each step, the results the model opened and how every number in the answer
-was computed ([Evidence and audit](EVIDENCE.md)).
+was computed ([Audit an answer](EVIDENCE.md)).
 
 ## 1. Two formations inside a group
 

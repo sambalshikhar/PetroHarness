@@ -90,6 +90,11 @@ def resolve_interval(well: str, formation: str, tops_csv: Path, columns: dict[st
     if hit.empty:
         known = ", ".join(sorted(rows["name"].unique()))
         raise FormationNotFound(f"top {formation!r} not found for well {well!r}; known tops: {known}")
+    if len(hit) > 1:                                 # as the tops-file reader reads a name listed twice
+        at = ", ".join(f"{float(t):g}" for t in sorted(hit["top"]))
+        raise ValueError(f"WHAT: the settings' tops table {Path(tops_csv).name} lists {name} {len(hit)} times for well "
+                         f"{well!r} (tops at {at}). WHY: a name listed more than once is not one stretch. FIX: give the "
+                         "interval by its depths (--top and --base), or give each listing its own name in the table.")
     top = float(hit["top"].min())
     deeper = sorted(t for t in rows["top"].unique() if t > top)
     return Interval(formation=name, top=top, base=float(deeper[0]) if deeper else None)
@@ -98,6 +103,14 @@ def resolve_interval(well: str, formation: str, tops_csv: Path, columns: dict[st
 def interval_from_tops(well: str, formation: str, data: "DataPaths") -> Interval:
     """`resolve_interval` with the tops table, column names and top-name pattern of the data paths (DataPaths)."""
     return resolve_interval(well, formation, data.tops_csv, data.tops_columns, data.top_name_pattern)
+
+
+def cell_span(top: float, base: float, n: int) -> float:
+    """The thickness of n samples from top to base (the first and last sample's depths): base - top, or under the
+    cell_thickness switch n steps of regular sampling, as Petrophys counts thickness (each sample its own cell)."""
+    from petroharness import options
+    span = base - top
+    return span * n / (n - 1) if n > 1 and options.get().cell_thickness else span
 
 
 @dataclass
@@ -113,7 +126,8 @@ class Zone:
 
     @property
     def thickness(self) -> float:
-        return self.base - self.top
+        """First to last sample; under cell_thickness, Petrophys's rule: each sample its own cell (n samples, n steps)."""
+        return cell_span(self.top, self.base, self.n_samples)
 
 
 @lru_cache(maxsize=4)
@@ -242,6 +256,34 @@ def find_lithology_curve(curve: Callable[[str], Optional[np.ndarray]], las_curve
         raise ValueError(f"WHAT: this LAS has several lithology logs ({', '.join(found)}). WHY: the zones come from "
                          "one. FIX: name it in data.lithology_curve.")
     return found[0] if found else None
+
+
+def solver_lithology(steps: dict, well) -> Optional[dict]:
+    """The lithology Petrophys's workflow solved when the well had no lithology log: its lithology step's code curve
+    (the output that carries Petrophys's category labels: the mineral solver's dominant mineral per sample) with its
+    code table (code -> upper-case label; Petrophys's "unknown", a sample the solver could not call, is no
+    lithology), and how the step made it as its record says (method, domain, input curves, decisions, samples
+    solved). None: the step wrote no such curve, or it has no value."""
+    step = (steps or {}).get("lithology") or {}
+    params = step.get("parameters") or {}
+    if not params.get("lithology_curve_written"):
+        return None
+    for name in step.get("outputs") or []:
+        c = well.get(name) if well is not None else None
+        labels = ((getattr(getattr(c, "metadata", None), "custom", None) or {}).get("category_labels")
+                  if c is not None else None)
+        if not labels or not np.isfinite(np.asarray(c.data, dtype=float)).any():
+            continue
+        from petroharness.well.prepare import lithology_domain
+        table = {int(k): (MISSING_LITHOLOGY if str(v).strip().lower() == "unknown" else str(v).upper())
+                 for k, v in labels.items()}
+        net_pay = ((steps or {}).get("net_pay") or {}).get("parameters") or {}
+        return {"curve": name, "table": table, "method": str(step.get("method") or ""),
+                "domain": str(params.get("lithology_domain") or lithology_domain(net_pay)),
+                "inputs": [str(x) for x in step.get("inputs") or []],
+                "decisions": [str(x) for x in step.get("decisions") or []],
+                "solved": params.get("multi_mineral_solved_samples"), "samples": params.get("multi_mineral_total_samples")}
+    return None
 
 
 def vcl_band_labels(vcl: np.ndarray, bands=(0.3, 0.6)) -> np.ndarray:

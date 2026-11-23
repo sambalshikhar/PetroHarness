@@ -183,7 +183,7 @@ def bind(f, function: str) -> tuple | None:
       - numbers (Petrophys declares the parameter a value): DISPLAY_MEDIANS' line the display draws, else the
         record's parameter of that name, else Petrophys' default."""
     from petrophys import function_schema
-    from petroharness.agent import library_api as A
+    from petroharness.agent.library import api as A
     fn = _function(function)
     decl = function_schema.declaration(fn)
     kinds = dict(decl.parameters) if decl else {}

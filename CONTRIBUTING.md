@@ -32,10 +32,10 @@ No model server is needed to run the tests. To ask a question you need one
 | A plot | Petrophys (`petrophys.visualization`) | The plot, in Petrophys, then one line in `DISPLAYS` in `src/petroharness/figures.py`. The harness draws nothing itself |
 | Guidance for the model on a topic (how an expert works a kind of question) | A skill library ([docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), "The skill library") | A guide folder: text and recipes, no code |
 | Support for a model | A model card ([docs/MODELS.md](docs/MODELS.md)) | A YAML file of request settings |
-| Something that reads an answer: an export, a check list, a table | The session graph ([docs/SESSION_GRAPH.md](docs/SESSION_GRAPH.md)) | A node after `turn`, with its route. It cannot change an answer |
+| Something that reads an answer: an export, a check list, a table | The session graph ([docs/GRAPH.md](docs/GRAPH.md#the-session-graph)) | A node after `turn`, with its route. It cannot change an answer |
 | Something that needs what an answer rests on | The evidence graph ([docs/EVIDENCE.md](docs/EVIDENCE.md)) | A reader of `EvidenceGraph`, or a new node or link kind built from the session log |
-| A change to how a later question of a conversation is answered | The later-question graph ([docs/SESSION_GRAPH.md](docs/SESSION_GRAPH.md)) | A node or a route |
-| A change to how the first question is answered | The question graph ([docs/GRAPH.md](docs/GRAPH.md)) | A measured change: see below |
+| A change to how a later question of a conversation is answered | The later-question graph ([docs/GRAPH.md](docs/GRAPH.md#the-later-question-graph)) | A node or a route |
+| A change to how the first question is answered | The question graph ([docs/GRAPH.md](docs/GRAPH.md#the-question-graph)) | A measured change: see below |
 
 Science goes into Petrophys. The harness decides what to compute, records it and checks the answer; it does not
 compute petrophysics (`tests/test_petrophys_integration.py` enforces this).
@@ -80,3 +80,4 @@ The full list with reasons is in [AGENTS.md](AGENTS.md). The ones a first contri
 - `ruff check src tests` and `pytest tests -q` pass.
 - The description says what the change is for, which gate you ran, and, for a behaviour change, what you measured.
 - New user-facing behaviour comes with its page in `docs/`.
+- A contribution is released under the repository's licence, CC BY 4.0 ([LICENSE](LICENSE)).

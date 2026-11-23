@@ -140,7 +140,8 @@ Taranaki Basin Curated Well Logs Dataset (New Zealand Petroleum & Minerals), CDL
 <details>
 <summary>The options, in detail</summary>
 
-- **Lithology curve:** detected by default; with none, the zones are shale-volume bands.
+- **Lithology curve:** detected by default; with none, the zones are runs of the lithology Petrophys's mineral solver
+  gives; with neither, shale-volume bands.
 - **The formation's lithology** as you know it: it reaches the model with the question, marked as your statement.
 - **Context profile:** a Petrophys context profile, for wells of a known context package.
 - **Skill library:** the packaged one, none, or a library folder.
@@ -204,7 +205,7 @@ there and at *Ask*. The run records the settings it ran with, and later question
 <summary>The groups and defaults, in detail</summary>
 
 - **Zones:** the minimum zone thickness (in the well's depth unit), the shale-volume band edges that zone a well
-  without a lithology log, and one zone for the whole interval.
+  with neither a lithology log nor a solved lithology, and one zone for the whole interval.
 - **Clay volume:** the GR method and endpoints, SP. **Porosity and matrix:** matrix, ρma, matrix neutron, Δtma,
   fluid. **Formation water:** Rw, salinity. **Water saturation:** the model; a, m, n; the shaly-sand parameters.
   **Permeability**, **Net reservoir and pay** (the cutoffs), **Temperature**, **Mud**, **Lithology** and **Input
@@ -220,6 +221,10 @@ there and at *Ask*. The run records the settings it ran with, and later question
 
 Every setting: [Interpretation settings](reference/INTERPRETATION_SETTINGS.md).
 </details>
+
+The start page says how every well is interpreted: Petrophys's default dynamic workflow (shale volume, porosity,
+lithology, water saturation, permeability, net pay), with a link to the interpretation settings for changing how
+before you ask.
 
 ## Following a run
 
@@ -240,37 +245,77 @@ median time of this server's answered runs of that kind, as "About N min left: i
 
 ## Reading the answer
 
-The run opens on **Interpretation**, which tells the run as a petrophysicist reads a report, conclusion first:
+The run opens on **Interpretation**, one column read top to bottom: the well, the work as it happens, then the answer.
 
-1. **The answer:** its opening sentences, the findings by confidence, the results computed, and the checker's outcome
-   (every number traced to a computed result, or not). The questions of the conversation are listed above it, and its
-   **figures**, drawn by Petrophys, follow right under it. When the harness told the model something under the
-   question, the answer starts with a **Before you read:** strip (*The Interpretation page, in detail*, below).
-2. **The well:** the interval as Petrophys interpreted it, as a log plot with the zones, and the zone table; the zones
-   the answer names most are marked.
-3. **How the answer was reached:** the parts the model split the question into, each with its findings, the zone
+1. **The well:** the interval as Petrophys interpreted it, as a log plot with the zones; the zones the answer names
+   most are marked. Under the plot, **How the lithology zones were made**: how Petrophys ran (its dynamic workflow
+   with its default settings, or the settings you changed), its steps in order with the one the zones come from
+   marked, and a flow from the curves to the zones. A well with its own lithology log is zoned by it; a well without
+   one by the lithology Petrophys's mineral solver gives (the input curves, the solver's domain and method, the
+   samples it solved, and its record's decisions in its own words); a well with neither by shale-volume bands. Then a
+   question about the lithology: for a solved lithology, whether it is right, with buttons that ask the question
+   again with the solver's domain changed (*It is a carbonate*, *It is clastic*, *Let the logs decide*); in the
+   clastic domain, Petrophys's default, a carbonate's limestone can come out as sandstone. Zones read from a
+   lithology are called **lithology zones**; zones of shale-volume bands, and your own zones, are named as such. The
+   **lithology zone table** and the **lithology** summary (each lithology's zones, thickness and share of the zoned
+   thickness) open from the two buttons under them.
+2. **The work:** one line per model call, in order (reading the question, each investigation step, settling the
+   findings, writing the answer, the checker's repairs), with its time, what it came back with, and the last lines
+   of the model's reasoning for that call; *All of its reasoning* opens the whole of it. These grey lines are the
+   model's working notes: shown as the server returned them and never checked. The checked part is the answer. While
+   the run goes on, the call in flight streams: its reasoning comes in line by line as the model writes it
+   (*Thinking · 1,184 characters*), then *Writing the reply* with its length, with the call's time so far. Once the
+   answer is in, the work folds to one line (*Worked 12 min · 11 model calls · 6 steps*), which opens it again.
+3. **The answer:** its opening sentences, the findings by confidence, the results computed, and the checker's outcome
+   (every number traced to a computed result, or not). The questions of the conversation are listed above the run, and
+   the answer's **figures**, drawn by Petrophys, follow right under it. When the harness told the model something
+   under the question, the answer starts with a **Before you read:** strip (*The Interpretation page, in detail*,
+   below).
+4. **How the answer was reached:** the parts the model split the question into, each with its findings, the zone
    values they rest on, why they matter and what could change them.
-4. **What limits this answer.**
-5. **The whole written answer.** Click a number to see every computed result that shows it, or a zone to find it on
+5. **What limits this answer.**
+6. **The whole written answer.** Click a number to see every computed result that shows it, or a zone to find it on
    the logs. Then rate the answer (good, partly or wrong) with a note.
 
 ![An answer on the Interpretation page](images/ui-30_6-5-brent-answer.png "Question 1 on GeoLink 30/6-5, Brent Group, done after 15 min 29 s: the phase bar, the tabs, and the answer's opening with its findings by confidence, the 10 computed results it rests on and the checker's outcome (here, its last findings stand). Numbers and zones in the answer are links.")
 
 | Tab | What it holds |
 |---|---|
-| **Well logs** | the full plot, track by track, each curve marked measured (LAS) or computed by Petrophys; read every curve at a depth, pick a zone, zoom 2x or 4x; and Petrophys's own log viewer of the interval |
+| **Well logs** | the full plot, track by track, each curve marked measured (LAS) or computed by Petrophys; read every curve at a depth, pick a zone, zoom 2x or 4x; **Open the log viewer** (below); and Petrophys's own log viewer of the interval |
 | **Evidence** | by question part, each claim with its grade, what weakens it, the code's checks and the results it rests on; *All results* lists every result the model read, with a filter |
 | **Investigation log** | the run as it happened: every stage, each step's focus, the results it opened, its claims, the settle step, the writer and the checker's rounds |
 | **Details** | steps, model calls, tokens, time; the interval and its zones; the topics, measurements and skills used; the data settings and the Petrophys version; the inputs |
 
 `answer.md` and `trace.json` open from the run's header.
 
+### The log viewer
+
+Every log plot has its own buttons in its top bar: **−**, **Zoom** and **+** zoom the plot on depth inside its frame
+(scroll the plot to move; **Zoom** shows the level and goes back to the whole interval), and **⤢ Expand** opens the log viewer, which shows the logs full screen, as a log-viewing
+program does:
+
+- **Depth:** scroll or drag to move, Ctrl + scroll or the + and − keys to zoom, double-click to zoom in, *Zoom* for all
+  of it. The strip on the left is the whole extent with the part on screen marked; click or drag in it to jump. Click
+  a zone in the lithology column to zoom to it. Zoomed in, the curves are drawn from every sample; zoomed out, from
+  every n-th (the bar says which).
+- **The interval or the whole well:** the question's interval, or the well from its first sample to its last, with
+  its zones.
+- **Measured or computed:** every curve carries a tag, **LAS** (measured: in the LAS file) or **PP** (computed by
+  Petrophys), in the track heads and in the curve list, which lists the two apart. *Measured · LAS* and *Computed ·
+  Petrophys* in the bar show one kind only.
+- **Curves and tracks:** the panel on the right lists the tracks on screen and every curve with a value here. Click a
+  curve to add it as a new track, or to a track chosen under *Add to*; click it again, or its ✕, to take it off. A
+  track switches between a linear and a log scale, and each curve's left and right edge values can be typed in.
+- **Read-out:** move over the logs to read every curve on screen at a depth, with its zone and the flags set there.
+
+The viewer changes no result: it draws the well as Petrophys interpreted it for this run.
+
 ### How it was computed
 
 Under the figures, a graph draws what the answer rests on, left to right: the measured logs, the Petrophys steps
 that computed its curves (with key parameters such as Archie's a, m, n and Rw), the results the model opened, the
 findings and the answer. Click a box to light up its path, or a number in the answer to follow it back to the measured
-logs. It is drawn from the conversation's evidence graph ([Evidence and audit](EVIDENCE.md)).
+logs. It is drawn from the conversation's evidence graph ([Audit an answer](EVIDENCE.md)).
 
 ![How it was computed](images/ui-30_6-5-brent-lineage.png "How it was computed, for that answer: the measured logs, the Petrophys steps that computed its curves with their key parameters, the results the model opened, the findings and the answer. Clicking 2841.0 in the answer lit its path: it appears in E1, E4 and E5, and the steps behind their curves.")
 
@@ -282,6 +327,10 @@ Under the written answer: **Methods and parameters this answer rests on** (read 
 
 - **The well** plots gamma ray, resistivity, density and neutron, shale volume, porosity, water saturation,
   permeability, the pay flags, the lithology column and the zones.
+- **The work** reads each call's reply as the Investigation log does (a step's focus, its parts, its finding edits,
+  the results it opened, its next actions; the settle step's edits; the writer's length). The reasoning comes from the
+  model server's reasoning field; a server that returns none shows the lines without it, as do runs saved before the
+  reasoning was kept.
 - **A finding** gives its confidence and its reading, a chart of the zone values it rests on for each curve it names
   (with the net-pay step's cutoff, and the zones it names marked), why it matters, what could change it, and a link to
   the computed results it rests on. While the run goes on, the parts fill in with the model's working readings.

@@ -6,6 +6,7 @@ from __future__ import annotations
 import inspect
 import json
 import re
+from typing import Optional
 
 from petroharness.agent import components as C  # the texts: src/petroharness/agent/components
 from petroharness.agent import engine as E
@@ -21,14 +22,32 @@ def named() -> list:
     return TOOLSET.schemas()
 
 
-_NUMERIC = {"limit": int, "min_thickness": float, "max_thickness": float, "tolerance": float, "threshold": float, "k": float,
-            "min_change": float, "window": int, "max_lag": float, "vcl_max": float, "phie_min": float,
-            "vcl_cutoff": float, "phie_cutoff": float, "sw_cutoff": float, "rmf": float, "rmf_temp_f": float,
-            "bht_f": float, "td": float}
+_NUMBER = re.compile(r"\s*[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?\s*")
+_FLAGS = {"true": True, "yes": True, "1": True, "false": False, "no": False, "0": False}
+_DOOR = {"zones": "names", "where": "text", "by": "text", "label": "text"}   # what the call door reads, for any tool
 
 
-def arguments(raw) -> dict:
-    """The model's arguments as a dict: JSON text or a dict; empty values dropped; numbers sent as text read as numbers."""
+def kinds(tool: Optional[str]) -> dict:
+    """What each argument of a tool takes, from its schema (Tool.arguments): "integer" or "number" (a number sent as
+    text is read as one), "names" (a list of names; one name as text is a list of one), "text" (a string; text sent as
+    a list of one is that text), "flag" (true or false, also written as text); and the call door's own arguments."""
+    t = TOOLSET.get(tool) if tool else None
+    out = dict(_DOOR)
+    for k, sc in (t.properties() if t is not None else {}).items():
+        ty = sc.get("type")
+        if ty in ("integer", "number"):
+            out[k] = ty
+        elif ty in ("string", "boolean"):
+            out[k] = "text" if ty == "string" else "flag"
+        elif ty == "array" and (sc.get("items") or {}).get("type") == "string":
+            out[k] = "names"
+    return out
+
+
+def arguments(raw, tool: Optional[str] = None) -> dict:
+    """The model's arguments for `tool` as a dict: JSON text or a dict; empty values dropped; each read as the tool's
+    schema says (kinds): numbers sent as text as numbers, one name as a list, a list of one text as that text, true or
+    false written as text as a flag."""
     if isinstance(raw, str):
         try:
             raw = json.loads(raw) if raw.strip() else {}
@@ -36,12 +55,15 @@ def arguments(raw) -> dict:
             raise ToolError(f"the arguments are not JSON ({e.msg}); send an object such as {{\"curves\": [\"PHIE\"]}}") from None
     if not isinstance(raw, dict):
         raise ToolError("the arguments must be an object of named values")
-    out = {}
+    out, kind = {}, kinds(tool)
     for k, v in raw.items():
         if v is None or v == [] or (isinstance(v, str) and v.strip().lower() in ("", "null", "none")):
             continue
-        if k in _NUMERIC and isinstance(v, str) and re.fullmatch(r"\s*[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?\s*", v):
-            v = _NUMERIC[k](float(v))
+        number = kind.get(k) in ("integer", "number")
+        if number and isinstance(v, str) and _NUMBER.fullmatch(v):
+            v = (int if kind[k] == "integer" else float)(float(v))
+        if kind.get(k) == "flag" and isinstance(v, str) and v.strip().lower() in _FLAGS:
+            v = _FLAGS[v.strip().lower()]                   # "false" is false, not a non-empty text
         if k == "zones" and isinstance(v, bool):              # every zone (fit reads it)
             out[k] = v
             continue
@@ -49,7 +71,7 @@ def arguments(raw) -> dict:
             continue
         if k == "zones" and isinstance(v, int):                # one zone by its number
             v = [v]
-        if k in _LISTS:                                     # a list of names: one name as text is a list of one
+        if kind.get(k) == "names":                          # a list of names: one name as text is a list of one
             if isinstance(v, str) and v.strip().startswith("["):    # a list written as JSON text
                 try:
                     v = json.loads(v)
@@ -58,22 +80,25 @@ def arguments(raw) -> dict:
             if isinstance(v, str):
                 v = [x.strip() for x in v.split(",") if x.strip()]
             if not isinstance(v, list) or not all(isinstance(x, (str, int)) and not isinstance(x, bool) for x in v):
-                raise ToolError(f"{k} must be a list of names, e.g. {_LISTS[k]}, not {v!r}")
+                raise ToolError(f"{k} must be a list of names, e.g. {_LISTS.get(k, _ANY_NAMES)}, not {v!r}")
             if k == "statistics" and [str(x).lower() for x in v] in (["all"], ["*"]):
                 continue                                    # "all": the default set
         elif k == "curve" and isinstance(v, list) and v and all(isinstance(x, str) for x in v):
             pass                                            # several curves where one belongs: fit reads it per tool
-        elif k in _TEXTS and isinstance(v, list) and len(v) == 1 and isinstance(v[0], str):
+        elif kind.get(k) == "text" and isinstance(v, list) and len(v) == 1 and isinstance(v[0], str):
             v = v[0]                                        # text sent as a list of one: that text (the mirror of a
-            #                                                 list's one name sent as text; question suite B10)
+            #                                                 list's one name sent as text)
         elif k in _TEXTS and not isinstance(v, str):
             raise ToolError(f"{k} must be text, e.g. {_TEXTS[k]}, not {v!r}")
-        elif k in _NUMERIC and (isinstance(v, bool) or not isinstance(v, (int, float))):
+        elif number and (isinstance(v, bool) or not isinstance(v, (int, float))):
             raise ToolError(f"{k} must be a number, not {v!r}")
+        elif kind.get(k) == "flag" and not isinstance(v, bool):
+            raise ToolError(f"{k} must be true or false, not {v!r}")
         out[k] = v
     return out
 
 
+_ANY_NAMES = '["..."]'
 _LISTS = {"curves": '["PHIE", "SW"]', "zones": '["Z1", "Z3"]', "statistics": '["mean", "median"]', "inputs": '["VCL", "PHIE"]'}
 _TEXTS = C.text("C4", "argument_texts")
 
@@ -90,6 +115,18 @@ _SCOPE_WORDS = {"all", "whole", "entire", "every", "each", "full", "both", "pool
                 "lithology", "zoned", "gross", "thickness", "always", "everywhere", "incl", "including", "inclusive"}
 _ASIDES = ("find", "reason", "note", "notes", "purpose", "why", "comment", "intent")    # words about a call, not arguments
 _ZONE_RANGE = re.compile(r"^Z(\d+)\s*(?:-|–|to|\.\.|…)\s*Z?(\d+)$", re.I)
+_ZONES_WRITTEN = re.compile(r"\bZ(\d+)(?:\s*(?:-|–|to|\.\.|…)\s*Z?(\d+))?\b", re.I)    # Z2, Z1-Z5, Z5 to Z2
+
+
+def _zone_span(a, b) -> list:
+    """The zones of a range, its ends in either order ("Z5-Z2" is Z2 to Z5); [] for one too long to be zones."""
+    lo, hi = sorted((int(a), int(b)))
+    return [f"Z{i}" for i in range(lo, hi + 1)] if hi - lo < 200 else []
+
+
+def zones_written(text: str) -> list:
+    """The zone ids a text names, in order, a range given as each of its zones ("Z1-Z3 and Z7": Z1, Z2, Z3, Z7)."""
+    return list(dict.fromkeys(z for m in _ZONES_WRITTEN.finditer(text) for z in _zone_span(m.group(1), m.group(2) or m.group(1))))
 
 
 def _zone_list(v):
@@ -106,8 +143,8 @@ def _zone_list(v):
             continue
         t = str(z).strip()
         m = _ZONE_RANGE.match(t)
-        if m and 0 <= int(m.group(2)) - int(m.group(1)) < 200:
-            out += [f"Z{i}" for i in range(int(m.group(1)), int(m.group(2)) + 1)]
+        if m and _zone_span(*m.groups()):
+            out += _zone_span(*m.groups())
             continue
         m = re.match(r"^(Z\d+)\b[\s(]", t + " ", re.I)
         out.append(m.group(1).upper() if m else t)
@@ -124,7 +161,6 @@ _STAT_PHRASE = re.compile(r"\b(" + "|".join(sorted((k.replace("_", r"\s+") for k
 
 
 _DEFAULT_WORDS = ("default", "none", "null", "")
-_NO_COUNT = ("lithology_stats",)                           # the workflow's table has no count statistic (it shows n anyway)
 
 
 def _plain_args(name: str, a: dict) -> None:
@@ -137,7 +173,8 @@ def _plain_args(name: str, a: dict) -> None:
     if isinstance(st, list):
         two = lambda v: _STAT_PHRASE.sub(lambda m: re.sub(r"\s+", "_", m.group(1)), v)   # one name
         st = [x for v in st for x in (re.split(r"[,;\s]+", two(v).strip()) if isinstance(v, str) else [v]) if x != ""]
-        if name in _NO_COUNT:
+        t = TOOLSET.get(name)
+        if t is not None and t.table:                         # a computed table shows n anyway: no count asked of it
             st = [x for x in st if str(x).strip().lower() not in ("n", "count")]
         if st:
             a["statistics"] = st
@@ -168,7 +205,7 @@ def fit(name: str, args: dict) -> dict:
     if isinstance(a.get("where"), str):
         w = a["where"].strip()
         words = re.findall(r"[A-Za-z_]+\d*", w)
-        zids = [x.upper() for x in words if re.fullmatch(r"[Zz]\d+", x)]
+        zids = zones_written(w)
         scope = [x for x in words if not re.fullmatch(r"[Zz]\d+", x)]
         if w.lower() in _NO_CONDITION or (not re.search(r"[<>=]", w) and words
                                           and all(x.lower() in _SCOPE_WORDS for x in scope)):
@@ -191,12 +228,13 @@ def fit(name: str, args: dict) -> dict:
         if len(a["curve"]) != 1:
             raise ToolError(f"{name} takes one curve, not {len(a['curve'])}; stats takes several")
         a["curve"] = a["curve"][0]
-    if name == "overlap" and ("a" not in a or "b" not in a):                   # the two conditions as a list
+    pair = TOOLSET[name].pair if name in TOOLSET else ()
+    if pair and (pair[0] not in a or pair[1] not in a):                      # the tool's two arguments as a list
         pair_ = next((a.pop(k) for k in ("conditions", "curves", "condition") if isinstance(a.get(k), list)
                       and len(a[k]) == 2), None)
         if pair_ is not None:
-            a.setdefault("a", str(pair_[0]))
-            a.setdefault("b", str(pair_[1]))
+            a.setdefault(pair[0], str(pair_[0]))
+            a.setdefault(pair[1], str(pair_[1]))
     if name == "runs":
         if isinstance(a.get("where"), str) and "condition" not in a:            # the condition given as where
             a["condition"] = a.pop("where")
@@ -210,9 +248,6 @@ def fit(name: str, args: dict) -> dict:
     return a
 
 
-from petroharness.agent.selection import WHOLE_WELL as WHOLE_WELL_TOOLS   # zones do not apply (dropped, said)
-
-
 def _verb_run(name: str) -> bool:
     """A verb over Petrophys (its run reaches every Petrophys function it serves)."""
     from petroharness.agent.toolset import TOOLSET
@@ -223,11 +258,11 @@ def _verb_run(name: str) -> bool:
 def _tool_named(name: str, raw):
     """A verb asked for one of the other tools by name where its object belongs ({"check": {"what":
     "threshold_exceedance", ...}}: the tool is listed under the verb's own heading): (that tool, the call's other
-    arguments); None otherwise. Benchmark N3/N4 and question suite B05: the count asked was refused as "no check"."""
+    arguments); None otherwise (before, the count asked was refused as "no check")."""
     if not (_verb_run(name) and isinstance(raw, dict)):
         return None
-    from petroharness.agent.library_api import _objects
-    a = arguments(raw)
+    from petroharness.agent.library.api import _objects
+    a = arguments(raw, name)
     for k in ("what", "property", "parameter", "run"):          # run: {"calibrate": {"run": "core_vs_log"}} (N6: 4)
         v = a.get(k)
         if isinstance(v, str) and v.strip() in TOOLS and v.strip() != name and v.strip() not in _objects(name):
@@ -251,7 +286,7 @@ def call(f: Formation, name: str, raw) -> Result:
     if getattr(f.view, "reach", "focus") == "well" and isinstance(raw, dict) and raw.get("where") is not None:
         from petroharness.agent import selection
         selection.where_names_stretches(f, raw["where"], raw.get("zones"))   # a stretch written as a condition: zones
-    args = fit(name, arguments(raw))
+    args = fit(name, arguments(raw, name))
     original = f                                             # the question's formation (what any call writes reaches it)
     merged = []                                              # the union's notes (selection.resolve)
     frame = args.pop("by", None)                             # by lithology: the lithology zones under the user's
@@ -260,12 +295,12 @@ def call(f: Formation, name: str, raw) -> Result:
         f = selection.by(f, frame)
     params = [p for p in inspect.signature(fn).parameters if p != "f"]
     if (args.get("zones") and getattr(f.view, "reach", "focus") == "well" and ("zones" not in params or args.get("run"))
-            and name not in WHOLE_WELL_TOOLS):
+            and TOOLSET.stretch(name) != "whole_well"):     # zones do not apply to it: dropped, said
         # a tool that does not read zones itself, or a verb's run: it computes on the selection, focus zones included
         # (a tool that reads the workflow's results for the focus: focus zones as today, elsewhere refused)
         from petroharness.agent import selection
         on, _ = selection.resolve(f, args["zones"])
-        if not (on is f and name in selection.FOCUS_ONLY):
+        if not (on is f and TOOLSET.stretch(name) == "focus_only"):
             selection.refuse_focus_only(name, f)
             on, _ = selection.resolve(f, args["zones"], force=True, notes=merged)
             f, args = on, {k: v for k, v in args.items() if k != "zones"}
@@ -281,7 +316,7 @@ def call(f: Formation, name: str, raw) -> Result:
     unknown = [a for a in args if a not in params]
     args = {k: v for k, v in args.items() if k in params}
     if args.get("zones"):                                    # a unit or a depth range anywhere in the well: the call
-        from petroharness.agent import selection             # runs on that selection (docs/designs/zones-and-intervals.md)
+        from petroharness.agent import selection             # runs on that selection (docs/ARCHITECTURE.md)
         on, zones = selection.resolve(f, args["zones"], notes=merged)
         if on is not f:
             selection.refuse_focus_only(name, f)
@@ -337,7 +372,7 @@ def advice(names: list, name: str, params: list, args: dict) -> str:
     takes = [p for p in params if p not in ("parameters",)]
     if isinstance(args.get("run"), str):                     # a Petrophys function run by name: its own inputs too
         try:
-            from petroharness.agent.library_api import lookup
+            from petroharness.agent.library.api import lookup
             takes += [p for p in lookup(args["run"]).params if p not in takes]
         except Exception:  # noqa: BLE001  (an unknown function: the tool's own arguments)
             pass

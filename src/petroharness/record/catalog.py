@@ -3,81 +3,19 @@ class runs, flags, relations), each a petrophys call or a listed generic data op
 
 from __future__ import annotations
 
-from typing import Any, Callable, Literal, Optional, Union
-
-
-import re
-
+from typing import Callable, Optional
 import numpy as np
-from pydantic import BaseModel, Field
-
-from petroharness.well.calculations import calculations
-from petroharness.record.card import cutoff_fact, invasion_route, last_step, recorded_inputs, sxo_route
+from petroharness.record.card import cutoff_fact, last_step, recorded_inputs, sxo_route
 from petroharness.well.stats import statistic
 from petroharness.well import summary as S
-from petrophys.evaluation.net_pay import lithology_in  # noqa: F401  (petrophys; re-exported for the confidence rules)
 from petroharness.well.view import FormationView, fmt, fmt_depth, fmt_pct, sig
-
-# geometric and harmonic means (over the positive samples, petrophys curve_statistics) for log-normal curves such as
-# permeability; the third-power average and the mode, the rest of the statistics the workflow of record reports per
-# group. Lookups ask for them, so every summarising lookup offers them.
-STATS = ("mean", "median", "min", "max", "std", "var", "max_abs", "p10", "p25", "p50", "p75", "p90", "iqr",
-         "geometric_mean", "harmonic_mean", "third_power_average", "mode")
-NOT_EXPORTED = "computed from the log samples of this interval"
-
-
-class EvidenceError(ValueError):
-    pass
-
-
-
-class Evidence(BaseModel):
-    id: str
-    call: str
-    args: dict[str, Any]
-    title: str
-    columns: list[str] = Field(default_factory=list)
-    rows: list[list[Union[str, float, int, None]]] = Field(default_factory=list)
-    facts: list[str] = Field(default_factory=list)
-    values: list[float] = Field(default_factory=list)   # every number shown, for the verifier
-    coefficients: list[tuple[float, int]] = Field(default_factory=list)   # sample-level coefficients shown, with n
-    runs: list[dict[str, Any]] = Field(default_factory=list)   # flagged_runs: every run, for the code-composed block
-
-    def render(self) -> str:
-        out = [f"[{self.id}] {self.title}"]
-        if self.columns:
-            out.append(" | ".join(self.columns))
-            for r in self.rows:
-                out.append(" | ".join("n/a" if v is None else (fmt(v) if isinstance(v, float) else str(v)) for v in r))
-        out.extend(f"- {f}" for f in self.facts)
-        return "\n".join(out)
+from petroharness.record.result import Evidence, EvidenceError, _runs, flag_runs  # noqa: F401  (callers import them from the catalog)
+from petroharness.record.analyzers import _net_rock_status, sample_labels, section_summaries, zone_classes_raw
 
 
 def _stat(x: np.ndarray, name: str) -> float:
     """One statistic of a curve's finite samples, from petrophys (petroharness.well.stats)."""
     return statistic(x, name)
-
-
-_WHERE = re.compile(r"^\s*([A-Za-z_]+)\s*(<=|>=|==|!=|=|<|>)\s*(p\d{1,2}|-?\d+(?:\.\d+)?)\s*$")
-
-
-def _where_mask(view: FormationView, where: Optional[str]) -> tuple[np.ndarray, str]:
-    """Sample mask for a simple condition 'CURVE OP VALUE' where VALUE is a number or pNN of that curve."""
-    n = int(view.mask.sum())
-    if not where:
-        return np.ones(n, dtype=bool), ""
-    m = _WHERE.match(where)
-    if not m:
-        raise EvidenceError(f"WHAT: cannot read where={where!r}. FIX: use 'CURVE OP VALUE', e.g. 'GR < p25', 'VCL < 0.3' or 'NET_PAY == 1'.")
-    curve, op, value = m.group(1).upper(), m.group(2), m.group(3)
-    data = view.values(curve)
-    if data is None or not np.isfinite(data).any():
-        raise EvidenceError(f"WHAT: {curve} has no data here. FIX: use a curve listed on the formation card.")
-    thr = float(np.nanpercentile(data, int(value[1:]))) if value.startswith("p") else float(value)
-    with np.errstate(invalid="ignore"):
-        mask = {"<": data < thr, "<=": data <= thr, ">": data > thr, ">=": data >= thr,
-                "==": np.isclose(data, thr), "=": np.isclose(data, thr), "!=": ~np.isclose(data, thr)}[op]
-    return mask & np.isfinite(data), f"where {curve} {op} {fmt(thr)}" + (f" ({value} of {curve})" if value.startswith("p") else "")
 
 
 def _missing_text(view: FormationView, missing: list[str]) -> str:
@@ -111,55 +49,6 @@ def _check_curves(view: FormationView, curves: list[str]) -> tuple[list[str], li
         raise EvidenceError(f"WHAT: none of {curves} has data in this interval. WHY: absent or all null. "
                             "FIX: choose curves listed as present/available on the formation card.")
     return ok, missing
-
-
-def _check_stats(stats: list[str]) -> list[str]:
-    stats = [s.lower() for s in (stats or ["mean"])]
-    bad = [s for s in stats if s not in STATS]
-    if bad:
-        raise EvidenceError(f"WHAT: unknown statistic(s) {bad}. FIX: use any of {list(STATS)}.")
-    return stats
-
-
-def _zones(view: FormationView, zones: Optional[list[str]]):
-    if not zones or zones == "all":
-        return view.zones
-    picked = [view.zone(z) for z in zones]
-    unknown = [z for z, p in zip(zones, picked) if p is None]
-    if unknown:
-        raise EvidenceError(f"WHAT: unknown zone ids {unknown}. FIX: use ids Z1..Z{len(view.zones)} from the card.")
-    return picked
-
-
-def _differs(a: float, b: float, view: FormationView) -> bool:
-    """Whether two figures of one quantity on two sample bases differ materially (catalog limit
-    basis_note_min_relative_difference, relative to the larger): only then is the second basis worth a note."""
-    if a is None or b is None or not (np.isfinite(a) and np.isfinite(b)):
-        return False
-    scale = max(abs(a), abs(b))
-    return scale > 0 and abs(a - b) > view.reg.limit("basis_note_min_relative_difference", 0.02) * scale
-
-
-def flag_runs(depth: np.ndarray, flag: np.ndarray) -> list[tuple[int, int]]:
-    """The flagged runs as (first, last) sample indices, from petrophys evaluation.intervals.flag_intervals
-    (consecutive flagged samples, never joined across a depth gap of more than 1.5 sampling steps). The library
-    reports each run's cell boundaries; the harness shows the first and last flagged samples, like its zones."""
-    from petrophys.evaluation.intervals import flag_intervals as library_intervals
-
-    depth = np.asarray(depth, dtype=float)
-    on = np.isfinite(np.asarray(flag, dtype=float)) & (np.asarray(flag, dtype=float) > 0.5)
-    if not on.any():
-        return []
-    out = []
-    for top, bottom in zip(*library_intervals(on, depth)[["top", "bottom"]].to_numpy().T):
-        idx = np.flatnonzero(on & (depth >= top) & (depth <= bottom))
-        out.append((int(idx[0]), int(idx[-1])))
-    return out
-
-
-def _runs(depth: np.ndarray, flag: np.ndarray, step: float = 0.0) -> list[tuple[float, float]]:
-    """The flagged runs as (first, last) sample depths (flag_runs)."""
-    return [(float(depth[a]), float(depth[b])) for a, b in flag_runs(depth, flag)]
 
 
 def grade_interval(view: FormationView, top: float, base: float) -> tuple[str, str, str, list[str]]:
@@ -207,38 +96,10 @@ def pay_confidence(view: FormationView) -> dict:
 # The largest per-zone table a lookup returns (values = curves x statistics x zones, about 2.8 tokens each): every
 # curve and statistic on a 30-zone formation is about 100k tokens, which would push the next step's prompt past the
 # model's context and leave the answer empty.
-MAX_ZONE_VALUES = 5000
-
-
 def length_m(view: FormationView, metres: float) -> str:
     """A length stated in metres (a policy threshold, a tool argument): as stated when depths are shown in metres, else
     in the reporting unit."""
     return f"{metres} m" if view.depth_unit == "m" else f"{fmt(view.to_unit(metres))} {view.depth_unit}"
-
-def zone_stats(view: FormationView, curves: list[str], stats: list[str] = None, zones=None) -> dict:
-    (curves, missing), stats = _check_curves(view, curves), _check_stats(stats)
-    n = len(curves) * len(stats) * len(_zones(view, zones))
-    if n > MAX_ZONE_VALUES:
-        raise EvidenceError(f"WHAT: a table of {n} values ({len(curves)} curves x {len(stats)} statistics x "
-                            f"{len(_zones(view, zones))} zones, about {round(2.8 * n / 1000)}k tokens) is too large to read. "
-                            f"FIX: ask for at most {MAX_ZONE_VALUES} values - fewer curves or statistics per call (split the "
-                            f"curves over several calls), or interval_stats for formation values.")
-    cols = ["zone", "lithology", f"depth ({view.depth_unit})"] + [f"{s} {c}" + (f" ({view.unit(c)})" if view.unit(c) else "")
-                                                 for c in curves for s in stats]
-    rows, values = [], []
-    for z in _zones(view, zones):
-        row = [z.zone_id, z.lithology, f"{fmt_depth(z.top)}–{fmt_depth(z.base)}"]
-        for c in curves:
-            data = view.zone_values(z, c)
-            for s in stats:
-                v = sig(_stat(data, s))
-                row.append(v)
-                values.append(v)
-        rows.append(row)
-    return {"facts": [_missing_text(view, missing)] if missing else [],
-            "title": f"Zone {', '.join(stats)} of {', '.join(curves)}"
-            + (" (flag curves: mean = fraction of zone flagged)" if any(view.is_flag(c) for c in curves) else ""),
-            "columns": cols, "rows": rows, "values": values + [z.top for z in view.zones] + [z.base for z in view.zones]}
 
 
 def _stat_names(stats: Optional[list[str]], x) -> tuple[list[str], bool]:
@@ -353,38 +214,6 @@ def lithology_stats(view: FormationView, curves: list[str], stats: list[str] = N
             "columns": cols, "rows": rows, "values": values, "facts": facts}
 
 
-def interval_stats(view: FormationView, curves: list[str], stats: list[str] = None,
-                   scope: Literal["both", "interval", "zoned"] = "both", where: Optional[str] = None) -> dict:
-    """Formation statistics with their sample basis: the lithology zones (the characterised rock) and the whole
-    interval. The zoned basis comes first: thin runs and the transitions between zones mix two rock types, so sound
-    practice leaves them out of formation statistics. The whole interval is always given alongside when the zones do
-    not cover it all (scope "both" or "interval"); scope="zoned" gives the zones only."""
-    (curves, missing), stats = _check_curves(view, curves), _check_stats(stats)
-    n_all = int(view.mask.sum())
-    zoned = view.zoned
-    bases = {"interval": [("whole interval", np.ones(n_all, dtype=bool))], "zoned": [("lithology zones", zoned)]}
-    partial = bool(view.zones) and not zoned.all()
-    if scope == "zoned":
-        picked = bases["zoned"]
-    else:
-        picked = (bases["zoned"] + bases["interval"]) if partial else bases["interval"]
-    wmask, wtext = _where_mask(view, where)
-    rows, values = [], []
-    for c in curves:
-        for label, sel in picked:
-            data = view.values(c)[sel & wmask]
-            n = int(np.isfinite(data).sum())
-            row = [c, label, view.unit(c) or "-", n] + [sig(_stat(data, s_)) for s_ in stats]
-            values.extend(row[4:])
-            rows.append(row)
-    facts = [f"lithology zones cover {fmt(view.zoned_thickness)} {view.depth_unit} of the {fmt(view.gross)} {view.depth_unit} interval; the zoned "
-             "basis leaves out thin runs and transitions between zones"] if len(picked) > 1 else []
-    if missing:
-        facts.append(_missing_text(view, missing))
-    return {"title": f"Formation statistics ({fmt_depth(view.top)}–{fmt_depth(view.base)} {view.depth_unit})" + (f", {wtext}" if wtext else ""),
-            "columns": ["curve", "basis", "unit", "n"] + stats, "rows": rows, "values": values, "facts": facts}
-
-
 # --- curves related by construction -------------------------------------------------------------
 
 def construction(view: FormationView) -> tuple[dict[str, list[str]], dict[str, str]]:
@@ -492,18 +321,6 @@ def _zone_means(view: FormationView, curve: str) -> dict:
     return {z.zone_id: _stat(view.zone_values(z, curve), "mean") for z in view.zones}
 
 
-def _ranks(x: np.ndarray) -> np.ndarray:
-    """Ranks 1..n (ties share their average rank)."""
-    order = np.argsort(x, kind="mergesort")
-    ranks = np.empty(len(x), dtype=float)
-    ranks[order] = np.arange(1, len(x) + 1)
-    for v in np.unique(x):
-        same = x == v
-        if same.sum() > 1:
-            ranks[same] = ranks[same].mean()
-    return ranks
-
-
 def _contrast(view: FormationView, curve: str, inputs: list[str]) -> tuple[list, list[str], list]:
     """Zones with higher vs lower zone-mean `curve` (top and bottom half by rank; the middle zone of an odd count is
     left out), with their thickness-weighted inputs and lithology mix. Rows, facts, values."""
@@ -556,319 +373,7 @@ def zone_contrast(view: FormationView, curve: str, inputs: Optional[list[str]] =
             "rows": rows, "facts": facts, "values": values}
 
 
-def _within_zone(view: FormationView, cx: str, cy: str, zones) -> tuple[list[str], list, list[str], list]:
-    """How cy moves with cx inside each of the given zones, over the zone's own samples (one rock type): the mean of cy
-    in the lower, middle and upper third of cx, so the direction reads without a coefficient, over good-hole samples
-    away from a model or tool limit. A zone with too few good-hole samples (mostly bad hole) is read over all its
-    samples away from limits, with a caveat (still the logs we have). A zone without a lithology-log label is not known
-    to be one rock type, and says so. Where either curve's p10-p90 inside the zone is narrower than one of its library
-    classes, the order inside the zone is not informative and no thirds are given. The within-zone Spearman rank
-    correlation is sample-level detail: returned apart (detail lines and coefficients), shown only when a coefficient is
-    asked for. (facts, values, detail, coefficients)"""
-    from petroharness.well.formation import MISSING_LITHOLOGY
-
-    a, b = view.values(cx), view.values(cy)
-    present = np.isfinite(a) & np.isfinite(b) & ~view.at_bound(cx) & ~view.at_bound(cy)
-    usable = present & view.good_hole()
-    facts, values, detail, coefficients = [], [], [], []
-    if not zones:
-        return ["within a zone: no lithology zone has both curves, so no within-zone relation"], values, detail, coefficients
-    for z in zones:
-        idx, caveat = z.indices[usable[z.indices]], ""
-        if idx.size < 8:
-            idx = z.indices[present[z.indices]]
-            caveat = " - most samples flagged bad hole: relation over all samples, read with caution"
-        if idx.size < 8:
-            facts.append(f"within {z.zone_id} ({z.lithology}, {fmt_depth(z.top)}-{fmt_depth(z.base)} {view.depth_unit}): only "
-                         f"{idx.size} samples with both curves away from limits - too few for a within-zone relation")
-            values.append(int(idx.size))
-            continue
-        xa, ya = a[idx], b[idx]
-        narrow = [r for r in (_narrow_range(view, c, d, [10, 90]) for c, d in ((cx, xa), (cy, ya))) if r]
-        if narrow:
-            facts.append(f"within {z.zone_id} ({z.lithology}, {fmt_depth(z.top)}-{fmt_depth(z.base)} {view.depth_unit}, n={idx.size}): "
-                         + "; ".join(f"{c} p10-p90 {fmt(lo)}-{fmt(hi)}{u} is narrower than one of its classes ({w})"
-                                     for c, lo, hi, u, w, _ in narrow)
-                         + ", so the order inside the zone is not informative")
-            values += [int(idx.size)] + [v for r in narrow for v in r[5]]
-            continue
-        rho = float(np.corrcoef(_ranks(xa), _ranks(ya))[0, 1]) if np.ptp(xa) > 0 and np.ptp(ya) > 0 else float("nan")
-        cuts = np.quantile(xa, [1 / 3, 2 / 3])
-        thirds = [ya[xa <= cuts[0]], ya[(xa > cuts[0]) & (xa <= cuts[1])], ya[xa > cuts[1]]]
-        means = [float(np.mean(t)) if t.size else float("nan") for t in thirds]
-        trend = (f"{cy} rises with {cx}; " if np.isfinite(rho) and rho >= 0.3 else
-                 f"{cy} falls as {cx} rises; " if np.isfinite(rho) and rho <= -0.3 else "")
-        basis = ("no lithology-log label, so the samples may mix rock types: read with caution"
-                 if z.lithology == MISSING_LITHOLOGY else "one rock type, so the samples are not a mix of lithologies")
-        facts.append(f"within {z.zone_id} ({z.lithology}, {fmt_depth(z.top)}-{fmt_depth(z.base)} {view.depth_unit}, n={idx.size}; "
-                     f"{basis}): {trend}mean {cy} in the lower/middle/upper third of {cx}: "
-                     + " / ".join(fmt(sig(m)) for m in means) + caveat)
-        values += [int(idx.size)] + [sig(m) for m in means]
-        if np.isfinite(rho):
-            detail.append(f"{z.zone_id} Spearman {fmt(rho)} (n={idx.size})")
-            coefficients.append((sig(rho), int(idx.size)))
-    return facts, values, detail, coefficients
-
-
-def correlation(view: FormationView, x: str, y: str, coefficient: bool = False) -> dict:
-    """How two curves relate, as a petrophysicist reads it, in this order. (a) The class-level verdict: the class
-    concordance of the two curves' library classes per zone against the expected relation (rules/relations.yaml:
-    positive, inverse or requires; neutral without one), the class pairs with their rock types where the classes split,
-    and the classes of the highest and lowest zone. (b) The zone order (zone means ranked, the direction over the zones
-    with its pair counts and Spearman over the zone means) only where it is informative: both curves' zone means fall in
-    two or more classes and span at least one class width, and the zones' p25-p75 ranges mostly separate; otherwise a
-    line saying why it is not, with no direction. With fewer than 3 zones, the relation inside each zone (one rock
-    type; _within_zone), except for a necessary condition (requires) or a pair related by construction. (c) Construction,
-    read from the step record: a pair computed from one another gets its class agreement and this caveat, never a zone
-    order (inside a class the formula's other terms can reorder it); and the physical mechanisms (rules/relations.yaml).
-    (d) A sample coefficient only when asked (coefficient=True, set by rule expansion when the question or the spec's
-    statistics name one): a note where it is not informative (fewer than 3 zones, a sample range inside one class,
-    mixed rock types), then the Pearson r over zoned, good-hole samples away from a model or tool limit, with n."""
-    (pair, _), = [_check_curves(view, [x, y])]
-    if len(pair) < 2:
-        raise EvidenceError(f"WHAT: need two curves with data, got {pair}. FIX: choose two curves from the card.")
-    cx, cy = pair
-    a, b = view.values(cx), view.values(cy)
-    if (np.isfinite(a) & np.isfinite(b)).sum() < 3:
-        raise EvidenceError("WHAT: fewer than 3 samples have both curves. FIX: choose curves that overlap.")
-    mx, my = _zone_means(view, cx), _zone_means(view, cy)
-    zs = [z for z in view.zones if np.isfinite(mx[z.zone_id]) and np.isfinite(my[z.zone_id])]
-    facts, values, detail, wcoef, coefficients = [], [], [], [], []
-    relation = construction_relation(view, cx, cy)
-    derived = bool(relation) and relation["kind"] == "derived"
-    expected = None if derived else expected_relation(view, cx, cy)
-    requires = (expected or {}).get("direction") == "requires"
-    n = len(zs)
-    vx, vy = np.array([mx[z.zone_id] for z in zs]), np.array([my[z.zone_id] for z in zs])
-
-    # (a) the class-level verdict
-    concordance = _class_concordance(view, cx, cy, expected, mx)
-    if concordance:
-        facts += concordance[0]
-        values += concordance[1]
-
-    # (b) the zone order, only where it is informative (never for a pair computed from one another)
-    rho = float("nan")
-    if n >= 3 and not derived:
-        pcts = view.reg.relation_limit("zone_range_percentiles", [25, 75])
-        pairs = n * (n - 1) // 2
-        sep = {c: _separated_zone_pairs(view, zs, c, pcts) for c in (cx, cy)}
-        reasons, rvalues = [], []
-        for c in (cx, cy):
-            why, wvalues = _zone_order_reasons(view, c, zs, sep[c], pairs, pcts)
-            reasons += why
-            rvalues += wvalues
-        if reasons:
-            sources = [w for w, has in (("the classes", bool(concordance)), ("the mechanism", bool(_mechanisms(view, cx, cy))))
-                       if has]
-            facts.append("zone order not informative: " + "; ".join(reasons) + ", so no zone-level direction is given"
-                         + (f"; the relation reads from {' and '.join(sources)}" if sources else ""))
-            values += rvalues
-        else:
-            rx, ry = _ranks(-vx), _ranks(-vy)                                    # rank 1 = highest zone mean
-            order = list(np.argsort(rx, kind="mergesort"))
-            most = view.reg.limit("correlation_max_ranked_zones", 12)
-            shown = order if len(order) <= most else order[: most // 2] + order[-(most // 2):]
-            entry = lambda i: f"{zs[i].zone_id} {fmt(vx[i])}/{fmt(vy[i])} ({fmt(ry[i])})"
-            listing = "; ".join(entry(i) for i in shown) if shown is order else (
-                "; ".join(entry(i) for i in shown[: most // 2]) + f"; ... {len(order) - len(shown)} zones ...; "
-                + "; ".join(entry(i) for i in shown[most // 2:]))
-            rho = float(np.corrcoef(_ranks(vx), _ranks(vy))[0, 1]) if np.ptp(vx) > 0 and np.ptp(vy) > 0 else 0.0
-            sx, sy = np.sign(vx[:, None] - vx[None, :]), np.sign(vy[:, None] - vy[None, :])
-            iu = np.triu_indices(n, 1)
-            same, opposite = int(np.sum(sx[iu] * sy[iu] > 0)), int(np.sum(sx[iu] * sy[iu] < 0))
-            counted = same + opposite
-            word = "higher" if rho >= 0 else "lower"
-            agree = same if rho >= 0 else opposite
-            phrase = next((w for t, w in view.reg.relation_limit("direction_words", [[0.5, "generally have"],
-                                                                                     [0.2, "weakly tend to have"]])
-                           if abs(rho) >= t), None)
-            if phrase:
-                direction = (f"higher-{cx} zones {phrase} {word} {cy}: in {agree} of {counted} zone pairs the zone "
-                             f"with higher {cx} has {word} {cy}")
-            else:          # weak: say how the pairs split, never "no relationship"
-                direction = (f"{cy} follows the {cx} ranking only weakly: in {same} of {counted} zone pairs the zone "
-                             f"with higher {cx} has higher {cy}, in {opposite} lower")
-            facts.append(f"zone means ranked by {cx}, highest first ({cx}/{cy}, {cy} rank of {n} in brackets): {listing}")
-            facts.append(f"zone p{pcts[0]}-p{pcts[1]} ranges separate {cx} in {sep[cx]} and {cy} in {sep[cy]} of "
-                         f"{pairs} zone pairs (the rest overlap)")
-            facts.append(f"zone level ({n} zones, zone means): {direction}; Spearman rank correlation over the zone "
-                         f"means {fmt(rho)}")
-            values += [v for i in shown for v in (sig(vx[i]), sig(vy[i]), sig(ry[i]))]
-            values += [sep[cx], sep[cy], pairs, sig(rho), same, opposite, counted, n]
-    elif n < 3:
-        inside = not (requires or derived)
-        facts.append(f"{n} zone(s) have both curves: the relation is not resolvable at zone level; it reads from the "
-                     "classes and the construction or mechanism" + (", and the relation inside the zone below" if inside else ""))
-        # Few zones is not "no relation": inside one rock type the samples are not a mix of lithologies, so their
-        # relation is meaningful. Not for a
-        # necessary condition (no order is implied) or a computed pair (the formula's other terms can reorder it).
-        if inside:
-            within, wvalues, detail, wcoef = _within_zone(view, cx, cy, zs)
-            facts += within
-            values += wvalues
-
-    # (c) construction (step record) and mechanism (registry)
-    if relation:
-        kind = "related by construction" if derived else "partly related by construction"
-        facts.append(f"{kind}: {relation['text']}; not independent evidence: their co-variation follows from how the "
-                     "workflow computed them and does not show what controls either curve"
-                     + ("; their class agreement above is arithmetic too, and no zone order is given (inside a class "
-                        "the formula's other terms can reorder it)" if derived else ""))
-        for c in relation["chain"]:
-            spec = (view.reg.curves.get("construction") or {}).get(c, {})
-            params = last_step(view.prep.steps, (spec.get("steps") or [""])[0]).get("parameters") or {}
-            clip, data = params.get(spec.get("clip", "")), view.values(c)
-            if not isinstance(clip, (int, float)) or isinstance(clip, bool) or data is None:
-                continue
-            at = np.isfinite(data) & (data >= float(clip) * (1 - 1e-9))
-            if at.any():
-                facts.append(f"{c} is held at its recorded clip ({fmt(float(clip))} {view.unit(c)}) in {int(at.sum())} "
-                             f"samples of this interval")
-                values += [float(clip), int(at.sum())]
-        if derived and n >= 3:
-            # what differs between higher and lower zones of the computed curve, only where its zones span classes
-            target = relation["derived"] if relation["derived"] in (cx, cy) else cy
-            pcts = view.reg.relation_limit("zone_range_percentiles", [25, 75])
-            spans = not _zone_order_reasons(view, target, zs, _separated_zone_pairs(view, zs, target, pcts),
-                                            n * (n - 1) // 2, pcts)[0]
-            if spans:
-                inputs = list(dict.fromkeys(view.reg.curves.get("control_inputs", ["VCL", "PHIE"]) + [relation["base"]]))
-                _, parts, cvalues = _contrast(view, target, inputs)
-                facts.append("inputs contrast (what differs between zones, for a question about controls): "
-                             + " | ".join(parts))
-                values += cvalues
-    facts += _mechanism_facts(view, cx, cy, rho)
-
-    # (d) a sample coefficient only when asked for, last
-    if coefficient:
-        valid = np.isfinite(a) & np.isfinite(b)
-        zoned, good = view.zoned, view.good_hole()
-        used = valid & zoned
-        sample_line, sample_values = None, []
-        if n >= 3:
-            # Sample r: zoned, good-hole samples away from a limit of either curve or of a derived curve they come from.
-            limited = view.at_bound(cx) | view.at_bound(cy)
-            for c in set((relation or {}).get("chain", [])) | {cx, cy}:
-                if c in (view.reg.curves.get("construction") or {}) and c not in (cx, cy):
-                    limited |= view.at_bound(c)
-            unzoned, bad = valid & ~zoned, valid & zoned & ~good
-            clipped = valid & zoned & good & limited
-            used = valid & zoned & good & ~limited
-            k = int(used.sum())
-            left = [f"{int(m.sum())} {what}" for m, what in ((unzoned, "outside the zones"), (bad, "bad hole"),
-                                                              (clipped, "at a model or tool limit")) if m.any()]
-            if k >= 3 and np.ptp(a[used]) > 0 and np.ptp(b[used]) > 0:
-                r = float(np.corrcoef(a[used], b[used])[0, 1])
-                sample_line = (f"sample level (supporting detail only): Pearson r = {fmt(r)} over {k} zoned good-hole "
-                               "samples" + (f" (left out: {', '.join(left)})" if left else ""))
-                sample_values = [sig(r), k]
-                coefficients.append((sig(r), k))
-            else:
-                sample_line = f"sample level: too few usable samples ({k}) for a correlation coefficient"
-                sample_values = [k]
-            sample_values += [int(m.sum()) for m in (unzoned, bad, clipped)]
-        reasons, rvalues = _range_restriction(view, cx, cy, a[used], b[used], n)
-        if reasons:
-            facts.append("a sample coefficient is not informative here: " + "; ".join(reasons))
-            values += rvalues
-        if sample_line:
-            facts.append(sample_line)
-            values += sample_values
-        if detail:
-            facts.append(f"sample level inside the zone (supporting detail only): {cy} against {cx}: " + "; ".join(detail))
-            values += [c for c, _ in wcoef]
-            coefficients += wcoef
-    facts.append(NOT_EXPORTED)
-    return {"title": f"Relation of {cx} and {cy} (class level first; zone order only where informative)",
-            "facts": facts, "values": values, "coefficients": coefficients}
-
-
 # --- relation helpers (rules/relations.yaml) -----------------------------------------------------------------------
-
-def _separated_zone_pairs(view: FormationView, zones, curve: str, pcts) -> int:
-    """Zone pairs whose percentile ranges of the curve (e.g. p25-p75 of each zone's samples) do not overlap."""
-    spans = []
-    for z in zones:
-        v = view.zone_values(z, curve)
-        v = v[np.isfinite(v)]
-        spans.append(tuple(np.percentile(v, pcts)) if v.size else (np.nan, np.nan))
-    return sum(1 for i in range(len(spans)) for j in range(i + 1, len(spans))
-               if spans[i][1] < spans[j][0] or spans[j][1] < spans[i][0])
-
-
-def _bands(entry: dict, view: Optional[FormationView] = None):
-    """The petrophys Bands a rules/relations.yaml class entry names ('Analyzer.NAME', e.g.
-    PermeabilityAnalysis.DISTRIBUTION_BANDS): the analyzer's own classes, edges and edge sides, from the table set the
-    view's policy classifies with (analyzers.class_tables, as make_analyzer); without one, the library's default set."""
-    import inspect
-    from petrophys.evaluation import diagnostics
-
-    analyzer, name = entry["bands"].split(".")
-    klass = getattr(diagnostics, analyzer)
-    tables = (view.policy.get("analyzers") or {}).get("class_tables") if view is not None else None
-    accepts = "class_tables" in inspect.signature(klass.__init__).parameters
-    return diagnostics.bands_of(klass(class_tables=tables) if tables and accepts else klass(), name)
-
-
-def _class_width(entry: dict, value: float, view: Optional[FormationView] = None) -> tuple[float, bool]:
-    """(width of the class holding value, on the class scale: decades for a log-scaled curve; an open class takes its
-    neighbour's width, log-scaled). The class of a value on an edge is the library's (Bands.label_of)."""
-    bands = _bands(entry, view)
-    log = entry.get("scale") == "log"
-    t = np.log10 if log else (lambda q: q)
-    widths = np.diff(t(np.asarray(bands.edges, dtype=float)))
-    label = bands.label_of(value) if (value > 0 or not log) else bands.labels[0]
-    k = bands.labels.index(label) if label in bands.labels else 0
-    return float(widths[min(max(k - 1, 0), widths.size - 1)]), log
-
-
-def _narrow_range(view: FormationView, curve: str, data: np.ndarray, pcts) -> Optional[tuple]:
-    """(curve, low, high, unit, width text, values) when the curve's percentile range of data is narrower than one of
-    its own library classes (rules/relations.yaml classes); None otherwise or without class thresholds."""
-    source, entry = _class_entry(view, curve)
-    if entry is None or source != curve or len(_bands(entry, view).edges) < 2:
-        return None
-    log = entry.get("scale") == "log"
-    v = np.asarray(data, dtype=float)
-    v = v[np.isfinite(v)]
-    v = v[v > 0] if log else v
-    if v.size < 2:
-        return None
-    lo, hi = (float(q) for q in np.percentile(v, pcts))
-    width, _ = _class_width(entry, float(np.median(v)), view)
-    t = np.log10 if log else (lambda q: q)
-    if t(hi) - t(lo) >= width:
-        return None
-    unit = f" {view.unit(curve)}" if view.unit(curve) else ""
-    return curve, lo, hi, unit, (f"{fmt(width)} decade" if log else f"{fmt(width)}{unit}"), [sig(lo), sig(hi), sig(width)]
-
-
-def _zone_order_reasons(view: FormationView, curve: str, zones, separated: int, pairs: int, pcts) -> tuple[list[str], list]:
-    """Why the zone order of a curve is not informative: its zone means fall in one of its library classes or span
-    less than one class width, or its zones' p25-p75 ranges mostly overlap (relations.yaml limits min_separated_share).
-    Empty when it is informative."""
-    reasons, values = [], []
-    source, entry = _class_entry(view, curve)
-    if entry is not None and source == curve:
-        _, labels = zone_labels(view, curve)
-        classes = sorted({labels[z.zone_id] for z in zones if z.zone_id in labels})
-        if len(classes) == 1:
-            reasons.append(f"the zones fall in one class of {curve} ({classes[0]})")
-        else:
-            means = [_stat(view.zone_values(z, curve), "mean") for z in zones]
-            narrow = _narrow_range(view, curve, np.asarray(means), [0, 100])
-            if narrow:
-                _, lo, hi, unit, width, nums = narrow
-                reasons.append(f"the zone means of {curve} span {fmt(lo)}-{fmt(hi)}{unit}, less than one of its classes "
-                               f"({width})")
-                values += nums
-    share = float(view.reg.relation_limit("min_separated_share", 0.5))
-    if pairs and separated < share * pairs:
-        reasons.append(f"the zone p{pcts[0]}-p{pcts[1]} ranges of {curve} overlap in {pairs - separated} of {pairs} "
-                       "zone pairs")
-        values += [pairs - separated, pairs]
-    return reasons, values
 
 
 def _zone_list(view: FormationView, ids) -> str:
@@ -882,244 +387,6 @@ def _zone_list(view: FormationView, ids) -> str:
             runs.append([i, i])
     zs = view.zones
     return ", ".join(zs[a].zone_id if a == b else f"{zs[a].zone_id}-{zs[b].zone_id}" for a, b in runs)
-
-
-def _class_entry(view: FormationView, curve: str) -> tuple[Optional[str], Optional[dict]]:
-    """(the curve whose classes grade this curve, its rules/relations.yaml class entry), or (None, None)."""
-    rel = view.reg.relations
-    source = (rel.get("class_from") or {}).get(curve, curve)
-    entry = (rel.get("classes") or {}).get(source)
-    return (source, entry) if entry and view.available(source) else (None, None)
-
-
-def _library_grades(view: FormationView, entry: dict, source: str) -> bool:
-    """Whether the library section grades this very curve here: it is the first of the section's inputs present (a
-    section that forms its quantity itself, reads empty, grades its own ratio, not the workflow's curve)."""
-    present = [c for c in entry.get("reads", []) if view.available(c)]
-    return bool(present) and present[0] == source
-
-
-def zone_labels(view: FormationView, curve: str) -> tuple[Optional[str], dict[str, str]]:
-    """One class per zone for a curve (rules/relations.yaml classes): the library's own zone class (zone_classes_raw,
-    the zone_classes machinery) where its section grades this very curve; elsewhere, and for zones it leaves
-    unclassed, the section's petrophys Bands applied to the curve's zone mean (Bands.label_of: the library's edges and
-    edge sides). (the graded curve, {zone_id: label}); _band_basis says when the classes are the bands only."""
-    source, entry = _class_entry(view, curve)
-    if entry is None:
-        return None, {}
-    bands = _bands(entry, view)
-    library = (zone_classes_raw(view, entry["topic"])["classes"].get(entry["section"], {})
-               if _library_grades(view, entry, source) else {})
-    labels = {}
-    for z in view.zones:
-        label = library.get(z.zone_id)
-        if label not in bands.labels:
-            label = bands.label_of(_stat(view.zone_values(z, source), "mean"))
-        if label:
-            labels[z.zone_id] = label
-    return source, labels
-
-
-def _band_basis(view: FormationView, curve: str) -> Optional[str]:
-    """How a curve's classes were formed when its section does not grade it: in the section's bands, and what the
-    section grades instead. None when the classes are the section's own."""
-    source, entry = _class_entry(view, curve)
-    if entry is None or _library_grades(view, entry, source):
-        return None
-    reads = entry.get("reads", [])
-    present = [c for c in reads if view.available(c)]
-    why = ("the section forms its own ratio" if not reads else f"the section grades {present[0]}" if present
-           else "the section has none of its inputs here")
-    return f"{source} in the {entry['section']} bands ({why})"
-
-
-def _mechanisms(view: FormationView, cx: str, cy: str) -> list[dict]:
-    """The rules/relations.yaml mechanisms that match the pair (one curve in each group)."""
-    out = []
-    for m in view.reg.relations.get("mechanisms") or []:
-        g1, g2 = (set(g) for g in m["between"])
-        if cx != cy and ((cx in g1 and cy in g2) or (cx in g2 and cy in g1)):
-            out.append(m)
-    return out
-
-
-def expected_relation(view: FormationView, cx: str, cy: str) -> Optional[dict]:
-    """The expected relation of the pair from the first matching mechanism that states one: {direction: positive or
-    inverse}, or for a necessary condition {direction: requires, dependent, required, words, caveat} when the pair is
-    one of the mechanism's dependent and required curves (other pairs of that mechanism get none)."""
-    for m in _mechanisms(view, cx, cy):
-        direction = m.get("direction")
-        if direction == "requires":
-            spec = m.get("requires") or {}
-            dep, req = set(spec.get("dependent", [])), set(spec.get("required", []))
-            pair = (cx, cy) if cx in dep and cy in req else (cy, cx) if cy in dep and cx in req else None
-            if pair:
-                return {"direction": direction, "dependent": pair[0], "required": pair[1],
-                        "words": spec.get("words") or {}, "caveat": spec.get("caveat", "")}
-        elif direction:
-            return {"direction": direction}
-    return None
-
-
-
-def _class_concordance(view: FormationView, cx: str, cy: str, expected: Optional[dict] = None,
-                       means_x: Optional[dict] = None) -> Optional[tuple[list[str], list]]:
-    """The class-level verdict: the shares of the classed zone thickness (classes counted high: rules/relations.yaml
-    classes) read against the expected relation (expected_relation): consistent with it or against it, so zones that
-    follow an inverse relation are not called discordant; for a necessary condition (requires) only dependent-high
-    zones with a low required curve are against it; without one, neutrally as both high, both low and discordant.
-    Then the class pairs per zone, with their rock types where the classes split, and the classes of the zones with the
-    highest and lowest cx."""
-    direction = (expected or {}).get("direction")
-    (sx, lx), (sy, ly) = zone_labels(view, cx), zone_labels(view, cy)
-    if not lx or not ly or sx == sy:
-        return None
-    both = [zid for zid in lx if zid in ly]
-    if not both:
-        return None
-    classes = view.reg.relations["classes"]
-    ex, ey = classes[sx], classes[sy]
-    thick = {z.zone_id: z.thickness for z in view.zones}
-    total = sum(thick[z] for z in both) or 1.0
-    groups: dict[tuple[str, str], list[str]] = {}
-    for zid in both:
-        groups.setdefault((lx[zid], ly[zid]), []).append(zid)
-    graded = [f"{c} graded by {s}" for c, s in ((cx, sx), (cy, sy)) if c != s]
-    graded += [b for b in dict.fromkeys(_band_basis(view, c) for c in (cx, cy)) if b]       # classes from the bands only
-    parts, pair_values = [], []
-    ranked = sorted(groups.items(), key=lambda kv: -sum(thick[z] for z in kv[1]))
-    most = int(view.reg.relation_limit("max_class_pairs", 4))
-    lith = {z.zone_id: z.lithology for z in view.zones}
-    split = len(groups) > 1 and len({lith[z] for z in both}) > 1       # the rock-type contrast between the classes
-
-    def rocks(ids):
-        mix: dict[str, float] = {}
-        for z in ids:
-            mix[lith[z]] = mix.get(lith[z], 0.0) + thick[z]
-        size = sum(mix.values()) or 1.0
-        top = sorted(mix.items(), key=lambda kv: -kv[1])[:3]
-        pair_values.extend(round(100 * m / size) for _, m in top)
-        return "; " + ", ".join(f"{l} {fmt_pct(100 * m / size)}" for l, m in top)
-
-    for (gx, gy), ids in ranked[:most]:
-        m = sum(thick[z] for z in ids)
-        pair_values.append(sig(m))
-        parts.append(f"{gx} with {gy}: {_zone_list(view, ids)} ({fmt(m)} {view.depth_unit}{rocks(ids) if split else ''})")
-    if len(ranked) > most:              # the thinnest combinations, summed (the pack budget is shared)
-        rest = sum(thick[z] for _, ids in ranked[most:] for z in ids)
-        parts.append(f"{len(ranked) - most} other class pairs ({fmt(rest)} {view.depth_unit})")
-        pair_values.append(sig(rest))
-    classes_line = (f"library classes of the zone means ({cx} with {cy}" + "".join(f"; {g}" for g in graded) + "): "
-                    + "; ".join(parts))
-    ends = sorted((z for z in both if means_x and np.isfinite(means_x.get(z, np.nan))), key=lambda z: means_x[z])
-    if len(ends) >= 2:
-        unit = f" {view.unit(cx)}" if view.unit(cx) else ""
-        classes_line += "".join(f"; {end} {cx}: {z} ({fmt(means_x[z])}{unit}) in {lx[z]} with {ly[z]}"
-                                for end, z in (("highest", ends[-1]), ("lowest", ends[0])))
-        pair_values += [sig(means_x[ends[-1]]), sig(means_x[ends[0]])]
-    facts, values = [], []
-    hx, hy = set(ex.get("high", [])), set(ey.get("high", []))
-    cells: dict[str, list[str]] = {"hh": [], "ll": [], "hl": [], "lh": []}
-    for zid in both:
-        cells[("h" if lx[zid] in hx else "l") + ("h" if ly[zid] in hy else "l")].append(zid)
-    m = {k: sum(thick[z] for z in ids) for k, ids in cells.items()}
-    m["disc"] = m["hl"] + m["lh"]
-    word = lambda e, k: (e.get("names") or {}).get("high" if k == "h" else "low", "high" if k == "h" else "low")
-    share = lambda k: fmt_pct(100 * m[k] / total)
-    head = f"class concordance by classed zone thickness (high = {cx} {word(ex, 'h')}, {cy} {word(ey, 'h')}): "
-    if direction == "requires":
-        facts.append(head + _requirement_text(view, expected, cx, cells, thick, total, values))
-        return facts + [classes_line], values + pair_values
-    if direction in ("positive", "inverse"):
-        follow = ("hh", "ll") if direction == "positive" else ("hl", "lh")
-        ids = {"with": [z for k in follow for z in cells[k]], "against": [z for k in cells if k not in follow for z in cells[k]]}
-        frac = {k: sum(thick[z] for z in v) / total for k, v in ids.items()}
-        zones = lambda k: f" ({_zone_list(view, ids[k])})" if ids[k] else ""
-        against = "both high or both low" if direction == "inverse" else "one high, the other low"
-        facts.append(head + f"consistent with the expected {direction} relation {fmt_pct(100 * frac['with'])}"
-                     + zones("with") + f"; against it ({against}) {fmt_pct(100 * frac['against'])}" + zones("against"))
-        values += [round(100 * frac["with"]), round(100 * frac["against"])]
-        return facts + [classes_line], values + pair_values
-    disc = [f"{cx} {'high' if k[0] == 'h' else 'low'} with {cy} {'high' if k[1] == 'h' else 'low'} in "
-            f"{_zone_list(view, cells[k])}" for k in ("hl", "lh") if cells[k]]
-    facts.append(head + f"both high {share('hh')}, both low {share('ll')}, discordant {share('disc')}"
-                 + (f" ({'; '.join(disc)})" if disc else ""))
-    values += [round(100 * m[k] / total) for k in ("hh", "ll", "disc")]
-    return facts + [classes_line], values + pair_values
-
-
-def _requirement_text(view: FormationView, expected: dict, cx: str, cells: dict, thick: dict, total: float,
-                      values: list) -> str:
-    """The concordance of a necessary condition: of the dependent-high thickness, how much has the required curve high
-    (consistent) or low (against it); and the required-high zones with a low dependent, which do not contradict it.
-    Appends the percentages shown to values."""
-    dep, req, w = expected["dependent"], expected["required"], expected["words"]
-    first = dep == cx                           # cell keys are (cx, cy): put them as (dependent, required)
-    cell = lambda d, r: cells[(d + r) if first else (r + d)]
-    hh, hl, lh = cell("h", "h"), cell("h", "l"), cell("l", "h")
-    size = lambda ids: sum(thick[z] for z in ids)
-    zones = lambda ids: f" ({_zone_list(view, ids)})" if ids else ""
-    dh, dl = w.get("dependent_high", f"{dep} high"), w.get("dependent_low", f"{dep} low")
-    rh, rl = w.get("required_high", f"{req} high"), w.get("required_low", f"{req} low")
-    base = size(hh) + size(hl)
-    if base > 0:
-        tested = (f"{dh} zones are {rh} in {fmt_pct(100 * size(hh) / base)} of the {dh} thickness{zones(hh)}; {dh} but "
-                  f"{rl} (against it): {fmt_pct(100 * size(hl) / base)}{zones(hl)}")
-        values += [round(100 * size(hh) / base), round(100 * size(hl) / base)]
-    else:
-        tested = f"no zone is {dh}, so the requirement is not tested"
-    other = (f"; {rh} but {dl}: {fmt_pct(100 * size(lh) / total)} of the classed thickness{zones(lh)}, which does not "
-             f"contradict it" + (f" ({expected['caveat']})" if expected.get("caveat") else ""))
-    values.append(round(100 * size(lh) / total))
-    return f"consistent with {dep} requiring {req}: {tested}{other}"
-
-
-def _mechanism_facts(view: FormationView, cx: str, cy: str, rho: float) -> list[str]:
-    """Physical mechanisms for the pair (rules/relations.yaml mechanisms), with whether the zone-level direction
-    agrees where the registry gives one."""
-    facts = []
-    words = view.reg.relation_limit("direction_words", [[0.5, ""], [0.2, ""]])
-    weak = min(t for t, _ in words) if words else 0.0
-    for m in _mechanisms(view, cx, cy):
-        text = f"mechanism: {m['fact']}"
-        expected = m.get("direction")
-        if expected in ("positive", "inverse") and np.isfinite(rho):        # requires: no zone-level direction
-            if abs(rho) < weak:
-                text += f"; expected {expected} at zone level, and the zone ranking is too weak to test it"
-            else:
-                agrees = (rho > 0) == (expected == "positive")
-                text += f"; expected {expected} at zone level, and the zone ranking {'agrees' if agrees else 'runs against it'}"
-        facts.append(text)
-    return facts
-
-
-def _range_restriction(view: FormationView, cx: str, cy: str, a: np.ndarray, b: np.ndarray,
-                       n: int) -> tuple[list[str], list]:
-    """Reasons a sample coefficient is not informative here: fewer than 3 zones, a sample range (p10-p90 of the samples
-    the coefficient would use) inside one class width of a curve's library classes, or samples pooled over several
-    rock types."""
-    reasons, values = [], []
-    if n < 3:
-        reasons.append(f"only {n} zone(s) have both curves, so a coefficient describes the spread inside a zone, not a "
-                       "change between zones")
-    pcts = view.reg.relation_limit("sample_range_percentiles", [10, 90])
-    for c, data in ((cx, a), (cy, b)):
-        narrow = _narrow_range(view, c, data, pcts)
-        if narrow:
-            _, lo, hi, unit, width, nums = narrow
-            reasons.append(f"{c} p{pcts[0]}-p{pcts[1]} {fmt(lo)}-{fmt(hi)}{unit} is narrower than one of its classes ({width})")
-            values += nums
-    share_min = float(view.reg.relation_limit("rock_type_min_share", 0.1))
-    thick: dict[str, float] = {}
-    for z in view.zones:
-        thick[z.lithology] = thick.get(z.lithology, 0.0) + z.thickness
-    total = sum(thick.values())
-    mixed = [(l, m / total) for l, m in sorted(thick.items(), key=lambda kv: -kv[1]) if total > 0 and m / total >= share_min]
-    if len(mixed) >= 2:
-        reasons.append(f"{len(mixed)} rock types pooled (" + ", ".join(f"{l} {fmt_pct(100 * s)}" for l, s in mixed)
-                       + " of the zoned thickness)")
-        values += [round(100 * s) for _, s in mixed]
-    return reasons, values
 
 
 def threshold_exceedance(view: FormationView, curve: str, threshold: Optional[float] = None,
@@ -1178,30 +445,6 @@ def threshold_exceedance(view: FormationView, curve: str, threshold: Optional[fl
                      "whole interval",
             "columns": ["zone", "lithology", f"depth ({view.depth_unit})", "samples beyond", "% samples", f"mean {shown}",
                         "mean beyond"], "rows": rows, "facts": facts, "values": [v for v in values if v is not None]}
-
-
-def zone_relation(view: FormationView, curves: list[str]) -> dict:
-    """Per-zone ordering of curve means, e.g. RSHA >= RMED >= RDEP (descending in the given order)."""
-    curves, missing = _check_curves(view, curves)
-    if len(curves) < 2:
-        raise EvidenceError("WHAT: need at least two curves with data. FIX: pass curves in the order to test.")
-    rows, values, holds, reverse = [], [], 0, 0
-    for z in view.zones:
-        means = [_stat(view.zone_values(z, c), "mean") for c in curves]
-        ok = all(np.isfinite(means)) and all(means[i] >= means[i + 1] for i in range(len(means) - 1))
-        holds += ok
-        reverse += all(np.isfinite(means)) and all(means[i] <= means[i + 1] for i in range(len(means) - 1))
-        rows.append([z.zone_id, z.lithology, f"{fmt_depth(z.top)}–{fmt_depth(z.base)}"] + [sig(m) for m in means] + ["yes" if ok else "no"])
-        values += [sig(m) for m in means if np.isfinite(m)]
-    rel = " >= ".join(curves)
-    # The test is "decreasing in the given order"; the reverse order is stated too, so a planner that lists the curves
-    # shallow-to-deep cannot turn "the deep curve reads highest" into "the expected order does not hold".
-    facts = [f"{rel} holds in {holds} of {len(view.zones)} zones (zone means)",
-             f"the reverse order {' >= '.join(reversed(curves))} holds in {reverse} of {len(view.zones)} zones (zone means)"]
-    if missing:
-        facts.append(_missing_text(view, missing))
-    return {"title": f"Zone relation {rel}", "columns": ["zone", "lithology", f"depth ({view.depth_unit})"] + [f"mean {c}" for c in curves] + ["holds"],
-            "rows": rows, "facts": facts, "values": values}
 
 
 ORDER_RELATIONS = ("decreasing", "increasing", "between")
@@ -1443,90 +686,6 @@ def curve_order(view: FormationView, curves: list[str], relation: str = "decreas
             "rows": rows, "facts": facts, "values": values}
 
 
-def spike_flags(view: FormationView, curves: list[str], k: float = 3.0,
-                baseline: Literal["zoned", "interval", "zone"] = "zoned") -> dict:
-    """Samples beyond mean +/- k standard deviations (bounds in curve units), with counts per zone and the largest
-    deviations, and adjacent-sample jumps above k sigma of the jumps.
-
-    baseline: "zoned" (default) screens the lithology-zone samples against their own mean and std: thin runs and the
-    transitions between zones mix two rock types and would inflate the std and flag ordinary contacts. The whole-
-    interval figures follow as a labelled note only where they differ materially. "interval" screens every sample
-    against the interval statistics; "zone" screens each zone against its own statistics."""
-    curves, _ = _check_curves(view, curves)
-    if baseline not in ("zoned", "interval", "zone"):
-        raise EvidenceError(f"WHAT: unknown baseline {baseline!r}. FIX: use zoned, interval or zone.")
-    n_all = int(view.mask.sum())
-    zoned = view.zoned
-    if baseline == "zoned" and not zoned.any():
-        baseline = "interval"                       # no zones: the interval is the only baseline
-    pool = zoned if baseline in ("zoned", "zone") else np.ones(n_all, dtype=bool)
-    zone_of = np.full(n_all, -1)
-    for i, z in enumerate(view.zones):
-        zone_of[z.indices] = i
-    rows, values, facts = [], [], []
-
-    def screen(x, sel):
-        mu, sd = float(np.nanmean(x[sel])), float(np.nanstd(x[sel]))
-        lo, hi = mu - k * sd, mu + k * sd
-        with np.errstate(invalid="ignore"):
-            return mu, sd, lo, hi, sel & ((x < lo) | (x > hi))
-
-    for c in curves:
-        x = view.values(c)
-        ok = np.isfinite(x)
-        if baseline == "zone":
-            out = np.zeros_like(ok)
-            for z in view.zones:
-                zx = x[z.indices]
-                if np.isfinite(zx).sum() >= 3:
-                    mu, sd = float(np.nanmean(zx)), float(np.nanstd(zx))
-                    out[z.indices] = np.isfinite(zx) & (np.abs(zx - mu) > k * sd) if sd > 0 else False
-            mu, sd = float(np.nanmean(x[pool & ok])), float(np.nanstd(x[pool & ok]))
-            lo = hi = None
-        else:
-            mu, sd, lo, hi, out = screen(x, ok & pool)
-        dx = np.abs(np.diff(x))
-        if baseline == "interval":
-            pair = np.ones(dx.size, dtype=bool)
-        else:                                       # jumps within a zone, not across a lithology contact
-            pair = (zone_of[:-1] == zone_of[1:]) & (zone_of[:-1] >= 0)
-        dxs = np.where(pair, dx, np.nan)
-        dsd = float(np.nanstd(dxs)) if np.isfinite(dxs).any() else 0.0
-        jumps = int(np.nansum(dxs > k * dsd)) if dsd > 0 else 0
-        runs = _runs(view.depth, out.astype(float), view.step)
-        top = ", ".join(f"{fmt_depth(a)}–{fmt_depth(b)}" for a, b in runs[:5])
-        per_zone = "; ".join(f"{z.zone_id} {int(out[z.indices].sum())}" for z in view.zones if out[z.indices].any())
-        n_screened = int((ok & pool).sum())
-        rows.append([c, sig(mu), sig(sd), sig(lo) if lo is not None else "per zone", sig(hi) if hi is not None else "per zone",
-                     int(out.sum()), sig(100 * out.sum() / max(n_screened, 1)), jumps, top or "-"])
-        values += [sig(mu), sig(sd), int(out.sum()), sig(100 * out.sum() / max(n_screened, 1)), jumps, n_screened]
-        values += [v for v in (lo, hi) if v is not None and np.isfinite(v)]
-        values += [sig(v) for v in (lo, hi) if v is not None and np.isfinite(v)]
-        if out.any():
-            dev = np.where(out, np.abs(x - mu), -1.0)
-            worst = np.argsort(dev)[::-1][: min(3, int(out.sum()))]
-            facts.append(f"{c}: flagged by zone: {per_zone or 'none'}; largest deviations "
-                         + ", ".join(f"{fmt(float(x[w]))} at {fmt_depth(float(view.depth[w]))} {view.depth_unit}" for w in sorted(worst)))
-            values += [sig(float(x[w])) for w in worst] + [float(view.depth[w]) for w in worst]
-        if baseline == "zoned" and not zoned.all():
-            mu_i, sd_i, lo_i, hi_i, out_i = screen(x, ok)
-            if _differs(mu, mu_i, view) or _differs(sd, sd_i, view) or _differs(float(out.sum()), float(out_i.sum()), view):
-                facts.append(f"{c} whole interval ({int(ok.sum())} samples, thin runs and transitions included): mean "
-                             f"{fmt(mu_i)}, std {fmt(sd_i)}, bounds {fmt(lo_i)} to {fmt(hi_i)}, {int(out_i.sum())} "
-                             "samples beyond")
-                values += [sig(mu_i), sig(sd_i), sig(lo_i), sig(hi_i), int(out_i.sum()), int(ok.sum())]
-    basis = {"zone": "each zone's own mean and std", "interval": "the interval mean and std",
-             "zoned": "the mean and std of the lithology-zone samples"}[baseline]
-    if baseline == "zoned":
-        facts.insert(0, f"screened: the lithology-zone samples ({int(zoned.sum())} of {n_all}; thin runs and "
-                        "transitions left out); jumps counted within zones")
-        values += [int(zoned.sum()), n_all]
-    return {"title": f"Spike screen (beyond mean +/- {k} std of {basis}; adjacent jumps > {k} std of the jumps)",
-            "columns": ["curve", "mean", "std", f"lower bound", f"upper bound", "samples beyond", "% samples",
-                        "adjacent jumps", f"first runs ({view.depth_unit})"],
-            "rows": rows, "facts": facts + [NOT_EXPORTED], "values": values}
-
-
 def adjacent_jumps(view: FormationView, curve: str, threshold: float) -> dict:
     """Changes between adjacent samples larger than a threshold in curve units (e.g. sonic cycle skips), the model's
     threshold: each zone (pairs inside it), the zones pooled, and the whole interval (every adjacent pair, across
@@ -1613,37 +772,6 @@ def vertical_sequence(view: FormationView, curves: list[str] = None, min_change:
                   f"no zone-to-zone change of {c} reaches {fmt(thr)}: no robust sequence"]
     return {"title": f"Vertical sequence of zone-mean {', '.join(curves)}, base to top", "rows": rows, "facts": facts,
             "values": values, "columns": columns}
-
-
-def flag_intervals(view: FormationView, flag: str, min_thickness_m: float = 0.0, max_items: int | None = None) -> dict:
-    max_items = max_items or view.reg.limit("flag_intervals_max_items", 25)
-    flag = flag.upper()
-    if not view.is_flag(flag):
-        raise EvidenceError(f"WHAT: {flag} is not a flag curve. FIX: use one of {sorted(view.reg.flags | view.calc_flags)}.")
-    data = view.values(flag)
-    if data is None or not np.isfinite(data).any():
-        return {"title": f"{flag} intervals", "facts": [f"{flag} is not available in this interval"], "values": []}
-    gross, of = view.gross, "the interval"
-    runs = [(a, b) for a, b in _runs(view.depth, data, view.step) if b - a + view.step >= view.to_unit(min_thickness_m)]
-    total = float(np.nansum(data > 0.5) * view.step)
-    facts = [f"{flag} total {fmt(total)} {view.depth_unit} = {fmt_pct(100 * total / max(gross, 1e-9), 1)} of {of}; {len(runs)} interval(s)"]
-    graded = flag in set(view.policy.get("confidence", {}).get("applies_to", []))
-    rows = []
-    shown = runs if len(runs) <= max_items else \
-        sorted(sorted(runs, key=lambda r: -(r[1] - r[0]))[:max_items])       # the thickest, listed in depth order
-    for a, b in shown:
-        if graded:
-            zid, lith, conf, reasons = grade_interval(view, a, b)
-            rows.append([f"{fmt_depth(a)}–{fmt_depth(b)}", sig(b - a + view.step), zid, lith,
-                         conf + (f" ({'; '.join(reasons)})" if reasons else "")])
-        else:
-            rows.append([f"{fmt_depth(a)}–{fmt_depth(b)}", sig(b - a + view.step)])
-    if len(runs) > max_items:
-        facts.append(f"{len(runs) - max_items} further intervals not listed (the thinnest)")
-    values = [total, 100 * total / max(gross, 1e-9)] + [v for a, b in shown for v in (a, b, b - a + view.step)]
-    return {"title": f"{flag} intervals (min thickness {length_m(view, min_thickness_m)})" + (" with screening confidence" if graded else ""),
-            "columns": [f"depth ({view.depth_unit})", f"thickness ({view.depth_unit})"] + (["zone", "lithology", "confidence"] if graded else []),
-            "rows": rows, "facts": facts, "values": values}
 
 
 def _limiting_cutoffs(view: FormationView, values: list) -> list[str]:
@@ -1736,13 +864,18 @@ def pay_summary(view: FormationView) -> dict:
     if pay is not None and np.nansum(pay > 0.5) > 0:
         curves = [c for c in view.reg.curves["pay_summary_curves"] if view.prep.well.get(c) is not None]
         averages = calculate_pay_averages(well, curves=curves)
+        from petrophys.evaluation.summaries.zone_summary import pay_average_curves
+        read = pay_average_curves(well)               # the curve Petrophys averages for PHIE and PERM
         for c in curves:
             v = averages.get(c)
             if v is not None and np.isfinite(v):
                 v = sig(float(v))
-                kind = "geometric mean" if c.upper() in ("PERM", "K", "PERMEABILITY") else "mean"
-                facts.append(f"{kind} {c} in NET_PAY samples = {fmt(v)} (the workflow's pay average: Petrophys "
-                             f"calculate_pay_averages, geometric for permeability)")
+                unit = str(getattr(well.get(c), "unit", "") or "").strip().lower()
+                kind = "geometric mean" if unit == "md" else "mean"              # a permeability, as Petrophys takes it
+                took = read.get(c.upper())
+                how = f"{took} where it has a value, {c} elsewhere; " if took and took != c else ""
+                facts.append(f"{kind} {c} in NET_PAY samples = {fmt(v)} (the workflow's pay average, {how}Petrophys "
+                             f"calculate_pay_averages)")
                 values.append(v)
         pc = pay_confidence(view)
         cr = view.policy.get("confidence", {})
@@ -1761,237 +894,6 @@ def pay_summary(view: FormationView) -> dict:
     values.append(sig(gross))
     return {"title": f"Net-to-gross summary (thickness {view.depth_unit}, fraction of gross)", "columns": ["flag", f"thickness ({view.depth_unit})", "fraction"],
             "rows": rows, "facts": facts, "values": values}
-
-
-_ANALYZERS = {
-    "hydrocarbon": ("petrophys.evaluation.diagnostics.hydrocarbon_analysis", "HydrocarbonAnalysis"),
-    "saturation": ("petrophys.evaluation.diagnostics.saturation_analysis", "SaturationAnalysis"),
-    "permeability": ("petrophys.evaluation.diagnostics.permeability_analysis", "PermeabilityAnalysis"),
-    "porosity": ("petrophys.evaluation.diagnostics.porosity_analysis", "PorosityAnalysis"),
-    "lithology": ("petrophys.evaluation.diagnostics.lithology_analysis", "LithologyAnalysis"),
-    "numerical": ("petrophys.evaluation.diagnostics.numerical_statistical_analysis", "NumericalStatisticalAnalysis"),
-}
-
-
-_SECTION_META = ("description", "methodology", "calculation_thresholds")
-
-
-def make_analyzer(view: FormationView, family: str):
-    """A family's petrophys analyzer with the policy's class tables (policy analyzers.class_tables: the library's
-    current set, or the set a data config names in data.analyzer_class_tables, FormationView.build). Analyzers that
-    take no class_tables argument (the numerical one, or any in a library without class-table sets) are built with
-    their defaults."""
-    import importlib
-    import inspect
-    module, cls = _ANALYZERS[family]
-    klass = getattr(importlib.import_module(module), cls)
-    tables = (view.policy.get("analyzers") or {}).get("class_tables")
-    if tables and "class_tables" in inspect.signature(klass.__init__).parameters:
-        return klass(class_tables=tables)
-    return klass()
-
-def zone_results(view: FormationView, family: str) -> list[tuple[Any, Any]]:
-    """(zone, CategoryAnalysisResult): the library analyzer of a family run on exactly each zone's samples (as the
-    workflow of record), once per view; the store and every class lookup read the same results."""
-    import warnings
-
-    family = family.lower()
-    if family not in _ANALYZERS:
-        raise EvidenceError(f"WHAT: unknown family {family!r}. FIX: use one of {sorted(_ANALYZERS)}.")
-    cache = view.__dict__.setdefault("_analyzer_results", {})
-    if family not in cache:
-        analyzer = make_analyzer(view, family)
-        out = []
-        for z in view.zones:
-            # with the calculations the well was interpreted with (petroharness.well.calculations)
-            with warnings.catch_warnings(), calculations(getattr(view.prep, "context_profile", None)):
-                warnings.simplefilter("ignore")
-                out.append((z, analyzer.analyze(view.zone_well(z), add_curves=False)))
-        cache[family] = out
-    return cache[family]
-
-
-def label_runs(depth: np.ndarray, labels) -> dict[str, list[tuple[float, float]]]:
-    """Each label's runs as (first, last) sample depths, in first-appearance order; missing labels (None, NaN, '')
-    have none. Runs from flag_runs (petrophys flag_intervals)."""
-    labels = np.asarray(labels, dtype=object)
-    out: dict[str, list[tuple[float, float]]] = {}
-    for label in dict.fromkeys(labels.tolist()):
-        if label is None or label == "" or (isinstance(label, float) and np.isnan(label)):
-            continue
-        out[str(label)] = [(float(depth[a]), float(depth[b])) for a, b in flag_runs(depth, (labels == label).astype(float))]
-    return out
-
-
-def _shown(x: float) -> float:
-    """A depth at the analyzers' display precision (0.1, as their interval text): class listings keep it."""
-    return float(f"{x:.1f}")
-
-
-
-def classify_raw(view: FormationView, family: str, sections: Optional[list[str]] = None):
-    """All threshold classes per zone from the library analyzer's per-sample labels:
-    {section: {label: [(zone_id, top, base)]}}, depths at the analyzers' display precision (0.1)."""
-    merged: dict[str, dict[str, list[tuple[str, float, float]]]] = {}
-    thresholds: dict[str, str] = {}
-    for z, result in zone_results(view, family):
-        zd = view.depth[z.indices]
-        for sec, section in result.sections.items():
-            if sections and sec not in sections:
-                continue
-            thresholds.setdefault(sec, section.calculation_thresholds or "")
-            for label, runs in label_runs(zd, section.raw_labels).items():
-                merged.setdefault(sec, {}).setdefault(label, []).extend((z.zone_id, _shown(a), _shown(b)) for a, b in runs)
-    return merged, thresholds
-
-
-def _summary_fields(body) -> list[tuple[str, Any]]:
-    """The scalar fields of an analyzer's summary (its result metadata, values not class intervals), e.g.
-    reservoir_fraction of formation_level_summary; empty for anything else."""
-    if not isinstance(body, dict):
-        return []
-    return [(k, v) for k, v in body.items()
-            if k not in _SECTION_META and not isinstance(v, (list, dict)) and v not in (None, "")]
-
-
-def section_summaries(view: FormationView, family: str, section: str) -> list[tuple[str, list[float]]]:
-    """Analyzer sections that report values per zone instead of class intervals (e.g. formation_level_summary,
-    mhi_confirmation): one line per zone with its scalar fields, and the numbers shown (for the verifier).
-    Without it a verdict topic whose section is a summary would show nothing."""
-    out = []
-    for z, result in zone_results(view, family):
-        fields, nums = [], []
-        for k, v in _summary_fields(result.metadata.get(section)):
-            if isinstance(v, (int, float)) and not isinstance(v, bool):
-                nums.append(sig(float(v)))
-                fields.append(f"{k} {fmt(sig(float(v)))}")
-            else:
-                fields.append(f"{k}: {v}")
-        if fields:
-            out.append((f"{section} — {z.zone_id} ({z.lithology}, {fmt_depth(z.top)}-{fmt_depth(z.base)} {view.depth_unit}): "
-                        + "; ".join(fields), nums))
-    return out
-
-
-
-def classify(view: FormationView, topic=None, family: Optional[str] = None, sections: Optional[list[str]] = None,
-             max_per_class: int | None = None) -> dict:
-    """Threshold classes from the library analyzers for a domain topic, run per zone (as the workflow of record)."""
-    max_per_class = max_per_class or view.reg.limit("classify_max_per_class", 8)
-    topics = view.reg.resolve_topics(topic if topic is not None else family)
-    if not topics:
-        raise EvidenceError(f"WHAT: unknown topic {topic or family!r}. "
-                            f"FIX: use one of {sorted(view.reg.topics['topics'])} (or a judgement name).")
-    facts, values = [], []
-    for name in topics:
-        for fam, secs in view.reg.topics["topics"][name]:
-            merged, thresholds = classify_raw(view, fam, sections or secs)
-            for sec, classes in merged.items():
-                facts.append(f"{sec} — thresholds: {thresholds.get(sec, '')[:300]}")
-                for label, items in classes.items():
-                    spans = [(zid, f"{a:.1f}-{b:.1f} {view.depth_unit}", a, b) for zid, a, b in items]
-                    total = sum(b - a + view.step for _, _, a, b in spans)
-                    shown = sorted(sorted(spans, key=lambda s: -(s[3] - s[2]))[:max_per_class], key=lambda s: s[2])
-                    more = len(spans) - len(shown)
-                    facts.append(f"  {label} ({len(spans)} intervals, {fmt(total)} {view.depth_unit}): "
-                                 + "; ".join(f"{zid}:{it}" for zid, it, _, _ in shown)
-                                 + (f"; +{more} thinner intervals not listed" if more > 0 else ""))
-                    values.append(sig(total))
-                    values.extend(v for _, _, a, b in shown for v in (a, b))
-            for sec in (s for s in (sections or secs) if s not in merged):
-                for line, nums in section_summaries(view, fam, sec):   # summary-shaped (values, not classes)
-                    facts.append(line)
-                    values.extend(nums)
-    if not facts:
-        facts.append("no classes assigned in the lithology zones")
-    return {"title": f"Classes for {', '.join(topics)} by zone (zone:depth interval; thickest first, listed in depth order)",
-            "facts": facts, "values": values}
-
-
-def _zone_mean_well(view: FormationView):
-    """A petrophys Well with one sample per zone holding the zone means (codes as the zone's mode)."""
-    from petrophys.model.well import Well
-
-    full = view.prep.well
-    w = Well(name=full.name)
-    w.depth = np.array([(z.top + z.base) / 2 for z in view.zones], dtype=float)
-    w._depth_unit = view.depth_unit                     # zone mid-points are in metres whatever the LAS unit
-    w.header, w._parameters = full.header, full._parameters
-    for mnemonic in full.curves:
-        data = view.values(mnemonic)
-        if data is None:
-            continue
-        vals = []
-        for z in view.zones:
-            x = data[z.indices]
-            x = x[np.isfinite(x)]
-            if x.size == 0:
-                vals.append(np.nan)
-            elif mnemonic == view.lithology_curve or mnemonic.startswith("LITHOLOGY"):
-                u, c = np.unique(np.round(x), return_counts=True)
-                vals.append(float(u[np.argmax(c)]))
-            else:
-                vals.append(float(np.mean(x)))
-        w.add_curve(mnemonic, vals, view.unit(mnemonic))
-    return w
-
-
-def zone_classes_raw(view: FormationView, topic) -> dict:
-    """{section: {zone_id: label}} from the analyzer run on zone means, plus thresholds."""
-    import warnings
-
-    topics = view.reg.resolve_topics(topic)
-    if not topics:
-        raise EvidenceError(f"WHAT: unknown topic {topic!r}. FIX: use one of {sorted(view.reg.topics['topics'])}.")
-    w = _zone_mean_well(view)                         # one sample per zone, in zone order
-    out, thresholds, summaries, families = {}, {}, [], {}
-    for name in topics:
-        for fam, secs in view.reg.topics["topics"][name]:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                result = make_analyzer(view, fam).analyze(w, add_curves=False)
-            for sec in [k for k in list(result.sections) + list(result.metadata) if k in secs]:   # the result's order
-                if _summary_fields(result.metadata.get(sec)):
-                    # A summary (values, not classes) has no class per zone mean: it would read "unresolved" in every
-                    # zone. zone_classes gives its values per zone instead (section_summaries).
-                    summaries.append((fam, sec))
-                    continue
-                if sec not in result.sections:
-                    continue
-                section = result.sections[sec]
-                thresholds[sec] = section.calculation_thresholds or ""
-                families[sec] = fam
-                out[sec] = {z.zone_id: str(lab) for z, lab in zip(view.zones, section.raw_labels)
-                            if not (lab is None or lab == "" or (isinstance(lab, float) and np.isnan(lab)))}
-    return {"classes": out, "thresholds": thresholds, "summaries": summaries, "families": families}
-
-
-def sample_labels(view: FormationView, family: str, section: str) -> np.ndarray:
-    """Each interval sample's label in a section, from the analyzer run on each zone's samples (None outside the zones
-    and where the analyzer gives none)."""
-    out = np.full(np.asarray(view.depth).size, None, dtype=object)
-    for z, result in zone_results(view, family):
-        if section in result.sections:
-            labs = np.asarray(result.sections[section].raw_labels, dtype=object)
-            if labs.size == len(z.indices):
-                out[z.indices] = labs
-    return out
-
-
-def _net_rock_status(view: FormationView) -> dict[str, str]:
-    """Each zone's net-rock status by the policy shale cutoff: the NET_ROCK fraction where the workflow wrote the flag,
-    else the zone-mean VCL against the cutoff."""
-    vcl_max = (view.policy.get("cutoffs") or {}).get("vcl_max")
-    out = {}
-    for z in view.zones:
-        net = view.zone_values(z, "NET_ROCK")
-        vcl = view.zone_values(z, "VCL")
-        v = float(np.nanmean(vcl)) if vcl is not None and np.isfinite(vcl).any() else None
-        if net is not None and np.isfinite(net).any():
-            out[z.zone_id] = "pass" if float(np.nanmean(net)) >= 0.5 else ("fail" + (f" (VCL {v:.2f})" if v is not None else ""))
-        elif v is not None and vcl_max is not None:
-            out[z.zone_id] = "pass" if v <= vcl_max else f"fail (VCL {v:.2f})"
-    return out
 
 
 def zone_classes(view: FormationView, topic, net_rock: bool = True) -> dict:
@@ -2222,112 +1124,11 @@ def core_vs_log(view: FormationView) -> dict:
             "values": values}
 
 
-# A step's record lines describe the whole well's run; they are shown as written, under one label, and the interval's
-# own facts come from the step's output curves (interval_facts), not from rewriting the lines.
-RECORD_LABEL = "record (the whole well's run; its counts are the well's)"
-
-
-def interval_facts(view: FormationView, outputs) -> tuple[list[str], list[float]]:
-    """What a step's output curves hold in this interval, read from the curves: each flag's samples set here (and
-    their thickness); the range here of a step's one curve of values (a temperature, an Rw: the record's is the whole
-    well's); an output with values at only part of the interval's samples; and, where the analyzers filled
-    an output the step left empty (the view's values against its own_values), the step's samples and the analyzers'
-    apart: the record may say the step did not compute a curve the interval holds. (lines, their numbers)."""
-    from petroharness.well.summary import curve_kind
-    n_all, step, unit = int(view.mask.sum()), float(view.step), view.depth_unit
-    lines, nums = [], []
-    outs = [str(o) for o in dict.fromkeys(outputs or ()) if view.available(str(o))]
-    values = [c for c in outs if curve_kind(view, c).kind == "values"]
-    if len(values) == 1:                               # a step that writes one curve of values (a temperature, an
-        c = values[0]                                  #   Rw): its range here, as a flag gives its count (question
-        x = np.asarray(view.values(c), dtype=float)    #   suite X06: the record's range is the whole well's)
-        if np.isfinite(x).any():
-            lo, hi, u = float(np.nanmin(x)), float(np.nanmax(x)), (view.unit(c) or "").strip()
-            lines.append(f"{c} from {fmt(sig(lo))} to {fmt(sig(hi))}{' ' + u if u else ''}")
-            nums += [sig(lo), sig(hi)]
-    for c in dict.fromkeys(str(o) for o in outputs or ()):
-        if not view.available(c):
-            continue
-        x = np.asarray(view.values(c), dtype=float)
-        have = int(np.isfinite(x).sum())
-        own = view.own_values(c)
-        k = have if own is None else int(np.isfinite(np.asarray(own, dtype=float)).sum())
-        added = f" ({k} from the step; the analyzers add {have - k} where the step left it empty)" if have > k else ""
-        if curve_kind(view, c).kind == "flag":         # by the shape of its values, as every tool reads it
-            n = int(np.nansum(x > 0.5))
-            lines.append(f"{c} set at {n} of {have} samples ({fmt(n * step)} {unit})" + added)
-            nums += [n, have, sig(n * step)] + ([k, have - k] if added else [])
-        elif 0 < have < n_all or added:
-            lines.append(f"{c} has values at {have} of {n_all} samples" + added)
-            nums += [have, n_all] + ([k, have - k] if added else [])
-    return lines, nums
-
-
-_SXO_ROUTE_TEXT = {"quicklook": "the quicklook transform of SW", "measured": "from measured shallow resistivity",
-                   "mixed": "from measured shallow resistivity where valid, the quicklook transform of SW elsewhere"}
-
-
-def provenance(view: FormationView, topics: list[str]) -> dict:
-    """How the workflow of record computed a quantity: each step's method and its first decisions, scoped to the
-    interval's own facts from its curves (interval_facts), plus the routes read from this interval's curves where the record describes the
-    whole well (which resistivity pair INVASION_RATIO uses, how SXO was obtained)."""
-    facts, values = [], []
-    table, aliases = view.reg.topics["provenance"], view.reg.topics.get("provenance_aliases", {})
-    asked = ([topics] if isinstance(topics, str) else topics) or ["rw"]           # a single topic may come as a string
-    unknown = [t for t in asked if table.get(aliases.get(str(t).lower(), str(t).lower())) is None]
-    if len(unknown) == len(asked):
-        raise EvidenceError(f"WHAT: unknown topic {unknown[0]!r}. FIX: use any of {sorted(table)}.")
-    for topic in [t for t in asked if t not in unknown]:         # the known topics run; the unknown ones are named below
-        steps = table.get(aliases.get(topic.lower(), topic.lower()))
-        for s in steps:
-            st = view.prep.steps.get(s) or {}
-            if not st:
-                continue
-            said = [d for d in (st.get("decisions") or []) if isinstance(d, str)][:4]
-            decisions = [f"{RECORD_LABEL}: " + "; ".join(said)] if said else []     # whole: a verdict's alternatives
-            here, nums = interval_facts(view, st.get("outputs") or [])                #   are its end
-            if here:
-                decisions.append("in this interval: " + "; ".join(here))
-                values += nums
-            if s == "invasion" and invasion_route(view):
-                decisions.append(f"in this interval INVASION_RATIO = {invasion_route(view)}")
-            if s in ("mhi", "saturation") and sxo_route(view) in _SXO_ROUTE_TEXT:
-                decisions.append(f"in this interval SXO is {_SXO_ROUTE_TEXT[sxo_route(view)]}")
-            if s == "porosity":
-                from petroharness.record.card import porosity_parameters
-                params = porosity_parameters(st, [z.lithology for z in view.zones])
-                if params:
-                    decisions.append(params)
-            facts.append(f"{s}: method={st.get('method')}; " + " | ".join(decisions))
-    if unknown:
-        facts.append(f"unknown topics left out: {', '.join(map(str, unknown))} (topics: {', '.join(sorted(table))})")
-    return {"title": "How the workflow of record computed it", "facts": facts, "values": values}
-
-
-def depth_trend(view: FormationView, curves: list[str]) -> dict:
-    curves, _ = _check_curves(view, curves)
-    res = zone_stats(view, curves, ["mean"])
-    facts = []
-    mids = np.array([(z.top + z.base) / 2 for z in view.zones])
-    for j, c in enumerate(curves):
-        ys = np.array([r[3 + j] for r in res["rows"]], dtype=float)
-        ok = np.flatnonzero(np.isfinite(ys))
-        if ok.size >= 3:
-            hi, lo = ok[np.argmax(ys[ok])], ok[np.argmin(ys[ok])]
-            slope10 = 10 * np.polyfit(mids[ok], ys[ok], 1)[0]
-            facts.append(f"{c}: top zone {view.zones[ok[0]].zone_id} {fmt(ys[ok[0]])}, bottom zone "
-                         f"{view.zones[ok[-1]].zone_id} {fmt(ys[ok[-1]])}; highest {view.zones[hi].zone_id} {fmt(ys[hi])}, "
-                         f"lowest {view.zones[lo].zone_id} {fmt(ys[lo])}; linear trend {fmt(slope10)} per 10 {view.depth_unit} of depth "
-                         f"({'increasing' if slope10 > 0 else 'decreasing'} downward, i.e. {'decreasing' if slope10 > 0 else 'increasing'} upward)")
-    res["title"] = f"Top-down zone means of {', '.join(curves)}"
-    res["facts"] = facts
-    return res
-
-
-
 # Measured logs a completeness record lists per zone (the primary logs of petrophys' completeness list that are
 # measured, not computed by the workflow)
 _COMPLETENESS_COMPUTED = {"TEMP", "RMF", "RW"}
+
+
 # derived curves the numerical analyzer builds from shear sonic (its methodology: Vs = 304800 / DTS)
 _SHEAR_BASED = ("POISSON_RATIO", "YOUNG_MOD", "BRITTLENESS_INDEX", "SH_MIN", "VP_VS_RATIO")
 
@@ -2394,6 +1195,7 @@ def data_record(view: FormationView) -> dict:
             "columns": ["zone", "lithology", f"depth ({view.depth_unit})", "samples", "lithology labels valid", "measured logs with a value",
                         "gaps in measured logs", "derived curves with no value"],
             "rows": rows, "facts": facts, "values": values}
+
 
 def unit_roles(view: FormationView) -> dict:
     """The workflow's flow roles (Petrophys flow_roles), as it gives them: zones ranked by mean permeability
@@ -2480,71 +1282,9 @@ def unit_roles(view: FormationView) -> dict:
             "rows": rows, "facts": facts, "values": values}
 
 
-def _plain(label: str) -> str:
-    """A library class label in plain words (references write labels as words, not tokens)."""
-    return label.replace("_", " ").lower()
-
-
-def flagged_runs(view: FormationView, topics=None, flags=None) -> dict:
-    """Where the analyzers flag something: for each non-background class of the given topics and each
-    flag curve, every run inside the zones with depth, thickness and zone, the run count, the summed thickness and the
-    largest continuous run. Rows are summaries for the writer; `runs` holds every run for the code-composed block
-    (writer.render_flag_block). Background classes (registry topics.yaml background_classes) are left out."""
-    background = set(view.reg.topics.get("background_classes", []))
-    zone_of = lambda a, b: next((z.zone_id for z in view.zones if z.top - 0.06 <= (a + b) / 2 <= z.base + 0.06), "-")
-    groups = []                                   # (section, label, [(a, b, zone)])
-    for name in view.reg.resolve_topics(topics or []):
-        for fam, secs in view.reg.topics["topics"][name]:
-            merged, _ = classify_raw(view, fam, secs)
-            for sec, classes in merged.items():
-                for label, items in classes.items():
-                    if label in background:
-                        continue
-                    runs = sorted({(a, b, zid) for zid, a, b in items})
-                    if runs:
-                        groups.append((sec, label, runs))
-    for flag in [str(f).upper() for f in (flags or [])]:
-        data = view.values(flag)
-        if not view.is_flag(flag) or data is None or not np.isfinite(data).any():
-            continue
-        runs = []
-        for z in view.zones:
-            idx = z.indices
-            runs += [(a, b, z.zone_id) for a, b in _runs(view.depth[idx], data[idx], view.step)]
-        if runs:
-            groups.append(("flag", flag, sorted(runs)))
-    rows, facts, values, full = [], [], [], []
-    seen = set()
-    for sec, label, runs in groups:
-        key = (label, tuple(runs))
-        if key in seen:                                   # the same class reached through two topics
-            continue
-        seen.add(key)
-        thick = [(b - a + view.step, a, b, zid) for a, b, zid in runs]
-        total = sum(t for t, *_ in thick)
-        big = max(thick)
-        zones = sorted({zid for *_, zid in thick if zid != "-"}, key=lambda z: [v.zone_id for v in view.zones].index(z))
-        name = _plain(label) if sec != "flag" else f"{label} flag"
-        rows.append([name, len(runs), sig(total), f"{fmt_depth(big[1])}–{fmt_depth(big[2])} {view.depth_unit} ({fmt(big[0])} {view.depth_unit}, {big[3]})",
-                     _zone_list(view, zones) if zones else "-"])
-        full.append({"class": name, "section": sec.replace("_", " "), "runs": [(a, b, t, zid) for t, a, b, zid in thick],
-                     "total": total, "largest": big})
-        values += [total, big[0], big[1], big[2]] + [v for t, a, b, _ in thick for v in (a, b, t)]
-    if not rows:
-        facts.append("no flagged class or flag runs in the lithology zones for these topics")
-    return {"title": "Flagged intervals (log-indicated screening classes and flags; every run listed in the answer block)",
-            "columns": ["class or flag", "runs", f"total ({view.depth_unit})", "largest continuous run", "zones"],
-            "rows": rows, "facts": facts, "values": values, "runs": full}
-
-
 CATALOG: dict[str, Callable[..., dict]] = {
-    "zone_stats": zone_stats, "lithology_stats": lithology_stats, "interval_stats": interval_stats, "flag_intervals": flag_intervals,
-    "pay_summary": pay_summary, "classify": classify, "zone_classes": zone_classes,
-    "formation_summary": formation_summary, "core_vs_log": core_vs_log,
-    "provenance": provenance, "depth_trend": depth_trend, "correlation": correlation,
-    "threshold_exceedance": threshold_exceedance, "zone_relation": zone_relation, "spike_flags": spike_flags,
+    "lithology_stats": lithology_stats, "pay_summary": pay_summary, "zone_classes": zone_classes,
+    "formation_summary": formation_summary, "core_vs_log": core_vs_log, "threshold_exceedance": threshold_exceedance,
     "adjacent_jumps": adjacent_jumps, "vertical_sequence": vertical_sequence, "curve_order": curve_order,
-    "zone_contrast": zone_contrast, "unit_roles": unit_roles, "flagged_runs": flagged_runs, "data_record": data_record,
+    "zone_contrast": zone_contrast, "unit_roles": unit_roles, "data_record": data_record,
 }
-
-

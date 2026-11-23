@@ -221,7 +221,7 @@ def screened(view, c: str) -> str:
     RANGE_SCREENING_WARNING_FRACTION, the share at which it warns of a wrong label, scale or curve type; a few spikes
     it masks without a word, and so does this): "range screening removed 4914 of its 9427 readings over the well
     (outside 38.5-300 us/ft); the rest is left out too" (the last where Petrophys left the whole curve out); ""
-    otherwise (question suite X25: DTC had no values in the interval and the answer said the well had no sonic
+    otherwise (DTC had no values in the interval and the answer said the well had no sonic
     log)."""
     from petrophys.preprocessing.standardization.curve_standardizer import RANGE_SCREENING_WARNING_FRACTION
     well = getattr(getattr(view, "prep", None), "well", None)
@@ -253,7 +253,7 @@ def code_text(code, labels: dict) -> str:
 
 def class_groups(codes, labels: dict = None) -> list:
     """The classes of a curve's codes: codes the record's labels name alike are one class (a tuple of them, question
-    suite F11: the data's code table names 9 and 12 LIMESTONE, listed twice), every other code its own; in the order of
+    the data's code table names 9 and 12 LIMESTONE, listed twice), every other code its own; in the order of
     each class's first code."""
     by = {}
     for c in codes:
@@ -330,7 +330,7 @@ def outside(view) -> int:
 
 def count_share(k: int, n: int, what: str = "samples") -> str:
     """A share of samples written with its count: "2 of 768 samples (0.3%)". A share alone left a question asking how
-    many with no count to quote (question suite B05, Y02, Y11: "the absolute sample counts are not stated")."""
+    many with no count to quote ("the absolute sample counts are not stated")."""
     from petroharness.well.view import fmt_pct
     return f"{int(k)} of {int(n)} {what} ({fmt_pct(100.0 * k / n, 1) if n else 'n/a'})"
 
@@ -395,7 +395,7 @@ def whole_label_of(view, i=str, keep=None, where: str = "") -> str:
     """The whole selection's label as every result line writes it, its counts written by i (a result's Out.i, so
     they are numbers of the result): with its samples outside any zone or row; under a where (keep: its samples,
     where: the condition as read), every sample where it holds, how many, and how many of them lie outside any zone
-    (question suite B01: 'whole interval (201 samples outside any zone)' over the 158 samples of a where was read
+    ('whole interval (201 samples outside any zone)' over the 158 samples of a where was read
     as the whole interval)."""
     if keep is None:
         return whole_text(view, i(outside(view)))

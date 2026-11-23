@@ -10,7 +10,7 @@ Every number in the answer traces back to the log.
 
 **Petrophys calculates · the model investigates · the harness records · you decide**
 
-[![Version](https://img.shields.io/badge/version-1.5.0-011e3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-011e3f)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.10-011e3f)](#install)
 [![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](docs/MODELS.md)
 [![Default model](https://img.shields.io/badge/default-K2--Horizon--7B-ef6719)](docs/MODELS.md)
@@ -50,7 +50,7 @@ it builds claims that cite their evidence.
 
 #### Any LAS file
 You give a raw LAS file, and formation tops from any table, a depth window or the whole well. No lithology log? The
-well is zoned by shale volume. Depths can be in feet or metres, even mixed.
+well is zoned by the lithology Petrophys's mineral solver gives. Depths can be in feet or metres, even mixed.
 
 </td>
 </tr>
@@ -165,7 +165,7 @@ flowchart LR
 
 | Stage | What happens |
 |---|---|
-| **1 · The well** | Petrophys interprets the raw LAS and cuts it to your interval. The interval is zoned by its lithology log, or by shale-volume bands when there is none. |
+| **1 · The well** | Petrophys interprets the raw LAS and cuts it to your interval. The interval is zoned by its lithology log; without one, by the lithology Petrophys's mineral solver gives; with neither, by shale-volume bands. |
 | **2 · Read** | The model chooses the topic areas the question touches, lists the measurements the question names, and says whether the question is direct (a value, a setting, a count that one or two lookups state) or needs an investigation. A direct question skips stages 3 and 4: one or two lookups, then a short answer with its basis, in about a quarter of the model's work. Where the lookups do not state what is asked, it gets the investigation after all. `--investigate` gives every question the full investigation. |
 | **3 · Investigate** | Up to eight steps, each one model call rebuilt from the state. The model opens results with tools (statistics zone by zone, analyzer classes as located depth runs, profiles, comparisons, crossplots, overlaps, arithmetic), has Petrophys compute what the record does not hold (another method, an estimate, a what-if, any of its functions), and adds, revises or drops claims that cite them. Code checks each claim as it arrives. |
 | **4 · Settle** | With every opened result in view, the claims become final. |
@@ -236,8 +236,8 @@ petroharness --las $LAS --tops $TOPS --formation "BRENT GP." \
 | neither | nothing: the whole log | Teapot 17-WX-21, in feet from surface (`petrophys.sample('teapot_17-wx-21')`) |
 
 The answer is printed, and `answer.md` and `trace.json` (every model call and every result opened) go to
-`./petroharness-out/<LAS name>/`. A well with no lithology log, such as Taranaki tuhua-7, is zoned by shale-volume
-bands. More: [docs/USAGE.md](docs/USAGE.md).
+`./petroharness-out/<LAS name>/`. A well with no lithology log, such as Taranaki tuhua-7, is zoned by the lithology
+Petrophys's mineral solver gives. More: [docs/USAGE.md](docs/USAGE.md).
 
 Data: GeoLink, CC BY-SA 4.0; Teapot Dome (NPR-3), RMOTC, U.S. Department of Energy; Taranaki Basin Curated Well Logs
 Dataset (New Zealand Petroleum & Minerals), CDLA-Sharing-1.0.
@@ -327,20 +327,23 @@ field, setting, tool and record is described in the [reference](docs/README.md#4
 | [docs/README.md](docs/README.md) | the map of the documentation: guides, concepts and the full reference |
 | [docs/USAGE.md](docs/USAGE.md) | evaluating a formation in your own wells: intervals, tops files, units, lithology, output, the Python API |
 | [docs/SESSIONS.md](docs/SESSIONS.md) | conversations: follow-up questions on one interval, figures, the session folder, resume |
-| [docs/EVIDENCE.md](docs/EVIDENCE.md) | the evidence graph and the audit trail of an answer |
-| [docs/SETUP.md](docs/SETUP.md) | the setup record: what answers a question, with one hash |
+| [docs/EVIDENCE.md](docs/EVIDENCE.md) | auditing an answer: the evidence graph, the audit trail, the report, and the setup record with its hash |
 | [docs/TOOLS.md](docs/TOOLS.md) | the tools by request, and Petrophys's functions: calculate, estimate, what_if, check, classify, summarize, calibrate |
 | [docs/MODELS.md](docs/MODELS.md) | models: serving, model cards, reasoning models, hosted APIs |
 | [docs/UI.md](docs/UI.md) | the web UI: options, the parts of the page, its API |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the parts, and how a question flows through them |
-| [docs/GRAPH.md](docs/GRAPH.md) | the question graph, node by node |
-| [docs/SESSION_GRAPH.md](docs/SESSION_GRAPH.md) | the session graph and the later-question graph |
+| [docs/GRAPH.md](docs/GRAPH.md) | the three graphs: the question graph node by node, the later-question graph and the session graph |
 | [docs/DESIGN.md](docs/DESIGN.md) | the design rules and the generality contract |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | configuration, benchmark mode, testing and the code layout |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | where a contribution goes and how to show a change is safe |
 | [tests/gate/README.md](tests/gate/README.md) | the gates: the public mini set, the golden tapes, the request gate |
 | [AGENTS.md](AGENTS.md) | the rules for changing the code |
 | [CHANGELOG.md](CHANGELOG.md) | the releases |
+
+## Licence
+
+PetroHarness is released under the [Creative Commons Attribution 4.0 International licence](LICENSE) (CC BY 4.0):
+you may share and adapt it, with credit. Petrophys and the benchmark datasets keep their own licences.
 
 ## Citation
 

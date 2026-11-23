@@ -1,15 +1,11 @@
 # Interpretation policy: the workflow of record for the single-formation benchmark. The curves come from the engine
-# that generated the benchmark's reference context, run unchanged on the raw LAS, so the policy needs no corrections
-# (GR endpoints, Rw) of its own.
+# that generated the benchmark's reference context, run unchanged on the raw LAS.
 name: reference_v2
 
 # Pinned interpretation engine (a directory under data.engines_dir): petrophys c41417f with its SWIRR reservoir-flag
-# rule, followed by the exporter's value-range QC. Omit it, or write "installed", to interpret with the installed
-# library and the corrections the policy lists (gr_endpoints, rw).
+# rule, followed by the exporter's value-range QC. Omit it, or write "installed", to have petrophys.interpret interpret
+# each LAS with the library's settings and the cutoffs below.
 engine: petrophys-c41417f-swirr-all-shale-phit
-
-# An engine interprets the whole well once.
-interpretation_scope: full_well
 
 # Value-range QC: the library's physical-plausibility rules per curve family (e.g. PHIE outside [0, 0.45] and PERM
 # outside [1e-4, 2e4] mD become NaN; SW is clipped to [0, 1]); the engine's own exporter applied it before computing

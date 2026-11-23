@@ -6,10 +6,12 @@ tops table, the first question, the later questions, the figures and the audit t
 
     .venv/bin/python -m pytest tests/gate -q          (no data settings, no endpoint)
 
-A different Petrophys version computes different curves, so different prompts: the test then skips and says so.
+A different Petrophys version computes different curves, so different prompts: the test then skips and says so,
+except where PETROHARNESS_GATE_REQUIRED is set (CI): there a gate that cannot run fails, since a skip would pass.
 Record again with tests/gate/record_mini.py after a change that is meant to alter what the model is sent.
 """
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -21,6 +23,16 @@ sys.path[:0] = [str(ROOT / "src"), str(HERE)]
 import record_mini as R  # noqa: E402
 
 RECORDED = sorted(p.parent.name for p in R.MINI.glob("*/set.json"))
+REQUIRED = bool(os.environ.get("PETROHARNESS_GATE_REQUIRED"))       # CI: the gate must run, not skip
+
+
+def _cannot_run(why: str) -> None:
+    (pytest.fail if REQUIRED else pytest.skip)(why)
+
+
+def test_the_gate_has_a_recorded_conversation_where_it_is_required():
+    if REQUIRED and not RECORDED:
+        pytest.fail("no recorded mini set in this checkout (tests/gate/record_mini.py)")
 
 
 def test_the_request_gate_compares_run_by_run_and_names_every_difference(tmp_path, capsys):
@@ -89,7 +101,7 @@ def test_a_recorded_conversation_replays_request_for_request(name, tmp_path, mon
     spec = json.loads((R.MINI / name / "set.json").read_text(encoding="utf-8"))
     why = R.other_build(spec["petrophys"])                            # another version, or another build of it
     if why:
-        pytest.skip(why)
+        _cannot_run(why)
     for key in ("PETROHARNESS_DATA", "PETROHARNESS_SKILLS", "PETROHARNESS_MODEL_URL"):
         monkeypatch.delenv(key, raising=False)                        # a user's defaults: no settings, no endpoint
     las, tops = R.sample_files(spec)

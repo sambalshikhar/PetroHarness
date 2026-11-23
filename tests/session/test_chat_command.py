@@ -3,14 +3,12 @@ a WHAT / FIX line, before any question is asked.
 
     .venv/bin/python -m pytest tests/session/test_chat_command.py -q
 """
-import os
-from pathlib import Path
 
 import pytest
 
 from petroharness.session import chat as CH
 
-SAMPLES = Path(os.environ.get("PETROHARNESS_SAMPLE_LAS", "sample_las"))
+from _wells import SAMPLES  # noqa: E402  (Petrophys's sample files; PETROHARNESS_SAMPLE_LAS for a folder of them)
 LAS = SAMPLES / "tuhua-7.las"
 WINDOW = ["--top", "600", "--base", "700", "--depth-unit", "m", "--formation", "test window"]
 NOWHERE = ["--model-url", "http://127.0.0.1:9/v1"]           # never reached: the inputs fail first

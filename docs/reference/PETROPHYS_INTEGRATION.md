@@ -13,8 +13,8 @@ flowchart TB
     las["Raw LAS"]:::input --> prep["Petrophys interprets<br/>prepare_well"]:::petrophys
     prep --> rec[("Prepared well<br/>curves + step record")]:::record
     verb["Model's call: a verb<br/>calculate, estimate, check, ..."]:::model
-    verb -->|an object| cur["Curated object<br/>library*.py"]:::code
-    verb -->|search / run| reg["Registry, 308 functions<br/>and the binder"]:::code
+    verb -->|an object| cur["Curated object<br/>library/"]:::code
+    verb -->|search / run| reg["Registry, 304 functions<br/>and the binder"]:::code
     rec -.->|the record's parameters| cur
     rec -.->|its curves and values, shown| reg
     rec --> look["Lookups<br/>analyzers, curve_statistics"]:::petrophys
@@ -36,8 +36,8 @@ flowchart TB
 | Petrophys build | commit `7aa9968e72e7c09a28e68af383471184af9f5f52`, package version 3.0.0 | `README.md` (install), `pyproject.toml` |
 | Interpretation of the raw LAS | Petrophys, once per well and setting, cached by content | `well/prepare.py`, `prepare_well` |
 | Lookups | Petrophys's six analyzers on each lithology zone; every statistic from `curve_statistics` | `record/catalog.py`, `well/stats.py` |
-| Verbs over Petrophys | `check`, `calculate`, `what_if`, `estimate`, `classify`, `summarize`, `calibrate` | `agent/library*.py` |
-| Functions reachable by `search` and `run` | 308 public functions from 103 modules, generated at import | `agent/library_api.py`, `registry()` |
+| Verbs over Petrophys | `check`, `calculate`, `what_if`, `estimate`, `classify`, `summarize`, `calibrate` | `agent/library/` |
+| Functions reachable by `search` and `run` | 304 public functions from 103 modules, generated at import | `agent/library/api.py`, `registry()` |
 | Figures | Petrophys `visualization`; the harness has no drawing code | `figures.py` |
 | The rule | A tool computes petrophysics only through Petrophys, or is a listed generic data operation | `tests/test_petrophys_integration.py` |
 
@@ -133,7 +133,7 @@ The step record a tool reads, here the saturation step of 30/6-5 (`{"step": {"na
 <details>
 <summary>The analyzers</summary>
 
-`src/petroharness/record/catalog.py`, `_ANALYZERS`: one Petrophys analyzer per family, run on exactly each zone's
+`src/petroharness/record/analyzers.py`, `_ANALYZERS`: one Petrophys analyzer per family, run on exactly each zone's
 samples (`zone_results`, once per view), with the calculations the well was interpreted with
 (`well.calculations.calculations`).
 
@@ -209,7 +209,7 @@ GROUP read the record only.
 <details>
 <summary>verb_tool</summary>
 
-`src/petroharness/agent/library_api.py`, `verb_tool(verb, curated)`: the function a verb runs. It keeps the curated
+`src/petroharness/agent/library/api.py`, `verb_tool(verb, curated)`: the function a verb runs. It keeps the curated
 function's arguments, makes every one of them optional, and adds `search`, `run`, `args` and `label`. A Petrophys function named as an
 object is recognised by `_objects` and `_is_function`.
 
@@ -239,17 +239,17 @@ is the record's, and the result names each input's source.
 
 | Verb | Objects | Module |
 |---|---|---|
-| `calculate`, `what_if` | `clay_volume`, `porosity`, `water_resistivity`, `mud_filtrate_resistivity`, `saturation`, `permeability`, `rock_quality`, `bvw`, `mhi`, `net_pay`, `temperature` | `library.py` |
-| `estimate` | `rw`, `archie_m`, `clay_point`, `gr_endpoints`, `matrix`, `temperature` | `library.py` |
-| `check` | `held_readings`, `bad_hole`, `depth_shift` | `library_check.py` |
-| `classify` | `gas`, `minerals`, `flow_units`, `electrofacies`, `moveable_hydrocarbons` | `library_classify.py` |
-| `summarize` | `pay` | `library_summarize.py` |
-| `calibrate` | `porosity`, `permeability`, `saturation`, `poro_perm`, `shear`, `elastic` | `library_calibrate.py` |
+| `calculate`, `what_if` | `clay_volume`, `porosity`, `water_resistivity`, `mud_filtrate_resistivity`, `saturation`, `permeability`, `rock_quality`, `bvw`, `mhi`, `net_pay`, `temperature` | `library/calculate.py` |
+| `estimate` | `rw`, `archie_m`, `clay_point`, `gr_endpoints`, `matrix`, `temperature` | `library/estimate.py` |
+| `check` | `held_readings`, `bad_hole`, `depth_shift` | `library/check.py` |
+| `classify` | `gas`, `minerals`, `flow_units`, `electrofacies`, `moveable_hydrocarbons` | `library/classify.py` |
+| `summarize` | `pay` | `library/summarize.py` |
+| `calibrate` | `porosity`, `permeability`, `saturation`, `poro_perm`, `shear`, `elastic` | `library/calibrate.py` |
 
 <details>
 <summary>calculate and what_if</summary>
 
-`src/petroharness/agent/library.py` (every name below). A property is recomputed by Petrophys's own workflow step
+`src/petroharness/agent/library/` (every name below). A property is recomputed by Petrophys's own workflow step
 (`petrophys.workflow.steps`), with the steps that read its outputs, on the prepared well.
 
 | Name | Type | Default | Meaning |
@@ -325,7 +325,7 @@ A limestone matrix on 30/6-5 Brent (the per-zone lines and the later curves cut)
 <details>
 <summary>estimate</summary>
 
-`src/petroharness/agent/library.py`, `estimate` and `ESTIMATES`. Each estimate is set against the record's value of the
+`src/petroharness/agent/library/estimate.py`, `estimate` and `ESTIMATES`. Each estimate is set against the record's value of the
 same parameter; `zones` limits the samples to those zones.
 
 | Parameter | Method | Petrophys function | Samples and defaults | Writes |
@@ -356,7 +356,7 @@ probably not all clean and water-bearing.
 <details>
 <summary>check</summary>
 
-`src/petroharness/agent/library_check.py`, `OBJECTS`. Each flag found is written as a curve of the question.
+`src/petroharness/agent/library/check.py`, `OBJECTS`. Each flag found is written as a curve of the question.
 
 | Object | Petrophys | Needs | Default threshold | Writes |
 |---|---|---|---|---|
@@ -378,7 +378,7 @@ Held readings on 30/6-5 Brent, every measured log:
 <details>
 <summary>classify</summary>
 
-`src/petroharness/agent/library_classify.py`, `OBJECTS`.
+`src/petroharness/agent/library/classify.py`, `OBJECTS`.
 
 | Object | Petrophys | Needs | Writes |
 |---|---|---|---|
@@ -410,7 +410,7 @@ available -> mineral volumes computed, LITHO not inferred or overwritten`); `cla
 <details>
 <summary>summarize</summary>
 
-`src/petroharness/agent/library_summarize.py`, `OBJECTS`.
+`src/petroharness/agent/library/summarize.py`, `OBJECTS`.
 
 | Object | Petrophys | Needs | Writes |
 |---|---|---|---|
@@ -432,7 +432,7 @@ The record's own flags, with its exclusions, are summarised by `pay_summary` (`r
 <details>
 <summary>calibrate</summary>
 
-`src/petroharness/agent/library_calibrate.py`, `OBJECTS`.
+`src/petroharness/agent/library/calibrate.py`, `OBJECTS`.
 
 | Object | Petrophys | Needs | Writes |
 |---|---|---|---|
@@ -450,20 +450,22 @@ The record's own flags, with its exclusions, are summarised by `pay_summary` (`r
 ```
 
 A curve this question calculated is added to a copy of the prepared well before a core fit reads it
-(`library_calibrate._well_with`).
+(`library.calibrate._well_with`).
 
 </details>
 
 ## 7. The function registry
 
-`library_api.registry()` files every public function of Petrophys's `interpretation`, `evaluation` and
-`preprocessing` packages under the verb its package serves: 308 functions from 103 modules in the pinned build. Every
+`library.api.registry()` files every public function of Petrophys's `interpretation`, `evaluation` and
+`preprocessing` packages under the verb its package serves: 304 functions from 103 modules in the pinned build. Every
 verb reaches them with `search` (words) and `run` (a name); a function added to Petrophys appears with no change here.
+A function that needs a file or folder path (a parameter typed `Path` or `PathLike`, such as a CSV reader) is left
+out, and an optional path parameter is not offered, so a call never reads or writes a file on the server.
 
 <details>
 <summary>Generation</summary>
 
-`src/petroharness/agent/library_api.py`, `registry()` (cached):
+`src/petroharness/agent/library/api.py`, `registry()` (cached):
 
 1. `pkgutil.walk_packages(petrophys.__path__, "petrophys.")` lists every module.
 2. A module is skipped when its name contains `._` (private), `borehole_imaging` (image logs, no LAS curves) or
@@ -471,7 +473,7 @@ verb reaches them with `search` (words) and `run` (a name); a function added to 
 3. Each module is imported; one that will not import offers nothing.
 4. Each public function defined in the module (not imported into it) becomes an `Fn`: its signature, its docstring's
    first sentence, its numpy-style Parameters lines (`low, high : float` gives both the description;
-   `library_api._param_docs`) and its Returns section.
+   `library.api._param_docs`) and its Returns section.
 
 | Petrophys package (after `petrophys.`) | Verb |
 |---|---|
@@ -485,9 +487,9 @@ verb reaches them with `search` (words) and `run` (a name); a function added to 
 
 ```python
 from collections import Counter
-from petroharness.agent.library_api import registry
+from petroharness.agent.library.api import registry
 Counter(fn.verb for fn in registry())
-# {'summarize': 41, 'classify': 40, 'what_if': 5, 'calculate': 83, 'estimate': 62, 'calibrate': 52, 'check': 25}
+# {'summarize': 39, 'classify': 39, 'what_if': 5, 'calculate': 83, 'estimate': 62, 'calibrate': 51, 'check': 25}
 ```
 
 The first prefix that matches, in the order of `PACKAGES`, wins; so `interpretation.lithology.matrix` is `estimate` and
@@ -499,7 +501,7 @@ have no verb and are not in the registry.
 <details>
 <summary>Fn</summary>
 
-The fields of each registered `library_api.Fn`:
+The fields of each registered `library.api.Fn`:
 
 | Name | Type | Default | Meaning |
 |---|---|---|---|
@@ -513,7 +515,7 @@ The fields of each registered `library_api.Fn`:
 | `call()` | method | - | The function itself, imported |
 
 ```python
-from petroharness.agent.library_api import lookup
+from petroharness.agent.library.api import lookup
 lookup("calculate_net_gross")
 # Fn(name='calculate_net_gross', path='petrophys.evaluation.summaries.net_gross', verb='summarize',
 #    summary='Calculate net-to-gross ratios.',
@@ -528,18 +530,20 @@ lookup("calculate_net_gross")
 <details>
 <summary>Counts and groups</summary>
 
-Generated from the pinned Petrophys (`len(library_api.functions(verb))` and `library_api.groups(verb)`):
+Generated from the pinned Petrophys (`len(library.api.functions(verb))` and `library.api.groups(verb)`):
 
+<!-- generated: verbs (tests/docs_tables.py) -->
 | Verb | Functions | Groups (named from the Petrophys modules) |
 |---|---|---|
 | `calculate` | 83 | gr, sp, thomas stieber, vcl, invasion classification, invasion, inversion, profile, permeability, coates denoo, impermeable flag, lith vcl, perm, timur, eaton, density porosity, effective porosity, density correction, hc correction, neutron correction, neutron porosity, porosity, sonic porosity, total porosity, archie, dual water, indonesia, nigeria schlumberger, north sea, simandoux, sw, sxo, waxman smits |
 | `estimate` | 62 | nd, rcl, archie parameters, pickett analysis, rmf, rw, rwa, salinity rw, sp rw, sp window, temp correction, apparent matrix, matrix inference, matrix properties, temp corrections, temp gradient, temp profile |
-| `calibrate` | 52 | core analysis calibration, grain size, nmr calibration, elastic, capillary, empirical, formation pressure, mdt pretest, pressure contacts, saturation height, scal, rock physics, sonic saturation |
-| `summarize` | 41 | bvw, net pay cutoffs, net pay flags, net pay, pay summary, screening, averages, formation analysis, net gross, ranking, summaries statistics, zone summary, hydrocarbon pore volume |
-| `classify` | 40 | flow units, roles, heterogeneity, mhi, rock quality, zonation, clay typing, elemental spectroscopy, spectral gamma, thorium uranium, carbonate minerals, crossplots, labels, lithology log, lithology, multi mineral solver |
+| `calibrate` | 51 | core analysis calibration, grain size, nmr calibration, elastic, capillary, empirical, formation pressure, mdt pretest, pressure contacts, saturation height, scal, rock physics, sonic saturation |
+| `summarize` | 39 | bvw, net pay cutoffs, net pay flags, net pay, pay summary, screening, averages, formation analysis, net gross, ranking, summaries statistics, zone summary, hydrocarbon pore volume |
+| `classify` | 39 | flow units, roles, heterogeneity, mhi, rock quality, zonation, clay typing, elemental spectroscopy, spectral gamma, thorium uranium, carbonate minerals, crossplots, labels, lithology log, lithology, multi mineral solver |
 | `check` | 25 | depth matching, impute, histogram matching, normalization, curve masking, flag generator, washout detection, held readings, value ranges |
 | `what_if` | 5 | sensitivity, uncertainty |
-| All | 308 | from 103 modules |
+| All | 304 | from 103 modules |
+<!-- end generated: verbs -->
 
 `menu_line(verb)` ends every verb's description with its count and groups:
 
@@ -552,15 +556,15 @@ Generated from the pinned Petrophys (`len(library_api.functions(verb))` and `lib
 <details>
 <summary>search</summary>
 
-`library_api.find(f, verb, query)`: the functions matching the words.
+`library.api.find(f, verb, query)`: the functions matching the words.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| Words | set | - | Lower-case words of two characters or more, from the query | `library_api._words` |
-| Score | int | - | 3 per word in the function's name, plus 1 per word in its name, summary and parameter names; plus 2 when it is this verb's | `library_api.find` |
-| Order | - | - | Highest score first, then by name | `library_api.find` |
-| `MAX_FOUND` | int | 8 | Functions listed | `library_api.py` |
-| Each line | text | - | `name (other verb): summary [It reads the well's curves itself.] Needs <each required input>. Optional: <the first 8 optional inputs>`, each input with its facts ([section 8](#8-the-binder)) | `library_api.find`, `_facts` |
+| Words | set | - | Lower-case words of two characters or more, from the query | `library.api._words` |
+| Score | int | - | 3 per word in the function's name, plus 1 per word in its name, summary and parameter names; plus 2 when it is this verb's | `library.api.find` |
+| Order | - | - | Highest score first, then by name | `library.api.find` |
+| `MAX_FOUND` | int | 8 | Functions listed | `library/api.py` |
+| Each line | text | - | `name (other verb): summary [It reads the well's curves itself.] Needs <each required input>. Optional: <the first 8 optional inputs>`, each input with its facts ([section 8](#8-the-binder)) | `library.api.find`, `_facts` |
 
 On 30/6-5 Brent:
 
@@ -583,14 +587,14 @@ On 30/6-5 Brent:
 <details>
 <summary>run</summary>
 
-`library_api.run(f, verb, function, args, label)`: one Petrophys function on the question's interval.
+`library.api.run(f, verb, function, args, label)`: one Petrophys function on the question's interval.
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `function` | str | required | Looked up by its last dotted part, the one under this verb first | `library_api.lookup` |
-| `args` | dict | `{}` | The inputs the model names, read by the binder ([section 8](#8-the-binder)) | `library_api.bind` |
-| `label` | str | the function's name | The new curves' prefix | `library_api._label` |
-| First line | text | - | `Petrophys <qualified name>: <summary> Inputs: <sources>`, then `(it is filed under <verb>)` for another verb's function and `It returns: <Returns>` | `library_api.run` |
+| `function` | str | required | Looked up by its last dotted part, the one under this verb first | `library.api.lookup` |
+| `args` | dict | `{}` | The inputs the model names, read by the binder ([section 8](#8-the-binder)) | `library.api.bind` |
+| `label` | str | the function's name | The new curves' prefix | `library.api._label` |
+| First line | text | - | `Petrophys <qualified name>: <summary> Inputs: <sources>`, then `(it is filed under <verb>)` for another verb's function and `It returns: <Returns>` | `library.api.run` |
 
 Apparent water resistivity on 30/6-5 Brent. Called without its inputs, it is refused with what this interval offers
 for each; called with them, it runs on exactly those (`a`, not named, keeps Petrophys's default):
@@ -648,7 +652,7 @@ pickett_analysis: method is one of rma, ols, not 'fit'; leave it out for Petroph
 <details>
 <summary>What the model is shown for each input</summary>
 
-`library_api._facts(f, fn, p)`, in a search listing (every input) and in the refusal of a call that leaves a required
+`library.api._facts(f, fn, p)`, in a search listing (every input) and in the refusal of a call that leaves a required
 input out:
 
 | Part | When | Source |
@@ -747,7 +751,7 @@ summarize pay, sw_cutoff 0.5                   -> NET_RES_SW0_5, NET_PAY_SW0_5
 <details>
 <summary>Parts of a result</summary>
 
-`library_api.run` reads the value a function returns as `(label, value)` parts (`library_api._parts`, down two
+`library.api.run` reads the value a function returns as `(label, value)` parts (`library.api._parts`, down two
 levels): a dataclass's fields, a dict's items, a tuple's or list's members (labelled 0, 1, ...), a Petrophys object's
 public attributes. At most 24 parts are written; a curve goes through `library.register`.
 
@@ -779,19 +783,19 @@ On 30/6-5 Brent (four parts cut):
 
 | Source | Name | Defined in |
 |---|---|---|
-| `run` | `<LABEL>_<PART>`: the label (else the function's name) upper case, non-alphanumerics as `_`, at most 20 characters; the part at most 10; `X` first when it does not start with a letter | `library_api._label` |
+| `run` | `<LABEL>_<PART>`: the label (else the function's name) upper case, non-alphanumerics as `_`, at most 20 characters; the part at most 10, or whole when a part of the same result already took the cut name; `X` first when it does not start with a letter | `library.api._label` |
 | `calculate` | `<CURVE>_<LABEL>`: the label (else the method or model, else `ALT`), at most 16 characters | `library._label` |
-| `summarize` | `NET_RES_<LABEL>`, `NET_PAY_<LABEL>`, the label made from the asked cutoffs | `library_summarize.summarize` |
-| `classify` | Fixed names; `_LIB` added when the record already holds the name | `library_classify._name` |
-| `calibrate elastic` | Fixed names; `_EL` added when the record already holds the name | `library_calibrate._elastic` |
-| `check`, `estimate`, `calibrate` | Fixed names (`HELD_<CURVE>`, `WASHOUT`, `RWA`, `RHOMAA`, `PERM_PP`, `DTS_GC`, ...) | `library_check`, `library`, `library_calibrate` |
+| `summarize` | `NET_RES_<LABEL>`, `NET_PAY_<LABEL>`, the label made from the asked cutoffs | `library.summarize.summarize` |
+| `check`, `classify`, `estimate`, `calibrate` | Fixed names (`HELD_<CURVE>`, `WASHOUT`, `GAS_FLAG`, `RWA`, `RHOMAA`, `PERM_PP`, `DTS_GC`, `VP`, ...) | `library_check`, `library_classify`, `library`, `library_calibrate` |
+| Every source | A name the record or its analyzers hold gets `_LIB` (then `_LIB2`, ...): a lookup reads the record's curve first, so the new one would be hidden. A curve computed on request before keeps its name | `library.free_name`, in `register` |
 
 </details>
 
 <details>
 <summary>register</summary>
 
-`src/petroharness/agent/library.py`, `register(f, name, full, meaning, unit, step)`: a curve of the question.
+`src/petroharness/agent/library/shared.py`, `register(f, name, full, meaning, unit, step)`: a curve of the question, written
+under `free_name(f, name)`, which it returns (every caller says the returned name).
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
@@ -805,8 +809,8 @@ Every lookup then reads the curve like a record curve, and its label says what m
 [E9] SW_SIMANDOUX [v/v] = SW recomputed by Petrophys (saturation: model simandoux) (model output of the saturation (model simandoux, on request) step)
 ```
 
-In a conversation, a curve computed again under the same name by a later question marks the earlier questions' items
-that read it, and the same call asked again is computed anew (`ledger.Ledger._supersede`).
+A curve computed again under the same name with other values, later in the question or by a later question of a
+conversation, marks the earlier items that read it, and the same call asked again is computed anew (`ledger.Ledger._supersede`).
 
 </details>
 
@@ -841,14 +845,14 @@ calculate not run: Petrophys did not compute porosity with method neutron_densit
 
 | Situation | Message | Defined in |
 |---|---|---|
-| A `run` whose function raises | `Petrophys <fn>: <ExceptionType>: <message, at most 400 characters>` | `library_api.run` |
+| A `run` whose function raises | `Petrophys <fn>: <ExceptionType>: <message, at most 400 characters>` | `library.api.run` |
 | A step that refuses its parameters | `Petrophys <kind>: <message, at most 500 characters>` | `library._step` |
 | A workflow run that fails | `Petrophys could not run <kind>: <ExceptionType>: <message, at most 300 characters>` | `library.run` |
 | The asked step does not run (the steps after it would run on the record's inputs) | `Petrophys did not compute <kind> with <change>: <step>: <reason>. Inputs: ...`; in `what_if`, that value's line says `not written` | `library.calculate`, `library.what_if`, `library._ran` |
 | A later step skipped or failing inside a run that succeeded | A line of the result: `Petrophys did not run: <step>: <reason>`, and `not computed: <curves> (the step that writes them did not run)` | `library.calculate` |
-| A function's result that carries its own error | `Petrophys <fn> could not compute it: <error>. Inputs: ...` | `library_api.run` |
+| A function's result that carries its own error | `Petrophys <fn> could not compute it: <error>. Inputs: ...` | `library.api.run` |
 | A curated object's function that raises | `Petrophys <function>: <message>` (for example `Petrophys pickett_analysis: ...`) | `library*.py` |
-| A Petrophys warning during `run` | A line of the result: `Petrophys said: ...` | `library_api.run` |
+| A Petrophys warning during `run` | A line of the result: `Petrophys said: ...` | `library.api.run` |
 | A curated object's own notes | A line of the result: `Petrophys notes: ...` (depth shift), `Petrophys converted the core values: ...` | `library_check`, `library_calibrate` |
 
 - A `ToolError` comes back in the next step's NEW as `<tool> not run: <message>`; the trace keeps it under `errors` (at
@@ -1030,8 +1034,8 @@ calculation belongs in Petrophys ([EXTENDING.md](EXTENDING.md), "Add a Petrophys
 
 | Name | Value | Meaning | Defined in |
 |---|---|---|---|
-| `MODULES` | `record/catalog.py`, `record/sections.py`, `record/card.py`, `well/view.py`, `well/stats.py`, `well/formation.py`, `well/prepare.py`, `record/store.py`, `well/summary.py`, `agent/tools.py`, `agent/compute.py`, `agent/engine.py` | The modules whose static call graph is read | `tests/test_petrophys_integration.py` |
-| `ANALYZER_ENTRIES` | `catalog.zone_results`, `catalog.zone_classes_raw` | Reaching these runs a Petrophys analyzer | same |
+| `MODULES` | `record/catalog.py`, `record/sections.py`, `record/card.py`, `well/view.py`, `well/stats.py`, `well/formation.py`, `well/prepare.py`, `record/store.py`, `well/summary.py`, `agent/tools.py`, `agent/compute.py`, `agent/engine/` | The modules whose static call graph is read | `tests/test_petrophys_integration.py` |
+| `ANALYZER_ENTRIES` | `analyzers.zone_results`, `analyzers.zone_classes_raw` | Reaching these runs a Petrophys analyzer | same |
 | `GENERIC` | see below | Generic data operations, each with its reason; their statistics go through Petrophys only | same |
 | `RECORD_READERS` | `provenance`, `step` | Render the workflow's step record: library output read, not computed | same |
 
@@ -1044,20 +1048,18 @@ name that names no tool fails as stale. `test_the_graph_sees_library_calls` chec
 
 | `GENERIC` entry | Reason in the test |
 |---|---|
-| `correlation` | Pearson / rank correlation of two curves and their zone means |
 | `adjacent_jumps` | changes between adjacent samples above a threshold |
-| `zone_relation` | the per-zone order of curve means |
 | `zone_contrast` | zone means grouped by the high and low zones of a curve |
 | `threshold_exceedance` | samples beyond a threshold, per zone |
-| `depth_trend` | linear trend of zone means with depth |
 | `spike_flags` | samples beyond k standard deviations |
+| `values_at` | the values of curves at given depths (each nearest sample) |
+| `lag_correlation` | the correlation of two curves with one shifted by a depth lag |
 
 - Generic data operations computed in the harness, outside `CATALOG`: the least-squares line and Pearson correlation
   of `crossplot` (`engine.line_fit`), the differences and Spearman rank correlation of `compare` (`engine.pair`), the
   spike screen (`compute.spikes`), the lag correlation (`compute.lag_correlation`), and the thirds of a single zone
   (`tools._thirds`, `compute._sequence_in_zone`).
-- The `spike_flags` tool runs `compute.spikes`; the `spike_flags` entry of `GENERIC` names the catalog function of the
-  same name.
+- The `spike_flags` entry of `GENERIC` is the `spike_flags` tool, which runs `compute.spikes`.
 
 </details>
 
@@ -1071,15 +1073,15 @@ Most limits come back as a `ToolError` the model can act on, or as a line of the
 
 | Situation | What happens | Where |
 |---|---|---|
-| A function name not in the registry | `no Petrophys function '<name>'; search lists them, e.g. {"<verb>": {"search": "<words>"}}` | `library_api.lookup` |
-| A text argument for an array that is neither a curve nor a condition | `<fn>: <p> '<v>' is neither a curve here nor a condition` | `library_api.bind` |
+| A function name not in the registry | `no Petrophys function '<name>'; search lists them, e.g. {"<verb>": {"search": "<words>"}}` | `library.api.lookup` |
+| A text argument for an array that is neither a curve nor a condition | `<fn>: <p> '<v>' is neither a curve here nor a condition` | `library.api.bind` |
 | A property or method the step catalog does not list | `no property ...` or `<kind> has no method ...; methods: ...` | `library.kind_of`, `library._changes` |
 | A parameter of another property | `ToolError` with the call that changes it | `library._changes` |
 | Parameters that cannot be reconciled after 4 tries | `Petrophys <kind>: the parameters could not be reconciled with the step` | `library._step` |
 | A `what_if` target the runs do not write | `ToolError` naming what they write | `library.what_if` |
 | `estimate rw` by rwa with fewer than 10 clean, porous samples | `ToolError` suggesting `vcl_max`, `phie_min` or more zones | `library.estimate` |
-| `calibrate` core fits without 3 plugs with log values | `ToolError` naming the core curves needed | `library_calibrate._core_fit` |
-| `check bad_hole` without CALI | `ToolError`; the record's BAD_HOLE, where present, rests on DRHO alone | `library_check.bad_hole` |
+| `calibrate` core fits without 3 plugs with log values | `ToolError` naming the core curves needed | `library.calibrate._core_fit` |
+| `check bad_hole` without CALI | `ToolError`; the record's BAD_HOLE, where present, rests on DRHO alone | `library.check.bad_hole` |
 | No readable figure choice | `the model gave no readable choice of figures`; no figures | `figures.attach` |
 
 </details>

@@ -1,4 +1,4 @@
-"""summarize (docs/TOOLS_DESIGN.md, stage 2): net pay and hydrocarbon pore thickness per zone with the cutoffs the
+"""summarize (docs/TOOLS.md): net pay and hydrocarbon pore thickness per zone with the cutoffs the
 model gives, by Petrophys summarize_pay. The record's own flags and cutoffs are pay_summary's; this verb recomputes
 the flags from VCL, PHIE and SW with one cutoff set, so a cutoff question is answered zone by zone."""
 from __future__ import annotations
@@ -92,12 +92,13 @@ def summarize(f: Formation, what: str = "pay", zones=None, vcl_cutoff: float | N
     out.fit(rows, what="zones", label="pay")
     if any(s == "asked" for s in src.values()):
         lab = _label("_".join(f"{k.split('_')[0]}{cut[k]}" for k in CUTOFFS if src[k] == "asked"), {})
+        written = []
         for flag, values in (("NET_RES", whole.net_reservoir), ("NET_PAY", whole.net_pay)):
             full = np.full(np.asarray(f.view.prep.depth).size, np.nan)
             vals = np.asarray(values, dtype=float)
             vals[~(np.isfinite(vcl) & np.isfinite(phie) & np.isfinite(sw))] = np.nan
             full[f.view.mask] = vals
-            register(f, joined_name(flag, lab), full, f"{flag} recomputed by Petrophys summarize_pay with the cutoffs "
-                                               f"{shown}", "flag", "summarize pay (on request)")
-        out.add(f"  written: {joined_name('NET_RES', lab)}, {joined_name('NET_PAY', lab)} (flags of this question: runs, stats and conditions read them)")
+            written.append(register(f, joined_name(flag, lab), full, f"{flag} recomputed by Petrophys summarize_pay "
+                                    f"with the cutoffs {shown}", "flag", "summarize pay (on request)"))
+        out.add(f"  written: {', '.join(written)} (flags of this question: runs, stats and conditions read them)")
     return out.result()

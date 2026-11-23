@@ -18,8 +18,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT), str(Path(__file__).resolve().parent)]
-from petroharness.agent import components as C, direction, loop  # noqa: E402
+from petroharness.agent import components as C, direction, prompts as PR, replies as RP, state as ST  # noqa: E402
 from petroharness.config import DEFAULT_SKILLS, RESOURCES, SKILLS_ENV, HarnessConfig  # noqa: E402
+from _support.model import DONE, ScriptedModel  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 MINI = (FIXTURES / "skill_library_mini").resolve()          # a second library: two guides on two areas
@@ -71,11 +72,11 @@ def test_the_guide_fragments_are_in_with_a_library_and_out_with_none(monkeypatch
     """C1 brief, C5 step 1 and C8 not_run: with a library their guide fragments are in place; with none the same texts
     without them, and nothing in them speaks of guides."""
     monkeypatch.delenv(SKILLS_ENV, raising=False)
-    lib, n = RESEARCHED, str(loop.ACTIONS)
-    on, off = loop.brief(lib), loop.brief(None)
+    lib, n = RESEARCHED, str(ST.ACTIONS)
+    on, off = PR.brief(lib), PR.brief(None)
     assert C.text("C1", "brief_direction") in on and C.text("C1", "brief_guide").replace("{ACTIONS}", n) in on
     assert off == on.replace(C.text("C1", "brief_direction"), "").replace(C.text("C1", "brief_guide").replace("{ACTIONS}", n), "")
-    on1, off1 = loop.step1(lib), loop.step1(None)
+    on1, off1 = PR.step1(lib), PR.step1(None)
     call = C.fill("C5", "step1_guide_call", guide="net_reservoir_pay")    # the researched guide on the example's topic
     assert call == '{"guide": "net_reservoir_pay"}, ' and call in on1
     assert off1 == on1.replace(C.text("C5", "step1_guides").replace("{ACTIONS}", n), "").replace(call, "")
@@ -85,21 +86,21 @@ def test_the_guide_fragments_are_in_with_a_library_and_out_with_none(monkeypatch
     assert note_on.endswith("get, find, guide and calc.") and note_off.endswith("get, find and calc.")
     for text in (off, off1, note_off):
         assert "guide" not in text.lower() and "DIRECTION" not in text
-    assert loop.brief() == on and loop.step1() == on1                 # left out: the plugged library (researched)
+    assert PR.brief() == on and PR.step1() == on1                 # left out: the plugged library (researched)
 
 
 def test_with_no_library_a_guide_call_is_no_action():
-    assert loop.coerce_action({"guide": "porosity"}) == ("guide", "porosity")
+    assert RP.coerce_action({"guide": "porosity"}) == ("guide", "porosity")
     for a in ({"guide": "porosity"}, {"tool": "guide", "facet": "porosity"}, {"action": "guide", "name": "x"}):
-        assert loop.coerce_action(a, guides=False) is None, a
-    assert loop.coerce_action({"stats": ["SW"]}, guides=False) == ("tool", "stats", {"curves": ["SW"]})
+        assert RP.coerce_action(a, guides=False) is None, a
+    assert RP.coerce_action({"stats": ["SW"]}, guides=False) == ("tool", "stats", {"curves": ["SW"]})
 
 
 def test_a_second_library_example_names_its_own_guide():
     mini = direction.load(MINI)
-    text = loop.step1(mini)                                         # no guide on the example's topic: its first guide
+    text = PR.step1(mini)                                         # no guide on the example's topic: its first guide
     assert json.loads(text[text.index('{"asks"'):])["next"][0] == {"guide": "clay_volume"}
-    assert loop.brief(mini) == loop.brief(RESEARCHED)               # any library: the same brief
+    assert PR.brief(mini) == PR.brief(RESEARCHED)               # any library: the same brief
 
 
 # --- a second library ---------------------------------------------------------------------------------------------------
@@ -118,48 +119,27 @@ def test_a_second_library_is_listed_under_the_areas_its_guides_serve():
     assert mini.guide("porosity") == "no facet 'porosity'; facets: clay_volume, pore_space"
 
 
-class Stub:
-    """A model by stage: READ from its reply, step 1 from its reply, then done; the writer a short answer. Every call
-    is kept."""
-
-    def __init__(self, step1):
-        self.step1, self.sent = step1, []
-
-    def replays_reasoning(self):
-        return True
-
-    def chat(self, stage, messages, usage, max_tokens, json_schema=None, temperature=None, retry=False):
-        self.sent.append({"stage": stage, "messages": messages})
-        usage.log.append({"stage": stage, "prompt_tokens": sum(len(m["content"]) for m in messages) // 4})
-        if stage.startswith("read"):
-            r = {"topics": ["porosity", "shale_clay"],
-                 "named": ["PHIE"]}
-        elif stage == "step_1":
-            r = self.step1
-        elif stage.startswith(("step_", "settle")):
-            r = {"edits": [], "next": [], "done": True}
-        else:                                                   # the writer and its repairs
-            r = "## Porosity\nThe porosity is read zone by zone.\n\n{{ZONE_TABLE}}"
-        return r if isinstance(r, str) else json.dumps(r)
-
-    def prompt(self, stage):
-        return next(c["messages"][-1]["content"] for c in self.sent if c["stage"] == stage)
+def model(step1) -> ScriptedModel:
+    """READ porosity and clay, step 1 from its reply, then done; the writer (and its repairs) a short answer."""
+    return ScriptedModel({"read*": {"topics": ["porosity", "shale_clay"], "named": ["PHIE"]}, "step_1": step1,
+                          "step_*": DONE, "settle*": DONE},
+                         default="## Porosity\nThe porosity is read zone by zone.\n\n{{ZONE_TABLE}}")
 
 
 def _run(monkeypatch, nxt):
     """One question through the question graph, the model stubbed; step 1 runs the actions nxt. The session is built
     after the setting is made (it plugs the library in force)."""
-    from test_b2_tools import F
+    from _support.formations import F
     from petroharness.agent import graph
     from petroharness.agent.ledger import Ledger
-    from petroharness.agent.loop import Session
+    from petroharness.agent.state import Session
     from petroharness.agent.map import render
     t, f = next(((t, f) for t, f in F() if "PHIE" in f.inv.curves and "VCL" in f.inv.curves), (None, None))
     if t is None:
         pytest.skip("no formation with PHIE and VCL in this dataset")
     s = Session(t, f, render(f.inv), Ledger(f))
     monkeypatch.setattr(Session, "build", classmethod(lambda cls, task, cfg: s))
-    llm = Stub({"asks": "How porous is the formation?", "points": ["How does porosity vary by zone?"],
+    llm = model({"asks": "How porous is the formation?", "points": ["How does porosity vary by zone?"],
                 "intent": "characterize", "focus": "porosity",
                 "edits": [{"op": "add", "point": 1, "text": "Porosity is likely moderate", "grade": "hypothesis"}],
                 "next": nxt, "done": False})

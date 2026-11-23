@@ -13,7 +13,7 @@ import pytest
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "src"), str(Path(__file__).resolve().parents[2]),
                 str(Path(__file__).resolve().parent)]
 import b2_reference as R  # noqa: E402
-from test_b2_tools import F  # noqa: E402
+from _support.formations import F  # noqa: E402
 from petroharness.well.view import fmt, sig  # noqa: E402
 
 ON = {}             # no switches: the tests' 'with options.use(**ON)' blocks run the defaults
@@ -110,7 +110,7 @@ def test_zone_table_adds_the_geometric_mean_by_the_shape_of_the_values_only():
 
 @pytest.mark.data
 def test_the_brief_carries_the_level_and_ranking_lines(real):
-    from petroharness.agent.loop import BRIEF_LEVELS, brief
+    from petroharness.agent.prompts import BRIEF_LEVELS, brief
     from petroharness.agent.writer import prompt
     system, _, _, _ = prompt(real, "default")
     assert "zone-mean permeability" not in system

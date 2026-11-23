@@ -123,15 +123,15 @@ def note(s) -> str:
     """The lines under QUESTION (C10): "Named but not in this well's record: <name> (<curves>); ..." for the named
     items whose curves the record does not hold, and "Named, in this well's record but with no values in this
     interval: <name> (<curve>: what the range screening removed)" for those it holds without a value here (question
-    suite X25: DTC, held and screened out here, was said to be not in the record, and the answer said the well had no
+    DTC, held and screened out here, was said to be not in the record, and the answer said the well had no
     sonic log). A quantity the workflow derives (the catalog's derived curves) also names the Petrophys functions that
-    may compute it (library_api.computes), so the model reaches for them before saying it cannot be had; empty when
+    may compute it (library.api.computes), so the model reaches for them before saying it cannot be had; empty when
     every named item has data here. The same items as data, for the answer's reader: facts()."""
     from petroharness.agent import components as C
     got = facts(s)
     out = [f for f in got if f["kind"] == "absent"]
     here = [f for f in got if f["kind"] == "empty"]
-    unit = getattr(s, "unit_note", "") or ""             # a unit the tops file does not have (loop.ask_back)
+    unit = getattr(s, "unit_note", "") or ""             # a unit the tops file does not have (read.ask_back)
 
     def item(f):
         fns = f["computes"]
@@ -148,7 +148,7 @@ def note(s) -> str:
 def facts(s) -> list:
     """note()'s items as data, for the answer's reader (the web UI words them): {"kind": "absent", "name", "curves",
     "computes"} for a named item the record does not hold, {"kind": "empty", "name", "curves": [{"curve", "why"}]} for
-    one it holds with no value in this interval, then the session's own (loop.ask_back: a unit the tops file does not
+    one it holds with no value in this interval, then the session's own (read.ask_back: a unit the tops file does not
     have, the user's zones with no sample here)."""
     from petroharness.well.summary import screened
     items = absent(s)
@@ -165,7 +165,7 @@ def facts(s) -> list:
                 continue
             fns = []
             if {x.upper() for x in c} & derived:
-                from petroharness.agent.library_api import computes
+                from petroharness.agent.library.api import computes
                 fns = computes(n)
             out.append({"kind": "absent", "name": n[:NAME_CHARS], "curves": list(c), "computes": list(fns)})
     return out + here + list(getattr(s, "unit_facts", None) or [])

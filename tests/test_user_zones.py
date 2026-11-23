@@ -1,4 +1,4 @@
-"""Brick 3 of docs/designs/zones-and-intervals.md: the user's zones. A table of zone tops and bottoms (CSV, TSV or
+"""The user's zones. A table of zone tops and bottoms (CSV, TSV or
 Excel) read by Petrophys as formation tops are (well.user_zones.read_zones), each sample labelled by Petrophys
 (label_depths: top <= depth < bottom); the zones frame the question in place of the lithology zones (ids Z1.. with the
 user's names, no minimum thickness), the lithology zones kept as L1..; a stretch is framed by them too; `by:
@@ -234,8 +234,7 @@ def test_prepare_reads_the_zones_file_into_the_data_settings(tmp_path):
     import petroharness.ask as A
     from _wells import sample
     p = _csv(tmp_path, [("Ness", 2841.0, 2865.0), ("Etive", 2865.0, 2958.0)])
-    got = A.prepare(sample("30/6-5"), "k", formation="BRENT GP.", tops=sample("formations_30_6-5.csv"), zones=p,
-                    cache=tmp_path / ".cache")
+    got = A.prepare(sample("30/6-5"), "k", A.Inputs(formation="BRENT GP.", tops=sample("formations_30_6-5.csv"), zones=p), cache=tmp_path / ".cache")
     assert [z["name"] for z in got.data["zones"]] == ["Ness", "Etive"] and got.data["zones_source"] == "zones.csv"
 
 

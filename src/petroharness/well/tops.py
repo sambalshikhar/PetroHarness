@@ -43,7 +43,7 @@ def convert(depth: float, unit: str, to: str) -> float:
 
 
 def name_key(name) -> str:
-    """How names are matched: case, spaces and punctuation ignored ('Mount Messenger' = 'MOUNT-MESSENGER')."""
+    """How names are matched: case, spaces and punctuation ignored ('Upper Sand' = 'UPPER-SAND')."""
     return re.sub(r"[\W_]+", "", str(name)).casefold()
 
 
@@ -78,6 +78,17 @@ class FormationInterval:
     closed: bool                 # the base is the formation's stated base (included), not the next top
     unit: str | None          # m or ft; None: the LAS's own unit
     base_from: str               # "stated base", "next top <name>" or "end of log"
+
+
+@dataclass(frozen=True)
+class Unit:
+    """A unit of the tops file in reach (FormationView.units): its name as the file writes it, top and base in the reporting unit, the
+    file's line, and whether the base is the unit's own (stated, included) or the next unit's top."""
+    name: str
+    top: float
+    base: float
+    line: int = 0
+    closed: bool = True
 
 
 @dataclass
