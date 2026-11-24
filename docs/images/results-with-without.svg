@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 478" width="880" height="478" role="img" aria-label="Models scoring higher with PetroHarness than without it, on WellLogBench single-formation questions">
+<rect x="0.5" y="0.5" width="879" height="477" rx="14" fill="#ffffff" stroke="#e6eaf0"/>
+<g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#5b677a">
+<circle cx="35" cy="34" r="6" fill="#fff" stroke="#9aa6b8" stroke-width="2.5"/><text x="50" y="38.5">without the harness</text>
+<circle cx="215" cy="34" r="7" fill="#ef6719"/><text x="230" y="38.5">with PetroHarness</text>
+<text x="852" y="38.5" text-anchor="end" fill="#8a94a6">Overall score W, 0 to 100 · 347 single-formation questions</text></g>
+<line x1="214.0" y1="62" x2="214.0" y2="438" stroke="#e6eaf0" stroke-dasharray="2 4"/><text x="214.0" y="458" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#8a94a6">54</text>
+<line x1="332.7" y1="62" x2="332.7" y2="438" stroke="#e6eaf0" stroke-dasharray="2 4"/><text x="332.7" y="458" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#8a94a6">58</text>
+<line x1="451.3" y1="62" x2="451.3" y2="438" stroke="#e6eaf0" stroke-dasharray="2 4"/><text x="451.3" y="458" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#8a94a6">62</text>
+<line x1="570.0" y1="62" x2="570.0" y2="438" stroke="#e6eaf0" stroke-dasharray="2 4"/><text x="570.0" y="458" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#8a94a6">66</text>
+<line x1="688.7" y1="62" x2="688.7" y2="438" stroke="#e6eaf0" stroke-dasharray="2 4"/><text x="688.7" y="458" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#8a94a6">70</text>
+<text x="28" y="86" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#011e3f">K2-Horizon-7B</text>
+<text x="42" y="120.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#1c2838">post-trained (ours)</text>
+<line x1="511.3" y1="116" x2="667.6" y2="116" stroke="#f8c9a8" stroke-width="5" stroke-linecap="round"/>
+<circle cx="511.3" cy="116" r="6" fill="#fff" stroke="#9aa6b8" stroke-width="2.5"/><circle cx="667.6" cy="116" r="7.5" fill="#ef6719" stroke="#fff" stroke-width="2"/>
+<text x="498.3" y="120" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5b677a">64.0</text><text x="681.6" y="120" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#011e3f">69.3</text>
+<text x="852" y="120.5" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#1a7f4b">+5.3</text>
+<text x="42" y="154.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#1c2838">base</text>
+<line x1="307.4" y1="150" x2="530.5" y2="150" stroke="#f8c9a8" stroke-width="5" stroke-linecap="round"/>
+<circle cx="307.4" cy="150" r="6" fill="#fff" stroke="#9aa6b8" stroke-width="2.5"/><circle cx="530.5" cy="150" r="7.5" fill="#ef6719" stroke="#fff" stroke-width="2"/>
+<text x="294.4" y="154" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5b677a">57.1</text><text x="544.5" y="154" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#011e3f">64.7</text>
+<text x="852" y="154.5" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#1a7f4b">+7.5</text>
+<text x="28" y="192" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#011e3f">K2-Horizon-3.7B</text>
+<text x="42" y="226.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#1c2838">post-trained (ours)</text>
+<line x1="452.5" y1="222" x2="604.1" y2="222" stroke="#f8c9a8" stroke-width="5" stroke-linecap="round"/>
+<circle cx="452.5" cy="222" r="6" fill="#fff" stroke="#9aa6b8" stroke-width="2.5"/><circle cx="604.1" cy="222" r="7.5" fill="#ef6719" stroke="#fff" stroke-width="2"/>
+<text x="439.5" y="226" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5b677a">62.0</text><text x="618.1" y="226" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#011e3f">67.2</text>
+<text x="852" y="226.5" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#1a7f4b">+5.1</text>
+<text x="42" y="260.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#1c2838">base</text>
+<line x1="274.5" y1="256" x2="492.6" y2="256" stroke="#f8c9a8" stroke-width="5" stroke-linecap="round"/>
+<circle cx="274.5" cy="256" r="6" fill="#fff" stroke="#9aa6b8" stroke-width="2.5"/><circle cx="492.6" cy="256" r="7.5" fill="#ef6719" stroke="#fff" stroke-width="2"/>
+<text x="261.5" y="260" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5b677a">56.0</text><text x="506.6" y="260" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#011e3f">63.4</text>
+<text x="852" y="260.5" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#1a7f4b">+7.3</text>
+<text x="28" y="298" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#011e3f">Qwen3.5-27B</text>
+<text x="42" y="332.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#1c2838">post-trained (ours)</text>
+<line x1="566.1" y1="328" x2="656.3" y2="328" stroke="#f8c9a8" stroke-width="5" stroke-linecap="round"/>
+<circle cx="566.1" cy="328" r="6" fill="#fff" stroke="#9aa6b8" stroke-width="2.5"/><circle cx="656.3" cy="328" r="7.5" fill="#ef6719" stroke="#fff" stroke-width="2"/>
+<text x="553.1" y="332" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5b677a">65.9</text><text x="670.3" y="332" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#011e3f">68.9</text>
+<text x="852" y="332.5" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#1a7f4b">+3.0</text>
+<text x="42" y="366.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#1c2838">base</text>
+<line x1="319.0" y1="362" x2="573.6" y2="362" stroke="#f8c9a8" stroke-width="5" stroke-linecap="round"/>
+<circle cx="319.0" cy="362" r="6" fill="#fff" stroke="#9aa6b8" stroke-width="2.5"/><circle cx="573.6" cy="362" r="7.5" fill="#ef6719" stroke="#fff" stroke-width="2"/>
+<text x="306.0" y="366" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5b677a">57.5</text><text x="587.6" y="366" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#011e3f">66.1</text>
+<text x="852" y="366.5" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#1a7f4b">+8.6</text>
+<text x="28" y="408.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#011e3f">Gemma 4 31B</text>
+<line x1="420.8" y1="404" x2="577.4" y2="404" stroke="#f8c9a8" stroke-width="5" stroke-linecap="round"/>
+<circle cx="420.8" cy="404" r="6" fill="#fff" stroke="#9aa6b8" stroke-width="2.5"/><circle cx="577.4" cy="404" r="7.5" fill="#ef6719" stroke="#fff" stroke-width="2"/>
+<text x="407.8" y="408" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5b677a">61.0</text><text x="591.4" y="408" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#011e3f">66.3</text>
+<text x="852" y="408.5" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#1a7f4b">+5.3</text>
+</svg>
