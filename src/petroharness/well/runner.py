@@ -26,13 +26,13 @@ def _jsonable(value):
     return str(value)
 
 
-def bad_hole_thresholds(generate_bad_hole_flags) -> dict:
-    """The thresholds the library's bad-hole step used: it calls generate_bad_hole_flags with its defaults and does
+def bad_hole_thresholds(bad_hole_flags) -> dict:
+    """The thresholds the library's bad-hole step used: it calls bad_hole_flags with its defaults and does
     not record them, so read them from the signature (BAD_HOLE = CALI-BS above the caliper threshold or |DRHO| above
     the density threshold, or bit size above the large-hole threshold)."""
     import inspect
 
-    p = inspect.signature(generate_bad_hole_flags).parameters
+    p = inspect.signature(bad_hole_flags).parameters
     pick = {"cali_threshold": "cali_minus_bs_threshold_in", "drho_threshold": "drho_threshold_g_cc",
             "large_hole_threshold": "large_hole_threshold_in"}
     out = {new: p[old].default for old, new in pick.items() if old in p and p[old].default is not inspect._empty}
@@ -98,8 +98,9 @@ def main(argv: list[str]) -> int:
         d = step.to_dict()
         steps[step.step] = {k: _jsonable(d.get(k)) for k in ("method", "parameters", "decisions")}
     if "bad_hole" in steps:
-        flags = _import_first(("petrophys.qaqc.bad_hole.flag_generator", "generate_bad_hole_flags"),
-                              ("petrophys.preprocessing.quality.bad_hole.flag_generator", "generate_bad_hole_flags"))
+        flags = _import_first(("petrophys.preprocessing.quality.bad_hole.flag_generator", "bad_hole_flags"),
+                              ("petrophys.preprocessing.quality.bad_hole.flag_generator", "generate_bad_hole_flags"),
+                              ("petrophys.qaqc.bad_hole.flag_generator", "generate_bad_hole_flags"))   # older engines
         params = steps["bad_hole"].get("parameters") or {}
         steps["bad_hole"]["parameters"] = _jsonable(bad_hole_thresholds(flags)) | params
     engine_meta = engine_dir / "ENGINE.json"

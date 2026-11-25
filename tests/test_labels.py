@@ -238,9 +238,9 @@ def test_the_core_calibrated_note_names_the_plugs():
 def test_petrophys_advice_is_given_as_the_tool_calls_that_take_its_inputs():
     """The inputs come as data (Petrophys Advice.inputs, collected at the call door), not from the sentence."""
     from petroharness.agent.library import advice_calls
-    said = advice_calls(["rmf", "rmf_temp_f", "train_wells"], kind="saturation")
+    said = advice_calls(["rmf", "rmf_meas_temp", "train_wells"], kind="saturation")
     assert said == ('as tool calls: {"calculate": {"property": "mud_filtrate_resistivity", "parameters": {"rmf": ..., '
-                    '"rmf_temp_f": ...}}}; train_wells: no tool here takes it')
+                    '"rmf_meas_temp": ...}}}; train_wells: no tool here takes it')
     assert advice_calls(["rcl", "m"], kind="saturation") == \
         'as tool calls: {"calculate": {"property": "saturation", "parameters": {"rcl": ..., "m": ...}}}'
     assert advice_calls(["zones", "rcl"], takes=["zones", "where"]) == \
@@ -254,8 +254,8 @@ def test_the_call_door_gives_the_calls_petrophys_advice_names_for_any_tool():
     f = formation_of(CASES["tuhua"])
     r = schemas.call(f, "calculate", {"property": "saturation", "method": "simandoux"})
     lines = r.text.splitlines()
-    assert any("Petrophys did not run:" in ln and "steps.mud_filtrate(rmf=..., rmf_temp_f=...)" in ln for ln in lines)
-    want = 'as tool calls: {"calculate": {"property": "mud_filtrate_resistivity", "parameters": {"rmf": ..., "rmf_temp_f": ...}}}'
+    assert any("Petrophys did not run:" in ln and "steps.mud_filtrate(rmf=..., rmf_meas_temp=...)" in ln for ln in lines)
+    want = 'as tool calls: {"calculate": {"property": "mud_filtrate_resistivity", "parameters": {"rmf": ..., "rmf_meas_temp": ...}}}'
     assert lines[-1].strip() == want and r.rows[-1][0].strip() == want      # in the result, and kept for its get
     plain = schemas.call(f, "stats", {"curves": ["GR"]}).text
     assert "as tool calls" not in plain

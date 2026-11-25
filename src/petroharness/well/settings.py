@@ -1,6 +1,7 @@
 """The interpretation settings a user may change before Petrophys interprets a well (the web UI's settings panel;
 ask(..., interpretation=...)): Petrophys's own, read from the library (petrophys.workflow.DynamicWorkflowConfig: each
-setting's group, help, default, unit and choices), and the harness's zone rule. A setting left unset keeps its
+setting's group, help, default, unit and choices; a temperature, gradient or depth is given with its unit, as
+Petrophys takes it), and the harness's zone rule. A setting left unset keeps its
 default: the policy's for the zones and the net-pay cutoffs, Petrophys's for the rest (often read from the LAS header
 or derived from the data, which a preview shows for the well in hand).
 
@@ -29,7 +30,7 @@ GROUPS = [
      ["matrix_type", "rho_ma", "nphi_ma", "dt_ma", "rho_fl", "dt_fl", "phi_cl", "apply_hc_correction", "hc_type",
       "rho_hc", "hc_hydrogen_index"]),
     ("water", "Formation water", "Rw: given, from salinity, or estimated from the data.",
-     ["rw", "rw_meas_temp_f", "salinity_ppm", "allow_default_rw"]),
+     ["rw", "rw_meas_temp", "salinity_ppm", "allow_default_rw"]),
     ("saturation", "Water saturation", "The saturation model and its parameters.",
      ["sw_model", "a", "m", "n", "m_star", "cec", "b_coeff", "rwb", "rtsh", "vsh_exp", "shale_exp",
       "sw_routing_vcl_cutoff"]),
@@ -38,10 +39,10 @@ GROUPS = [
     ("pay", "Net reservoir and pay", "The cutoffs that flag net reservoir and net pay.",
      ["vcl_cutoff", "phie_cutoff", "sw_cutoff", "reuse_input_resflag"]),
     ("temperature", "Temperature", "The temperature profile Rw and Rmf are corrected along.",
-     ["surface_temp_f", "bht_f", "td_ft", "gradient_f_per_100ft"]),
+     ["surface_temp", "bht", "td", "temperature_gradient"]),
     ("mud", "Mud", "Mud type and filtrate properties (Rmf, Rm).",
-     ["mud_type", "mud_water", "mud_has_clay_or_kcl", "rmf_at_meas_temp", "rmf_meas_temp_f", "rmf_salinity_ppm",
-      "rmf_chlorides_mg_l", "rm", "rm_meas_temp_f"]),
+     ["mud_type", "mud_water", "mud_has_clay_or_kcl", "rmf_at_meas_temp", "rmf_meas_temp", "rmf_salinity_ppm",
+      "rmf_chlorides_mg_l", "rm", "rm_meas_temp"]),
     ("lithology", "Lithology", "The interpretation domain and the mineral solve.",
      ["lithology_domain", "lithology_source", "carbonate_calibration", "mineral_solver_version"]),
     ("input", "Input handling", "How the LAS curves are read and checked.",
@@ -52,32 +53,32 @@ HIDDEN = {"raise_on_error", "peer_wells", "formation_tops", "zones", "lithology"
 # the settings most interpretations are checked on, shown first in their groups
 COMMON = {"zone_min_thickness_m", "zone_vcl_bands", "zone_layout", "gr_method", "gr_min", "gr_max", "matrix_type",
           "rho_ma", "rw", "salinity_ppm", "sw_model", "a", "m", "n", "perm_method", "vcl_cutoff", "phie_cutoff",
-          "sw_cutoff", "bht_f", "mud_type", "lithology_domain"}
+          "sw_cutoff", "bht", "mud_type", "lithology_domain"}
 LABELS = {
     "gr_method": "GR to shale volume", "gr_min": "GR clean (gr_min)", "gr_max": "GR shale (gr_max)",
     "sp_min": "SP shale (sp_min)", "sp_max": "SP clean (sp_max)", "rho_cl": "Clay density", "matrix_type": "Matrix",
     "rho_ma": "Matrix density (ρma)", "nphi_ma": "Matrix neutron porosity", "dt_ma": "Matrix sonic (Δtma)",
     "rho_fl": "Fluid density (ρfl)", "dt_fl": "Fluid sonic (Δtfl)", "phi_cl": "Clay porosity",
     "apply_hc_correction": "Hydrocarbon correction", "hc_type": "Hydrocarbon type", "rw": "Rw",
-    "rw_meas_temp_f": "Rw temperature", "salinity_ppm": "Water salinity", "allow_default_rw": "Default Rw if none found",
+    "rw_meas_temp": "Rw temperature", "salinity_ppm": "Water salinity", "allow_default_rw": "Default Rw if none found",
     "sw_model": "Saturation model", "a": "Tortuosity a", "m": "Cementation m", "n": "Saturation exponent n",
     "m_star": "Shaly-sand m*", "cec": "CEC", "b_coeff": "B coefficient", "rwb": "Bound-water Rwb", "rtsh": "Shale Rt",
     "vsh_exp": "Shale-volume exponent", "shale_exp": "Shale exponent", "sw_routing_vcl_cutoff": "Shaly-sand model above VCL",
     "perm_method": "Permeability transform", "perm_fallback_method": "Fallback transform", "swirr": "Irreducible Sw",
     "swirr_flag_phi_cl": "Swirr reservoir flag", "use_peer_core": "Use core from peer wells",
     "vcl_cutoff": "VCL cutoff", "phie_cutoff": "PHIE cutoff", "sw_cutoff": "SW cutoff",
-    "reuse_input_resflag": "Reuse the LAS reservoir flag", "surface_temp_f": "Surface temperature",
-    "bht_f": "Bottom-hole temperature", "td_ft": "Total depth for BHT", "mud_type": "Mud type", "mud_water": "Mud water",
-    "mud_has_clay_or_kcl": "Mud has clay or KCl", "rmf_at_meas_temp": "Rmf", "rmf_meas_temp_f": "Rmf temperature",
+    "reuse_input_resflag": "Reuse the LAS reservoir flag", "surface_temp": "Surface temperature",
+    "bht": "Bottom-hole temperature", "td": "Total depth for BHT", "mud_type": "Mud type", "mud_water": "Mud water",
+    "mud_has_clay_or_kcl": "Mud has clay or KCl", "rmf_at_meas_temp": "Rmf", "rmf_meas_temp": "Rmf temperature",
     "rmf_salinity_ppm": "Filtrate salinity", "rmf_chlorides_mg_l": "Filtrate chlorides", "rm": "Rm",
-    "rm_meas_temp_f": "Rm temperature", "lithology_domain": "Interpretation domain", "lithology_source": "Lithology source",
+    "rm_meas_temp": "Rm temperature", "lithology_domain": "Interpretation domain", "lithology_source": "Lithology source",
     "carbonate_calibration": "Carbonate calibration", "mineral_solver_version": "Mineral solver version",
     "standardize_input": "Standardize curves and units", "rename_input_curves": "Rename vendor mnemonics",
     "calculation_profile": "Calculation profile",
     "rho_hc": "Hydrocarbon density (ρhc)", "hc_hydrogen_index": "Hydrocarbon hydrogen index",
-    "gradient_f_per_100ft": "Geothermal gradient",
+    "temperature_gradient": "Geothermal gradient",
 }
-UNITS = (("degF", "°F"), ("ohm.m", "ohm.m"), ("g/cm3", "g/cm³"), ("us/ft", "µs/ft"), ("ppm", "ppm"), ("mg/l", "mg/l"),
+UNITS = (("degF/100ft", "°F/100 ft"), ("degF", "°F"), ("ohm.m", "ohm.m"), ("g/cm3", "g/cm³"), ("us/ft", "µs/ft"), ("ppm", "ppm"), ("mg/l", "mg/l"),
          ("v/v", "v/v"), ("in feet", "ft"), ("API", "API"), ("mV", "mV"), ("meq/100g", "meq/100 g"),
          ("meq/100 g", "meq/100 g"))
 # the harness's own: the zone rule (policy zones), set per run through the data settings
@@ -95,6 +96,20 @@ ZONE_FIELDS = [
      "choice_labels": {"lithology_runs": "Runs of one lithology", "formation": "The whole interval as one zone"},
      "help": "Split the interval into runs of one lithology, or keep it as one zone."},
 ]
+
+
+def computed_names(cls=None) -> dict:
+    """{the name Petrophys computes and records a setting under: (the setting, the unit of that name)} for the settings
+    given with a unit: bht_f -> (bht, degF), td_ft -> (td, ft). Read from the settings class, where each such name is
+    a property naming its setting and unit."""
+    if cls is None:
+        from petrophys.workflow import DynamicWorkflowConfig as cls
+    out = {}
+    for name, attr in vars(cls).items():
+        setting, unit = getattr(attr, "setting", None), getattr(attr, "unit", None)
+        if isinstance(setting, str) and isinstance(unit, str):
+            out[name] = (setting, unit)
+    return out
 
 
 def _doc_fields(cls) -> dict:
@@ -171,17 +186,26 @@ def schema() -> dict:
     cut = policy.get("cutoffs") or {}
     policy_default = {"vcl_cutoff": cut.get("vcl_max"), "sw_cutoff": cut.get("sw_max"), "phie_cutoff": cut.get("phie_min_clastic")}
 
+    with_unit = {setting: unit for setting, unit in computed_names(C).values()}
+    unit_default = {s: getattr(vars(C).get(name), "default", None) for name, (s, _) in computed_names(C).items()}
+
     def field(name: str) -> dict:
         f, (heading, doc) = by_name[name], docs.get(name, ("", ""))
         typ = str(f.type)
         default = f.default if f.default is not dataclasses.MISSING else None
         if policy_default.get(name) is not None:
             default = policy_default[name]
+        if default is None and unit_default.get(name) is not None:   # surface_temp: 68 (degF) when unset
+            default = unit_default[name]
         choices = _choices(C, name) if "str" in typ else []
-        kind = ("switch" if "bool" in typ else "choice" if choices else
+        # a quantity: a number with its unit ("110 degC", "30 degC/km", "2650 m"); a bare number is read in the unit
+        # Petrophys states (degF, degF/100 ft; a depth in the well's own unit)
+        kind = ("quantity" if name in with_unit else "switch" if "bool" in typ else "choice" if choices else
                 "integer" if typ in ("<class 'int'>", "int") else "number" if any(t in typ for t in ("float", "Any", "int"))
                 else "text")
-        return {"key": name, "label": LABELS.get(name, name.replace("_", " ")), "kind": kind, "unit": _unit(doc, kind),
+        unit = (dict(UNITS).get(with_unit[name], "") if with_unit.get(name) not in (None, "ft", "m")
+                else "") if kind == "quantity" else _unit(doc, kind)
+        return {"key": name, "label": LABELS.get(name, name.replace("_", " ")), "kind": kind, "unit": unit,
                 "choices": choices, "default": default, "help": _first(doc), "more": _plain(doc),
                 "common": name in COMMON, "petrophys": True, "heading": heading}
 
@@ -233,10 +257,18 @@ def validate(settings: dict) -> dict:
     for k, v in (settings or {}).items():
         f = known.get(k)
         if f is None:
-            errors[k] = "not a setting this panel knows"
+            renamed = computed_names().get(k)              # bht_f, before Petrophys 3a9378e: now bht, with its unit
+            errors[k] = (f"not a setting this panel knows; Petrophys now takes it as {renamed[0]}, with its unit "
+                         f"(e.g. {renamed[0]}=\"120 {renamed[1]}\")" if renamed else "not a setting this panel knows")
             continue
         kind = f["kind"]
-        if kind in ("number", "integer"):
+        if kind == "quantity":                           # a number, or a number with its unit: Petrophys reads it
+            pair = isinstance(v, (tuple, list)) and len(v) == 2 and isinstance(v[0], (int, float)) \
+                and not isinstance(v[0], bool) and isinstance(v[1], str)
+            if isinstance(v, bool) or not (isinstance(v, (int, float)) or (isinstance(v, str) and v.strip()) or pair):
+                errors[k] = "give a number, or a number with its unit"
+                continue
+        elif kind in ("number", "integer"):
             if isinstance(v, bool) or not isinstance(v, (int, float)):
                 errors[k] = "give a number"
                 continue
@@ -263,7 +295,7 @@ def validate(settings: dict) -> dict:
             C(**petro)
         except Exception as exc:  # noqa: BLE001  (Petrophys says which value it refuses)
             for line in str(exc).splitlines():
-                m = re.match(r"\s*-\s*([a-z_0-9]+)\s*=?(.*)", line)
+                m = re.match(r"\s*-\s*([a-z_0-9]+)\s*=?(.*)", line) or re.match(r"\s*([a-z_0-9]+)\s*=", line)
                 if m and m.group(1) in petro:
                     errors[m.group(1)] = line.strip(" -")
             if not any(k in errors for k in petro):
@@ -284,22 +316,25 @@ def split(settings: dict) -> tuple[dict, dict]:
 def used(prep) -> dict:
     """{setting: the value Petrophys used} on a prepared well, read from its step record: the parameters of its steps
     whose names are settings (the first step that records one), with the step that used it, and the unit the step
-    records beside it where it records one (td_unit beside td_ft: a total depth taken from the log is in the log's
-    unit, whatever the setting's name says)."""
+    records beside it where it records one (td_unit beside td: a total depth taken from the log is in the log's unit),
+    else the unit of the name it records a unit setting under (bht_f: the setting bht, in degF)."""
     known = _fields()
+    computed = computed_names()                          # bht_f, recorded: the setting bht, in degF
     out: dict[str, Any] = {}
     steps = getattr(prep, "steps", None) or {}
     for step, rec in sorted(steps.items(), key=lambda kv: kv[0] != "net_pay"):   # the cutoffs: net pay's own
-        for k, v in ((rec or {}).get("parameters") or {}).items():
+        for name, v in ((rec or {}).get("parameters") or {}).items():
+            k, in_unit = (computed[name] if name in computed and name not in known else (name, None))
             if k in known and k not in out and isinstance(v, (int, float, str, bool)):
                 if step != "net_pay" and k in ("vcl_cutoff", "phie_cutoff", "sw_cutoff") and "net_pay" in steps:
                     continue
                 params = (rec or {}).get("parameters") or {}
                 applied = params.get(f"{k}_used")                                # the value Petrophys applied
                 out[k] = {"value": applied if isinstance(applied, (int, float, str, bool)) else v, "step": step}
-                unit = params.get(f"{k}_unit", params.get(f"{k.rsplit('_', 1)[0]}_unit"))   # td_ft: td_unit
+                unit = params.get(f"{k}_unit", params.get(f"{k.rsplit('_', 1)[0]}_unit"))   # td: td_unit
+                unit = unit if isinstance(unit, str) and unit.strip() else in_unit
                 if isinstance(unit, str) and unit.strip():
-                    out[k]["unit"] = unit.strip()
+                    out[k]["unit"] = dict(UNITS).get(unit.strip(), unit.strip())
     return out
 
 
@@ -330,8 +365,14 @@ def _shown(key: str, value) -> str:
         return "the default" + (f" ({_shown(key, d)})" if d is not None else "")
     if isinstance(value, bool):
         return "on" if value else "off"
+    if _fields().get(key, {}).get("kind") == "quantity" and isinstance(value, (tuple, list)) and len(value) == 2 \
+            and isinstance(value[1], str):
+        return f"{value[0]:g} {value[1]}"                    # (30, "degC/km"): the number with its unit
     if isinstance(value, (list, tuple)):
         return " / ".join(_shown(key, x) for x in value)
+    f = _fields().get(key, {})
+    if f.get("kind") == "quantity" and isinstance(value, (int, float)) and not isinstance(value, bool) and f.get("unit"):
+        return f"{value:g} {f['unit']}"                     # a bare number, in the unit Petrophys reads it in
     if isinstance(value, float):
         return f"{value:g}"
     return str(value)

@@ -208,7 +208,7 @@ PROPERTY_LOG = (("porosity", "PHIE", False), ("permeability", "PERM", True), ("s
 
 
 def depth_shift(f: Formation, curves, zones, threshold) -> Result:
-    from petrophys.interpretation.core_analysis.calibration import core_data_from_well
+    from petrophys.interpretation.core_analysis import core_data
     from petrophys.interpretation.core_analysis.depth_matching import (
         find_core_depth_shift,
     )
@@ -217,9 +217,9 @@ def depth_shift(f: Formation, curves, zones, threshold) -> Result:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
-            core = core_data_from_well(well, top=float(d.min()), bottom=float(d.max()))
+            core = core_data(well, top=float(d.min()), bottom=float(d.max()))
         except Exception as e:  # noqa: BLE001  (no core curves the library reads)
-            raise ToolError(f"no core plugs in this interval's LAS (Petrophys core_data_from_well: {str(e)[:200]})") from None
+            raise ToolError(f"no core plugs in this interval's LAS (Petrophys core_data: {str(e)[:200]})") from None
     have = [(p, log, lg) for p, log, lg in PROPERTY_LOG if getattr(core, p, None) is not None
             and np.isfinite(np.asarray(getattr(core, p), dtype=float)).sum() > 0]
     if not have:

@@ -157,9 +157,9 @@ The tables in `well/settings.py` that shape the sheet.
 |---|---|---|---|---|
 | `GROUPS` | list | 11 groups | `(key, title, about, Petrophys fields)`: `zones`, `clay`, `porosity`, `water`, `saturation`, `permeability`, `pay`, `temperature`, `mud`, `lithology`, `input` | `settings.GROUPS` |
 | `HIDDEN` | set | | `raise_on_error`, `peer_wells`, `formation_tops`, `zones`, `lithology`, `lithology_csv`, `lithology_intervals`, `lithology_codes`, `lithology_curve`, `skip_steps`, `nd_clay`, `curve_aliases`: fields that take a table, a list of wells or a file, and internal flags. Besides these, every setting whose type takes a table, a list or a pair (`mineral_endpoints`, `bad_hole`, `perm_coefficients`, ...) is not a field; a settings file gives it under `data.interpret` | `settings.HIDDEN`, `settings._takes_a_table` |
-| `COMMON` | set | | `zone_min_thickness_m`, `zone_vcl_bands`, `zone_layout`, `gr_method`, `gr_min`, `gr_max`, `matrix_type`, `rho_ma`, `rw`, `salinity_ppm`, `sw_model`, `a`, `m`, `n`, `perm_method`, `vcl_cutoff`, `phie_cutoff`, `sw_cutoff`, `bht_f`, `mud_type`, `lithology_domain` | `settings.COMMON` |
+| `COMMON` | set | | `zone_min_thickness_m`, `zone_vcl_bands`, `zone_layout`, `gr_method`, `gr_min`, `gr_max`, `matrix_type`, `rho_ma`, `rw`, `salinity_ppm`, `sw_model`, `a`, `m`, `n`, `perm_method`, `vcl_cutoff`, `phie_cutoff`, `sw_cutoff`, `bht`, `mud_type`, `lithology_domain` | `settings.COMMON` |
 | `LABELS` | table | | setting -> the panel's label | `settings.LABELS` |
-| `UNITS` | list | | `(token, shown)`: `degF` °F, `ohm.m`, `g/cm3` g/cm³, `us/ft` µs/ft, `ppm`, `mg/l`, `v/v`, `in feet` ft, `API`, `mV`, `meq/100g` and `meq/100 g` meq/100 g | `settings.UNITS` |
+| `UNITS` | list | | `(token, shown)`: `degF/100ft` °F/100 ft, `degF` °F, `ohm.m`, `g/cm3` g/cm³, `us/ft` µs/ft, `ppm`, `mg/l`, `v/v`, `in feet` ft, `API`, `mV`, `meq/100g` and `meq/100 g` meq/100 g | `settings.UNITS` |
 | `ZONE_FIELDS` | list | | the harness's three zone settings | `settings.ZONE_FIELDS` |
 
 Example: reading the sheet in Python.
@@ -319,21 +319,23 @@ Rw: given, from salinity, or estimated from the data. Shown first: `rw`, `salini
 <!-- generated: settings_water (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
-| `rw` | number | from the data | Formation water resistivity Rw, ohm.m, at rw_meas_temp_f. | - | ohm.m | Rw |
+| `rw` | number | from the data | Formation water resistivity Rw, ohm.m, at rw_meas_temp. | - | ohm.m | Rw |
 | `salinity_ppm` | number | from the data | Formation water salinity, ppm NaCl equivalent: another way to give the formation water. | - | ppm | Water salinity |
-| `rw_meas_temp_f` | number | from the data | Temperature of rw, degF. | - | °F | Rw temperature |
+| `rw_meas_temp` | quantity | from the data | Temperature of rw, e.g. "230 degF" or "110 degC". | - | °F | Rw temperature |
 | `allow_default_rw` | switch | `true` | Use a 0.05 ohm.m default Rw when no Rw source is found (the warnings say so). | - | - | Default Rw if none found |
 <!-- end generated: settings_water -->
 
 Example: Rw given with its temperature.
 
 ```python
-interpretation = {"rw": 0.05, "rw_meas_temp_f": 150}
+interpretation = {"rw": 0.05, "rw_meas_temp": "150 degF"}
 ```
 
 Notes:
 
-- Without `rw_meas_temp_f`, Rw is taken at the median formation temperature (no temperature correction).
+- Without `rw_meas_temp`, Rw is taken at the median formation temperature (no temperature correction).
+- A temperature, gradient or depth is given with its unit (`"65 degC"`, `"30 degC/km"`, `"2650 m"`); a bare number
+  is read in the unit the panel shows (°F, °F/100 ft; a depth in the well's own unit), with Petrophys's warning.
 - `salinity_ppm` makes Rw follow the temperature profile ahead of a header RW; a set `rw` wins over it.
 - With `allow_default_rw: false`, saturation is not computed without an Rw source.
 - On 30/6-5 no water setting is recorded under its own name: the rw step took the LAS header's RW
@@ -358,7 +360,7 @@ The saturation model and its parameters. Shown first: `sw_model`, `a`, `m`, `n`.
 | `cec` | number | from the data | Cation exchange capacity, meq/100 g (0 to 150; pure smectite is 80-150). | - | meq/100 g | CEC |
 | `b_coeff` | number | from the data | Equivalent counter-ion conductance B, (S/m)/(meq/cm3): at 25 degC 4.6 * (1 - 0.6 * exp(-0.77 / Rw)) (Waxman and Smits, 1968), and higher at reservoir temperature. | - | - | B coefficient |
 | `rwb` | number | from the data | Bound-water resistivity, ohm.m, from lab data or the LAS header. | - | ohm.m | Bound-water Rwb |
-| `rtsh` | number | from the data | Shale resistivity, ohm.m. | - | ohm.m | Shale Rt |
+| `rtsh` | number | from the data | Shale resistivity Rsh, ohm.m, of the shaly-sand equations (Simandoux, modified Simandoux, Indonesia, North Sea, Nigeria). | - | ohm.m | Shale Rt |
 | `vsh_exp` | number | `1.6` | Shale exponent of the North Sea model. | - | - | Shale-volume exponent |
 | `shale_exp` | number | `1.6` | Shale exponent of the Nigeria-Schlumberger model. | - | - | Shale exponent |
 | `sw_routing_vcl_cutoff` | number | from the data | Clay volume, v/v, from which sw_model="auto" uses a shaly-sand equation rather than Archie. | - | v/v | Shaly-sand model above VCL |
@@ -472,32 +474,34 @@ Notes:
 <details>
 <summary>Temperature (<code>temperature</code>)</summary>
 
-The temperature profile Rw and Rmf are corrected along. Shown first: `bht_f`.
+The temperature profile Rw and Rmf are corrected along. Shown first: `bht`.
 
 <!-- generated: settings_temperature (tests/docs_tables.py) -->
 | Name | Type | Default | Meaning | Choices | Unit | Label |
 |---|---|---|---|---|---|---|
-| `bht_f` | number | from the data | Bottom-hole temperature, degF. | - | °F | Bottom-hole temperature |
-| `surface_temp_f` | number | `68.0` | Surface (mean annual) temperature, degF, at depth 0 of the linear temperature profile (offshore, the sea surface rather than the seabed). | - | °F | Surface temperature |
-| `td_ft` | number | from the data | Total depth for the BHT, in feet. | - | ft | Total depth for BHT |
-| `gradient_f_per_100ft` | number | from the data | Geothermal gradient, degF/100 ft (1 degC/100 m is 0.549 degF/100 ft), from surface_temp_f at depth 0. | - | - | Geothermal gradient |
+| `bht` | quantity | from the data | Bottom-hole temperature, e.g. "230 degF" or "110 degC". | - | °F | Bottom-hole temperature |
+| `surface_temp` | quantity | `68.0` | Surface (mean annual) temperature at depth 0 of the linear temperature profile (offshore, the sea surface rather than the seabed); default 68 degF. | - | °F | Surface temperature |
+| `td` | quantity | from the data | Total depth of the BHT, e.g. "2650 m" or "8700 ft"; a bare number is in the well's depth unit. | - | - | Total depth for BHT |
+| `temperature_gradient` | quantity | from the data | Geothermal gradient from surface_temp at depth 0, e.g. "30 degC/km", "3 degC/100m" or "1.65 degF/100ft"; a bare number is read as degF/100 ft, with a warning. | - | °F/100 ft | Geothermal gradient |
 <!-- end generated: settings_temperature -->
 
 Example: the values Petrophys took on 30/6-5, Brent Group.
 
 ```json
-{"surface_temp_f": {"value": 68.0, "step": "temperature"}, "bht_f": {"value": 258.8, "step": "temperature"},
- "gradient_f_per_100ft": {"value": 1.6353916325489521, "step": "temperature"}}
+{"surface_temp": {"value": 68.0, "step": "temperature", "unit": "°F"}, "bht": {"value": 258.8, "step": "temperature", "unit": "°F"},
+ "td": {"value": 3556.08032, "step": "temperature", "unit": "m"},
+ "temperature_gradient": {"value": 1.6353916325489521, "step": "temperature", "unit": "°F/100 ft"}}
 ```
 
 Notes:
 
-- Unset, `bht_f` is the LAS header BHT (on 30/6-5 the header gives `BHT` 126 and the step records `bht_f` 258.8) and
-  `td_ft` the header TD, else the deepest sample.
-- `settings.used` carries the unit a step records beside a setting (`<name>_unit`, or `td_unit` beside `td_ft`), and
-  the preview shows the value in it. On 30/6-5 the temperature step records the total depth as `td` 3556.08032 with
-  `td_unit` m, a parameter of another name, so `td_ft` is not read back.
-- A set `bht_f` makes the temperature profile follow it rather than an input TEMP log (kept as TEMP_LOG).
+- Unset, `bht` is the LAS header BHT (on 30/6-5 the header gives `BHT` 126 and the step records `bht_f` 258.8, in
+  degF) and `td` the header TD, else the deepest sample.
+- Petrophys records a setting given with a unit under the name it computes it in (`bht_f` for `bht`, in degF;
+  `gradient_f_per_100ft` for `temperature_gradient`), read from its settings class (`settings.computed_names`), and
+  the total depth as `td` with `td_unit` beside it. `settings.used` reads them back under the setting's name, with
+  that unit, and the preview shows the value in it.
+- A set `bht` makes the temperature profile follow it rather than an input TEMP log (kept as TEMP_LOG).
 
 </details>
 
@@ -512,12 +516,12 @@ Mud type and filtrate properties (Rmf, Rm). Shown first: `mud_type`.
 | `mud_type` | choice | `WBM` | "WBM" (water-based) or "OBM" (oil-based) mud. | `WBM`, `OBM` | - | Mud type |
 | `mud_water` | choice | `fresh` | "fresh" or "salt" mud, which sets the Rm-to-Rmf factor. | `fresh`, `salt` | - | Mud water |
 | `mud_has_clay_or_kcl` | switch | `false` | The mud contains clay or KCl, so the SP log is not used: Rw is not estimated from the SP, and no VCL_SP is computed. | - | - | Mud has clay or KCl |
-| `rmf_at_meas_temp` | number | from the data | Mud-filtrate resistivity Rmf at rmf_meas_temp_f, ohm.m. | - | ohm.m | Rmf |
-| `rmf_meas_temp_f` | number | from the data | Temperature at which rmf_at_meas_temp was measured, degF. | - | °F | Rmf temperature |
+| `rmf_at_meas_temp` | number | from the data | Mud-filtrate resistivity Rmf at rmf_meas_temp, ohm.m. | - | ohm.m | Rmf |
+| `rmf_meas_temp` | quantity | from the data | Temperature at which rmf_at_meas_temp was measured, e.g. "75 degF" or "24 degC". | - | °F | Rmf temperature |
 | `rmf_salinity_ppm` | number | from the data | Mud-filtrate salinity, ppm NaCl equivalent (alternative to Rmf). | - | ppm | Filtrate salinity |
 | `rmf_chlorides_mg_l` | number | from the data | Mud-filtrate chlorides (Cl-), mg/l, as on the mud report and the LAS header CLFL. | - | mg/l | Filtrate chlorides |
-| `rm` | number | from the data | Mud resistivity Rm at rm_meas_temp_f, ohm.m (Rmf is derived from it). | - | ohm.m | Rm |
-| `rm_meas_temp_f` | number | from the data | Temperature at which rm was measured, degF. | - | °F | Rm temperature |
+| `rm` | number | from the data | Mud resistivity Rm at rm_meas_temp, ohm.m (Rmf is derived from it). | - | ohm.m | Rm |
+| `rm_meas_temp` | quantity | from the data | Temperature at which rm was measured, e.g. "75 degF" or "24 degC". | - | °F | Rm temperature |
 <!-- end generated: settings_mud -->
 
 Example: an oil-based mud.
@@ -684,7 +688,7 @@ change (`merged`, `diff`) and describe (`describe`, `values`) settings.
 |---|---|---|---|---|
 | `validate(settings)` | -> table | | `{setting: what is wrong}`; empty when all can be used (section 9) | `settings.validate` |
 | `split(settings)` | -> two tables | | `(Petrophys's options, the zone rule)`; band edges as floats | `settings.split` |
-| `used(prep)` | -> table | | `{setting: {value, step}}`, with `unit` where the step records one beside the setting (`td_unit` beside `td_ft`): each setting's value in the first step that records a parameter of that name, the applied `<name>_used` where the step records one; the cutoffs from `net_pay`; numbers, text and yes/no only | `settings.used` |
+| `used(prep)` | -> table | | `{setting: {value, step}}`, with `unit` where the step records one beside the setting (`td_unit` beside `td`) or the setting is recorded under its computed name (`bht_f`: `bht` in °F): each setting's value in the first step that records a parameter of that name, the applied `<name>_used` where the step records one; the cutoffs from `net_pay`; numbers, text and yes/no only | `settings.used` |
 | `merged(in_force, changes)` | -> table | | `changes` over `in_force`; a value of `None` removes the setting (back to its default) | `settings.merged` |
 | `diff(before, after)` | -> list | | `[{key, from, to}]` for each setting whose value differs (`None`: the default) | `settings.diff` |
 | `describe(changes)` | -> text | | a change in words, as the log, the prompts and the answer header name it | `settings.describe` |

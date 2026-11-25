@@ -10,7 +10,7 @@ to the log.
 
 **[Website](https://welllogbench.com/petroharness/) · [Documentation](https://welllogbench.com/petroharness/docs/) · [Quick start](#quick-start) · [Results](#results) · [Features](#features)**
 
-[![Version](https://img.shields.io/badge/version-1.0.0-011e3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1.0-011e3f)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.10-011e3f)](#quick-start)
 [![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](https://welllogbench.com/petroharness/docs/models.html)
 [![Calculations](https://img.shields.io/badge/calculations-Petrophys-197e6f)](https://github.com/sambalshikhar/petrophys)
@@ -19,6 +19,78 @@ to the log.
 <img src="docs/images/ui-first-page.png" alt="The first page of the PetroHarness web UI: drop a LAS file or pick a sample well, choose the interval and the interpretation settings, and ask a question in your own words" width="100%">
 
 </div>
+
+## Quick start
+
+**1. Install**
+
+```bash
+python3.10 -m venv .venv
+.venv/bin/pip install -r requirements.lock
+.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@3a9378e27eaab54077d326ba5fbbfc6de569f56b"
+.venv/bin/pip install -e . --no-deps
+source .venv/bin/activate
+```
+
+**2. Connect a model**
+
+PetroHarness works with any chat model behind an OpenAI-compatible endpoint, with a context window of 64k tokens or
+more. Serve one, then point PetroHarness at it:
+
+```bash
+# vLLM
+vllm serve Qwen/Qwen3-32B --port 8000 --max-model-len 65536
+export PETROHARNESS_MODEL_URL=http://localhost:8000/v1
+
+# or Ollama (its default context window is too small, so raise it)
+OLLAMA_CONTEXT_LENGTH=65536 ollama serve
+ollama pull qwen3:32b
+export PETROHARNESS_MODEL_URL=http://localhost:11434/v1
+```
+
+Name the model you serve with `--model` (`--model Qwen/Qwen3-32B`, `--model qwen3:32b`). K2-Horizon-7B is the
+default and needs no `--model`. Several endpoints go in one variable, comma-separated. SGLang, a hosted API with your
+key, and serving K2-Horizon-7B: [Models](https://welllogbench.com/petroharness/docs/models.html).
+
+**3. Launch the UI**
+
+```bash
+petroharness --launch-ui                       # K2-Horizon-7B, at PETROHARNESS_MODEL_URL
+petroharness --launch-ui --model qwen3:32b     # any other model, by the name it is served under
+```
+
+The UI opens at http://localhost:7860. Pick one of Petrophys's sample wells or drop your own LAS file, choose the
+interval, and ask in your own words. On a remote machine, forward the port first (`ssh -L 7860:localhost:7860 HOST`)
+and open the same address. More: [Web UI](https://welllogbench.com/petroharness/docs/ui.html).
+
+**4. Or ask from the command line**
+
+GeoLink well 30/6-5 ships with Petrophys, so this runs as it is:
+
+```bash
+LAS=$(python -c "import petrophys; print(petrophys.sample('30/6-5'))")
+TOPS=$(python -c "import petrophys; print(petrophys.sample('formations_30_6-5.csv'))")
+
+petroharness --las $LAS --tops $TOPS --formation "BRENT GP." \
+  --question "What are the porosity, water saturation and permeability of the Brent Group, and is any of it hydrocarbon-bearing?"
+```
+
+The answer is printed, and `answer.md` and `trace.json` (every model call and every result opened) go to
+`./petroharness-out/<LAS name>/`.
+
+<details>
+<summary>Go further</summary>
+
+| To | Run | Read |
+|---|---|---|
+| Ask in the browser | `petroharness --launch-ui` (`petroharness ui` starts the server without opening a browser) | [Web UI](https://welllogbench.com/petroharness/docs/ui.html) |
+| Use another model | `--model NAME --model-url URL`, or `--model-card FILE` | [Models](https://welllogbench.com/petroharness/docs/models.html) |
+| Keep asking about the interval | `petroharness chat --las $LAS --tops $TOPS --formation "BRENT GP." --session brent` | [Conversations](https://welllogbench.com/petroharness/docs/sessions.html) |
+| Audit every answer of a conversation | `petroharness audit brent` | [Audit an answer](https://welllogbench.com/petroharness/docs/evidence.html) |
+| Use your own well | `--las FILE` with `--tops FILE --formation NAME`, or `--top D --base D`, or neither for the whole log | [Evaluate a formation](https://welllogbench.com/petroharness/docs/usage.html) |
+| Call it from Python | `from petroharness.ask import ask` | [Python API](https://welllogbench.com/petroharness/docs/python-api.html) |
+
+</details>
 
 ## Results
 
@@ -223,52 +295,6 @@ flowchart LR
 In depth: [Architecture](https://welllogbench.com/petroharness/docs/architecture.html) ·
 [The question graph](https://welllogbench.com/petroharness/docs/graph.html) ·
 [Design rules](https://welllogbench.com/petroharness/docs/design.html).
-
-## Quick start
-
-**1. Install**
-
-```bash
-python3.10 -m venv .venv
-.venv/bin/pip install -r requirements.lock
-.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@7aa9968e72e7c09a28e68af383471184af9f5f52"
-.venv/bin/pip install -e . --no-deps
-source .venv/bin/activate
-```
-
-**2. Connect a model**
-
-```bash
-export PETROHARNESS_MODEL_URL=http://localhost:8000/v1     # any OpenAI-compatible endpoint
-```
-
-K2-Horizon-7B is the default. For any other chat model, give its served name with `--model`. Serving a model with
-vLLM, SGLang or Ollama: [Models](https://welllogbench.com/petroharness/docs/models.html).
-
-**3. Ask**
-
-GeoLink well 30/6-5 ships with Petrophys, so this runs as it is:
-
-```bash
-LAS=$(python -c "import petrophys; print(petrophys.sample('30/6-5'))")
-TOPS=$(python -c "import petrophys; print(petrophys.sample('formations_30_6-5.csv'))")
-
-petroharness --las $LAS --tops $TOPS --formation "BRENT GP." \
-  --question "What are the porosity, water saturation and permeability of the Brent Group, and is any of it hydrocarbon-bearing?"
-```
-
-The answer is printed, and `answer.md` and `trace.json` (every model call and every result opened) go to
-`./petroharness-out/<LAS name>/`.
-
-**4. Go further**
-
-| To | Run | Read |
-|---|---|---|
-| Ask in the browser | `petroharness ui` | [Web UI](https://welllogbench.com/petroharness/docs/ui.html) |
-| Keep asking about the interval | `petroharness chat --las $LAS --tops $TOPS --formation "BRENT GP." --session brent` | [Conversations](https://welllogbench.com/petroharness/docs/sessions.html) |
-| Audit every answer of a conversation | `petroharness audit brent` | [Audit an answer](https://welllogbench.com/petroharness/docs/evidence.html) |
-| Use your own well | `--las FILE` with `--tops FILE --formation NAME`, or `--top D --base D`, or neither for the whole log | [Evaluate a formation](https://welllogbench.com/petroharness/docs/usage.html) |
-| Call it from Python | `from petroharness.ask import ask` | [Python API](https://welllogbench.com/petroharness/docs/python-api.html) |
 
 ## What you can ask
 

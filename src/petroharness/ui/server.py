@@ -1,7 +1,8 @@
 """The PetroHarness web UI: ask about a LAS file in the browser and follow the answer as it is made.
 
+    petroharness --launch-ui [the same options]     (starts the UI and opens it in your browser)
     petroharness ui [--host 127.0.0.1] [--port 7860] [--runs DIR] [--workers N] [--model NAME | --model-card CARD]
-                    [--model-url URLS]
+                    [--model-url URLS] [--open]
 
 Standard library only. It binds to 127.0.0.1 by default: open http://localhost:7860 on the same machine, or forward the
 port from a remote one (`ssh -L 7860:localhost:7860 HOST`, or the editor's port forwarding). `--host localhost` listens
@@ -653,7 +654,30 @@ def parser() -> argparse.ArgumentParser:
                                     "(default: K2-Horizon-7B)")
     ap.add_argument("--model-card", help="a model card: a YAML file (docs/MODELS.md), or a packaged card's name")
     ap.add_argument("--model-url", help="the model endpoint(s), comma-separated (default: PETROHARNESS_MODEL_URL)")
+    ap.add_argument("--open", action="store_true", help="open the UI in your browser once it listens (what "
+                                                        "`petroharness --launch-ui` does)")
     return ap
+
+
+def page_url(host: str, port: int) -> str:
+    """The address to open in a browser on this machine: localhost for a loopback or every-interface server."""
+    return f"http://localhost:{port}" if host in LOOPBACK | {"0.0.0.0", "::", ""} else _url((host, port))
+
+
+def open_browser(url: str, env=None, platform: str | None = None, opener=None) -> bool:
+    """Open url in the user's browser where there is one to open: a desktop (macOS, Windows, a Linux display) or a
+    BROWSER the environment names (an editor's remote terminal sets one that opens the page on the editor's machine).
+    On a Linux machine with no display it opens nothing, since Python's webbrowser would start a text browser in the
+    terminal: the caller says where to point a browser instead."""
+    import webbrowser
+    env = os.environ if env is None else env
+    platform = sys.platform if platform is None else platform
+    if platform.startswith("linux") and not any(env.get(k) for k in ("BROWSER", "DISPLAY", "WAYLAND_DISPLAY")):
+        return False
+    try:
+        return bool((opener or webbrowser.open)(url))
+    except Exception:                               # noqa: BLE001  (no browser to open: the address is printed)
+        return False
 
 
 def main(argv: list | None = None) -> int:
@@ -680,6 +704,12 @@ def main(argv: list | None = None) -> int:
           flush=True)
     for s in servers[1:]:
         threading.Thread(target=s.serve_forever, daemon=True).start()
+    if args.open:
+        url = page_url(args.host, servers[0].server_address[1])
+        if not open_browser(url):
+            print(f"  open {url} in your browser (from another machine: ssh -L "
+                  f"{servers[0].server_address[1]}:localhost:{servers[0].server_address[1]} HOST, then the same address)",
+                  file=sys.stderr, flush=True)
     try:
         servers[0].serve_forever()
     except KeyboardInterrupt:

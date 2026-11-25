@@ -197,8 +197,8 @@ def _temperature_source(rec: dict, row) -> str:
 
 def _temperature(f: Formation, bht_f: Optional[float], td: Optional[float]) -> Result:
     """Formation temperature as the record's temperature step has it (its TEMP and gradient), and the gradient from
-    a bottom-hole temperature (given, else the LAS header's) by Petrophys estimate_gradient_from_bht."""
-    from petrophys.interpretation.temperature.temp_gradient import estimate_gradient_from_bht
+    a bottom-hole temperature (given, else the LAS header's) by Petrophys gradient_from_bht."""
+    from petrophys.interpretation.temperature.temp_gradient import gradient_from_bht
     m = _method(f, "temperature")
     rec = (m.parameters or {}) if m else {}
     out = Out(f)
@@ -219,14 +219,14 @@ def _temperature(f: Formation, bht_f: Optional[float], td: Optional[float]) -> R
                 f"total depth, {f.inv.depth_unit}) for a gradient from them")
         return out.result()
     try:
-        g = estimate_gradient_from_bht(float(bht), float(depth), bht_unit=bht_unit, depth_unit=depth_unit)
+        g = gradient_from_bht(float(bht), float(depth), bht_unit=bht_unit, depth_unit=depth_unit)
     except Exception as e:  # noqa: BLE001  (the library refuses a temperature or depth it cannot use)
-        raise ToolError(f"Petrophys estimate_gradient_from_bht: {str(e)[:300]}") from None
+        raise ToolError(f"Petrophys gradient_from_bht: {str(e)[:300]}") from None
     row = out.child()
     src = "given" if bht_f is not None else "LAS header"
     vs = (f" (the record's: {row.v(rec['gradient_f_per_100ft'])})" if _num(rec.get("gradient_f_per_100ft")) else "")
     out.add(f"  gradient from BHT {row.v(bht)} {bht_unit} at TD {row.v(depth)} {depth_unit} ({src}; Petrophys "
-            f"estimate_gradient_from_bht): {row.v(g)} degF/100ft{vs}", row)
+            f"gradient_from_bht): {row.v(g)} degF/100ft{vs}", row)
     return out.result()
 
 

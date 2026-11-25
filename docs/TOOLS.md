@@ -122,7 +122,7 @@ Every number an answer states must come from results like these. Data: GeoLink, 
 - **New curves:** each is written as `<CURVE>_<LABEL>`, for example `SW_INDONESIA`, and every lookup and condition
   reads it.
 - **An input another property computes** (Rw, VCL, PHIE) is changed by calculating that property:
-  `{"property": "water_resistivity", "parameters": {"rw": 0.03, "rw_temp_f": 105}}`.
+  `{"property": "water_resistivity", "parameters": {"rw": 0.03, "rw_meas_temp": "105 degF"}}`.
 - **With the property alone,** it lists the step's parameters with the record's values and the choices.
 </details>
 

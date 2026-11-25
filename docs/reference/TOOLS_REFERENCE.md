@@ -1816,15 +1816,15 @@ With the property alone (`{"calculate": {"property": "saturation"}}`), the resul
 |---|---|---|---|
 | `clay_volume` | `clay_volume` | `method`: gr, sp, neutron_density, minimum; `nd_matrix`: sandstone, limestone, dolomite | `gr_clean`, `gr_shale`, `gr_transform`, `sp_clean`, `sp_shale` |
 | `porosity` | `porosity` | `method`: density, neutron_density, neutron, sonic | `matrix`, `matrix_density`, `matrix_neutron`, `matrix_slowness`, `fluid_density`, `fluid_slowness`, `clay_porosity`, `hc_type` |
-| `water_resistivity` | `formation_water` | - | `rw`, `rw_temp_f`, `salinity_ppm` |
-| `mud_filtrate_resistivity` | `mud_filtrate` | - | `rmf`, `rmf_temp_f` |
+| `water_resistivity` | `formation_water` | - | `rw`, `rw_meas_temp`, `salinity_ppm` |
+| `mud_filtrate_resistivity` | `mud_filtrate` | - | `rmf`, `rmf_meas_temp` |
 | `saturation` | `saturation` | `model`: archie, simandoux, modified_simandoux, indonesia, north_sea, nigeria_schlumberger, dual_water, waxman_smits, auto | `a`, `m`, `n`, `rcl`, `vsh_exp`, `shale_exp`, `rwb`, `clay_porosity`, `cec`, `b_coeff`, `m_star`, `matrix_density`, `salinity_ppm`, `vcl_cutoff`, `lithology` |
 | `permeability` | `permeability` | `method`: auto, timur, coates, wyllie_rose, lith_vcl | `swirr`, `fallback_method`, `min_core_points` |
 | `rock_quality` | `rock_quality` | - | none (recomputed from its inputs) |
 | `bvw` | `bvw` | - | none |
 | `mhi` | `mhi` | - | none |
 | `net_pay` | `net_pay` | - | `vcl_cutoff`, `phie_cutoff`, `sw_cutoff`, `lithology`, `exclude_non_reservoir` |
-| `temperature` | `temperature` | - | `bht_f`, `td_ft`, `surface_temp_f`, `gradient_f_per_100ft` |
+| `temperature` | `temperature` | - | `bht`, `td`, `surface_temp`, `temperature_gradient` (each a number, or a number with its unit: `"110 degC"`) |
 
 - A parameter that belongs to another property is refused with the call that changes it (`rw` belongs to
   `water_resistivity`); `parameter` or `values` sent to `calculate` point to `what_if`.
@@ -1845,7 +1845,7 @@ With the property alone (`{"calculate": {"property": "saturation"}}`), the resul
 | `parameter` | string | required | The input (`sw_cutoff`, `m`, `rcl`), or `model` / `method` | `library.what_if` |
 | `values` | array of number or string | required | The values to try; at most `MAX_VALUES` = 6 are used | `library.what_if` |
 | `target` | string | the property's main curve (`TARGETS`: saturation SW, net_pay NET_PAY, ...) | A curve the step or the steps after it write | `library.TARGETS` |
-| `parameters` | object | none | Inputs held fixed for every value (`{"rw_temp_f": 105}`) | `library.what_if` |
+| `parameters` | object | none | Inputs held fixed for every value (`{"rw_meas_temp": "105 degF"}`) | `library.what_if` |
 
 **Example**
 
@@ -1958,8 +1958,8 @@ Every verb also takes `search` and `run`, which reach every public Petrophys fun
 ```
 
 ```text
-[E34] check: Petrophys functions matching 'washout' (2 found; 25 serve check); run one with {"check": {"run": "<name>", "args": {...}}}
-  detect_washout: Convenience function for washout detection. It reads the well's curves itself. Needs nothing. Optional: bit_size (number, in; Bit Size here: BS in)
+[E34] check: Petrophys functions matching 'washout' (2 found; 28 serve check); run one with {"check": {"run": "<name>", "args": {...}}}
+  detect_washout: Convenience function for washout detection. It reads the well's curves itself. Needs nothing. Optional: bit_size (number, in)
 ```
 
 ```json
@@ -2161,7 +2161,7 @@ Net rock, reservoir and pay.
 
 **Notes**
 
-- Computation: Petrophys `calculate_net_gross` and `calculate_pay_averages` on the interval's well, and
+- Computation: Petrophys `calculate_net_gross` and `pay_averages` on the interval's well, and
   `cutoff_attrition` for the cutoffs in order.
 
 </details>
@@ -2203,14 +2203,14 @@ its own core.
 ```
 
 ```text
-[E29] poro-perm transform fitted on core plugs (Petrophys fit_poro_perm_transform): log10(K) = A * porosity + B with A 21.6883, B -2.5285; R2 0.7761, RMSE 0.7435 (log10 mD), n 197. Written: PERM_PP (the transform applied to PHIE).
-  against the record's PERM over 423 samples: geometric means PERM_PP 18.1695, PERM 17.1488 mD
+[E29] poro-perm transform fitted on core plugs (Petrophys fit_poro_perm): log10(K) = A * porosity + B with A 21.6883, B -2.5285; R2 0.7761, RMSE 0.7435 (log10 mD), n 197. Written: PERM_PP (the transform applied to PHIE).
+  against the record's PERM over 574 samples: geometric means PERM_PP 12.8774, PERM 11.9925 mD
 ```
 
 **COSTA HW-3**, Kharaib-2, 7805–8020 ft (COSTA data, CC BY). With no core plugs, the transform is fitted on the log:
 
 ```text
-[E8] poro-perm transform fitted on the log (PHIE and PERM: no core porosity and permeability here) (Petrophys fit_poro_perm_transform): log10(K) = A * porosity + B with A 21.26, B -1.1519; R2 0.9381, RMSE 0.2885 (log10 mD), n 431. Written: PERM_PP (the transform applied to PHIE).
+[E8] poro-perm transform fitted on the log (PHIE and PERM: no core porosity and permeability here) (Petrophys fit_poro_perm): log10(K) = A * porosity + B with A 21.26, B -1.1519; R2 0.9381, RMSE 0.2885 (log10 mD), n 431. Written: PERM_PP (the transform applied to PHIE).
 ```
 
 **Notes**

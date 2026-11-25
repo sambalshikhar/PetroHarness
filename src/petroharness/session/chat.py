@@ -76,7 +76,19 @@ def command(c: Conversation, line: str) -> str:
                           for k, v in c.settings.items()) or "Petrophys defaults"
         return f"settings in force: {shown}" + (f"\nchanged {made}" if made else "")
     if word == "/set":
-        pairs = [p for p in rest.split() if p.strip()]
+        # name=value pairs; a value may hold a space, quoted or not (bht="110 degC", bht=110 degC): a word with no "="
+        # belongs to the value before it
+        import shlex
+        try:
+            words = shlex.split(rest)
+        except ValueError:
+            words = rest.split()
+        pairs = []
+        for w in words:
+            if "=" in w or not pairs:
+                pairs.append(w)
+            else:
+                pairs[-1] += " " + w
         if not pairs or any("=" not in p for p in pairs):
             return "usage: /set name=value [name=value ...]   (name=default takes a setting back to its default)"
         try:

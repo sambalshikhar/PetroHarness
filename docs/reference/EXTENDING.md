@@ -195,7 +195,7 @@ added to an already mapped package needs no harness change at all.
 3. **Its declaration, in Petrophys.** Each parameter's kind (`petrophys/_function_declarations.py`, read through
    `petrophys.function_schema`); Petrophys's `scripts/check_function_schema.py` fails its CI when one is missing. The
    harness binds and describes the function from it.
-4. **Install** the Petrophys build that has it. The harness pins one commit (`7aa9968`): README "Install" and
+4. **Install** the Petrophys build that has it. The harness pins one commit (`3a9378e`): README "Install" and
    `.github/workflows/tests.yml` install it beside `requirements.lock`, which holds the other dependencies.
 5. **Tests.** `tests/agent/test_library_api.py`: the registry, search and run, the binder; its run tests need the
    sample wells.
@@ -227,7 +227,7 @@ with Petrophys's defaults for the inputs it does not name.
 | `Fn` | dataclass | | `name`, `path`, `verb`, `summary` (the docstring's first sentence, 160 characters), `params` (annotation, default, the docstring's Parameters line, 200 characters), `returns` (the Returns section, 300 characters). | `library.api.Fn`, `_param_docs` |
 | `Fn.kinds`, `Fn.samplewise` | dict, bool | | Each parameter's declaration and whether the function takes one sample (Petrophys's `function_schema.declaration`). The binder reads a named input as its kind; the search shows each input's kind with what this well has for it. | `library.api.registry`, `bind`, `_facts` |
 | `MAX_FOUND` | integer | 8 | Functions a `search` lists. | `library.api.MAX_FOUND` |
-| Counts | per verb | | With the pinned Petrophys (7aa9968): calculate 83, estimate 62, calibrate 51, classify 39, summarize 39, check 25, what_if 5 (304 in all). | `library.api.functions` |
+| Counts | per verb | | With the pinned Petrophys (3a9378e): calculate 83, estimate 62, calibrate 51, classify 39, summarize 39, check 28, what_if 5 (307 in all). | `library.api.functions` |
 
 </details>
 
@@ -454,21 +454,21 @@ A card that names no model needs `--model`; otherwise a question fails with
 
 The figures of an answer are Petrophys plots: the plots of the cited results, and the standard displays of the
 interval listed in `DISPLAYS` (`src/petroharness/figures.py`). The harness draws nothing itself: a display is one
-line naming a Petrophys function and the curves it reads beyond those its signature names.
+line naming a Petrophys plot (by its name on `petrophys`) and the curves it reads.
 
 ```python
 # src/petroharness/figures.py
 DISPLAYS = {
     ...
-    "create_pickett_plot": (),
-    "create_triple_combo": (("GR",), ("RDEP", "RT", "RMED"), ("RHOB",), ("NPHI", "PHIN")),
+    "pickett_plot": (("phi", ("PHIE",)), ("rt", ("RT", "RDEP"))),
+    "triple_combo": ((None, ("GR",)), (None, ("RDEP", "RT", "RMED")), (None, ("RHOB",)), (None, ("NPHI", "PHIN"))),
 }
 ```
 
-![A Pickett plot of the Brent Group](../images/geolink-30_6-5-brent-pickett.png "What the one line for create_pickett_plot gives on the Brent Group of GeoLink 30/6-5: Petrophys draws the plot from the interval's PHIE and RDEP (768 samples), with rw 0.07195 (the median of RW over the interval), m 2 and n 2 (the record's saturation step) and a 1 (Petrophys's default), as the binding chose them. Data: GeoLink, CC BY-SA 4.0.")
+![A Pickett plot of the Brent Group](../images/geolink-30_6-5-brent-pickett.png "What the one line for pickett_plot gives on the Brent Group of GeoLink 30/6-5: Petrophys draws the plot from the interval's PHIE and RDEP, on clean rock (198 samples with VCL up to 0.15; 570 left out), with rw 0.07195 (the median of RW over the interval), m 2 and n 2 (the record's saturation step) and a 1 (Petrophys's default), as the binding chose them. Data: GeoLink, CC BY-SA 4.0.")
 
-1. **The plot.** Add it to `petrophys.visualization` (exported, or in one of the three submodules). Its docstring's
-   first sentence becomes the candidate's title (`figures.summary`).
+1. **The plot.** Add it to Petrophys, on `petrophys` (`pp.<name>`). Its docstring's first sentence becomes the
+   candidate's title (`figures.summary`).
 2. **The line.** A `DISPLAYS` entry, `"<function>": (<curve groups>)`. The kind must be lower-case letters with `_`
    (else the UI cannot serve the file).
 3. **Tests.** `test_the_harness_draws_nothing_itself_and_every_plot_is_a_petrophys_function` checks that every
@@ -484,27 +484,27 @@ DISPLAYS = {
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
 | `DISPLAYS` | dict | 9 displays | Petrophys function name to the curve groups it reads beyond those its signature names: one curve of each group must hold values in the interval (`("NPHI", "PHIN")` means NPHI or PHIN). `()` when the signature names all. | `figures.DISPLAYS` |
-| Function lookup | rule | | `petrophys.visualization.<name>`, else the submodules `zone_flags`, `crossplot_viewer`, `log_plot`. | `figures._function` |
-| `kind_of` | rule | | The kind is the function name without `create_`/`plot_` and `_plot`/`_crossplot`: `create_pickett_plot` gives `pickett`. | `figures.kind_of` |
+| Function lookup | rule | | `petrophys.<name>`: the plots Petrophys puts on `pp` (`pp.pickett_plot`, `pp.crossplot`, `pp.plot`). | `figures._function` |
+| `kind_of` | rule | | The kind is the function name without `create_`/`plot_` and `_plot`/`_crossplot`: `pickett_plot` gives `pickett`, `zone_flags_plot` `zone_flags`. | `figures.kind_of` |
 | Binding | rule | | `*_curve` parameters take their default curve or the role's curve; number parameters the median of the role's curve, else the record's parameter, else Petrophys's default; array parameters the role's curve; `_LEFT` parameters (`well`, `result`, `depth_range`, `figsize`, `title`, `cmap`, `color_curve`, `kwargs`) are not bound. A required parameter that cannot be bound drops the display. | `figures.bind`, `figures._LEFT` |
 | Offered when | rule | | Every curve it reads holds values and is among the curves the answer rests on (`behind`). | `figures.displays` |
 | Limits | integers | 3, 10, 16 | `MAX_FIGURES` per answer, `MAX_RESULT_PLOTS` from the cited results, `MAX_CANDIDATES` shown to the model. | `figures` constants |
 | File name | pattern | | `figure_<n>_<kind>.png`; the web UI serves only `figure_\d+_[a-z]+(_[a-z]+)*\.png` (and the interval's `overview.png`). | `figures.attach`, `ui.store.Store.figure` |
 | Result plots | dicts | | `FUNCTIONS` and `DRAW` for `log_viewer`, `histogram`, `crossplot`; `forms(f, item)` maps a result's tool (`stats`, `profile`, `crossplot`, `compare`) to its plots. | `figures.FUNCTIONS`, `figures.forms` |
 
-All nine displays bind on the Brent Group of 30/6-5 (`figures.bind`). GeoLink 16/7-1 has no neutron log, so the four displays that read NPHI return `None` there and are never offered:
+All nine displays bind on the Brent Group of 30/6-5 (`figures.bind`). GeoLink 16/7-1 has no neutron log and no core, so the four displays that read NPHI and the flow units, which Petrophys draws from the core plugs, return `None` there and are never offered:
 
 | Display | Kind | Curves on 30/6-5 Brent | On 16/7-1 (whole log, no NPHI) |
 |---|---|---|---|
-| `create_nd_crossplot` | `nd` | NPHI, RHOB | not offered |
-| `create_mn_plot` | `mn` | NPHI, RHOB, DTC | not offered |
-| `create_mid_plot` | `mid` | NPHI, RHOB, DTC | not offered |
-| `create_pickett_plot` | `pickett` | PHIE, RDEP | PHIE, RDEP |
-| `create_hingle_plot` | `hingle` | PHIE, RDEP | PHIE, RDEP |
-| `create_buckles_plot` | `buckles` | PHIE, SW | PHIE, SW |
-| `create_flow_unit_plot` | `flow_unit` | PHIE, PERM | PHIE, PERM |
-| `create_triple_combo` | `triple_combo` | GR, RDEP, RHOB, NPHI | not offered |
-| `create_net_pay_summary_plot` | `net_pay_summary` | NET_RES | NET_RES |
+| `nd_plot` | `nd` | NPHI, RHOB | not offered |
+| `mn_plot` | `mn` | NPHI, RHOB, DTC | not offered |
+| `mid_plot` | `mid` | NPHI, RHOB, DTC | not offered |
+| `pickett_plot` | `pickett` | PHIE, RDEP | PHIE, RDEP |
+| `hingle_plot` | `hingle` | PHIE, RDEP | PHIE, RDEP |
+| `buckles_plot` | `buckles` | PHIE, SW | PHIE, SW |
+| `flow_unit_plot` | `flow_unit` | PHIC, KH_CORE (the core plugs) | not offered |
+| `triple_combo` | `triple_combo` | GR, RDEP, RHOB, NPHI | not offered |
+| `zone_flags_plot` | `zone_flags` | NET_ROCK, NET_RES, NET_PAY | NET_ROCK, NET_RES, NET_PAY |
 
 </details>
 

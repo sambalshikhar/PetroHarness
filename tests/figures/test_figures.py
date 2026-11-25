@@ -48,8 +48,9 @@ def test_the_harness_draws_nothing_itself_and_every_plot_is_a_petrophys_function
         assert callable(F._function(function)), function
     for function in F.DISPLAYS:
         assert F.summary(function) and F.kind_of(function).replace("_", "").isalpha(), function
-    assert F.kind_of("create_pickett_plot") == "pickett" and F.kind_of("create_nd_crossplot") == "nd"
-    assert F.summary("create_buckles_plot").startswith("Buckles plot")       # Petrophys' own words
+    assert F.kind_of("pickett_plot") == "pickett" and F.kind_of("nd_plot") == "nd"
+    assert F.kind_of("zone_flags_plot") == "zone_flags" and F.kind_of("triple_combo") == "triple_combo"
+    assert F.summary("buckles_plot").startswith("Buckles plot")              # Petrophys' own words
 
 
 @pytest.mark.data
@@ -140,20 +141,25 @@ def fake(curves: dict, record: dict):
 def test_a_display_takes_its_curves_and_numbers_from_the_interval_each_said_with_its_source():
     x = np.array([0.1, 0.2, 0.3, np.nan, 0.2])
     f = fake({"PHIE": x, "RDEP": x * 10, "RW": np.array([0.04, 0.05, 0.06, 0.05, np.nan]), "SW": x}, {"m": 1.8, "n": 2})
-    kw, curves, said = F.bind(f, "create_pickett_plot")
-    assert kw == {"rw": 0.05, "phie_curve": "PHIE", "rt_curve": "RDEP", "m": 1.8, "n": 2.0} and curves == ["PHIE", "RDEP"]
+    kw, curves, said = F.bind(f, "pickett_plot")
+    assert kw == {"rw": 0.05, "phi": "PHIE", "rt": "RDEP", "m": 1.8, "n": 2.0} and curves == ["PHIE", "RDEP"]
     assert said == ["rw 0.05 (median of RW over the interval)", "a 1 (Petrophys' default)", "m 1.8 (record, saturation)",
-                    "n 2 (record, saturation)"]
-    assert F.bind(f, "create_buckles_plot")[:2] == ({"phie_curve": "PHIE", "sw_curve": "SW"}, ["PHIE", "SW"])
-    assert F.bind(f, "create_nd_crossplot") is None                           # no neutron or density here
+                    "n 2 (record, saturation)", "vcl_max 0.15 (Petrophys' default)"]
+    assert F.bind(f, "buckles_plot")[:2] == ({"phi": "PHIE", "sw": "SW"}, ["PHIE", "SW"])
+    assert F.bind(f, "nd_plot") is None                                       # no neutron or density here
     no_rw = fake({"PHIE": x, "RDEP": x}, {"rw": 0.08})
-    assert F.bind(no_rw, "create_pickett_plot")[2][0] == "rw 0.08 (record, saturation)"
-    assert F.bind(fake({"PHIE": x, "RDEP": x}, {}), "create_pickett_plot") is None   # rw has no default: not offered
-    assert F.bind(fake({"PHIE": x}, {"rw": 0.08}), "create_pickett_plot") is None    # no resistivity
-    arrays = F.bind(fake({"PHIE": x, "PERM": x * 100}, {}), "create_flow_unit_plot")
-    assert set(arrays[0]) == {"phi_e", "perm"} and arrays[1] == ["PHIE", "PERM"]
+    assert F.bind(no_rw, "pickett_plot")[2][0] == "rw 0.08 (record, saturation)"
+    # no RW curve and no recorded rw: not offered (Petrophys would read rw from the RW curve, and refuse without it)
+    assert F.bind(fake({"PHIE": x, "RDEP": x}, {}), "pickett_plot") is None
+    assert F.bind(fake({"PHIE": x}, {"rw": 0.08}), "pickett_plot") is None    # no resistivity
+    # flow units from the core plugs (Petrophys draws them from a well's plugs), not from the log curves
+    assert F.bind(fake({"PHIC": x, "KH_CORE": x * 100}, {}), "flow_unit_plot")[:2] == ({}, ["PHIC", "KH_CORE"])
+    assert F.bind(fake({"PHIE": x, "PERM": x * 100}, {}), "flow_unit_plot") is None
+    # a parameter that takes a list of curves is given every curve of its entry that holds values
+    flags = F.bind(fake({"NET_RES": x, "NET_PAY": x, "NET_ROCK": np.full(5, np.nan)}, {}), "zone_flags_plot")
+    assert flags[:2] == ({"flag_curves": ["NET_RES", "NET_PAY"]}, ["NET_RES", "NET_PAY"])
     empty = fake({"PHIE": x, "SW": np.full(5, np.nan)}, {})
-    assert F.bind(empty, "create_buckles_plot") is None                       # a curve with no values is not held
+    assert F.bind(empty, "buckles_plot") is None                              # a curve with no values is not held
 
 
 def test_the_choice_is_read_in_order_and_ids_not_offered_are_dropped():
@@ -175,7 +181,7 @@ def one_reply(*replies, cap=None) -> ScriptedModel:
 
 def test_the_choice_is_asked_on_a_steps_allowance_with_the_offered_ids_and_once_more_when_empty():
     cands = [F.Candidate(f"F{i}", "histogram", "E1", f"t{i}") for i in range(1, 3)] \
-        + [F.Candidate("F3", "pickett", "interval", "t3", {"function": "create_pickett_plot"})]
+        + [F.Candidate("F3", "pickett", "interval", "t3", {"function": "pickett_plot"})]
     llm = one_reply("", '{"figures": ["F3"]}', cap=32768)
     assert [c.id for c in F.pick(llm, None, "q", "a", cands)] == ["F3"]
     c1, c2 = llm.sent
@@ -205,9 +211,9 @@ def test_attach_asks_once_petrophys_draws_the_chosen_and_the_captions_say_so(ses
     assert "F4: Crossplot of SW" in user and "(from result E2)" in user and "(a standard display of the interval)" in user
     assert rec["chosen"] == ["F4", "F1", buckles] and not rec["errors"]
     assert [g["source"] for g in rec["figures"]] == ["E2", "E1", "interval"]
-    ends = ["Drawn by Petrophys (create_crossplot) from result E2.",
-            "Drawn by Petrophys (create_histogram_comparison) from result E1.",
-            "Drawn by Petrophys (create_buckles_plot) from the interval's curves."]
+    ends = ["Drawn by Petrophys (pp.crossplot) from result E2.",
+            "Drawn by Petrophys (pp.histograms) from result E1.",
+            "Drawn by Petrophys (pp.buckles_plot) from the interval's curves."]
     for n, (g, end) in enumerate(zip(rec["figures"], ends), 1):
         assert (tmp_path / g["file"]).read_bytes().startswith(PNG)
         assert g["caption"].startswith(f"Figure {n}. ") and g["caption"].endswith(end)
@@ -221,3 +227,22 @@ def test_attach_asks_once_petrophys_draws_the_chosen_and_the_captions_say_so(ses
     assert none["candidates"] == [] and none["figures"] == [] and not (tmp_path / "none").exists()
     unread = F.attach(session, "q", "a", ["E1"], one_reply(""), None, tmp_path / "unread")
     assert unread["figures"] == [] and unread["errors"] == ["the model gave no readable choice of figures"]
+
+
+def test_a_list_parameter_and_the_net_flags_display_are_read_as_petrophys_declares_them():
+    """A parameter annotated as a list takes every held curve of its entry (Optional[List[str]] too), and the net
+    flags are offered where the answer rests on any one of them, as the net-pay display was."""
+    import inspect as I
+    from typing import List, Optional
+
+    def plot(well, flag_curves: List[str], other: Optional[List[str]] = None, one: str = "x"):
+        pass
+    ps = I.signature(plot).parameters
+    assert F._takes_a_list(ps["flag_curves"]) and F._takes_a_list(ps["other"]) and not F._takes_a_list(ps["one"])
+    x = np.array([0.0, 1.0, 1.0, np.nan, 0.0])
+    f = fake({"NET_ROCK": x, "NET_RES": x, "NET_PAY": x}, {})
+    assert F._rests_on(f, "zone_flags_plot", {"NET_PAY"}) and not F._rests_on(f, "zone_flags_plot", {"PHIE"})
+    assert F._rests_on(fake({"PHIE": x, "SW": x}, {}), "buckles_plot", {"PHIE", "SW"})
+    assert not F._rests_on(fake({"PHIE": x, "SW": x}, {}), "buckles_plot", {"PHIE"})
+    assert "zone_flags_plot" in F.DEPTH_DISPLAYS and "pickett_plot" not in F.DEPTH_DISPLAYS
+

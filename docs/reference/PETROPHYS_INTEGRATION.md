@@ -33,7 +33,7 @@ flowchart TB
 
 | Fact | Value | Where |
 |---|---|---|
-| Petrophys build | commit `7aa9968e72e7c09a28e68af383471184af9f5f52`, package version 3.0.0 | `README.md` (install), `pyproject.toml` |
+| Petrophys build | commit `3a9378e27eaab54077d326ba5fbbfc6de569f56b`, package version 3.0.0 | `README.md` (install), `pyproject.toml` |
 | Interpretation of the raw LAS | Petrophys, once per well and setting, cached by content | `well/prepare.py`, `prepare_well` |
 | Lookups | Petrophys's six analyzers on each lithology zone; every statistic from `curve_statistics` | `record/catalog.py`, `well/stats.py` |
 | Verbs over Petrophys | `check`, `calculate`, `what_if`, `estimate`, `classify`, `summarize`, `calibrate` | `agent/library/` |
@@ -69,7 +69,7 @@ PetroHarness is built and tested against one Petrophys commit, installed as a pa
 ```bash
 python3.10 -m venv .venv
 .venv/bin/pip install -r requirements.lock
-.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@7aa9968e72e7c09a28e68af383471184af9f5f52"
+.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@3a9378e27eaab54077d326ba5fbbfc6de569f56b"
 .venv/bin/pip install -e . --no-deps
 ```
 
@@ -78,7 +78,7 @@ python3.10 -m venv .venv
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| Requirement | pip specifier | `petrophys>=3.0` | The dependency, with the comment `pinned at 7aa9968 (README: install)` | `pyproject.toml` |
+| Requirement | pip specifier | `petrophys>=3.0` | The dependency, with the comment `pinned at 3a9378e (README: install)` | `pyproject.toml` |
 | Package version | str | `3.0.0` | `importlib.metadata.version("petrophys")` of the pinned build | installed metadata |
 | `library_identity()` | function | - | The installed Petrophys's version and build: a source checkout's commit (with `+dirty`), else the commit pip recorded, else a hash of its installed files (`files-...`) | `well/prepare.py` |
 
@@ -288,8 +288,8 @@ The steps a change carries into, as the pinned Petrophys gives them:
 | `temperature` | TEMP | formation_water, mud_filtrate |
 | `clay_volume` | VCL | porosity, saturation, permeability, rock_quality, bvw, mhi, net_pay |
 | `porosity` | PHID, PHIN, PHIT, PHIE | saturation, permeability, rock_quality, bvw, mhi, net_pay |
-| `formation_water` (with `rw` and `rw_temp_f`) | RW | saturation, bvw, mhi, net_pay |
-| `mud_filtrate` (with `rmf` and `rmf_temp_f`) | RMF | mhi |
+| `formation_water` (with `rw` and `rw_meas_temp`) | RW | saturation, bvw, mhi, net_pay |
+| `mud_filtrate` (with `rmf` and `rmf_meas_temp`) | RMF | mhi |
 | `saturation` | SW, SXO | bvw, mhi, net_pay |
 | `permeability` | PERM | rock_quality |
 | `rock_quality` | RQI, FZI, PHI_Z | - |
@@ -315,7 +315,7 @@ A limestone matrix on 30/6-5 Brent (the per-zone lines and the later curves cut)
   ...
 ```
 
-- `formation_water` needs `rw` with `rw_temp_f`, or `salinity_ppm` (else a `ToolError` asks for them); an Rw the record
+- `formation_water` needs `rw` with `rw_meas_temp`, or `salinity_ppm` (else a `ToolError` asks for them); an Rw the record
   states without its temperature is not used as a default.
 - `DROPPED` (`library._Dropped`) is per thread, so questions run side by side do not read each other's dropped
   parameters.
@@ -336,7 +336,7 @@ same parameter; `zones` limits the samples to those zones.
 | `clay_point` | `neutron_density` | `interpretation.clay_volume.nd_method.nd_shale_point` | Shale samples VCL above 0.6 | - |
 | `gr_endpoints` | `percentiles` | `interpretation.clay_volume.gr_method.bounded_gr_baselines` on P5 and P95 | The samples asked and the whole well | - |
 | `matrix` | `apparent` | `interpretation.lithology.apparent_matrix`: `apparent_total_porosity`, `apparent_matrix_density`, `apparent_matrix_volumetric_pe`; `matrix_properties.MINERAL_PROPERTIES` | Zone medians; Umaa needs PEF | `RHOMAA`, `UMAA` |
-| `temperature` | `gradient` | `interpretation.temperature.temp_gradient.estimate_gradient_from_bht` | The record's TEMP per zone; BHT and TD from `bht_f` and `td`, else the LAS header | - |
+| `temperature` | `gradient` | `interpretation.temperature.temp_gradient.gradient_from_bht` | The record's TEMP per zone; BHT and TD from `bht_f` and `td`, else the LAS header | - |
 
 A Pickett fit on the water-bearing sands of 30/6-5 Brent (Z13, Z14, Z15 and Z19, where SW is at or near 1):
 
@@ -362,7 +362,7 @@ probably not all clean and water-bearing.
 |---|---|---|---|---|
 | `held_readings` | `preprocessing.quality.held_readings.find_held_readings` (one value repeated over its minimum run, 10 samples in the pinned build) | measured input logs | repeat tolerance 0 | `HELD_<CURVE>` |
 | `bad_hole` | `preprocessing.quality.bad_hole.washout_detection.WashoutDetection` and `preprocessing.quality.wellbore.WellboreQC` (caliper rugosity) | CALI; BS for washout | washout limit CALI - BS 1.5 in | `WASHOUT`, `LARGE_HOLE`, `LOW_DENSITY`, `PEF_EXCLUDED`, `RUGOSE` |
-| `depth_shift` | `interpretation.core_analysis.calibration.core_data_from_well`, `interpretation.core_analysis.depth_matching.find_core_depth_shift` | core plugs in the LAS (PHIC, KH_CORE, SWC or the like) | Petrophys's largest shift; core runs split at 3 m gaps | - |
+| `depth_shift` | `interpretation.core_analysis.core_data`, `interpretation.core_analysis.depth_matching.find_core_depth_shift` | core plugs in the LAS (PHIC, KH_CORE, SWC or the like) | Petrophys's largest shift; core runs split at 3 m gaps | - |
 
 Held readings on 30/6-5 Brent, every measured log:
 
@@ -425,7 +425,7 @@ available -> mineral volumes computed, LITHO not inferred or overwritten`); `cla
 ```
 
 The record's own flags, with its exclusions, are summarised by `pay_summary` (`record/catalog.pay_summary`: Petrophys
-`calculate_net_gross` and `calculate_pay_averages`).
+`calculate_net_gross` and `pay_averages`).
 
 </details>
 
@@ -436,17 +436,17 @@ The record's own flags, with its exclusions, are summarised by `pay_summary` (`r
 
 | Object | Petrophys | Needs | Writes |
 |---|---|---|---|
-| `porosity`, `permeability`, `saturation` | `interpretation.core_analysis.calibration.calibrate_porosity`, `calibrate_permeability` (log10), `calibrate_saturation`, on core from `core_data_from_well` | core plugs (PHIC or CPOR; KH_CORE or CPERM; SWC or CSW) and the log; 3 plugs at least per scope | - |
-| `poro_perm` | `interpretation.core_analysis.calibration.fit_poro_perm_transform`; on the log through `petrophys.model.core.CoreData` when there is no core | core porosity and permeability, else PHIE and PERM | `PERM_PP` |
+| `porosity`, `permeability`, `saturation` | `interpretation.core_analysis.calibration.calibrate_porosity`, `calibrate_permeability` (log10), `calibrate_saturation`, on core from `core_data` | core plugs (PHIC or CPOR; KH_CORE or CPERM; SWC or CSW) and the log; 3 plugs at least per scope | - |
+| `poro_perm` | `interpretation.core_analysis.fit_poro_perm`; on the log through `petrophys.model.core.CoreData` when there is no core | core porosity and permeability, else PHIE and PERM | `PERM_PP` |
 | `shear` | `interpretation.saturation.sonic.rock_physics.slowness_to_velocity`, `vs_from_vp_greenberg_castagna` for the record's porosity matrix (sandstone, limestone or dolomite; sandstone otherwise) | DTC | `DTS_GC` |
-| `elastic` | `interpretation.rock_physics.elastic.calculate_elastic_properties` | RHOB, DTC; DTS or DTS_GC for the shear properties | `VP`, `AI`; with shear `VS`, `POISSON`, `SHEAR_MOD`, `BULK_MOD`, `YOUNG_MOD` |
+| `elastic` | `interpretation.rock_physics.elastic.elastic_properties` | RHOB, DTC; DTS or DTS_GC for the shear properties | `VP`, `AI`; with shear `VS`, `POISSON`, `SHEAR_MOD`, `BULK_MOD`, `YOUNG_MOD` |
 
 30/6-5 carries core plugs (PHIC, KH_CORE), so the transform is fitted on core:
 
 ```text
 {"calibrate": {"what": "poro_perm"}}
-[E29] poro-perm transform fitted on core plugs (Petrophys fit_poro_perm_transform): log10(K) = A * porosity + B with A 21.6883, B -2.5285; R2 0.7761, RMSE 0.7435 (log10 mD), n 197. Written: PERM_PP (the transform applied to PHIE).
-  against the record's PERM over 423 samples: geometric means PERM_PP 18.1695, PERM 17.1488 mD
+[E29] poro-perm transform fitted on core plugs (Petrophys fit_poro_perm): log10(K) = A * porosity + B with A 21.6883, B -2.5285; R2 0.7761, RMSE 0.7435 (log10 mD), n 197. Written: PERM_PP (the transform applied to PHIE).
+  against the record's PERM over 574 samples: geometric means PERM_PP 12.8774, PERM 11.9925 mD
 ```
 
 A curve this question calculated is added to a copy of the prepared well before a core fit reads it
@@ -540,9 +540,9 @@ Generated from the pinned Petrophys (`len(library.api.functions(verb))` and `lib
 | `calibrate` | 51 | core analysis calibration, grain size, nmr calibration, elastic, capillary, empirical, formation pressure, mdt pretest, pressure contacts, saturation height, scal, rock physics, sonic saturation |
 | `summarize` | 39 | bvw, net pay cutoffs, net pay flags, net pay, pay summary, screening, averages, formation analysis, net gross, ranking, summaries statistics, zone summary, hydrocarbon pore volume |
 | `classify` | 39 | flow units, roles, heterogeneity, mhi, rock quality, zonation, clay typing, elemental spectroscopy, spectral gamma, thorium uranium, carbonate minerals, crossplots, labels, lithology log, lithology, multi mineral solver |
-| `check` | 25 | depth matching, impute, histogram matching, normalization, curve masking, flag generator, washout detection, held readings, value ranges |
+| `check` | 28 | depth matching, impute, histogram matching, normalization, curve masking, flag generator, washout detection, depth alignment, depth match, held readings, value ranges |
 | `what_if` | 5 | sensitivity, uncertainty |
-| All | 304 | from 103 modules |
+| All | 307 | from 105 modules |
 <!-- end generated: verbs -->
 
 `menu_line(verb)` ends every verb's description with its count and groups:
@@ -573,9 +573,9 @@ On 30/6-5 Brent:
 ```
 
 ```text
-[E34] check: Petrophys functions matching 'washout' (2 found; 25 serve check); run one with {"check": {"run": "<name>", "args": {...}}}
-  detect_washout: Convenience function for washout detection. It reads the well's curves itself. Needs nothing. Optional: bit_size (number, in; Bit Size here: BS in)
-  generate_washout_flag: Generate washout flag based on caliper and density correction. Needs cali (curve, in; Caliper here: CALI in); bit_size (curve, in; Bit Size here: BS in). Optional: drho (curve, g/cm3; Density Correction here: DRHO g/cm3); cali_threshold (number, in; default 1.5); drho_threshold (number, g/cm3; default 0.15)
+[E34] check: Petrophys functions matching 'washout' (2 found; 28 serve check); run one with {"check": {"run": "<name>", "args": {...}}}
+  detect_washout: Convenience function for washout detection. It reads the well's curves itself. Needs nothing. Optional: bit_size (number, in)
+  washout_flag: Generate washout flag based on caliper and density correction. Needs cali (curve, in; Caliper here: CALI in); bit_size (curve, in; Bit Size here: BS in). Optional: drho (curve, g/cm3; Density Correction here: DRHO g/cm3); cali_threshold (number, in; default 1.5); drho_threshold (number, g/cm3; default 0.15)
 ```
 
 - A search finds functions under every verb; another verb's function is marked with its verb, for example
@@ -882,14 +882,14 @@ In `src/petroharness/figures.py`:
 | `MAX_FIGURES` | int | 3 | Figures on one answer at most |
 | `MAX_RESULT_PLOTS` | int | 10 | Candidates from the cited results |
 | `MAX_CANDIDATES` | int | 16 | Candidates shown to the model, the standard displays included |
-| `FUNCTIONS` | dict | - | `log_viewer`: `create_log_viewer`; `histogram`: `create_histogram_comparison`; `crossplot`: `create_crossplot` |
+| `FUNCTIONS` | dict | - | `log_viewer`: `plot`; `histogram`: `histograms`; `crossplot`: `crossplot` (their names on `petrophys`) |
 | `DISPLAYS` | dict | 9 entries | The standard displays offered, each with the curves it reads beyond its signature |
 | `OVERVIEW` | str | `overview.png` | The interval's log display, drawn once per conversation |
 
 ```python
 from petroharness import figures as F
-F.kind_of("create_pickett_plot")      # 'pickett'
-F.summary("create_buckles_plot")      # 'Buckles plot: porosity vs water saturation with constant-BVW hyperbolas'
+F.kind_of("pickett_plot")      # 'pickett'
+F.summary("buckles_plot")      # 'Buckles plot: Sw against porosity, with hyperbolas of constant bulk-volume water (porosity x Sw)'
 ```
 
 </details>
@@ -919,7 +919,7 @@ THE ANSWER:
 CANDIDATE FIGURES:
 F1: Histogram of PHIE_CC [v/v] by zone (all zones) (from result E9)
 ...
-F16: Buckles plot: porosity vs water saturation with constant-BVW hyperbolas (the interval's PHIE, SW) (a standard display of the interval)
+F16: Buckles plot: Sw against porosity, with hyperbolas of constant bulk-volume water (porosity x Sw) (the interval's PHIE, SW) (a standard display of the interval)
 ```
 
 </details>
@@ -951,31 +951,32 @@ the steps that computed them, one step back, from `petroharness.basis`).
 
 | Petrophys function | Kind | Curves it reads (one of each group) | What it shows (Petrophys's own first sentence) |
 |---|---|---|---|
-| `create_nd_crossplot` | `nd` | NPHI or PHIN; RHOB | Density-neutron crossplot with sandstone/limestone/dolomite matrix lines (porosity ticked 0-40%) |
-| `create_mn_plot` | `mn` | NPHI or PHIN; RHOB; DTC or DT | M-N crossplot (porosity-independent lithology), with the quartz/calcite/dolomite triangle (fresh mud: fluid 1.0 g/cc, 189 us/ft, neutron 1.0) |
-| `create_mid_plot` | `mid` | NPHI or PHIN; RHOB; DTC or DT | MID plot: apparent matrix density vs apparent matrix sonic, with the quartz/calcite/dolomite points (porosity-independent lithology) |
-| `create_pickett_plot` | `pickett` | PHIE; RT or RDEP | Pickett plot from well data |
-| `create_hingle_plot` | `hingle` | PHIE; RDEP or RT | Hingle plot: porosity vs Rt^(-1/m) on linear axes, with iso-Sw lines through the origin (the linear-axis counterpart of the Pickett plot) |
-| `create_buckles_plot` | `buckles` | PHIE; SW | Buckles plot: porosity vs water saturation with constant-BVW hyperbolas |
-| `create_flow_unit_plot` | `flow_unit` | PHIE; PERM | RQI vs phi_z flow-unit crossplot |
-| `create_triple_combo` | `triple_combo` | GR; RDEP, RT or RMED; RHOB; NPHI or PHIN | Standard triple-combo display: GR/caliper, resistivity, density-neutron |
-| `create_net_pay_summary_plot` | `net_pay_summary` | NET_RES, NET_PAY or NET_ROCK | summary plot showing net rock/reservoir/pay |
+| `nd_plot` | `nd` | NPHI or PHIN; RHOB | Density-neutron chart: RHOB against NPHI (limestone units), with the sandstone, limestone and dolomite lines ticked 0-40 % porosity |
+| `mn_plot` | `mn` | NPHI or PHIN; RHOB; DTC or DT | M-N plot: M (sonic and density) against N (neutron and density), with the quartz-calcite-dolomite triangle; porosity cancels out |
+| `mid_plot` | `mid` | NPHI or PHIN; RHOB; DTC or DT | Matrix identification (MID) plot: apparent matrix density against apparent matrix slowness, with the sandstone, limestone and dolomite points |
+| `pickett_plot` | `pickett` | PHIE; RT or RDEP | Pickett plot: deep resistivity against porosity on log-log axes, with lines of constant Sw (100, 80, 60, 40 and 20 %) of slope -m |
+| `hingle_plot` | `hingle` | PHIE; RDEP or RT | Hingle plot: Rt^(-1/m) against porosity on linear axes, where lines of constant Sw pass through the matrix point; the water line's slope gives a * Rw |
+| `buckles_plot` | `buckles` | PHIE; SW | Buckles plot: Sw against porosity, with hyperbolas of constant bulk-volume water (porosity x Sw) |
+| `flow_unit_plot` | `flow_unit` | the core plugs: PHIC, CPOR or CPOR_AMB; KH_CORE, CPERM, K_CORE or PERM_CORE | Hydraulic flow units: RQI against normalized porosity on log-log axes, with a line of constant FZI for each unit |
+| `triple_combo` | `triple_combo` | GR; RDEP, RT or RMED; RHOB; NPHI or PHIN | Standard triple-combo display: GR/caliper, resistivity, density-neutron |
+| `zone_flags_plot` | `zone_flags` | every one of NET_ROCK, NET_RES and NET_PAY that holds values | Plot zone flags as colored columns |
 
 `figures.bind` fills a display's signature from the interval, and says the source of each number:
 
 | Parameter | Filled with |
 |---|---|
-| `well`, `result`, `depth_range`, `figsize`, `title`, `cmap`, `color_curve`, `kwargs` | Left to Petrophys (`_LEFT`); the well is given separately |
-| The curves (`DISPLAYS`) | Each entry's first curve with values here, in the display's own lookup order (Pickett reads RT, else RDEP; Hingle RDEP, else RT); to its parameter as a name or as values, as Petrophys declares it; none: the display is not offered |
+| `well`, `data`, `result`, `top`, `bottom`, `figsize`, `title`, `color`, `chart`, `options`, `limits`, `kwargs` | Left to Petrophys (`_LEFT`); the well is given separately |
+| The curves (`DISPLAYS`) | Each entry's first curve with values here, in the display's own lookup order (Pickett reads RT, else RDEP; Hingle RDEP, else RT); to its parameter as a name or as values, as Petrophys declares it, and every curve of the entry with values to a parameter that takes a list (`flag_curves`); none: the display is not offered |
 | A number Petrophys declares a value | `DISPLAY_MEDIANS` (`rw`: the median of RW over the interval, the one water line the display draws), else the record's parameter of that name, else Petrophys's default |
 
 `figures.bind(f, function)` on 30/6-5 Brent, as (arguments bound, curves read, sources of the numbers):
 
 ```text
-create_pickett_plot -> (['rw', 'phie_curve', 'rt_curve', 'm', 'n'], ['PHIE', 'RDEP'],
-                        ['rw 0.07195 (median of RW over the interval)', "a 1 (Petrophys' default)",
-                         'm 2 (record, saturation)', 'n 2 (record, saturation)'])
-create_triple_combo -> ([], ['GR', 'RDEP', 'RHOB', 'NPHI'], [])
+pickett_plot -> (['phi', 'rt', 'rw', 'm', 'n'], ['PHIE', 'RDEP'],
+                 ['rw 0.07195 (median of RW over the interval)', "a 1 (Petrophys' default)",
+                  'm 2 (record, saturation)', 'n 2 (record, saturation)', "vcl_max 0.15 (Petrophys' default)"])
+triple_combo -> ([], ['GR', 'RDEP', 'RHOB', 'NPHI'], [])
+zone_flags_plot -> (['flag_curves'], ['NET_ROCK', 'NET_RES', 'NET_PAY'], [])
 ```
 
 </details>
@@ -989,10 +990,10 @@ In `src/petroharness/figures.py`; the overview is drawn for `session/conversatio
 |---|---|
 | `plot_well(f, curves, zones, where, inside)` | The interval's well (`FormationView.interval_well`: depths in the reporting unit) with each curve as the results read it: curves the workflow's well lacks (an analyzer's, one computed on request) added, values outside the condition (and, with `inside`, outside the zones) empty |
 | `zone_table(f, zones)` | The zones as the log viewer's lithology intervals (top, bottom, lithology) |
-| `_viewer` | `create_log_viewer(well, curves, interpreted=True, formation_name, lithology_intervals)` |
-| `_histogram` | `create_histogram_comparison` of each zone's values (`Zk LITH (n=N)`), 30 bins, outlines (`step`) with more than 3 zones |
-| `_crossplot` | `create_crossplot(well, x, y, color_curve="DEPTH", x_log, y_log)`, then the 1:1 line or the least-squares line of the plotted samples added with the plot's `add_line` |
-| `_display` | The bound display function, called with the well where it takes one |
+| `_viewer` | `pp.plot(well, curves=..., formation_name=..., lithology=<the zones>)` |
+| `_histogram` | `pp.histograms` of each zone's values (`Zk LITH (n=N)`), 30 bins, outlines (`step`) with more than 3 zones |
+| `_crossplot` | `pp.crossplot(well, x, y, color="DEPTH", chart="plain", x_log=..., y_log=...)` (points: a pair with a chart of its own is offered as that display), then the 1:1 line or the least-squares line of the plotted samples added with the plot's `add_line` |
+| `_display` | The bound display, called with the well where it takes one (`well` or `data`); an Archie chart (a `vcl_max` parameter) draws clean rock only, so its sample count is the samples with VCL up to `vcl_max`, as the chart's help says |
 | `overview(view, name)` | The interval's log viewer, with Petrophys's own tracks for the curves the well holds, beside the zones' lithology; PNG bytes |
 | `visualization()` | `petrophys.visualization`, on the Agg canvas when nothing chose one before |
 
@@ -1002,8 +1003,8 @@ The record `attach` returns for the first answer of the Brent conversation (`tra
 {"candidates": [...],
  "chosen": ["F4", "F8", "F16"],
  "figures": [..., {"id": "F16", "kind": "buckles", "source": "interval",
-              "spec": {"function": "create_buckles_plot", "curves": ["PHIE", "SW"]},
-              "caption": "Figure 3. Buckles plot: porosity vs water saturation with constant-BVW hyperbolas (the interval's PHIE, SW); 768 samples. Drawn by Petrophys (create_buckles_plot) from the interval's curves.",
+              "spec": {"function": "buckles_plot", "curves": ["PHIE", "SW"]},
+              "caption": "Figure 3. Buckles plot: Sw against porosity, with hyperbolas of constant bulk-volume water (porosity x Sw) (the interval's PHIE, SW); 768 samples. Drawn by Petrophys (pp.buckles_plot) from the interval's curves.",
               "file": "figures/figure_3_buckles.png", "samples": 768}],
  "errors": []}
 ```

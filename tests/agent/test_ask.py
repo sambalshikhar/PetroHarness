@@ -464,6 +464,37 @@ def test_benchmark_mode_and_the_older_arm_form(monkeypatch):
     assert _dispatch(monkeypatch, ["--cats", "porosity", "--arm=A2"]) == [("benchmark", ["--cats", "porosity", "--arm=A2"])]
 
 
+def test_launch_ui_starts_the_web_ui_and_opens_it(monkeypatch):
+    """`petroharness --launch-ui` (or --launch_ui), anywhere among the UI's options: the web UI with --open."""
+    from petroharness import cli
+    from petroharness.ui import server as U
+    got = []
+    monkeypatch.setattr(U, "main", lambda a: got.append(a) or 0)
+    for argv, want in ((["--launch-ui"], ["--open"]), (["--launch_ui"], ["--open"]),
+                       (["--model", "m", "--launch-ui", "--port", "8000"], ["--model", "m", "--port", "8000", "--open"])):
+        got.clear()
+        monkeypatch.setattr(sys, "argv", ["petroharness", *argv])
+        cli.main()
+        assert got == [want], argv
+    assert U.parser().parse_args(["--open"]).open and not U.parser().parse_args([]).open
+
+
+def test_the_ui_opens_a_browser_only_where_there_is_one():
+    """A Linux machine with no display gets the address, not a text browser in the terminal; a desktop, or an editor's
+    terminal that names a BROWSER, gets the page opened."""
+    from petroharness.ui import server as U
+    opened = []
+    open_ = lambda url: opened.append(url) or True
+    assert U.open_browser("http://localhost:7860", env={}, platform="linux", opener=open_) is False and not opened
+    assert U.open_browser("http://localhost:7860", env={"DISPLAY": ":0"}, platform="linux", opener=open_)
+    assert U.open_browser("http://localhost:7860", env={"BROWSER": "/x/helper.sh"}, platform="linux", opener=open_)
+    assert U.open_browser("http://localhost:7860", env={}, platform="darwin", opener=open_)
+    assert U.open_browser("u", env={}, platform="win32", opener=lambda u: 1 / 0) is False     # no browser: said instead
+    assert opened == ["http://localhost:7860"] * 3
+    assert (U.page_url("127.0.0.1", 7860), U.page_url("0.0.0.0", 9000), U.page_url("10.0.0.5", 7860)) == \
+        ("http://localhost:7860", "http://localhost:9000", "http://10.0.0.5:7860")
+
+
 def test_the_older_arm_form_reaches_the_batch_runner(monkeypatch, capsys):
     """Not stubbed: the batch runner's own parser reads the arguments (here it stops at a missing --ids)."""
     from petroharness import cli

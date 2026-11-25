@@ -585,7 +585,7 @@ Each step of the record, as `prepare.step_entry` keeps it (other functions noted
 | `inputs`, `outputs`, `removed` | absent when not listed | curves read, written (with `also_written`) and removed |
 | `stage` | `workflow` | `preparation` (name `preparation_*`), `after` (name `context_*`) or `workflow`; `data.interpret` route only (`prepare.step_stage`) |
 | repeated step |  | a name recorded twice keeps both, the later as `name_2` (`prepare._step_record`) |
-| bad-hole thresholds | `thresholds_source: library defaults` | `cali_minus_bs_threshold_in`, `drho_threshold_g_cc`, `large_hole_threshold_in` from `generate_bad_hole_flags`'s defaults; the record's own values win (`runner.bad_hole_thresholds`) |
+| bad-hole thresholds | `thresholds_source: library defaults` | `cali_minus_bs_threshold_in`, `drho_threshold_g_cc`, `large_hole_threshold_in` from `bad_hole_flags`'s defaults; the record's own values win (`runner.bad_hole_thresholds`) |
 
 The bad-hole and net-pay record of 30/6-5 (real output, abridged; the record counts the whole well, the map scopes
 its lines to the interval):

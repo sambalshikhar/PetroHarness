@@ -116,7 +116,7 @@ cut:
 ...
 ## Figures
 
-![Figure 3. Buckles plot: ... Drawn by Petrophys (create_buckles_plot) from the interval's curves.](figures/figure_3_buckles.png)
+![Figure 3. Buckles plot: ... Drawn by Petrophys (pp.buckles_plot) from the interval's curves.](figures/figure_3_buckles.png)
 ...
 
 ## Methods and parameters this answer rests on
@@ -213,7 +213,7 @@ Set in `agent/graph.py` unless noted.
 | `answer` | str | always | The delivered answer | `ask.py`, `session/graph.py`, `cli.py` |
 
 ```json
-{"task_id": "a2f8275dd57", "well": "30_6-5", "formation": "BRENT GP.", "harness": "petroharness 1.0.0",
+{"task_id": "a2f8275dd57", "well": "30_6-5", "formation": "BRENT GP.", "harness": "petroharness 1.1.0",
  "commit": "<commit>", "model": "K2-Horizon-7B", "skills": {"library": "researched", "version": "18c03ad5d3f8"},
  "components": {"C1": "6f8f4c39893a", "...": "..."}, "reads_depth": true, "status": "ok", "seconds": 903.5}
 ```
@@ -522,7 +522,7 @@ The log and the blobs are the record; the rest can be rebuilt from them and the 
 |---|---|---|---|---|
 | `log.jsonl` | file | always | The events, in order ([section 7](#7-the-session-log)) | `session/log.py` |
 | `blobs/<sha256>` | files | always | The texts the events name ([section 8](#8-blobs)) | `session/log.py`, `blob` |
-| `overview.png` | file | figures on, drawn | The interval's log display by Petrophys (`create_log_viewer`) | `session/conversation.py`, `overview` |
+| `overview.png` | file | figures on, drawn | The interval's log display by Petrophys (`pp.plot`) | `session/conversation.py`, `overview` |
 | `turns/NN/answer.md` | file | each question | The answer file ([section 4](#4-answermd)); NN is the question number, two digits | `session/graph.py`, `commit` |
 | `turns/NN/trace.json` | file | each question | The trace ([section 5](#5-tracejson)) | `session/graph.py`, `commit` |
 | `turns/NN/tape.jsonl` | file | each question with a real model client | Every model request and reply ([section 14](#14-tapes)) | `session/conversation.py`, `_factory` |
@@ -601,7 +601,7 @@ The setup record of the process answering from this question on ([section 9](#9-
 
 ```json
 {"seq": 3, "time": "<time>", "turn": 1, "type": "setup", "hash": "d70dbbf039dd",
- "harness": "1.0.0", "commit": "<commit>", "petrophys": "3.0.0@files-c5de047fe601",
+ "harness": "1.1.0", "commit": "<commit>", "petrophys": "3.0.0@files-c5de047fe601",
  "components": {"C1": "6f8f4c39893a", "...": "..."}, "functions": "1e177d0c7ca2", "model": "<served model name>",
  "card": "33012b760d52", "data": "61dcbf7ecfe4", "policy": "7631a4a859eb", "writer": "open", "max_steps": 8, "...": "..."}
 ```
@@ -688,7 +688,7 @@ The event of the figure in [section 4](#4-answermd):
 
 ```json
 {"seq": 29, "time": "<time>", "turn": 2, "type": "figure", "id": "F9", "kind": "crossplot", "source": "E17",
- "caption": "Figure 1. Crossplot of PERM_CC [mD] against PERM [mD] (zones Z1, Z4, ...), with the 1:1 line; 343 samples. Drawn by Petrophys (create_crossplot) from result E17.",
+ "caption": "Figure 1. Crossplot of PERM_CC [mD] against PERM [mD] (zones Z1, Z4, ...), with the 1:1 line; 343 samples. Drawn by Petrophys (pp.crossplot) from result E17.",
  "file": "figures/figure_1_crossplot.png", "samples": 343}
 ```
 
@@ -758,12 +758,12 @@ Set in `Conversation.overview`.
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `name` | str | `overview` | The display |
-| `file`, `function`, `bytes` | str, str, int | drawn | `overview.png`, `create_log_viewer`, the PNG's size |
+| `file`, `function`, `bytes` | str, str, int | drawn | `overview.png`, `plot`, the PNG's size |
 | `error` | str | failed | `<type>: <message>`, 300 characters |
 
 ```json
 {"seq": 2, "time": "<time>", "turn": 0, "type": "display", "name": "overview", "file": "overview.png",
- "function": "create_log_viewer", "bytes": 1662033}
+ "function": "plot", "bytes": 1740820}
 ```
 
 </details>
@@ -880,7 +880,7 @@ Set in `core/setup.py`, `of` unless noted.
 
 | Field | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `harness` | str | none | The package version (`petroharness.__version__`, `1.0.0`) | `of` |
+| `harness` | str | none | The package version (`petroharness.__version__`, `1.1.0`) | `of` |
 | `commit` | str | `""` for an installed package | The harness commit when `core/setup.py` is a tracked file, with `+dirty` when `src/` has changes | `harness_commit` |
 | `petrophys` | str | none | The Petrophys build (`library_identity`) | `well/prepare.py` |
 | `components` | object | none | Each component's version | `agent/components.py`, `versions` |
@@ -1222,7 +1222,7 @@ Defined in `evidence/report.py`, `markdown` unless noted.
 - **Interval:** BRENT GP. (2841.0-2958.0 m; 768 samples)
 - **LAS file:** `<site-packages>/petrophys/datasets/geolink/30_6-5.las`, SHA-256 `5ecf2c53...801b9`
 - ...
-- **PetroHarness:** 1.0.0 commit <commit>, setup `d70dbbf039dd`
+- **PetroHarness:** 1.1.0 commit <commit>, setup `d70dbbf039dd`
 - **Questions:** 2 answered of 2 asked
 ```
 

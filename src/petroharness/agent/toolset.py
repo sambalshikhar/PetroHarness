@@ -207,7 +207,7 @@ TOOLSET.add(
                               "description": "the values to try (6 at most)"},
                    "target": {"type": "string", "description": "the curve to report, e.g. NET_PAY"},
                    "parameters": {"type": "object",
-                                  "description": "inputs held fixed for every value, e.g. {\"rw_temp_f\": 105}"}},
+                                  "description": "inputs held fixed for every value, e.g. {\"rw_meas_temp\": \"105 degF\"}"}},
           main="property"),
     _verb("estimate", P.estimate, CALCULATE,
           lambda: _TEXTS["estimate"] + "\n" + "\n".join(f"    {k}: {' | '.join(v)}" for k, v in P.ESTIMATES.items()),

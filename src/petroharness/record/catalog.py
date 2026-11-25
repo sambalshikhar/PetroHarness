@@ -796,11 +796,32 @@ def _limiting_cutoffs(view: FormationView, values: list) -> list[str]:
     why = np.asarray(view.values("NET_EXCLUSION"), dtype=float) if kinds else None
     listed = [k.replace("_", " ") for k in ((last_step(view.prep.steps, "net_pay") or {}).get("parameters") or {})
               .get("excluded_from_net_reservoir_and_pay") or {}]
+    # the kinds the step's record says it removed from NET_ROCK itself (salt, anhydrite, gypsum, halite on the logs)
+    excluded = ((last_step(view.prep.steps, "net_pay") or {}).get("parameters") or {}) \
+        .get("excluded_from_net_reservoir_and_pay") or {}
+    rock_kinds = {k for k, item in excluded.items() if isinstance(item, dict) and item.get("net_rock_samples_removed")}
     parts = []
     for step in cutoff_attrition(flags["NET_ROCK"], flags["NET_RES"], flags["NET_PAY"]):      # petrophys
         share = step["fails"]
         values.append(round(100 * share))                       # as displayed (whole percent)
         of = 'the interval' if step['tested'] == n else 'the rock passing the previous cutoff'
+        if step["cutoff"] == "shale_volume" and share > 0 and why is not None and rock_kinds:
+            gap, tested, cells = ~(flags["NET_ROCK"] > 0.5), max(int(step["tested"]), 1), []
+            out_of_rock = np.zeros(gap.size, dtype=bool)
+            for code, kind in sorted(kinds.items()):
+                if kind in rock_kinds:
+                    k = int((gap & (why == code)).sum())
+                    out_of_rock |= why == code
+                    if k:
+                        values.append(round(100 * k / tested))
+                        cells.append(f"{fmt_pct(100 * k / tested)} is left out as {kind.replace('_', ' ')} "
+                                     "(whatever its shale volume)")
+            rest = int((gap & ~out_of_rock).sum())
+            if cells:
+                values.append(round(100 * rest / tested))
+                parts.append(f"{fmt_pct(100 * share)} of {of} is not NET_ROCK: "
+                             + ", ".join(cells + [f"{fmt_pct(100 * rest / tested)} fails the shale-volume cutoff"]))
+                continue
         if step["cutoff"] == "porosity" and share > 0 and (why is not None or listed):
             gap = (flags["NET_ROCK"] > 0.5) & ~(flags["NET_RES"] > 0.5)
             tested = max(int(step["tested"]), 1)
@@ -837,10 +858,10 @@ def _limiting_cutoffs(view: FormationView, values: list) -> list[str]:
 
 def pay_summary(view: FormationView) -> dict:
     """The workflow's net flags summarised by petrophys: calculate_net_gross (each sample counts its own depth cell,
-    gaps capped) and calculate_pay_averages over NET_PAY (geometric mean for PERM, as the library does)."""
+    gaps capped) and pay_averages over NET_PAY (geometric mean for PERM, as the library does)."""
     import warnings
 
-    from petrophys.evaluation.summaries.averages import calculate_pay_averages
+    from petrophys.evaluation.summaries.averages import pay_averages
     from petrophys.evaluation.summaries.net_gross import calculate_net_gross
 
     well = view.interval_well()
@@ -863,7 +884,7 @@ def pay_summary(view: FormationView) -> dict:
     pay = view.values("NET_PAY")
     if pay is not None and np.nansum(pay > 0.5) > 0:
         curves = [c for c in view.reg.curves["pay_summary_curves"] if view.prep.well.get(c) is not None]
-        averages = calculate_pay_averages(well, curves=curves)
+        averages = pay_averages(well, curves=curves)
         from petrophys.evaluation.summaries.zone_summary import pay_average_curves
         read = pay_average_curves(well)               # the curve Petrophys averages for PHIE and PERM
         for c in curves:
@@ -875,7 +896,7 @@ def pay_summary(view: FormationView) -> dict:
                 took = read.get(c.upper())
                 how = f"{took} where it has a value, {c} elsewhere; " if took and took != c else ""
                 facts.append(f"{kind} {c} in NET_PAY samples = {fmt(v)} (the workflow's pay average, {how}Petrophys "
-                             f"calculate_pay_averages)")
+                             f"pay_averages)")
                 values.append(v)
         pc = pay_confidence(view)
         cr = view.policy.get("confidence", {})

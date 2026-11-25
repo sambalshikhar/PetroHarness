@@ -382,10 +382,10 @@ def _step_record(steps_executed) -> dict:
         steps[name if name not in steps else f"{name}_{sum(k == name or k.startswith(name + '_') for k in steps) + 1}"] = \
             step_entry(s.to_dict())
     if "bad_hole" in steps:
-        from petrophys.preprocessing.quality.bad_hole.flag_generator import generate_bad_hole_flags
+        from petrophys.preprocessing.quality.bad_hole.flag_generator import bad_hole_flags
 
         from petroharness.well.runner import bad_hole_thresholds
-        steps["bad_hole"]["parameters"] = bad_hole_thresholds(generate_bad_hole_flags) | (steps["bad_hole"].get("parameters") or {})
+        steps["bad_hole"]["parameters"] = bad_hole_thresholds(bad_hole_flags) | (steps["bad_hole"].get("parameters") or {})
     return steps
 
 
@@ -420,8 +420,10 @@ def _check_porosity_cutoff_on_curves(steps: dict, cut: dict, well) -> None:
     if not phi_cuts or rock is None or res is None:
         return
     decisions = " ".join(d for d in (steps.get("net_pay") or {}).get("decisions") or [] if isinstance(d, str))
-    named = re.search(r"NET_RES:\s*\+\s*([A-Z_]+)\s*>", decisions)
-    phi_curve = well.get(named.group(1)) if named else None
+    # the porosity NET_RES read, as the step's decision names it ("NET_RES: NET_ROCK and porosity > ... ; porosity is
+    # PHIE_CC (PHIE where it is missing)"; before Petrophys 3a9378e "NET_RES: + PHIE_CC > ...")
+    named = re.search(r"NET_RES:[^;]*;\s*porosity is ([A-Z_]+)|NET_RES:\s*\+\s*([A-Z_]+)\s*>", decisions)
+    phi_curve = well.get(named.group(1) or named.group(2)) if named else None
     phi_curve = phi_curve if phi_curve is not None else well.get("PHIE")
     if phi_curve is None:
         return

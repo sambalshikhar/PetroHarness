@@ -9,7 +9,7 @@ import numpy as np
 from petroharness.agent import engine as E
 from petroharness.agent.engine import Formation, Out, Result, ToolError, said_whole
 from petroharness.well import summary as S
-from petroharness.agent.library.shared import MAX_VALUES, PROPERTIES, TARGETS, _changes, _coerce, _effect, _flag, _label, _method, _num, _pooled, _ran, _reproduction, _shown, _sources, _stat, _values, _whole, catalog, choices, defaults, joined_name, kind_of, parameters, register, run, unlisted_method
+from petroharness.agent.library.shared import MAX_VALUES, PROPERTIES, TARGETS, _changes, _coerce, _effect, _flag, _label, _method, _pooled, _ran, _reproduction, _shown, _sources, _stat, _values, _whole, catalog, choices, defaults, joined_name, kind_of, parameters, register, run, unlisted_method
 
 
 # --- the verbs ------------------------------------------------------------------------------------------------------
@@ -24,7 +24,7 @@ def menu(f: Formation, kind: str) -> Result:
     for p, d in parameters(kind).items():
         row = out.child()
         val = rec.get(p, d.get("default") if isinstance(d, dict) else None)
-        shown = row.v(val) if _num(val) else str(val)
+        shown = _shown(val, row)                                   # a number, or a number with its unit
         src = "record" if p in rec else "library default"
         if p in ("model", "method") and unlisted_method(f, kind):     # the record's method is not a choice
             src = f"library default; the record's {unlisted_method(f, kind)} is not one of the choices"
@@ -35,8 +35,8 @@ def menu(f: Formation, kind: str) -> Result:
 
 
 def advice_calls(names, takes=(), kind: Optional[str] = None) -> str:
-    """The inputs Petrophys's advice asks for (its Advice inputs: "add steps.mud_filtrate(rmf=..., rmf_temp_f=...)"
-    asks for rmf and rmf_temp_f), as the calls of this harness that take each - the tool's own argument first (`takes`),
+    """The inputs Petrophys's advice asks for (its Advice inputs: "add steps.mud_filtrate(rmf=..., rmf_meas_temp=...)"
+    asks for rmf and rmf_meas_temp), as the calls of this harness that take each - the tool's own argument first (`takes`),
     then the calculate property whose parameters hold it (`kind`'s own first) - and the names no tool here takes; ""
     with none."""
     names = list(dict.fromkeys(str(n) for n in names or ()))
@@ -113,7 +113,7 @@ def calculate(f: Formation, property: str, method: Optional[str] = None, paramet
 
 def what_if(f: Formation, property: str, parameter: str, values, target: Optional[str] = None,
             parameters: Optional[dict] = None) -> Result:
-    """parameters: inputs held at a given value for every run beside the one varied (Rw's temperature: rw_temp_f)."""
+    """parameters: inputs held at a given value for every run beside the one varied (Rw's temperature: rw_meas_temp)."""
     kind = kind_of(property)
     fixed = _changes(kind, None, parameters) if parameters else {}
     vals = values if isinstance(values, (list, tuple)) else [values]
@@ -140,6 +140,7 @@ def what_if(f: Formation, property: str, parameter: str, values, target: Optiona
     what = "share set (%)" if flag else "mean"
     rec_v = defaults(f, kind).get(parameter, "library default") if parameter not in ("model", "method") else \
         defaults(f, kind).get(next(iter(choices(kind)), "model"), "auto")
+    rec_v = _shown(rec_v)                                             # (230.0, "degF") as 230 degF
     held = ", ".join(f"{k} {_shown(v)}" for k, v in fixed.items())
     out.add(f"{kind}: {parameter} tried at {', '.join(str(v) for v in vals)} (the record's: {rec_v}); {tgt} "
             f"({what}), the whole interval, the {S.pooled_word(f.view)} pooled and each {S.pooled_word(f.view)[:-1]}; "

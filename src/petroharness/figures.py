@@ -1,11 +1,12 @@
-"""Figures for an answer, drawn by Petrophys (petrophys.visualization), where a plot says it better than text. For
+"""Figures for an answer, drawn by Petrophys (its plots on `petrophys`), where a plot says it better than text. For
 interactive use (petroharness.session, the web UI); a benchmark run draws none.
 
 How it works. The harness offers the Petrophys plots that can be drawn from what the answer rests on (`candidates`):
   - the plot of each result a settled claim cites: a statistics result gives a histogram of each curve by zone and the
     log viewer of its curves, a crossplot or a comparison gives the crossplot, a profile gives the log viewer;
-  - the standard displays of the interval (DISPLAYS: density-neutron, M-N, MID, Pickett, Hingle, Buckles, flow units,
-    triple combo, net pay) whose curves the interval holds and the answer's results read or were computed from.
+  - the standard displays of the interval (DISPLAYS: density-neutron, M-N, MID, Pickett, Hingle, Buckles, flow units
+    from the core plugs, triple combo, the net flags) whose curves the interval holds and the answer's results read or
+    were computed from.
 After the answer is written, one model call (`pick`) is shown the question, the answer and the candidates, and chooses
 which to show, in which order, or none. Petrophys then draws each (`draw`). The answer's text is never passed back
 through the model, so it cannot change.
@@ -40,28 +41,32 @@ MAX_RESULT_PLOTS = 10      # candidates from the cited results
 MAX_CANDIDATES = 16        # candidates shown to the model, the standard displays included
 VIEWER, HISTOGRAM, CROSSPLOT = "log_viewer", "histogram", "crossplot"
 OVERVIEW = "overview.png"  # the interval's log display, drawn once per conversation
-# the Petrophys function behind each plot of a result
-FUNCTIONS = {VIEWER: "create_log_viewer", HISTOGRAM: "create_histogram_comparison", CROSSPLOT: "create_crossplot"}
-# The standard displays offered: the Petrophys function -> the curves it draws, each as (its parameter, or None where
-# the display reads the curve from the well itself; the curves that can serve, in the display's own lookup order). One
-# of each entry must hold values in the interval. A display added to Petrophys is offered by adding its line here.
+# the Petrophys plot behind each plot of a result (its name on `petrophys`)
+FUNCTIONS = {VIEWER: "plot", HISTOGRAM: "histograms", CROSSPLOT: "crossplot"}
+# The standard displays offered: the Petrophys plot -> the curves it draws, each as (its parameter, or None where the
+# display reads the curve from the well itself; the curves that can serve, in the display's own lookup order). One of
+# each entry must hold values in the interval; a parameter that takes a list of curves is given every one of its entry
+# that does. A display added to Petrophys is offered by adding its line here.
 DISPLAYS = {
-    "create_nd_crossplot": ((None, ("NPHI", "PHIN")), (None, ("RHOB",))),
-    "create_mn_plot": ((None, ("NPHI", "PHIN")), (None, ("RHOB",)), (None, ("DTC", "DT"))),
-    "create_mid_plot": ((None, ("NPHI", "PHIN")), (None, ("RHOB",)), (None, ("DTC", "DT"))),
-    "create_pickett_plot": (("phie_curve", ("PHIE",)), ("rt_curve", ("RT", "RDEP"))),
-    "create_hingle_plot": (("phie_curve", ("PHIE",)), ("rt_curve", ("RDEP", "RT"))),
-    "create_buckles_plot": (("phie_curve", ("PHIE",)), ("sw_curve", ("SW",))),
-    "create_flow_unit_plot": (("phi_e", ("PHIE",)), ("perm", ("PERM",))),
-    "create_triple_combo": ((None, ("GR",)), (None, ("RDEP", "RT", "RMED")), (None, ("RHOB",)),
-                            (None, ("NPHI", "PHIN"))),
-    "create_net_pay_summary_plot": ((None, ("NET_RES", "NET_PAY", "NET_ROCK")),),
+    "nd_plot": ((None, ("NPHI", "PHIN")), (None, ("RHOB",))),
+    "mn_plot": ((None, ("NPHI", "PHIN")), (None, ("RHOB",)), (None, ("DTC", "DT"))),
+    "mid_plot": ((None, ("NPHI", "PHIN")), (None, ("RHOB",)), (None, ("DTC", "DT"))),
+    "pickett_plot": (("phi", ("PHIE",)), ("rt", ("RT", "RDEP"))),
+    "hingle_plot": (("phi", ("PHIE",)), ("rt", ("RDEP", "RT"))),
+    "buckles_plot": (("phi", ("PHIE",)), ("sw", ("SW",))),
+    "flow_unit_plot": ((None, ("PHIC", "CPOR", "CPOR_AMB")), (None, ("KH_CORE", "CPERM", "K_CORE", "PERM_CORE"))),
+    "triple_combo": ((None, ("GR",)), (None, ("RDEP", "RT", "RMED")), (None, ("RHOB",)), (None, ("NPHI", "PHIN"))),
+    "zone_flags_plot": (("flag_curves", ("NET_ROCK", "NET_RES", "NET_PAY")),),
 }
 # a display's number the record holds as a curve: the interval's median of it (the one water line it draws); said
-# with the figure, as every number a display is given
-DISPLAY_MEDIANS = {"create_pickett_plot": {"rw": "RW"}, "create_hingle_plot": {"rw": "RW"}}
+# with the figure, as every number a display is given. Where neither the curve nor the record holds it, the display is
+# not offered: Petrophys reads it from the same curve and would refuse ("rw is needed").
+DISPLAY_MEDIANS = {"pickett_plot": {"rw": "RW"}, "hingle_plot": {"rw": "RW"}}
+# displays drawn against depth (tracks, columns): their samples are the depths where any curve they draw has a value;
+# the others are crossplots, whose points need every curve
+DEPTH_DISPLAYS = {"triple_combo", "zone_flags_plot"}
 # parameters of a display that are not the interval's to give (the well is; the rest stay Petrophys' defaults)
-_LEFT = ("well", "result", "depth_range", "figsize", "title", "cmap", "color_curve", "kwargs")
+_LEFT = ("well", "data", "result", "top", "bottom", "figsize", "title", "color", "chart", "options", "limits", "kwargs")
 _NAME = re.compile(r"\b[A-Z][A-Z0-9_]+\b")
 _LOCK = threading.Lock()
 
@@ -85,20 +90,16 @@ def visualization():
 
 
 def _function(name: str):
-    V = visualization()
-    fn = getattr(V, name, None)
-    if fn is None:                                       # a plot the package does not export at its top
-        for mod in ("zone_flags", "crossplot_viewer", "log_plot"):
-            fn = getattr(importlib.import_module(f"petrophys.visualization.{mod}"), name, None)
-            if fn is not None:
-                break
+    """A Petrophys plot by its name on `petrophys` (pp.plot, pp.crossplot, pp.pickett_plot, ...)."""
+    visualization()
+    fn = getattr(importlib.import_module("petrophys"), name, None)
     if fn is None:
-        raise LookupError(f"petrophys.visualization has no {name}")
+        raise LookupError(f"petrophys has no plot {name}")
     return fn
 
 
 def kind_of(function: str) -> str:
-    """A display's short name: create_pickett_plot -> pickett, create_nd_crossplot -> nd."""
+    """A display's short name: pickett_plot -> pickett, nd_plot -> nd, zone_flags_plot -> zone_flags."""
     return re.sub(r"_(cross)?plot$", "", re.sub(r"^(create|plot)_", "", function))
 
 
@@ -188,17 +189,23 @@ def bind(f, function: str) -> tuple | None:
     decl = function_schema.declaration(fn)
     kinds = dict(decl.parameters) if decl else {}
     kw, curves, said = {}, [], []
+    params = inspect.signature(fn).parameters
     for param, names in DISPLAYS.get(function, ()):
         c = _held(f, names)
         if c is None:
             return None
+        if param is not None and _takes_a_list(params[param]):    # every curve of the entry that holds values here
+            held = [n for n in names if _held(f, [n])]
+            curves.extend(held)
+            kw[param] = held
+            continue
         curves.append(c)
         if param is not None:
             d = kinds.get(param)
             kw[param] = np.asarray(f.view.values(c), dtype=float) if d is not None and d.kind == "curve" else c
     record = A._record_params(f)
     medians = DISPLAY_MEDIANS.get(function, {})
-    for p, par in inspect.signature(fn).parameters.items():
+    for p, par in params.items():
         d = kinds.get(p)
         if p in _LEFT or p in kw or d is None or d.kind != "value":
             continue
@@ -209,11 +216,22 @@ def bind(f, function: str) -> tuple | None:
         elif p in record:
             kw[p] = record[p][0]
             said.append(f"{p} {record[p][0]:g} (record, {record[p][1]})")
-        elif par.default is inspect.Parameter.empty:
-            return None
+        elif c is not None or par.default is inspect.Parameter.empty:
+            return None                                  # a number it needs that nothing here holds
         elif isinstance(par.default, (int, float)) and not isinstance(par.default, bool):
             said.append(f"{p} {par.default:g} (Petrophys' default)")
     return kw, curves, said
+
+
+def _takes_a_list(par) -> bool:
+    """A parameter Petrophys annotates as a list (List[str]: zone_flags_plot's flag_curves; Optional[List[str]] too)."""
+    import collections.abc
+    import typing
+    ann = par.annotation
+    if isinstance(ann, str):                             # a postponed annotation: its text
+        return bool(re.search(r"\b(List|list|Sequence)\[", ann))
+    args = [a for a in typing.get_args(ann) if a is not type(None)] if typing.get_origin(ann) is typing.Union else [ann]
+    return any(typing.get_origin(a) in (list, collections.abc.Sequence) or a in (list,) for a in args)
 
 
 def behind(s, cited: list) -> set:
@@ -229,6 +247,19 @@ def behind(s, cited: list) -> set:
     return {c for c in names if c in s.f.inv.curves}
 
 
+def _rests_on(f, function: str, touched: set) -> bool:
+    """Every entry of a display has a curve the answer rests on: the curve it draws (the first held), or, for a list
+    parameter (the net flags), any of the curves it draws."""
+    fn, held = _function(function), lambda names: [n for n in names if _held(f, [n])]
+    params = inspect.signature(fn).parameters
+    for param, names in DISPLAYS.get(function, ()):
+        h = held(names)
+        many = param is not None and param in params and _takes_a_list(params[param])
+        if not h or not (set(h) & touched if many else h[0] in touched):
+            return False
+    return True
+
+
 def displays(s, cited: list) -> list:
     """(kind, title, spec) of each standard display the interval can show from what the answer rests on: every curve
     it reads holds values here and is among the curves the answer rests on (`behind`)."""
@@ -238,7 +269,7 @@ def displays(s, cited: list) -> list:
             got = bind(s.f, function)
         except Exception:                               # noqa: BLE001 - a display that cannot be bound is not offered
             got = None
-        if got is None or not set(got[1]) <= touched:
+        if got is None or not _rests_on(s.f, function, touched):
             continue
         _, curves, said = got
         title = f"{summary(function)} (the interval's {', '.join(curves)}" + (f"; {'; '.join(said)}" if said else "") + ")"
@@ -373,8 +404,8 @@ def overview(view, name: str = "") -> bytes:
     V = visualization()
     import matplotlib.pyplot as plt
     with _LOCK:
-        viewer = V.create_log_viewer(view.interval_well(), interpreted=True, formation_name=name or None,
-                                     lithology_intervals=_zone_rows(view.zones) if view.zones else None)
+        viewer = _function("plot")(view.interval_well(), formation_name=name or None,
+                                   lithology=_zone_rows(view.zones) if view.zones else None)
         fig = _figure_of(viewer)
         try:
             buf = io.BytesIO()
@@ -394,8 +425,7 @@ def _viewer(f, spec: dict) -> tuple:
     n = int(np.isfinite(np.vstack([_data(w, c) for c in cs])).any(axis=0).sum())
     if not n:
         raise ValueError(f"no values of {', '.join(cs)} to draw")
-    return visualization().create_log_viewer(w, curves=cs, interpreted=True, formation_name=f.inv.formation,
-                                             lithology_intervals=zone_table(f, spec.get("zones"))), n
+    return _function("plot")(w, curves=cs, formation_name=f.inv.formation, lithology=zone_table(f, spec.get("zones"))), n
 
 
 def _histogram(f, spec: dict) -> tuple:
@@ -408,8 +438,8 @@ def _histogram(f, spec: dict) -> tuple:
     if not n:
         raise ValueError(f"no values of {c} to draw")
     # outlines stay readable where several zones overlap (Petrophys' own advice for many datasets)
-    return visualization().create_histogram_comparison(groups, bins=30, xlabel=_name(f, c), title=f"{c} by zone",
-                                                       histtype="step" if len(groups) > 3 else "bar"), n
+    return _function("histograms")(groups, bins=30, xlabel=_name(f, c), title=f"{c} by zone",
+                                   histtype="step" if len(groups) > 3 else "bar"), n
 
 
 def _crossplot(f, spec: dict) -> tuple:
@@ -421,8 +451,10 @@ def _crossplot(f, spec: dict) -> tuple:
     if not ok.any():
         raise ValueError(f"no samples with both {y} and {x} to draw")
     w.add_curve("DEPTH", np.asarray(w.depth, dtype=float), unit=f.inv.depth_unit, description="depth")
-    plot = visualization().create_crossplot(w, x, y, color_curve="DEPTH", title=f"{y} against {x}",
-                                            x_log=log_x, y_log=log_y)
+    # the two curves as points (chart "plain": a pair with a chart of its own, Pickett or density-neutron, is offered
+    # as that display), coloured by depth
+    plot = _function("crossplot")(w, x, y, color="DEPTH", chart="plain", title=f"{y} against {x}",
+                                  x_log=log_x, y_log=log_y)
     xa, ya = xa[ok], ya[ok]
     if spec.get("line") == "one":                       # the line a comparison is read against
         lo, hi = float(min(xa.min(), ya.min())), float(max(xa.max(), ya.max()))
@@ -446,10 +478,18 @@ def _display(f, spec: dict) -> tuple:
     fn = _function(function)
     w = plot_well(f, curves)
     finite = np.isfinite(np.vstack([_data(w, c) for c in curves]))
-    n = int((finite.all(axis=0) if len(curves) <= 3 else finite.any(axis=0)).sum())    # a crossplot's points; a display's depths
+    drawn = finite.any(axis=0) if function in DEPTH_DISPLAYS else finite.all(axis=0)   # a display's depths; a crossplot's points
+    params = inspect.signature(fn).parameters
+    if "vcl_max" in params and w.get("VCL") is not None:   # an Archie chart plots clean rock only: VCL up to vcl_max,
+        cap = kw.get("vcl_max", params["vcl_max"].default)     # as its help says (None: every sample; no VCL: all)
+        if cap is not None:
+            with np.errstate(invalid="ignore"):
+                drawn = drawn & (_data(w, "VCL") <= float(cap))
+    n = int(drawn.sum())
     if not n:
         raise ValueError(f"no samples with {', '.join(curves)} to draw")
-    return (fn(w, **kw) if "well" in inspect.signature(fn).parameters else fn(**kw)), n
+    first = next(iter(inspect.signature(fn).parameters), None)
+    return (fn(w, **kw) if first in ("well", "data") else fn(**kw)), n
 
 
 DRAW = {VIEWER: _viewer, HISTOGRAM: _histogram, CROSSPLOT: _crossplot}
@@ -480,7 +520,7 @@ def draw(f, cand: Candidate) -> tuple:
 
 def caption(n: int, cand: Candidate, samples: int) -> str:
     function = cand.spec.get("function") or FUNCTIONS.get(cand.kind, "")
-    return (f"Figure {n}. {cand.title}; {samples} samples. Drawn by Petrophys ({function}) "
+    return (f"Figure {n}. {cand.title}; {samples} samples. Drawn by Petrophys (pp.{function}) "
             + ("from the interval's curves." if cand.source == "interval" else f"from result {cand.source}."))
 
 

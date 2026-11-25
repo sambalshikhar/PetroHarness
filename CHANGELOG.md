@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.1.0 (2026-11-25)
+
+PetroHarness on Petrophys's latest calculations, and a one-line start for the web UI.
+
+- **`petroharness --launch-ui`** starts the web UI and opens it in your browser (`petroharness ui --open`; any of
+  the UI's options go with it, e.g. `--model`, `--model-url`, `--port`). On a Linux machine with no display it opens
+  nothing and prints the address to open, with the SSH port forward for a remote machine.
+- **The README starts with the quick start:** install, connect a model (vLLM, SGLang, Ollama or a hosted API), launch
+  the UI.
+- **Petrophys 3a9378e.** The pin moves to Petrophys's latest dev.
+  - Its functions have shorter names (`fit_poro_perm`, `gradient_from_bht`, `pay_averages`, `bad_hole_flags`, ...):
+    the tools call them so, and each result names the function it came from.
+  - Figures are drawn by its new plots, on `petrophys` (`pp.plot`, `pp.crossplot`, `pp.pickett_plot`, ...). Flow
+    units are drawn from the core plugs, and the net flags (`zone_flags_plot`) take the place of the net-pay summary
+    plot. A Pickett or Hingle plot shows clean rock only, and its caption counts the samples it draws.
+  - A temperature, gradient or depth setting carries its unit (`bht`, `td`, `surface_temp`, `temperature_gradient`,
+    `rw_meas_temp`, `rmf_meas_temp`, `rm_meas_temp`): the settings panel, `/set` and `ask(interpretation=...)` take
+    `"110 degC"`, or a number in the unit shown. Settings under the earlier names (`bht_f`, `td_ft`, ...) are refused.
+  - Its record is worded in petrophysical terms. The card the model reads states the same facts as before: the
+    saturation routing, the net-pay cutoffs and the curves RQI, PHI_Z, FZI, MHI and PHIT are computed from.
+  - What Petrophys computes changes where it changed: Rw from your settings before the LAS header's, salt, anhydrite
+    and gypsum out of net rock, SW and SXO 1 where effective porosity is below 0.01 v/v, the mineral solve, and the
+    menu of `check` (28 functions, depth matching among them).
+
 ## 1.0.0 (2026-11-23)
 
 A stop button in the web UI, and three fixes for conversations and for questions typed freely. A single question on

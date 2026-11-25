@@ -812,7 +812,7 @@ In a conversation, once the answer is final, one model call chooses up to 3 figu
 results and the interval's standard displays; Petrophys draws them, and `answer.md` gains a `## Figures` section. The
 text is never changed. Both Brent answers chose 3 of 16 candidates:
 
-![Crossplot of PERM_CC against PERM](../images/geolink-30_6-5-brent-perm-crossplot.png "Chosen: figure 1 of the second Brent answer, PERM_CC against PERM with the 1:1 line; 343 samples, drawn by Petrophys (create_crossplot) from result E17. Data: GeoLink, CC BY-SA 4.0.") ![Pickett plot of the Brent Group](../images/geolink-30_6-5-brent-pickett.png "Offered, not chosen: the Pickett display F14 of the interval's PHIE and RDEP; 768 samples, drawn by Petrophys (create_pickett_plot). Data: GeoLink, CC BY-SA 4.0.")
+![Crossplot of PERM_CC against PERM](../images/geolink-30_6-5-brent-perm-crossplot.png "Chosen: figure 1 of the second Brent answer, PERM_CC against PERM with the 1:1 line; 343 samples, drawn by Petrophys (pp.crossplot) from result E17. Data: GeoLink, CC BY-SA 4.0.") ![Pickett plot of the Brent Group](../images/geolink-30_6-5-brent-pickett.png "Offered, not chosen: the Pickett display F14 of the interval's PHIE and RDEP; 198 samples (clean rock, VCL up to 0.15), drawn by Petrophys (pp.pickett_plot). Data: GeoLink, CC BY-SA 4.0.")
 
 <details>
 <summary>The figures step</summary>
@@ -836,8 +836,8 @@ One entry of `trace.figures.figures`: the first Brent answer's Pickett display F
 
 ```json
 {"id": "F14", "kind": "pickett", "source": "interval",
- "spec": {"function": "create_pickett_plot", "curves": ["PHIE", "RDEP"]},
- "caption": "Figure 3. Pickett plot from well data (the interval's PHIE, RDEP; rw 0.07195 (median of RW over the interval); a 1 (Petrophys' default); m 2 (record, saturation); n 2 (record, saturation)); 768 samples. Drawn by Petrophys (create_pickett_plot) from the interval's curves.",
+ "spec": {"function": "pickett_plot", "curves": ["PHIE", "RDEP"]},
+ "caption": "Figure 3. Pickett plot: deep resistivity against porosity on log-log axes, with lines of constant Sw (100, 80, 60, 40 and 20 %) of slope -m (the interval's PHIE, RDEP; rw 0.07195 (median of RW over the interval); a 1 (Petrophys' default); m 2 (record, saturation); n 2 (record, saturation); vcl_max 0.15 (Petrophys' default)); 198 samples. Drawn by Petrophys (pp.pickett_plot) from the interval's curves.",
  "file": "figures/figure_3_pickett.png", "samples": 768}
 ```
 

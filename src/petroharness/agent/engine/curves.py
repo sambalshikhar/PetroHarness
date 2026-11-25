@@ -390,14 +390,17 @@ def same_scale(f: Formation, a: str, b: str) -> bool:
 
 # --- a flag computed from an input with no value ---------------------------------------------------------------------
 
-_RECORD_LINE = re.compile(r"^(?P<name>[A-Z][A-Z0-9_]*):\s*(?P<plus>\+)?\s*(?P<cond>.*?)\s*->")
+_RECORD_LINE = re.compile(r"^(?P<name>[A-Z][A-Z0-9_]*):\s*(?:(?P<plus>\+)|(?P<after>[A-Z][A-Z0-9_]*)\s+and\s+)?\s*"
+                          r"(?P<cond>.*?)\s*->")
 
 
 def flag_inputs(f: Formation, c: str) -> list:
     """What a flag or class the workflow wrote is computed from, as groups of fallbacks: the curves its step's record
-    line for it names ("NET_PAY:  + SW < 0.7 -> ..." names SW; a line that starts with "+" adds to the line above it;
-    "PHIE+PHIT" is PHIE where present, otherwise PHIT), and the record's flags its catalog line names (a flag from
-    NET_PAY). [] for anything else: a curve of values is missing itself where its inputs are."""
+    line for it names ("NET_PAY:  + SW < 0.7 -> ..." names SW; a line that starts with "+", or with the line above's
+    flag and "and" ("NET_PAY: NET_RES and SW < 0.7"), adds to the line above it; "PHIE+PHIT" is PHIE where present,
+    otherwise PHIT; a word the line binds to curves, "porosity is PHIE_CC, and PHIE at samples without PHIE_CC", is
+    those curves), and the record's flags its catalog line names (a flag from NET_PAY). [] for anything else: a curve
+    of values is missing itself where its inputs are."""
     cache = f.__dict__.setdefault("_flag_inputs", {})
     if c in cache:
         return cache[c]
@@ -406,13 +409,18 @@ def flag_inputs(f: Formation, c: str) -> list:
         known = known_names(f) | set(f.inv.curves)
         m = next((m for m in f.inv.methods if m.step == cv.step), None)
         lines, prev = [], []
+        from petroharness.record.card import bindings
         for ln in dict.fromkeys(list(m.decisions_here) + list(m.decisions)) if m is not None else []:   # each once
             hit = _RECORD_LINE.match(str(ln))
             if not hit:
                 continue
-            groups = [t.split("+") for t in re.findall(r"[A-Za-z][A-Za-z0-9_]*(?:\+[A-Za-z][A-Za-z0-9_]*)*", hit["cond"])
+            bound = bindings(str(ln))
+            cond = re.sub(r"(?<![A-Za-z0-9_])([a-z][a-z_]*)(?![A-Za-z0-9_])", lambda w: bound.get(w.group(1), w.group(1)),
+                          hit["cond"])
+            groups = [t.split("+") for t in re.findall(r"[A-Za-z][A-Za-z0-9_]*(?:\+[A-Za-z][A-Za-z0-9_]*)*", cond)
                       if all(p.upper() in known for p in t.split("+"))]
-            groups = (prev if hit["plus"] else []) + groups
+            plus = hit["plus"] or (hit["after"] and lines and lines[-1][0] == hit["after"])
+            groups = (prev if plus else ([[hit["after"]]] if hit["after"] else [])) + groups
             lines.append((hit["name"], groups))
             prev = groups
         out = next((g for name, g in lines if name == c), [])

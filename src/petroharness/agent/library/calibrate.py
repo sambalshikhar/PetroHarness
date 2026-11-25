@@ -68,12 +68,12 @@ def _depths(f: Formation, idx: np.ndarray) -> tuple:
 
 
 def _core(f: Formation, idx: np.ndarray):
-    from petrophys.interpretation.core_analysis.calibration import core_data_from_well
+    from petrophys.interpretation.core_analysis import core_data
     top, bottom = _depths(f, idx)
     try:
         with warnings.catch_warnings():                  # unit conversions are in the core's metadata, and said
             warnings.simplefilter("ignore")
-            return core_data_from_well(scratch_well(f), top=top, bottom=bottom)
+            return core_data(scratch_well(f), top=top, bottom=bottom)
     except ValueError:                                   # no core curve with data in these depths
         return None
 
@@ -136,9 +136,7 @@ def _core_fit(f: Formation, w: str, curve: str | None, keep: np.ndarray) -> Resu
 
 
 def _poro_perm(f: Formation, keep: np.ndarray) -> Result:
-    from petrophys.interpretation.core_analysis.calibration import (
-        fit_poro_perm_transform,
-    )
+    from petrophys.interpretation.core_analysis import fit_poro_perm
     from petrophys.model.core import CoreData
     idx = np.flatnonzero(keep)
     core = _core(f, idx)
@@ -150,16 +148,16 @@ def _poro_perm(f: Formation, keep: np.ndarray) -> Result:
         core = CoreData(depth=depth[idx], porosity=phi[idx], permeability=perm[idx])
         basis = "the log (PHIE and PERM: no core porosity and permeability here)"
     try:
-        t = fit_poro_perm_transform(core)
+        t = fit_poro_perm(core)
     except ValueError as e:
-        raise ToolError(f"Petrophys fit_poro_perm_transform: {str(e)[:300]}") from None
+        raise ToolError(f"Petrophys fit_poro_perm: {str(e)[:300]}") from None
     _, phie = _curve(f, "PHIE")
     perm_pp = np.asarray(t.predict(phie), dtype=float)
     pp_name = register(f, "PERM_PP", _full(f, perm_pp), "permeability from the poro-perm transform fitted on "
                        f"{basis.split(' (')[0]}", "mD", "poro-perm transform (on request)")
     out = Out(f)
     row = out.child()
-    out.add(f"poro-perm transform fitted on {basis} (Petrophys fit_poro_perm_transform): log10(K) = A * porosity + B "
+    out.add(f"poro-perm transform fitted on {basis} (Petrophys fit_poro_perm): log10(K) = A * porosity + B "
             f"with A {row.v(t.A)}, B {row.v(t.B)}; R2 {row.v(t.r_squared)}, RMSE {row.v(t.rmse)} (log10 mD), n "
             f"{row.i(t.n_points)}. Written: {pp_name} (the transform applied to PHIE).", row)
     if basis.startswith("core") and "PERM" in f.inv.curves:
@@ -219,9 +217,7 @@ def _shear(f: Formation, keep: np.ndarray) -> Result:
 
 
 def _elastic(f: Formation, keep: np.ndarray) -> Result:
-    from petrophys.interpretation.rock_physics.elastic import (
-        calculate_elastic_properties,
-    )
+    from petrophys.interpretation.rock_physics.elastic import elastic_properties
     _, rhob = _curve(f, "RHOB")
     dn, dtc = _slowness(f, "DTC")
     if "DTS" in f.inv.curves and f.view.available("DTS"):
@@ -232,7 +228,7 @@ def _elastic(f: Formation, keep: np.ndarray) -> Result:
         shear = f"{predicted[-1]} (predicted in this question)"
     else:
         dts, shear = None, ""
-    p = calculate_elastic_properties(rhob, dtc, dts)
+    p = elastic_properties(rhob, dtc, dts)
     fields = [("VP", "vp_m_s", "m/s", "compressional velocity"), ("AI", "acoustic_impedance_mrayl", "MRayl",
               "acoustic impedance")]
     if dts is not None:
@@ -240,13 +236,13 @@ def _elastic(f: Formation, keep: np.ndarray) -> Result:
                    ("SHEAR_MOD", "shear_mod_gpa", "GPa", "shear modulus"), ("BULK_MOD", "bulk_mod_gpa", "GPa",
                    "bulk modulus"), ("YOUNG_MOD", "young_mod_gpa", "GPa", "Young's modulus")]
     out = Out(f)
-    out.add(f"dynamic elastic properties by Petrophys calculate_elastic_properties from RHOB, {dn}"
+    out.add(f"dynamic elastic properties by Petrophys elastic_properties from RHOB, {dn}"
             + (f" and {shear}" if dts is not None else " (no shear slowness: Vs, Poisson's ratio and the moduli need "
                "DTS; calibrate shear predicts one)") + "; medians over the whole selection, the zones pooled and each zone:")
     written = []
     for base, attr, unit, meaning in fields:
         x = np.asarray(getattr(p, attr), dtype=float)
-        name = register(f, base, _full(f, x), f"{meaning} (Petrophys calculate_elastic_properties)", unit,
+        name = register(f, base, _full(f, x), f"{meaning} (Petrophys elastic_properties)", unit,
                         "elastic properties (on request)")
         written.append(name)
         row = out.child()

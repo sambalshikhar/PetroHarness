@@ -28,7 +28,7 @@ checks and records.
 
 ```bash
 export PETROHARNESS_MODEL_URL=http://localhost:8000/v1    # the model server (MODELS.md)
-petroharness ui                                           # http://127.0.0.1:7860
+petroharness --launch-ui                                  # opens http://localhost:7860
 ```
 
 Installing, and serving a model: [Quick start](../README.md#quick-start), [Models](MODELS.md).

@@ -291,7 +291,7 @@ The server of [section 3](#3-command-line-and-environment), one endpoint up and 
 model's name and the runs folder replaced):
 
 ```json
-{"version": "1.0.0", "model": "<served model name>", "label": "K2-Horizon-7B",
+{"version": "1.1.0", "model": "<served model name>", "label": "K2-Horizon-7B",
  "endpoints": [{"url": "http://HOST:8000/v1", "ok": true, "models": ["<served model name>"], "ms": 6, "busy": 0},
                {"url": "http://localhost:8001/v1", "ok": false, "models": [],
                 "error": "URLError: <urlopen error [Errno 111] Connection refused>", "busy": 0}],
@@ -387,7 +387,7 @@ Response fields:
 | `zoned` | number | The summed thickness of the zones. | `adapter.preview` |
 | `interval_thickness` | number or null | Base minus top of the interval. | `adapter.preview` |
 | `min_thickness` | number or null | The policy's minimum zone thickness in the reporting unit. | `adapter.preview` |
-| `used` | object | Setting name to `{"value", "step"}`, and `"unit"` where the step records one beside the setting (`td_unit` beside `td_ft`): the value Petrophys applied (its `<name>_used` parameter where the step records one, as `gr_min_used` when it lowered `gr_min`) and the workflow step that recorded it. The cutoffs are read from the `net_pay` step. | `well.settings.used` |
+| `used` | object | Setting name to `{"value", "step"}`, and `"unit"` where the step records one beside the setting (`td_unit` beside `td`) or a unit setting recorded under its computed name (`bht_f`: `bht` in °F): the value Petrophys applied (its `<name>_used` parameter where the step records one, as `gr_min_used` when it lowered `gr_min`) and the workflow step that recorded it. The cutoffs are read from the `net_pay` step. | `well.settings.used` |
 
 The Brent Group with `m` set to 1.8:
 

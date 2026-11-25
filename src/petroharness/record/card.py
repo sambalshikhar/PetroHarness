@@ -152,6 +152,33 @@ def _name(names: dict, ident) -> str:
 _COMPOSITE = re.compile(r"(?<![A-Za-z0-9_])([A-Z][A-Z0-9_]*(?:\+[A-Z][A-Z0-9_]*)+)(?![A-Za-z0-9_])")
 
 
+_CLAUSE = re.compile(r";\s+|,\s+(?=[A-Z][A-Z0-9_]* = )")     # a decision's clauses: "; ", and ", " before "NAME = "
+_BINDING = re.compile(r"^([a-z][a-z_]*|[A-Z][A-Z0-9_]*) is ([A-Z][A-Z0-9_]*)(.*)$")
+
+
+def clauses(decision: str) -> list[str]:
+    """A decision line's clauses: "RQI = 0.0314*sqrt(k/phi), PHI_Z = phi/(1-phi); k is PERM" gives "RQI = ...",
+    "PHI_Z = ..." and "k is PERM"."""
+    return [c for c in _CLAUSE.split(decision) if c]
+
+
+def bindings(decision: str) -> dict:
+    """The curves a decision line says its words stand for, each as a composite in order of use: "k is PERM_CC, and
+    PERM at samples without PERM_CC; phi is PHIE_CC" gives {"k": "PERM_CC+PERM", "phi": "PHIE_CC"}; also "phi is
+    PHIE_CC (PHIE where it is missing)"."""
+    out = {}
+    for c in clauses(decision):
+        m = _BINDING.match(c.strip())
+        if m:
+            rest = m.group(3)
+            more = re.findall(r", and ([A-Z][A-Z0-9_]*) at samples without", rest)
+            gap = re.match(r"\s*\((.+?) where it is missing\)", rest)
+            if gap:
+                more += [x.strip() for x in gap.group(1).split(", then ")]
+            out[m.group(1)] = "+".join([m.group(2)] + more)
+    return out
+
+
 def _curves(text: str) -> str:
     """A depth-wise composite the record writes as PHIE+PHIT (PHIE, and PHIT where PHIE is missing), written so it
     cannot read as a sum: (PHIE where present, otherwise PHIT)."""
@@ -235,7 +262,8 @@ def saturation_fact(sat: dict, names: dict, model_parameters: dict) -> Optional[
     if len(models) == 1:
         text = f"SW model: {_name(names, models[0])}" + (" (every sample)" if counts else "")
     else:
-        routed = any(d.lower().startswith("auto-routing") for d in decisions)     # "... based on VCLAY and lithology"
+        routed = p.get("sw_model_requested") == "auto" or \
+            any(d.lower().startswith("auto-routing") for d in decisions)      # before Petrophys 3a9378e: its decision
         cut = p.get("vcl_cutoff_for_routing")
         vcl = f"VCL (cutoff {_f(cut)})" if _num(cut) else "VCL"
         how = f"routed on {vcl} and lithology" if routed else "routing rule not recorded"
@@ -319,7 +347,10 @@ def swirr_text(perm: dict) -> Optional[str]:
         mask.append(f"{md['rt_curve']}>{_f(md['rt_cutoff'])}")
     where = f" where {' and '.join(mask)}" if mask else ""
     n = md.get("hc_mask_samples")
-    fallback = str(how or "").startswith("default") or any(d.startswith("SWIRR") and "fallback" in d for d in decisions)
+    # a default SWIRR, as the step's decision says it ("SWIRR_APP = 0.200 (default): only 3 hydrocarbon samples ...";
+    # before Petrophys 3a9378e "SWIRR_APP = 0.200 fallback because ...")
+    fallback = str(how or "").startswith("default") or any(
+        d.startswith("SWIRR") and ("fallback" in d or "(default)" in d) for d in decisions)
     if fallback:
         why = f"only {int(n)} samples{where}" if _num(n) else (md.get("reason") or "reason not recorded")
         return f"{value}, a fallback default ({why})"
@@ -440,7 +471,7 @@ def core_fact(available: bool, source: Optional[str], supplied: Optional[list] =
     return head + "not available (no core model fitted in this well)"
 
 
-_FLAG_DECISION = re.compile(r"^(NET_ROCK|NET_RES|NET_PAY):\s*(\+\s*)?(\S+)\s*(<=|>=|<|>)\s*(\S+)")
+_FLAG_DECISION = re.compile(r"^(NET_ROCK|NET_RES|NET_PAY):\s*(\+\s*|(?:NET_ROCK|NET_RES)\s+and\s+)?(\S+)\s*(<=|>=|<|>)\s*(\S+)")
 _FLAG_PARAMETER = {"NET_ROCK": "vcl_cutoff", "NET_RES": "phie_cutoff", "NET_PAY": "sw_cutoff"}
 
 
@@ -461,7 +492,9 @@ def cutoff_fact(net_pay: dict, policy: dict) -> str:
     for d in _decisions(net_pay):
         m = _FLAG_DECISION.match(d)
         if m and m.group(1) not in parsed:
-            parsed[m.group(1)] = m.groups()[1:]
+            plus, curve, op, raw = m.groups()[1:]
+            curve = bindings(d).get(curve, curve)            # "porosity" -> the curve the decision says it is
+            parsed[m.group(1)] = (plus, curve, op, raw)
     parts = []
     for flag, key in _FLAG_PARAMETER.items():
         if flag in parsed:
@@ -544,6 +577,10 @@ def recorded_inputs(steps: dict, spec: dict) -> Optional[list[str]]:
     None when the record does not state it, so nothing is assumed. Names in an equation are upper-case mnemonics;
     a composite PHIE+PHIT counts as its first curve (the second only fills gaps); a name the record shows to be one
     value for the well (e.g. SWIRR with a single recorded swirr) is a constant, not an input."""
+    for alternative in spec.get("alternatives") or []:    # the wordings of different Petrophys builds, in turn
+        got = recorded_inputs(steps, alternative)
+        if got:
+            return got
     for step in spec.get("steps", []):
         rec = last_step(steps, step)
         p = _params(rec)
@@ -552,10 +589,12 @@ def recorded_inputs(steps: dict, spec: dict) -> Optional[list[str]]:
             text = _dotted(p, spec["parameter"])
         prefix = spec.get("decision")
         for d in (_decisions(rec) if prefix and text is None else []):
-            clause = next((c for c in d.split("; ") if c.startswith(prefix)), None)
+            clause = next((c for c in clauses(d) if c.startswith(prefix)), None)
             if clause is not None:
                 text = clause[len(prefix):]
                 text = text.split(spec["stop"])[0] if spec.get("stop") else text
+                bound = bindings(d)                          # k/phi -> PERM/PHIE, as the decision says
+                text = re.sub(r"(?<![A-Za-z0-9_])([a-z][a-z_]*)(?![A-Za-z0-9_(])", lambda w: bound.get(w.group(1), w.group(1)), text)
                 break
         if text is None and spec.get("core_model"):
             fitted = [m for m in p.get("core_models") or [] if isinstance(m, dict) and m.get(spec["core_model"])]

@@ -115,7 +115,19 @@ def test_simandoux_saturation_then_its_statistics(topeka):
     # salinity (salinity_ppm) rebuilds its SW; one that does not (Petrophys 0b31d72 as published) cannot, and says so
     routed = ((f.view.prep.steps or {}).get("saturation") or {}).get("parameters", {}).get("salinity_ppm")
     if routed:
-        assert "the baseline reproduces the record's SW (every sample within 1%)" in r.text
+        # Petrophys 3a9378e's workflow sets SW and SXO to 1 where the porosity its saturation step read is below 0.01
+        # v/v, and the step (which rebuilds the baseline) does not: the baseline then differs from the record's SW at
+        # those samples at most, and says so (a gap in Petrophys). The porosity: the step's own, first where present.
+        differs = re.search(r"the baseline differs from the record's SW at (\d+) of", r.text)
+        names = [n for i in (f.view.prep.steps["saturation"].get("inputs") or []) for n in str(i).split("+")
+                 if n.startswith("PHIE")] or ["PHIE"]
+        phi = np.full(len(f.view.values(names[0])), np.nan)
+        for n in names:                                               # first where present, the next where missing
+            v = np.asarray(f.view.values(n), dtype=float) if f.view.values(n) is not None else phi
+            phi = np.where(np.isfinite(phi), phi, v)
+        no_pores = int(np.sum(np.isfinite(phi) & (phi < 0.01)))
+        assert "the baseline reproduces the record's SW (every sample within 1%)" in r.text \
+            or (differs and int(differs.group(1)) <= no_pores), r.text
     else:
         assert "the baseline differs from the record's SW" in r.text and "read the change as its effect" in r.text
     assert "the baseline reproduces the record's NET_PAY (every sample within 1%)" in r.text
@@ -202,7 +214,7 @@ def test_temperature_from_the_record_and_from_a_given_bht(topeka):
     r = schemas.call(topeka, "estimate", {"parameter": "temperature"})
     assert "fallback_geothermal_gradient" in r.text and "give bht_f (degF) and td" in r.text
     g = estimate_kw(topeka, "temperature", bht_f=150, td=4695.5)
-    assert "gradient from BHT 150 F at TD 4695.5 ft (given; Petrophys estimate_gradient_from_bht)" in g.text
+    assert "gradient from BHT 150 F at TD 4695.5 ft (given; Petrophys gradient_from_bht)" in g.text
 
 
 @pytest.mark.data

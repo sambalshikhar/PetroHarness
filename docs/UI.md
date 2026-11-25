@@ -11,8 +11,12 @@ number was computed. Every run is saved, to come back to, rate and replay. The p
 
 ```bash
 export PETROHARNESS_MODEL_URL=http://localhost:8000/v1    # several: comma-separated
-petroharness ui                                           # http://127.0.0.1:7860
+petroharness --launch-ui                                  # opens http://localhost:7860 in your browser
 ```
+
+`petroharness ui` starts the same server without opening a browser (for a server you reach from elsewhere). Both
+take the options below, for example `petroharness --launch-ui --model qwen3:32b --model-url http://localhost:11434/v1`.
+On a Linux machine with no display, `--launch-ui` opens nothing and prints the address to open instead.
 
 The server needs nothing beyond the package. It prints where it listens, the runs folder and the model endpoints, and
 runs until you stop it (Ctrl+C). As for the command, a data settings file in `PETROHARNESS_DATA` is the base the
@@ -32,6 +36,7 @@ with the defaults.
 | `--model NAME` | any chat model, by its served name (default: K2-Horizon-7B; [Models](MODELS.md)) |
 | `--model-card CARD` | a model card: a YAML file or a packaged card's name |
 | `--model-url URLS` | the model endpoints, comma-separated (default `PETROHARNESS_MODEL_URL`) |
+| `--open` | open the page in your browser once the server listens (`petroharness --launch-ui` is `petroharness ui --open`) |
 
 The server does not start with a model card that names no model (the `generic` card) and no `--model`: it says to
 give the served model's name and exits with status 2.

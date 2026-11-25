@@ -106,12 +106,14 @@ def _percentile_term(f: Formation, term: str) -> tuple:
     m = _PERCENTILE.search(term)
     if not m:
         return term, ""
-    names = {x.upper() for x in re.findall(r"[A-Za-z][A-Za-z0-9_]*", _PERCENTILE.sub(" ", term))
-             if x.lower() not in ("its", "the", "of", "percentile", "below", "above")}
-    names = {curve(f, x) for x in names if x != "DEPTH"} if names else set()
+    # in the order written: a word that is no curve is named as the first such word, in every process (a set's order
+    # changes with the hash seed, and a replayed request then differs from the recorded one)
+    names = list(dict.fromkeys(x.upper() for x in re.findall(r"[A-Za-z][A-Za-z0-9_]*", _PERCENTILE.sub(" ", term))
+                               if x.lower() not in ("its", "the", "of", "percentile", "below", "above")))
+    names = list(dict.fromkeys(curve(f, x) for x in names if x != "DEPTH"))
     if len(names) != 1:
         return term, ""
-    c, q = names.pop(), int(m.group(1) or m.group(2))
+    c, q = names[0], int(m.group(1) or m.group(2))
     from petroharness.well.stats import percentile
     v = percentile(np.asarray(f.view.values(c), dtype=float), q)
     if not np.isfinite(v):
@@ -227,7 +229,7 @@ _UNIT_AFTER = re.compile(rf"^(?P<left>.*?(?:<=|>=|==|!=|=|<|>)\s*)(?P<num>-?{_UN
 
 def _unit_number(f: Formation, term: str) -> str:
     """A term whose number is written with a unit ("GR > 100 API", "DTC > 330 us/m", "DEPTH > 9500 ft"): the number in
-    the compared curve's unit (DEPTH: the reporting unit), converted by Petrophys (get_conversion_factor: gAPI and
+    the compared curve's unit (DEPTH: the reporting unit), converted by Petrophys (conversion_factor: gAPI and
     API are one unit); a unit that does not convert to it is refused, naming the curve's unit (before,
     "GR > 100 API" was refused as a term the grammar could not read)."""
     m = _UNIT_AFTER.match(term)
@@ -243,8 +245,8 @@ def _unit_number(f: Formation, term: str) -> str:
         target = f.inv.curves[c].unit or f.view.unit(c) or ""
     else:
         return term                                   # the name is refused where it is read
-    from petrophys.preprocessing.standardization.unit_converter import get_conversion_factor
-    factor = get_conversion_factor(m.group("unit"), target) if target else None
+    from petrophys.preprocessing.standardization.unit_converter import conversion_factor
+    factor = conversion_factor(m.group("unit"), target) if target else None
     if factor is None:
         raise ToolError(f"{term.strip()!r}: {c} is in {target or 'no unit'}; write the number in {target or 'its unit'}, "
                         "or without a unit")

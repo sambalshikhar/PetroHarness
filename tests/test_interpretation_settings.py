@@ -33,7 +33,7 @@ def test_every_petrophys_setting_is_offered_once_or_left_out_on_purpose():
 def test_each_setting_says_what_it_is():
     for f in _fields():
         assert f["label"] and f["help"], f["key"]
-        assert f["kind"] in ("number", "integer", "switch", "choice", "bands", "text"), f["key"]
+        assert f["kind"] in ("number", "integer", "quantity", "switch", "choice", "bands", "text"), f["key"]
         if f["kind"] == "choice":
             assert f["choices"], f["key"]
 
@@ -168,14 +168,18 @@ def test_used_reports_the_value_petrophys_applied():
 
 
 def test_a_used_value_carries_the_unit_its_step_records():
-    """Petrophys records td_unit beside td_ft: the log's depth unit when the total depth came from the log (metres on
-    tuhua-7), ft when the value was given. The panel shows that unit, not the setting name's."""
+    """Petrophys records td_unit beside td: the log's depth unit when the total depth came from the log (metres on
+    tuhua-7), ft when the value was given. A unit setting it records under its computed name (bht_f, the setting bht)
+    is the setting's, in that name's unit. The panel shows that unit, not the setting name's."""
     from types import SimpleNamespace
     from petroharness.well.settings import used
-    taken = used(SimpleNamespace(steps={"temperature": {"parameters": {"td_ft": 1350.2, "td_unit": "m", "bht_f": 210}}}))
-    assert taken["td_ft"] == {"value": 1350.2, "step": "temperature", "unit": "m"} and "unit" not in taken["bht_f"]
-    given = used(SimpleNamespace(steps={"temperature": {"parameters": {"td_ft": 8500, "td_unit": "ft"}}}))
-    assert given["td_ft"]["unit"] == "ft"
+    taken = used(SimpleNamespace(steps={"temperature": {"parameters": {
+        "td": 1350.2, "td_unit": "m", "bht_f": 210, "surface_temp_f": 68.0, "gradient_f_per_100ft": 1.64}}}))
+    assert taken["td"] == {"value": 1350.2, "step": "temperature", "unit": "m"}
+    assert taken["bht"] == {"value": 210, "step": "temperature", "unit": "°F"} and taken["surface_temp"]["unit"] == "°F"
+    assert taken["temperature_gradient"] == {"value": 1.64, "step": "temperature", "unit": "°F/100 ft"}
+    given = used(SimpleNamespace(steps={"temperature": {"parameters": {"td": 8500, "td_unit": "ft"}}}))
+    assert given["td"]["unit"] == "ft"
     from pathlib import Path
     page = (Path(__file__).resolve().parents[1] / "src" / "petroharness" / "ui" / "static" / "index.html").read_text(
         encoding="utf-8")
@@ -202,6 +206,37 @@ def test_a_setting_that_takes_a_table_is_not_offered_as_a_value():
 def test_the_hydrocarbon_and_gradient_settings_sit_in_their_groups():
     from petroharness.well.settings import schema
     where = {f["key"]: (g["key"], f["label"]) for g in schema()["groups"] for f in g["fields"]}
-    for key, group in (("rho_hc", "porosity"), ("hc_hydrogen_index", "porosity"), ("gradient_f_per_100ft", "temperature")):
+    for key, group in (("rho_hc", "porosity"), ("hc_hydrogen_index", "porosity"), ("temperature_gradient", "temperature")):
         if key in where:                                   # a Petrophys that has the setting
             assert where[key][0] == group and where[key][1] != key.replace("_", " "), (key, where[key])
+
+
+def test_a_temperature_gradient_or_depth_is_given_with_its_unit_and_read_by_petrophys():
+    """The settings Petrophys takes with a unit (read from its settings class: bht_f names the setting bht in degF)
+    are quantities: a number, read in the unit shown, or a number with its unit, which Petrophys reads and checks."""
+    from petroharness.well.settings import computed_names, schema, validate
+    with_unit = {s for s, _ in computed_names().values()}
+    assert with_unit == {"surface_temp", "bht", "td", "temperature_gradient", "rw_meas_temp", "rmf_meas_temp",
+                         "rm_meas_temp"}
+    fields = {f["key"]: f for g in schema()["groups"] for f in g["fields"]}
+    assert {k for k, f in fields.items() if f["kind"] == "quantity"} == with_unit
+    assert fields["bht"]["unit"] == "°F" and fields["temperature_gradient"]["unit"] == "°F/100 ft"
+    assert fields["td"]["unit"] == ""                     # a bare total depth is in the well's own unit
+    temperature = {f["key"] for g in schema()["groups"] if g["key"] == "temperature" for f in g["fields"]}
+    assert temperature == {"surface_temp", "bht", "td", "temperature_gradient"}
+    assert validate({"rw_meas_temp": "110 degC", "bht": 230, "td": "2650 m", "temperature_gradient": "30 degC/km"}) == {}
+    assert validate({"bht": True}) == {"bht": "give a number, or a number with its unit"}
+    assert "rw_meas_temp" in validate({"rw_meas_temp": "110 furlongs"})      # Petrophys refuses the unit, by name
+    assert validate({"bht_f": 230})["bht_f"].startswith("not a setting this panel knows")  # the name before 3a9378e
+
+
+def test_a_quantity_reads_back_with_its_unit_and_an_old_name_says_the_new_one():
+    from petroharness.well.settings import describe, diff, schema, validate
+    assert validate({"bht": (110, "degC")}) == {}                     # a (number, unit) pair, as Petrophys takes it
+    assert "Petrophys now takes it as bht, with its unit" in validate({"bht_f": 230})["bht_f"]
+    said = describe(diff({}, {"bht": 230, "rw_meas_temp": "65 degC", "temperature_gradient": (30, "degC/km")}))
+    assert said == ("bht the default -> 230 °F; rw_meas_temp the default -> 65 degC; temperature_gradient the "
+                    "default -> 30 degC/km")
+    fields = {f["key"]: f for g in schema()["groups"] for f in g["fields"]}
+    assert fields["surface_temp"]["default"] == 68.0 and fields["surface_temp"]["unit"] == "°F"
+

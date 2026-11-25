@@ -28,6 +28,7 @@ flowchart LR
 | `petroharness audit SESSION` | Each answer's audit trail, from the session folder alone | Standard output, or `--out FILE` | 0, or 2 |
 | `petroharness report SESSION` | A conversation as one Markdown document | `SESSION/report.md`, or `--out FILE` | 0, or 2 |
 | `petroharness setup` | The setup record and its hash | Standard output | 0, or 2 |
+| `petroharness --launch-ui` | The web UI server, opened in your browser (`petroharness ui --open`) | `./petroharness-ui-runs/` | as `petroharness ui` |
 | `petroharness ui` | The web UI server, `http://127.0.0.1:7860` by default | `./petroharness-ui-runs/` | 0 when stopped, 2 on a bad model card or port |
 | `petroharness benchmark` | Validation mode: a question file run in parallel | `runs/` under the repository root | 0 when it completes |
 
@@ -85,7 +86,7 @@ flowchart TD
 | `petroharness audit` | `petroharness.evidence.audit.main` | [audit.py](../../src/petroharness/evidence/audit.py) |
 | `petroharness report` | `petroharness.evidence.report.main` | [report.py](../../src/petroharness/evidence/report.py) |
 | `petroharness setup` | `petroharness.core.setup.main` | [setup.py](../../src/petroharness/core/setup.py) |
-| `petroharness ui` | `petroharness.ui.server.main` | [server.py](../../src/petroharness/ui/server.py) |
+| `petroharness ui`, `petroharness --launch-ui` | `petroharness.ui.server.main` (`--launch-ui`: with `--open`) | [server.py](../../src/petroharness/ui/server.py) |
 | `petroharness benchmark` | `petroharness.cli.benchmark` | [cli.py](../../src/petroharness/cli.py) |
 
 </details>
@@ -266,7 +267,7 @@ the interval's log display (Petrophys): …/brent/overview.png
 --- question 1 (ok; 8 investigation steps, 903.5 s; …/brent/turns/01) ---
 # Brent Group, Well 30_6-5 — Porosity, Saturation, Permeability and Hydrocarbon Potential
 […]
-[Figure 3. Buckles plot: porosity vs water saturation with constant-BVW hyperbolas (the interval's PHIE, SW); 768 samples. Drawn by Petrophys (create_buckles_plot) from the interval's curves. -> …/brent/turns/01/figures/figure_3_buckles.png]
+[Figure 3. Buckles plot: Sw against porosity, with hyperbolas of constant bulk-volume water (porosity x Sw) (the interval's PHIE, SW); 768 samples. Drawn by Petrophys (pp.buckles_plot) from the interval's curves. -> …/brent/turns/01/figures/figure_3_buckles.png]
 
 --- question 2 (ok; 8 investigation steps, 832.4 s; …/brent/turns/02) ---
 […]
@@ -490,7 +491,7 @@ The start of the report (the LAS path is shortened, the rest cut at […]):
 - **LAS file:** `…/petrophys/datasets/geolink/30_6-5.las`, SHA-256 `5ecf2c53826981f978c2efb47fe016abf94dac62e83dbdb54eee115596f801b9`
 - **Model:** K2-Horizon-7B
 - **Petrophys:** 3.0.0@files-c5de047fe601
-- **PetroHarness:** 1.0.0 commit <commit>, setup `d70dbbf039dd`
+- **PetroHarness:** 1.1.0 commit <commit>, setup `d70dbbf039dd`
 - **Questions:** 2 answered of 2 asked
 
 ![The interval as Petrophys displays it](overview.png)
@@ -540,7 +541,7 @@ The first command prints:
 
 ```text
 setup ae3aa9e6820f
-  harness: 1.0.0
+  harness: 1.1.0
   commit: <commit>
   petrophys: 3.0.0@files-c5de047fe601
   components:
@@ -604,6 +605,8 @@ settings built from the Brent interval, the ones a question about it is answered
 ## 8. petroharness ui
 
 `petroharness ui` serves the web UI, a standard-library HTTP server over the same `ask` path ([UI.md](../UI.md)).
+`petroharness --launch-ui` is the same with `--open`: it takes the same options, anywhere on the line (`--launch_ui`
+is read as well).
 
 ```bash
 petroharness ui --port 8080 --workers 2 --model Qwen/Qwen3-32B --model-url http://localhost:8000/v1
@@ -630,6 +633,7 @@ brackets.
 | `--model NAME` | text | none (the default model card) | Any chat model by its served name; selects the generic card unless `--model-card` is given. | `ui.server.parser`, `models.card_file` |
 | `--model-card CARD` | YAML path or packaged card name | none (the default card, K2-Horizon-7B) | A model card ([MODELS.md](../MODELS.md)). | `ui.server.parser`, `models.card_file` |
 | `--model-url URLS` | comma-separated URLs | from the environment (below) | The OpenAI-compatible endpoints, each ending in `/v1`. Empty entries are dropped; a trailing `/` is removed. | `ui.server.parser`, `ui.server.Endpoints` |
+| `--open` | flag | off | Opens `http://localhost:PORT` (the server's own address for any other `--host`) in your browser once the server listens: on macOS and Windows, on Linux with a display, or where the environment names a `BROWSER` (an editor's remote terminal sets one). Elsewhere it prints the address to open and the SSH port forward. | `ui.server.parser`, `ui.server.open_browser`, `ui.server.page_url` |
 
 </details>
 

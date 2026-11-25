@@ -702,7 +702,7 @@ starts with `error`.
 second.figures[0]
 # {'id': 'F9', 'kind': 'crossplot', 'source': 'E17', 'spec': {...},
 #  'caption': 'Figure 1. Crossplot of PERM_CC [mD] against PERM [mD] (zones Z1, Z4, Z5, Z6, Z7, Z9, Z13, Z14, Z15,
-#              Z18, Z19, Z20), with the 1:1 line; 343 samples. Drawn by Petrophys (create_crossplot) from result E17.',
+#              Z18, Z19, Z20), with the 1:1 line; 343 samples. Drawn by Petrophys (pp.crossplot) from result E17.',
 #  'file': 'figures/figure_1_crossplot.png', 'samples': 343}
 [(b["step"], b["why"]) for b in second.basis][:4]
 # [('normalization', 'named'), ('vclay', 'named'), ('porosity', 'named'), ('core_correction', 'named')]
@@ -968,7 +968,7 @@ with given_settings(given2):
 
 | Field | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `harness` | str | required | The package version (`1.0.0`). | `core.setup.Setup` |
+| `harness` | str | required | The package version (`1.1.0`). | `core.setup.Setup` |
 | `commit` | str | required | The checkout's short commit, `+dirty` when `src/` has changes; "" for an installed package. | `harness_commit` |
 | `petrophys` | str | required | The Petrophys build (version and commit, or a hash of its installed files). | `well.prepare.library_identity` |
 | `components` | dict | required | Prompt component (`C1` ... `C10`) -> version. | `agent.components.versions` |

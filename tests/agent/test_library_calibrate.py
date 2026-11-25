@@ -124,7 +124,7 @@ def test_the_fit_of_the_log_to_core(cored, what, core, space):
 @pytest.mark.data
 def test_poro_perm_on_core(cored):
     r = K.calibrate(cored, "poro_perm")
-    assert "fitted on core plugs (Petrophys fit_poro_perm_transform)" in r.text and "against the record's PERM" in r.text
+    assert "fitted on core plugs (Petrophys fit_poro_perm)" in r.text and "against the record's PERM" in r.text
 
 
 @pytest.mark.data

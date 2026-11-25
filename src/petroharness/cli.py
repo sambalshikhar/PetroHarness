@@ -1,6 +1,7 @@
 """The console script. `petroharness --las WELL.las --question "..." ...` answers one question about one LAS file
-(petroharness.ask; docs/USAGE.md), the default; `petroharness ui` starts the web UI (petroharness.ui,
-docs/UI.md); `petroharness benchmark ...` is the validation mode below.
+(petroharness.ask; docs/USAGE.md), the default; `petroharness --launch-ui` starts the web UI and opens it in the
+browser, `petroharness ui` starts it alone (petroharness.ui, docs/UI.md); `petroharness benchmark ...` is the
+validation mode below.
 
 Benchmark mode runs the harness on benchmark questions, each as a user's question is run: the model first says
 whether the question is direct (the direct route) or needs an investigation (petroharness.agent.graph; --investigate
@@ -37,6 +38,7 @@ from petroharness.tasks import load_tasks
 # the harness's commit for a source checkout ("+dirty" with uncommitted source changes), "" for an installed package
 # (git answers for any folder inside a repository: core.setup.harness_commit counts only a tracked source file)
 COMMIT = harness_commit()
+LAUNCH_UI = ("--launch-ui", "--launch_ui")     # petroharness --launch-ui: the web UI, opened in the browser
 
 
 def save(prefix: str, model_key: str, arm: str, items: list, index: dict, gt_dir: Path | None = None) -> None:
@@ -81,8 +83,9 @@ def answer(task, model_key: str, rep: int, max_steps: int, writer: str = "", fmt
 
 
 def main():
-    """petroharness [own-well options] (the default), petroharness ui [server options], petroharness benchmark [batch
-    options]; arguments with --arm (the batch runner's older form, used by scripts) run the benchmark too."""
+    """petroharness [own-well options] (the default), petroharness ui [server options], petroharness --launch-ui
+    [server options] (the same, opened in the browser), petroharness benchmark [batch options]; arguments with --arm
+    (the batch runner's older form, used by scripts) run the benchmark too."""
     argv = sys.argv[1:]
     if argv[:1] == ["benchmark"]:
         return benchmark(argv[1:])
@@ -101,6 +104,9 @@ def main():
     if argv[:1] == ["ui"]:                     # the web UI (src/petroharness/ui, docs/UI.md)
         from petroharness.ui.server import main as ui_main
         return ui_main(argv[1:])
+    if any(a in LAUNCH_UI for a in argv):      # the web UI, opened in the browser: petroharness --launch-ui [ui options]
+        from petroharness.ui.server import main as ui_main
+        return ui_main([a for a in argv if a not in LAUNCH_UI] + ["--open"])
     if any(a == "--arm" or a.startswith("--arm=") for a in argv):
         return benchmark(argv)
     from petroharness.ask import main as ask_main

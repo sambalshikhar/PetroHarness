@@ -243,7 +243,8 @@ Other commands (each has --help):
   petroharness audit SESSION               each answer's trail back to the LAS file (docs/EVIDENCE.md)
   petroharness report SESSION              a conversation as one document
   petroharness setup                       what answers a question, with one hash (docs/EVIDENCE.md)
-  petroharness ui                          ask in the browser, with live progress and saved runs (docs/UI.md)
+  petroharness --launch-ui                 ask in the browser: starts the web UI and opens it (docs/UI.md)
+  petroharness ui                          the web UI alone, with live progress and saved runs (docs/UI.md)
   petroharness benchmark                   validation mode: the harness on a benchmark's questions"""
 
 

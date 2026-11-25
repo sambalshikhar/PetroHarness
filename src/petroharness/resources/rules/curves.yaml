@@ -153,7 +153,7 @@ meanings:
   SEPARATION_RATIO: shallow-to-deep resistivity ratio as the saturation analyzer classifies it; a model output from INVASION_RATIO where the workflow wrote it, else from the shallow resistivity (RXO, RSHA or RESS) over RDEP
   VP_VS_RATIO: compressional to shear velocity ratio; a model output from DTS and DTC, DTS / DTC
   # flags of the workflow
-  NET_ROCK: flag, 1 where VCL is below the cutoff; a flag from VCL
+  NET_ROCK: flag, 1 where VCL is below the cutoff, less the rock the net-pay step's record lists as left out of it (salt, anhydrite, gypsum); a flag from VCL
   NET_RES: flag, NET_ROCK and effective porosity above the cutoff, less the samples the net-pay step's record lists as left out (bad hole, coal); a flag from VCL and porosity
   NET_PAY: flag, NET_RES and SW below the cutoff (so without the samples left out of NET_RES); a flag from VCL, porosity and SW
   RESFLAG: flag, reservoir-quality rock (NET_ROCK and porosity above the lithology cutoff); a flag from VCL and porosity
@@ -221,9 +221,10 @@ construction:
   PHI_Z: {steps: [rock_quality], decision: "PHI_Z = "}
   FZI: {steps: [rock_quality], decision: "FZI = "}
   BVW: {steps: [bvw], decision: "BVW = "}
-  MHI: {steps: [mhi], decision: "MHI = ", stop: " for "}
+  MHI: {steps: [mhi], decision: "MHI = ", stop: " at "}
   PHIE: {steps: [porosity], decision: "PHIE = ", stop: " ("}
-  PHIT: {steps: [porosity], decision: "PHIT = ", stop: " with "}
+  PHIT: {alternatives: [{steps: [porosity], decision: "PHIT from neutron and density", inputs: [PHIN, PHID]},
+                        {steps: [porosity], decision: "PHIT = ", stop: " with "}]}   # the second: an older engine's wording
   PHID: {steps: [porosity], decision: "PHID = "}
   PHIN: {steps: [porosity], decision: "PHIN = ", stop: " using "}
   PHIS: {steps: [porosity], decision: "PHIS from Wyllie", inputs: [DTC]}

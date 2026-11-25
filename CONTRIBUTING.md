@@ -15,7 +15,7 @@ to show that it does what you mean and nothing else.
 ```bash
 python3.10 -m venv .venv
 .venv/bin/pip install -r requirements.lock
-.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@7aa9968e72e7c09a28e68af383471184af9f5f52"
+.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@3a9378e27eaab54077d326ba5fbbfc6de569f56b"
 .venv/bin/pip install -e ".[dev]" --no-deps
 .venv/bin/python -m pytest tests -q        # tests that need benchmark data or a model server skip
 ```

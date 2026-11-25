@@ -1407,6 +1407,7 @@ function ishow(f, v) {                     // a value as the panel shows it (a z
   if (f.kind === "bands") return `${v[0]} / ${v[1]}`;
   if (f.kind === "switch") return v ? "on" : "off";
   if (f.kind === "choice") return (f.choice_labels && f.choice_labels[v]) || String(v).replace(/_/g, " ");
+  if (f.kind === "quantity" && typeof v === "string") return v;      // given with its unit ("110 degC")
   return `${typeof v === "number" ? +v.toPrecision(6) : v}${f.unit ? " " + f.unit : ""}`;
 }
 function isumRender() { chipsRender(); }
@@ -1425,6 +1426,10 @@ function irow(f) {
   if (f.kind === "choice") ctl = `<select data-ik="${k}" aria-label="${esc(f.label)}"><option value="">Default${f.default != null ? ` (${esc(ishow(f, f.default))})` : ""}</option>${f.choices.map(c => `<option value="${esc(c)}"${has && v === c ? " selected" : ""}>${esc((f.choice_labels && f.choice_labels[c]) || c.replace(/_/g, " "))}</option>`).join("")}</select>`;
   else if (f.kind === "switch") ctl = `<select data-ik="${k}" aria-label="${esc(f.label)}"><option value="">Default (${f.default ? "on" : "off"})</option><option value="1"${has && v ? " selected" : ""}>On</option><option value="0"${has && !v ? " selected" : ""}>Off</option></select>`;
   else if (f.kind === "bands") ctl = `<input type="number" step="0.01" min="0" max="1" data-ik="${k}" data-bi="0" value="${has ? v[0] : ""}" placeholder="${f.default[0]}" aria-label="clean below"><span class="u">to</span><input type="number" step="0.01" min="0" max="1" data-ik="${k}" data-bi="1" value="${has ? v[1] : ""}" placeholder="${f.default[1]}" aria-label="shale-prone above"><span class="u">v/v</span>`;
+  else if (f.kind === "quantity") {        // a number, read in the unit shown, or a number with its own unit
+    const ph = f.default == null ? "auto" : f.default;
+    ctl = `<input type="text" spellcheck="false" autocomplete="off" data-ik="${k}" value="${has ? esc(String(v)) : ""}" placeholder="${esc(ph)}" aria-label="${esc(f.label)}" title="A number${f.unit ? ` in ${esc(f.unit)}` : ", in the well's depth unit"}, or a number with its unit">${f.unit ? `<span class="u">${esc(f.unit)}</span>` : ""}`;
+  }
   else {
     const zone = f.key === "zone_min_thickness_m", u = zone ? depthUnit() : f.unit;
     const shown = has ? (zone && u === "ft" ? +(v / FT).toFixed(3) : v) : "";
@@ -1467,6 +1472,10 @@ function iset(key, el) {
     if (a === "" && b === "") delete S.interp[key]; else S.interp[key] = [a === "" ? f.default[0] : +a, b === "" ? f.default[1] : +b];
   } else if (f.kind === "choice") { if (el.value === "") delete S.interp[key]; else S.interp[key] = el.value; }
   else if (f.kind === "switch") { if (el.value === "") delete S.interp[key]; else S.interp[key] = el.value === "1"; }
+  else if (f.kind === "quantity") {       // a bare number stays a number; a number with a unit goes as written
+    const s = el.value.trim();
+    if (s === "") delete S.interp[key]; else S.interp[key] = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(s) ? +s : s;
+  }
   else if (el.value === "") delete S.interp[key];
   else { let x = +el.value; if (key === "zone_min_thickness_m" && depthUnit() === "ft") x *= FT; S.interp[key] = f.kind === "integer" ? Math.round(x) : x; }
   irefresh(key); ischedule();

@@ -62,7 +62,7 @@ def test_no_record_line_is_dropped_or_rewritten(case):
                                         ("hw3", "N-D clay point: default"),
                                         ("hw3", "No clean porous rock reads as water"),
                                         ("1671", "The Rw in use looks too high"),
-                                        ("1671", "SWIRR_APP = 0.200 fallback")])
+                                        ("1671", "SWIRR_APP = 0.200 (default)")])
 def test_the_defaults_fallbacks_and_checks_reach_the_map(case, line):
     from petroharness.agent.map import render
     f = formation_of(CASES[case])
@@ -460,7 +460,7 @@ def test_a_result_not_one_per_sample_is_given_for_each_lithology():
 # --- O2: Petrophys's advice as data -----------------------------------------------------------------------------------
 
 def test_petrophys_advice_names_its_inputs_as_data_and_the_call_door_reads_them():
-    """Petrophys's advice ('pass formations=...', 'add steps.mud_filtrate(rmf=..., rmf_temp_f=...)') carries the inputs
+    """Petrophys's advice ('pass formations=...', 'add steps.mud_filtrate(rmf=..., rmf_meas_temp=...)') carries the inputs
     it asks for (petrophys._internal.advice.Advice: a str with .inputs), through exceptions, warnings, joins and
     rewordings; the call door collects them from every message a call shows and from its refusal's exception chain
     (engine.advised), and reads no sentence for them (the regex over 'name=' is gone)."""
@@ -484,7 +484,7 @@ def test_petrophys_advice_names_its_inputs_as_data_and_the_call_door_reads_them(
         assert E.ADVISED.get() == ["salinity", "bht_f", "rmf"]
     finally:
         E.ADVISED.reset(token)
-    said = schemas.advice(["rmf", "rmf_temp_f"], "calculate", ["property", "method", "parameters"], {"property": "saturation"})
+    said = schemas.advice(["rmf", "rmf_meas_temp"], "calculate", ["property", "method", "parameters"], {"property": "saturation"})
     assert said.startswith('as tool calls: {"calculate": {"property": "mud_filtrate_resistivity"')
     assert schemas.advice([], "stats", ["curves"], {}) == ""
 
@@ -579,9 +579,14 @@ def test_a_step_refusal_names_the_calls_that_take_the_inputs_it_asks_for():
 
 def test_petrophys_leaves_no_input_asked_for_in_plain_text():
     """Petrophys's own check (petrophys._internal.advice.unwrapped_asks): every message that asks for an input by name
-    is an Advice carrying it, so the call door never reads a sentence for it."""
+    is an Advice carrying it, so the call door never reads a sentence for it. The call door reaches the functions of
+    the verbs, none of which is a plot: an ask of Petrophys's plots (petrophys.visualization, drawn by figures.py,
+    whose refusals are the figure's errors) is not the call door's. Petrophys 3a9378e has two there."""
     from petrophys._internal.advice import unwrapped_asks
-    assert unwrapped_asks() == []
+    from petroharness.agent.library import api as A
+    verbs = ("calculate", "estimate", "calibrate", "classify", "summarize", "check", "what_if")
+    assert not [fn.qualified for v in verbs for fn in A.functions(v) if ".visualization." in f".{fn.qualified}"]
+    assert [a for a in unwrapped_asks() if not a.startswith("visualization/")] == []
 
 
 # --- R10: a range written with a unit's own depths is that unit --------------------------------------------------------
@@ -1177,6 +1182,23 @@ def test_a_condition_on_a_curves_own_percentile_uses_the_percentile_the_tools_sh
         int(sel.mask.sum()) == int(np.sum(gr[np.isfinite(gr)] < p25))
     for written in (f"{c} below its 25th percentile", f"{c} < P25", sel.read):
         assert np.array_equal(select(f, written).mask, sel.mask), written
+
+
+def test_a_percentile_condition_names_its_first_word_that_is_no_curve_in_every_process():
+    """Golden replay (danish tf87b0df7db, 1.1.0): a statistics list written as a condition ("mean, median, p10, p90,
+    min, max with depths") was refused naming 'MAX' in one process and 'WITH' in another (the words were a set): the
+    replayed request differed from the recorded one. The first such word as written is named."""
+    import os
+    import subprocess
+    import sys
+    code = ("import sys; sys.path[:0] = ['src', 'tests', 'tests/agent']; from _wells import CASES, formation_of\n"
+            "from petroharness.agent.engine import select\n"
+            "try:\n    select(formation_of(CASES['brent']), 'mean, median, p10, p90, min, max with depths')\n"
+            "except Exception as e:\n    print(str(e).split(';')[0])\n")
+    root = Path(__file__).resolve().parents[1]
+    said = {subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True,
+                           env={**os.environ, "PYTHONHASHSEED": seed}).stdout.strip() for seed in ("1", "2", "3", "4")}
+    assert said == {"'MEAN' is not a curve here"}, said
 
 
 @pytest.mark.parametrize("case", ["brent", "hw3", "cheal"])

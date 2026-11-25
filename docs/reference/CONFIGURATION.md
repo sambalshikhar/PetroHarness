@@ -285,9 +285,9 @@ it from the data.
 | `hc_type` | `oil`, `gas` | `oil` | Hydrocarbon type, "oil" or "gas": the fluid of the neutron-density hydrocarbon correction and, under "current", the PHIT rule in neutron-density crossover (PHID > PHIN + 0.05): the root-mean-square of PHID and PHIN (Gaymard and Poupon, 1968) for gas, density porosity for oil. | Porosity and matrix |
 | `rho_hc` | number, g/cm³ | from the data | Hydrocarbon density in the flushed zone, g/cm3, for the hydrocarbon correction and the core matrix-density check of auto lithology. | Porosity and matrix |
 | `hc_hydrogen_index` | number | from the data | Hydrogen index of the hydrocarbon for the neutron hydrocarbon correction. | Porosity and matrix |
-| `rw` | number, ohm.m | from the data | Formation water resistivity Rw, ohm.m, at rw_meas_temp_f. | Formation water |
+| `rw` | number, ohm.m | from the data | Formation water resistivity Rw, ohm.m, at rw_meas_temp. | Formation water |
 | `salinity_ppm` | number, ppm | from the data | Formation water salinity, ppm NaCl equivalent: another way to give the formation water. | Formation water |
-| `rw_meas_temp_f` | number, °F | from the data | Temperature of rw, degF. | Formation water |
+| `rw_meas_temp` | quantity, °F | from the data | Temperature of rw, e.g. "230 degF" or "110 degC". | Formation water |
 | `allow_default_rw` | switch | `true` | Use a 0.05 ohm.m default Rw when no Rw source is found (the warnings say so). | Formation water |
 | `sw_model` | `auto`, `archie`, `north_sea`, `nigeria_schlumberger`, `simandoux`, `modified_simandoux`, `indonesia`, `dual_water`, `waxman_smits` | `auto` | "auto" (routed per sample by clay content) or one of "archie", "simandoux" (Sw in the clay term, Bardon-Pied), "modified_simandoux" (sand term over 1 - Vcl), "indonesia", "dual_water", "waxman_smits", "north_sea", "nigeria_schlumberger". | Water saturation |
 | `a` | number | from the data | Tortuosity factor a. | Water saturation |
@@ -297,7 +297,7 @@ it from the data.
 | `cec` | number, meq/100 g | from the data | Cation exchange capacity, meq/100 g (0 to 150; pure smectite is 80-150). | Water saturation |
 | `b_coeff` | number | from the data | Equivalent counter-ion conductance B, (S/m)/(meq/cm3): at 25 degC 4.6 * (1 - 0.6 * exp(-0.77 / Rw)) (Waxman and Smits, 1968), and higher at reservoir temperature. | Water saturation |
 | `rwb` | number, ohm.m | from the data | Bound-water resistivity, ohm.m, from lab data or the LAS header. | Water saturation |
-| `rtsh` | number, ohm.m | from the data | Shale resistivity, ohm.m. | Water saturation |
+| `rtsh` | number, ohm.m | from the data | Shale resistivity Rsh, ohm.m, of the shaly-sand equations (Simandoux, modified Simandoux, Indonesia, North Sea, Nigeria). | Water saturation |
 | `vsh_exp` | number | `1.6` | Shale exponent of the North Sea model. | Water saturation |
 | `shale_exp` | number | `1.6` | Shale exponent of the Nigeria-Schlumberger model. | Water saturation |
 | `sw_routing_vcl_cutoff` | number, v/v | from the data | Clay volume, v/v, from which sw_model="auto" uses a shaly-sand equation rather than Archie. | Water saturation |
@@ -310,19 +310,19 @@ it from the data.
 | `phie_cutoff` | number, v/v | `0.08` (policy) | Minimum effective porosity for net reservoir, v/v. | Net reservoir and pay |
 | `sw_cutoff` | number, v/v | `0.7` (policy) | Maximum water saturation for net pay, v/v. | Net reservoir and pay |
 | `reuse_input_resflag` | switch | `false` | Reuse a RESFLAG or NET_RES curve already on the well as the reservoir flag that picks the SWIRR_APP samples before permeability. | Net reservoir and pay |
-| `bht_f` | number, °F | from the data | Bottom-hole temperature, degF. | Temperature |
-| `surface_temp_f` | number, °F | `68.0` | Surface (mean annual) temperature, degF, at depth 0 of the linear temperature profile (offshore, the sea surface rather than the seabed). | Temperature |
-| `td_ft` | number, ft | from the data | Total depth for the BHT, in feet. | Temperature |
-| `gradient_f_per_100ft` | number | from the data | Geothermal gradient, degF/100 ft (1 degC/100 m is 0.549 degF/100 ft), from surface_temp_f at depth 0. | Temperature |
+| `bht` | quantity, °F | from the data | Bottom-hole temperature, e.g. "230 degF" or "110 degC". | Temperature |
+| `surface_temp` | quantity, °F | from the data | Surface (mean annual) temperature at depth 0 of the linear temperature profile (offshore, the sea surface rather than the seabed); default 68 degF. | Temperature |
+| `td` | quantity | from the data | Total depth of the BHT, e.g. "2650 m" or "8700 ft"; a bare number is in the well's depth unit. | Temperature |
+| `temperature_gradient` | quantity, °F/100 ft | from the data | Geothermal gradient from surface_temp at depth 0, e.g. "30 degC/km", "3 degC/100m" or "1.65 degF/100ft"; a bare number is read as degF/100 ft, with a warning. | Temperature |
 | `mud_type` | `WBM`, `OBM` | `WBM` | "WBM" (water-based) or "OBM" (oil-based) mud. | Mud |
 | `mud_water` | `fresh`, `salt` | `fresh` | "fresh" or "salt" mud, which sets the Rm-to-Rmf factor. | Mud |
 | `mud_has_clay_or_kcl` | switch | `false` | The mud contains clay or KCl, so the SP log is not used: Rw is not estimated from the SP, and no VCL_SP is computed. | Mud |
-| `rmf_at_meas_temp` | number, ohm.m | from the data | Mud-filtrate resistivity Rmf at rmf_meas_temp_f, ohm.m. | Mud |
-| `rmf_meas_temp_f` | number, °F | from the data | Temperature at which rmf_at_meas_temp was measured, degF. | Mud |
+| `rmf_at_meas_temp` | number, ohm.m | from the data | Mud-filtrate resistivity Rmf at rmf_meas_temp, ohm.m. | Mud |
+| `rmf_meas_temp` | quantity, °F | from the data | Temperature at which rmf_at_meas_temp was measured, e.g. "75 degF" or "24 degC". | Mud |
 | `rmf_salinity_ppm` | number, ppm | from the data | Mud-filtrate salinity, ppm NaCl equivalent (alternative to Rmf). | Mud |
 | `rmf_chlorides_mg_l` | number, mg/l | from the data | Mud-filtrate chlorides (Cl-), mg/l, as on the mud report and the LAS header CLFL. | Mud |
-| `rm` | number, ohm.m | from the data | Mud resistivity Rm at rm_meas_temp_f, ohm.m (Rmf is derived from it). | Mud |
-| `rm_meas_temp_f` | number, °F | from the data | Temperature at which rm was measured, degF. | Mud |
+| `rm` | number, ohm.m | from the data | Mud resistivity Rm at rm_meas_temp, ohm.m (Rmf is derived from it). | Mud |
+| `rm_meas_temp` | quantity, °F | from the data | Temperature at which rm was measured, e.g. "75 degF" or "24 degC". | Mud |
 | `lithology_domain` | `auto`, `clastic`, `carbonate`, `evaporite` | from the data | Broad interpretation domain: "clastic" (the default when unset), "carbonate", "evaporite" or "auto". | Lithology |
 | `lithology_source` | `auto`, `external`, `vendor`, `computed`, `config` | `auto` | Lithology source. | Lithology |
 | `carbonate_calibration` | `generic`, `costa` | from the data | Calibration of the carbonate-domain mineral solve, which takes calcite and dolomite from bulk density and closure. | Lithology |

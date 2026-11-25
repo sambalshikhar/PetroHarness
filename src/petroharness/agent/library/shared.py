@@ -103,8 +103,8 @@ def produces(kind: str, params: dict) -> list:
 def _requires(kind: str) -> tuple:
     _, S = _library()
     try:
-        st = getattr(S, kind)(**({"rw": 0.1, "rw_temp_f": 75.0} if kind == "formation_water" else
-                                 {"rmf": 0.1, "rmf_temp_f": 75.0} if kind == "mud_filtrate" else {}))
+        st = getattr(S, kind)(**({"rw": 0.1, "rw_meas_temp": "75 degF"} if kind == "formation_water" else
+                                 {"rmf": 0.1, "rmf_meas_temp": "75 degF"} if kind == "mud_filtrate" else {}))
     except Exception:  # noqa: BLE001  (a step the library will not build without its inputs reads nothing listed)
         return ()
     return tuple(n.strip() for r in st.requires for n in str(r).split(" or "))
@@ -238,7 +238,8 @@ def run(f: Formation, kind: str, changes: dict, with_downstream: bool = True) ->
     tied = [q for p, v in changes.items() if isinstance(v, str) for q in base_p if q.startswith(p + "_") and q not in changes]
     alt_p = {**{k: v for k, v in base_p.items() if k not in tied}, **changes}
     if kind == "formation_water" and not alt_p.get("rw") and not alt_p.get("salinity_ppm"):
-        raise ToolError("water_resistivity needs rw (ohm.m) with rw_temp_f (degF), or salinity_ppm: the record states "
+        raise ToolError("water_resistivity needs rw (ohm.m) with rw_meas_temp (its temperature, e.g. \"75 degF\"), or "
+                        "salinity_ppm: the record states "
                         "no single Rw for this well")
     alt_first = _step(kind, alt_p, tuple(changes))
     dropped = list(DROPPED.names)
@@ -345,8 +346,24 @@ def _label(label, changes: dict) -> str:
     return lab if re.match(r"[A-Z]", lab) else f"X{lab}"
 
 
-def _shown(v) -> str:
-    return num(float(v)) if _num(v) else str(v)
+def quantity(v) -> tuple:
+    """(number, unit) of a value Petrophys gives with its unit, as it records a setting taken with one ((230.0, "degF"),
+    or the text "230 degF"); (None, None) for anything else."""
+    if isinstance(v, (tuple, list)) and len(v) == 2 and _num(v[0]) and isinstance(v[1], str):
+        return float(v[0]), v[1]
+    m = re.fullmatch(r"\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*([A-Za-z][A-Za-z0-9/._ ]*)\s*", v) if isinstance(v, str) else None
+    return (float(m.group(1)), m.group(2).strip()) if m else (None, None)
+
+
+def _shown(v, row=None) -> str:
+    """A value as the tools write it: a number (registered on the row when one is given), a number with its unit
+    ("230 degF"), or its text."""
+    n, unit = quantity(v)
+    if n is not None:
+        return f"{row.v(n) if row is not None else num(n)} {unit}"
+    if _num(v):
+        return row.v(v) if row is not None else num(float(v))
+    return str(v)
 
 
 def used(kind: str, params: dict) -> list:
