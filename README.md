@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/petroharness/ui/static/img/petroharness_logo.svg" alt="PetroHarness" width="420">
+<img src="https://raw.githubusercontent.com/sambalshikhar/PetroHarness/main/src/petroharness/ui/static/img/petroharness_logo.svg" alt="PetroHarness" width="420">
 
 ### An agentic harness that makes formation evaluation<br>auditable and more accurate.
 
@@ -10,13 +10,13 @@ to the log.
 
 **[Website](https://welllogbench.com/petroharness/) · [Documentation](https://welllogbench.com/petroharness/docs/) · [Quick start](#quick-start) · [Results](#results) · [Features](#features)**
 
-[![Version](https://img.shields.io/badge/version-1.1.1-011e3f)](CHANGELOG.md)
-[![Python](https://img.shields.io/badge/python-3.10-011e3f)](#quick-start)
+[![PyPI](https://img.shields.io/pypi/v/petroharness?color=011e3f&label=pypi)](https://pypi.org/project/petroharness/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-011e3f)](#quick-start)
 [![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](https://welllogbench.com/petroharness/docs/models.html)
 [![Calculations](https://img.shields.io/badge/calculations-Petrophys-197e6f)](https://github.com/sambalshikhar/petrophys)
-[![Licence](https://img.shields.io/badge/licence-CC%20BY%204.0-011e3f)](LICENSE)
+[![Licence](https://img.shields.io/badge/licence-CC%20BY%204.0-011e3f)](https://github.com/sambalshikhar/PetroHarness/blob/main/LICENSE)
 
-<img src="docs/images/ui-first-page.png" alt="The first page of the PetroHarness web UI: drop a LAS file or pick a sample well, choose the interval and the interpretation settings, and ask a question in your own words" width="100%">
+<img src="https://raw.githubusercontent.com/sambalshikhar/PetroHarness/main/docs/images/ui-first-page.png" alt="The first page of the PetroHarness web UI: drop a LAS file or pick a sample well, choose the interval and the interpretation settings, and ask a question in your own words" width="100%">
 
 </div>
 
@@ -25,12 +25,21 @@ to the log.
 **1. Install**
 
 ```bash
-python3.10 -m venv .venv
-.venv/bin/pip install -r requirements.lock
-.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@821afba53cff552a01ef9cd052b1301e2b2897a0"
-.venv/bin/pip install -e . --no-deps
-source .venv/bin/activate
+pip install petroharness
 ```
+
+Python 3.10 or later; [Petrophys](https://pypi.org/project/petrophys/) comes with it.
+
+<details>
+<summary>From source, to change the code</summary>
+
+```bash
+git clone https://github.com/sambalshikhar/PetroHarness.git && cd PetroHarness
+python3.10 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.lock      # the versions the tests run with
+pip install -e .
+```
+</details>
 
 **2. Connect a model**
 
@@ -98,7 +107,7 @@ The answer is printed, and `answer.md` and `trace.json` (every model call and ev
 [WellLogBench](https://welllogbench.com), the models we tested score +3.0 to +8.6 points higher with PetroHarness.
 Our post-trained K2-Horizon-7B goes from 64.0 to 69.3.
 
-<img src="docs/images/results-with-without.svg" alt="The models we tested on WellLogBench's 347 single-formation questions, each without the harness and with PetroHarness. They score higher with the harness, by 3.0 to 8.6 points." width="100%">
+<img src="https://raw.githubusercontent.com/sambalshikhar/PetroHarness/main/docs/images/results-with-without.svg" alt="The models we tested on WellLogBench's 347 single-formation questions, each without the harness and with PetroHarness. They score higher with the harness, by 3.0 to 8.6 points." width="100%">
 
 <sub>W is WellLogBench's overall score, from 0 to 100. Without the harness, the same model answers from the well's
 full Petrophys interpretation, given to it in one prompt. Post-trained (ours): after our WellLogLLM post-training for
@@ -239,12 +248,12 @@ card, follow the recipes in [Extending](https://welllogbench.com/petroharness/do
 One question on GeoLink well 30/6-5, Brent Group, from the first page to an answer you can check. The same tour,
 screen by screen: [A tour in pictures](https://welllogbench.com/petroharness/docs/tour.html).
 
-<img src="docs/images/ui-30_6-5-brent-answer.png" alt="The answer in the web UI: the answer in brief, its five findings by confidence, the fourteen computed results they rest on, and the checker's outcome, every number traced to a computed result" width="100%">
+<img src="https://raw.githubusercontent.com/sambalshikhar/PetroHarness/main/docs/images/ui-30_6-5-brent-answer.png" alt="The answer in the web UI: the answer in brief, its five findings by confidence, the fourteen computed results they rest on, and the checker's outcome, every number traced to a computed result" width="100%">
 
 **The answer.** Conclusion first, then its findings by confidence, the computed results they rest on, and the
 checker's outcome.
 
-<img src="docs/images/ui-30_6-5-brent-lineage.png" alt="How it was computed: a click on 0.1988 lights its path from the measured logs, through the Petrophys steps with their methods and parameters, to the results the model opened, the finding that cites them and the answer" width="100%">
+<img src="https://raw.githubusercontent.com/sambalshikhar/PetroHarness/main/docs/images/ui-30_6-5-brent-lineage.png" alt="How it was computed: a click on 0.1988 lights its path from the measured logs, through the Petrophys steps with their methods and parameters, to the results the model opened, the finding that cites them and the answer" width="100%">
 
 **Every number, traced.** A click on 0.1988 v/v lights its path: the measured logs, the Petrophys steps that computed
 the curve, the two results that show it, the finding that cites them and the answer.
@@ -343,7 +352,7 @@ Eleven questions worked through on wells that ship with Petrophys:
 <tr>
 <td width="200" align="center" valign="middle">
 <a href="https://github.com/sambalshikhar/petrophys">
-<img src="docs/images/brand/petrophys-logo.png" alt="Petrophys" width="180">
+<img src="https://raw.githubusercontent.com/sambalshikhar/PetroHarness/main/docs/images/brand/petrophys-logo.png" alt="Petrophys" width="180">
 </a>
 </td>
 <td valign="middle">
@@ -351,7 +360,7 @@ Eleven questions worked through on wells that ship with Petrophys:
 [Petrophys](https://github.com/sambalshikhar/petrophys) turns well logs into traceable petrophysical
 interpretations: clay volume, porosity, water saturation, permeability, rock quality and net pay. Every step records
 its method, inputs, outputs and parameters. PetroHarness reads that record and never recomputes petrophysics on its
-own. Documentation: [petrophys.netlify.app](https://petrophys.netlify.app).
+own. Documentation: [welllogbench.com/petrophys/docs](https://welllogbench.com/petrophys/docs/).
 
 </td>
 </tr>
@@ -360,7 +369,7 @@ own. Documentation: [petrophys.netlify.app](https://petrophys.netlify.app).
 ## Documentation
 
 The documentation site: **[welllogbench.com/petroharness/docs](https://welllogbench.com/petroharness/docs/)**. The
-same pages live in this repository under [docs/](docs/README.md).
+same pages live in this repository under [docs/](https://github.com/sambalshikhar/PetroHarness/blob/main/docs/README.md).
 
 | Start | Use | Understand |
 |---|---|---|
@@ -370,7 +379,21 @@ same pages live in this repository under [docs/](docs/README.md).
 | [Read the work](https://welllogbench.com/petroharness/docs/trace.html) | [Interpretation settings](https://welllogbench.com/petroharness/docs/interpretation-settings.html) | [Extending](https://welllogbench.com/petroharness/docs/extending.html) |
 | [Audit an answer](https://welllogbench.com/petroharness/docs/evidence.html) | [Skills](https://welllogbench.com/petroharness/docs/skills.html) | [Development and testing](https://welllogbench.com/petroharness/docs/development.html) |
 
-Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Releases: [CHANGELOG.md](CHANGELOG.md).
+Contributing: [CONTRIBUTING.md](https://github.com/sambalshikhar/PetroHarness/blob/main/CONTRIBUTING.md). Releases: [CHANGELOG.md](https://github.com/sambalshikhar/PetroHarness/blob/main/CHANGELOG.md).
+
+## Data and acknowledgements
+
+The results come from [WellLogBench](https://welllogbench.com), built on public well data: we thank
+[GEOLINK](https://www.geolink-s2.com/) and the Norwegian Offshore Directorate for the North Sea wells (GeoLink),
+Jorge Costa Gomes, Sebastian Geiger and Daniel Arnold of Heriot-Watt University for the COSTA model, and the
+Geological Survey of Denmark and Greenland (GEUS) for the Danish wells and their formation tops. The quick start, the
+documentation and the tests use wells that ship with Petrophys, from GeoLink, COSTA, the Taranaki Basin Curated Well
+Logs Dataset, the Kansas Geological Survey and Teapot Dome (RMOTC, U.S. Department of Energy). We thank the domain
+experts from ThinkOnward for their contributions to defining the problem scope and validating the benchmark
+requirements.
+
+Each dataset keeps its own licence and attribution, and so does material here derived from it: sources, licences
+and citations are in [THIRD_PARTY_DATA.md](https://github.com/sambalshikhar/PetroHarness/blob/main/THIRD_PARTY_DATA.md).
 
 ## Citation
 
@@ -394,12 +417,13 @@ If you use PetroHarness in your work, please cite the paper:
 
 ## Licence
 
-PetroHarness is released under the [Creative Commons Attribution 4.0 International licence](LICENSE) (CC BY 4.0):
-you may share and adapt it, with credit. Petrophys and the benchmark datasets keep their own licences.
+PetroHarness is released under the [Creative Commons Attribution 4.0 International licence](https://github.com/sambalshikhar/PetroHarness/blob/main/LICENSE) (CC BY 4.0):
+you may share and adapt it, with credit. Petrophys and the datasets keep their own licences: see
+[Data and acknowledgements](#data-and-acknowledgements).
 
 <div align="center">
 <br>
-<img src="src/petroharness/ui/static/img/petroharness_logo.svg" alt="PetroHarness" width="160">
+<img src="https://raw.githubusercontent.com/sambalshikhar/PetroHarness/main/src/petroharness/ui/static/img/petroharness_logo.svg" alt="PetroHarness" width="160">
 &nbsp;&nbsp;&nbsp;
-<img src="docs/images/brand/petrophys-logo.png" alt="Petrophys" width="110">
+<img src="https://raw.githubusercontent.com/sambalshikhar/PetroHarness/main/docs/images/brand/petrophys-logo.png" alt="Petrophys" width="110">
 </div>

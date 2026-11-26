@@ -532,7 +532,23 @@ def _installed_build(package: str) -> str:
     if commit:
         return str(commit)
     record = dist.read_text("RECORD")
-    return f"files-{hashlib.sha256(record.encode()).hexdigest()[:12]}" if record else ""
+    return f"files-{hashlib.sha256(chr(10).join(_own_files(record)).encode()).hexdigest()[:12]}" if record else ""
+
+
+def _own_files(record: str) -> list:
+    """The lines of an installed distribution's RECORD that are the distribution itself, sorted: not the bytecode the
+    installer compiles (its names carry the Python version), not the scripts it writes outside the package (their
+    first line names the environment's Python), not its bookkeeping. One release is then one build on every Python,
+    in every environment and with every installer."""
+    skip = ("RECORD", "INSTALLER", "REQUESTED", "direct_url.json")
+    own = []
+    for line in record.splitlines():
+        path = line.split(",")[0]
+        if (not line.strip() or path.startswith("../") or "__pycache__/" in path or path.endswith(".pyc")
+                or (".dist-info/" in path and path.rsplit("/", 1)[-1] in skip)):
+            continue
+        own.append(line)
+    return sorted(own)
 
 
 @functools.lru_cache(maxsize=256)

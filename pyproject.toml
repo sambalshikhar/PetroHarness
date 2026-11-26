@@ -1,15 +1,29 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "petroharness"
-version = "1.1.1"
+version = "1.2.0"
 description = "Answers petrophysics questions about an interval of a well from its raw LAS: Petrophys calculates, the harness investigates and records, a language model interprets"
-license = {text = "CC-BY-4.0"}
+readme = "README.md"
+license = "CC-BY-4.0"
+license-files = ["LICENSE", "THIRD_PARTY_DATA.md"]
+authors = [{name = "PetroHarness Contributors"}]
+keywords = ["petrophysics", "formation evaluation", "well logs", "LAS", "LLM", "agents", "geoscience"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 requires-python = ">=3.10"
 dependencies = [
-    "petrophys>=3.0",        # pinned at 821afba (README: install)
+    "petrophys==3.0.0",      # the Petrophys release it is tested with (PyPI)
     "langgraph>=1.2",
     "lasio",                 # LAS header read (depth unit) without the data section
     "numpy",
@@ -18,6 +32,13 @@ dependencies = [
     "pyyaml",
     "openai>=1.40",
 ]
+
+[project.urls]
+Homepage = "https://welllogbench.com/petroharness/"
+Documentation = "https://welllogbench.com/petroharness/docs/"
+Repository = "https://github.com/sambalshikhar/PetroHarness"
+Issues = "https://github.com/sambalshikhar/PetroHarness/issues"
+Changelog = "https://github.com/sambalshikhar/PetroHarness/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-xdist", "ruff"]

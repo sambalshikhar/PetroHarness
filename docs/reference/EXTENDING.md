@@ -195,8 +195,9 @@ added to an already mapped package needs no harness change at all.
 3. **Its declaration, in Petrophys.** Each parameter's kind (`petrophys/_function_declarations.py`, read through
    `petrophys.function_schema`); Petrophys's `scripts/check_function_schema.py` fails its CI when one is missing. The
    harness binds and describes the function from it.
-4. **Install** the Petrophys build that has it. The harness pins one commit (`821afba`): README "Install" and
-   `.github/workflows/tests.yml` install it beside `requirements.lock`, which holds the other dependencies.
+4. **Install** the Petrophys release that has it. The harness pins one release (`petrophys==3.0.0` in
+   `pyproject.toml`, from PyPI); `.github/workflows/tests.yml` installs it beside `requirements.lock`, which holds the
+   other dependencies.
 5. **Tests.** `tests/agent/test_library_api.py`: the registry, search and run, the binder; its run tests need the
    sample wells.
 6. **Gates.** The verb's description ends with a line counting and grouping its functions
@@ -227,7 +228,7 @@ with Petrophys's defaults for the inputs it does not name.
 | `Fn` | dataclass | | `name`, `path`, `verb`, `summary` (the docstring's first sentence, 160 characters), `params` (annotation, default, the docstring's Parameters line, 200 characters), `returns` (the Returns section, 300 characters). | `library.api.Fn`, `_param_docs` |
 | `Fn.kinds`, `Fn.samplewise` | dict, bool | | Each parameter's declaration and whether the function takes one sample (Petrophys's `function_schema.declaration`). The binder reads a named input as its kind; the search shows each input's kind with what this well has for it. | `library.api.registry`, `bind`, `_facts` |
 | `MAX_FOUND` | integer | 8 | Functions a `search` lists. | `library.api.MAX_FOUND` |
-| Counts | per verb | | With the pinned Petrophys (821afba): calculate 83, estimate 62, calibrate 51, classify 39, summarize 39, check 28, what_if 5 (307 in all). | `library.api.functions` |
+| Counts | per verb | | With the pinned Petrophys (3.0.0): calculate 83, estimate 62, calibrate 51, classify 39, summarize 39, check 28, what_if 5 (307 in all). | `library.api.functions` |
 
 </details>
 

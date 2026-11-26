@@ -16,12 +16,12 @@
   "samples": 768,
   "from": "tops file formations_30_6-5.csv, base: stated base"
  },
- "petrophys": "3.0.0@821afba53cff552a01ef9cd052b1301e2b2897a0",
+ "petrophys": "3.0.0@files-6ddae85c6081",
  "setup": {
-  "hash": "cac6287a6aeb",
-  "harness": "1.1.0",
-  "commit": "05537c77",
-  "petrophys": "3.0.0@821afba53cff552a01ef9cd052b1301e2b2897a0",
+  "hash": "05b5dfaa2dc8",
+  "harness": "1.2.0",
+  "commit": "df7644f4",
+  "petrophys": "3.0.0@files-6ddae85c6081",
   "components": {
    "C1": "07d1417c992e",
    "C2": "f00f144e3af9",

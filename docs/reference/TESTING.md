@@ -165,7 +165,7 @@ The workflow `tests` runs on every push to `main` or `dev` and on every pull req
 | `runs-on` | runner | `ubuntu-latest` | The machine. | `.github/workflows/tests.yml` |
 | `timeout-minutes` | integer | 45 | The job's time limit. | `tests.yml` |
 | Python | version | `3.10`, pip cache on | `actions/setup-python@v5`. | `tests.yml` |
-| Install | steps | | `pip install -r requirements.lock`; Petrophys from GitHub at commit `821afba53cff552a01ef9cd052b1301e2b2897a0`; `pip install -e ".[dev]" --no-deps`. | `tests.yml` |
+| Install | steps | | `pip install -r requirements.lock`; Petrophys 3.0.0 from PyPI; `pip install -e ".[dev]" --no-deps`. | `tests.yml` |
 | Lint | step | | `ruff check src tests`. | `tests.yml` |
 | Tests | step | `LANGSMITH_TRACING=false` | `python -m pytest tests -q -p no:cacheprovider`, with no data config, no model server and no `WELLLOGBENCH`. | `tests.yml` |
 

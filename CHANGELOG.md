@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0 (2026-11-26)
+
+PetroHarness installs from PyPI, and credits the data behind its results and its examples.
+
+- **`pip install petroharness`.** PetroHarness and Petrophys are on PyPI; PetroHarness depends on `petrophys==3.0.0`,
+  the release it is tested with, in place of a Petrophys commit installed from GitHub. Installing from a clone is in
+  the README's quick start and in CONTRIBUTING.
+- **Data and acknowledgements.** `THIRD_PARTY_DATA.md`, shipped in the package, credits the WellLogBench data the
+  results come from (GeoLink, COSTA, the Danish wells of GEUS) and the Petrophys sample wells the quick start, the
+  documentation and the tests use (GeoLink, COSTA, Taranaki, the Kansas Geological Survey, Teapot Dome), each with its
+  licence; the README has a section on it.
+- **Petrophys's documentation** is at [welllogbench.com/petrophys/docs](https://welllogbench.com/petrophys/docs/).
+- **One build of Petrophys per release.** An installed Petrophys is identified by its own files, not the bytecode pip
+  writes at install, so a release is the same build on every Python version; the public mini set replays with
+  Petrophys 3.0.0 from PyPI.
+
 ## 1.1.1 (2026-11-26)
 
 PetroHarness on Petrophys's merged mineral solver. On wells with a lithology log every value is as in 1.1.0; mineral

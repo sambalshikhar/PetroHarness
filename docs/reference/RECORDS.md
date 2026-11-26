@@ -213,7 +213,7 @@ Set in `agent/graph.py` unless noted.
 | `answer` | str | always | The delivered answer | `ask.py`, `session/graph.py`, `cli.py` |
 
 ```json
-{"task_id": "a2f8275dd57", "well": "30_6-5", "formation": "BRENT GP.", "harness": "petroharness 1.1.1",
+{"task_id": "a2f8275dd57", "well": "30_6-5", "formation": "BRENT GP.", "harness": "petroharness 1.2.0",
  "commit": "<commit>", "model": "K2-Horizon-7B", "skills": {"library": "researched", "version": "18c03ad5d3f8"},
  "components": {"C1": "6f8f4c39893a", "...": "..."}, "reads_depth": true, "status": "ok", "seconds": 903.5}
 ```
@@ -601,7 +601,7 @@ The setup record of the process answering from this question on ([section 9](#9-
 
 ```json
 {"seq": 3, "time": "<time>", "turn": 1, "type": "setup", "hash": "d70dbbf039dd",
- "harness": "1.1.1", "commit": "<commit>", "petrophys": "3.0.0@files-c5de047fe601",
+ "harness": "1.2.0", "commit": "<commit>", "petrophys": "3.0.0@files-c5de047fe601",
  "components": {"C1": "6f8f4c39893a", "...": "..."}, "functions": "1e177d0c7ca2", "model": "<served model name>",
  "card": "33012b760d52", "data": "61dcbf7ecfe4", "policy": "7631a4a859eb", "writer": "open", "max_steps": 8, "...": "..."}
 ```
@@ -880,7 +880,7 @@ Set in `core/setup.py`, `of` unless noted.
 
 | Field | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `harness` | str | none | The package version (`petroharness.__version__`, `1.1.1`) | `of` |
+| `harness` | str | none | The package version (`petroharness.__version__`, `1.2.0`) | `of` |
 | `commit` | str | `""` for an installed package | The harness commit when `core/setup.py` is a tracked file, with `+dirty` when `src/` has changes | `harness_commit` |
 | `petrophys` | str | none | The Petrophys build (`library_identity`) | `well/prepare.py` |
 | `components` | object | none | Each component's version | `agent/components.py`, `versions` |
@@ -1222,7 +1222,7 @@ Defined in `evidence/report.py`, `markdown` unless noted.
 - **Interval:** BRENT GP. (2841.0-2958.0 m; 768 samples)
 - **LAS file:** `<site-packages>/petrophys/datasets/geolink/30_6-5.las`, SHA-256 `5ecf2c53...801b9`
 - ...
-- **PetroHarness:** 1.1.1 commit <commit>, setup `d70dbbf039dd`
+- **PetroHarness:** 1.2.0 commit <commit>, setup `d70dbbf039dd`
 - **Questions:** 2 answered of 2 asked
 ```
 

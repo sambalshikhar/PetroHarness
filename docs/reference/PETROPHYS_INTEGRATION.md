@@ -33,7 +33,7 @@ flowchart TB
 
 | Fact | Value | Where |
 |---|---|---|
-| Petrophys build | commit `821afba53cff552a01ef9cd052b1301e2b2897a0`, package version 3.0.0 | `README.md` (install), `pyproject.toml` |
+| Petrophys build | release 3.0.0 from PyPI (`pip install petrophys==3.0.0`) | `pyproject.toml`, `README.md` (install) |
 | Interpretation of the raw LAS | Petrophys, once per well and setting, cached by content | `well/prepare.py`, `prepare_well` |
 | Lookups | Petrophys's six analyzers on each lithology zone; every statistic from `curve_statistics` | `record/catalog.py`, `well/stats.py` |
 | Verbs over Petrophys | `check`, `calculate`, `what_if`, `estimate`, `classify`, `summarize`, `calibrate` | `agent/library/` |
@@ -69,7 +69,7 @@ PetroHarness is built and tested against one Petrophys commit, installed as a pa
 ```bash
 python3.10 -m venv .venv
 .venv/bin/pip install -r requirements.lock
-.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@821afba53cff552a01ef9cd052b1301e2b2897a0"
+.venv/bin/pip install "petrophys==3.0.0"
 .venv/bin/pip install -e . --no-deps
 ```
 
@@ -78,7 +78,7 @@ python3.10 -m venv .venv
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| Requirement | pip specifier | `petrophys>=3.0` | The dependency, with the comment `pinned at 821afba (README: install)` | `pyproject.toml` |
+| Requirement | pip specifier | `petrophys==3.0.0` | The dependency: the Petrophys release the harness is tested with, from PyPI | `pyproject.toml` |
 | Package version | str | `3.0.0` | `importlib.metadata.version("petrophys")` of the pinned build | installed metadata |
 | `library_identity()` | function | - | The installed Petrophys's version and build: a source checkout's commit (with `+dirty`), else the commit pip recorded, else a hash of its installed files (`files-...`) | `well/prepare.py` |
 
