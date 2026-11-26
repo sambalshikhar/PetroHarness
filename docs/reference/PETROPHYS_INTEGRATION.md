@@ -63,8 +63,15 @@ curves and lines of the result ([section 9](#9-outputs)), refusals come back in 
 
 ## 3. The pinned Petrophys
 
-PetroHarness is built and tested against one Petrophys commit, installed as a package on its own
-(`requirements.lock` does not list it):
+PetroHarness is built and tested against one Petrophys release, `petrophys==3.0.0` from PyPI, which installs with
+it:
+
+```bash
+pip install petroharness              # Petrophys 3.0.0 comes with it
+```
+
+From a clone, the other dependencies at the versions the tests run with (`requirements.lock`, which does not list
+Petrophys), then Petrophys and the harness:
 
 ```bash
 python3.10 -m venv .venv
@@ -80,7 +87,7 @@ python3.10 -m venv .venv
 |---|---|---|---|---|
 | Requirement | pip specifier | `petrophys==3.0.0` | The dependency: the Petrophys release the harness is tested with, from PyPI | `pyproject.toml` |
 | Package version | str | `3.0.0` | `importlib.metadata.version("petrophys")` of the pinned build | installed metadata |
-| `library_identity()` | function | - | The installed Petrophys's version and build: a source checkout's commit (with `+dirty`), else the commit pip recorded, else a hash of its installed files (`files-...`) | `well/prepare.py` |
+| `library_identity()` | function | - | The installed Petrophys's version and build: a source checkout's commit (with `+dirty`), else the commit pip recorded, else a hash of its own installed files (`files-...`; not the bytecode, scripts or installer files, so a release is one build on every Python; Petrophys 3.0.0 from PyPI is `files-6ddae85c6081`) | `well/prepare.py` |
 
 - A prepared well is cached by the LAS content, the interpretation settings and `library_identity()`: it is reused only
   with the same Petrophys build.
