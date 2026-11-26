@@ -548,13 +548,12 @@ The interpretation domain and the mineral solve. Shown first: `lithology_domain`
 | `lithology_domain` | choice | from the data | Broad interpretation domain: "clastic" (the default when unset), "carbonate", "evaporite" or "auto". | `auto`, `clastic`, `carbonate`, `evaporite` | - | Interpretation domain |
 | `lithology_source` | choice | `auto` | Lithology source. | `auto`, `external`, `vendor`, `computed`, `config` | - | Lithology source |
 | `carbonate_calibration` | choice | from the data | Calibration of the carbonate-domain mineral solve, which takes calcite and dolomite from bulk density and closure. | `generic`, `costa` | - | Carbonate calibration |
-| `mineral_solver_version` | integer | `1` | Mineral solver for the clastic mineral step. | - | - | Mineral solver version |
 <!-- end generated: settings_lithology -->
 
 Example: the values Petrophys took on 30/6-5, Brent Group, and a carbonate domain on COSTA HW-3, KHARAIB-2.
 
 ```json
-{"lithology_domain": {"value": "clastic", "step": "vclay"}, "mineral_solver_version": {"value": 1, "step": "lithology"}}
+{"lithology_domain": {"value": "clastic", "step": "vclay"}}
 ```
 
 ```python
@@ -820,7 +819,6 @@ what is wrong; Petrophys's own validation follows for its settings. Real message
 {"sw_model": "foo"}               -> sw_model: choose one of: auto, archie, north_sea, nigeria_schlumberger, simandoux, modified_simandoux, indonesia, dual_water, waxman_smits
 {"zone_vcl_bands": [0.6, 0.3]}    -> zone_vcl_bands: give two edges between 0 and 1, the first below the second
 {"zone_min_thickness_m": 0}       -> zone_min_thickness_m: give a thickness above 0
-{"mineral_solver_version": 1.5}   -> mineral_solver_version: give a whole number
 {"rw": -1}                        -> rw: rw must be greater than 0; got -1.0
 {"gr_min": 120, "gr_max": 30}     -> gr_min: gr_min (120) must be less than gr_max (30)
 {"bogus": 1}                      -> bogus: not a setting this panel knows

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.1.1 (2026-11-26)
+
+PetroHarness on Petrophys's merged mineral solver. On wells with a lithology log every value is as in 1.1.0; mineral
+volumes and the lithology zones solved from them change on wells without a lithology log or without NPHI.
+
+- **Petrophys 821afba.** The pin moves to Petrophys's latest dev (8 commits after 3a9378e).
+  - Petrophys has one mineral solver (`MultiMineralSolver`) where it had two versions: where a sample has NPHI and
+    PHIE it takes them as given, elsewhere it solves porosity with the minerals (quartz and calcite, or calcite and
+    dolomite in carbonate, where the logs resolve no more). The `mineral_solver_version` setting is gone from
+    Petrophys and from the settings panel, and the record no longer lists it. The `classify` minerals tool says
+    "multi-mineral solver" without a version.
+  - Mineral volumes and the lithology zones solved from them change on wells without a lithology log or without
+    NPHI. The benchmark's wells read the same: on the 36 golden questions the only change in what the model is sent
+    is the record line `mineral_solver_version 1`, gone.
+  - New in Petrophys's record, shown as it writes them: warnings of net pay where the gamma ray reads shale and
+    neutron-density clean, and of held readings; why SW is 1 below 0.01 v/v porosity, why minerals are zero where
+    clay and porosity fill the rock, and how a sandstone- or dolomite-scale neutron is converted to limestone.
+
 ## 1.1.0 (2026-11-25)
 
 PetroHarness on Petrophys's latest calculations, and a one-line start for the web UI.

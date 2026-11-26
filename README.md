@@ -10,7 +10,7 @@ to the log.
 
 **[Website](https://welllogbench.com/petroharness/) · [Documentation](https://welllogbench.com/petroharness/docs/) · [Quick start](#quick-start) · [Results](#results) · [Features](#features)**
 
-[![Version](https://img.shields.io/badge/version-1.1.0-011e3f)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1.1-011e3f)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.10-011e3f)](#quick-start)
 [![Models](https://img.shields.io/badge/models-any%20OpenAI--compatible%20LLM-ef6719)](https://welllogbench.com/petroharness/docs/models.html)
 [![Calculations](https://img.shields.io/badge/calculations-Petrophys-197e6f)](https://github.com/sambalshikhar/petrophys)
@@ -27,7 +27,7 @@ to the log.
 ```bash
 python3.10 -m venv .venv
 .venv/bin/pip install -r requirements.lock
-.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@3a9378e27eaab54077d326ba5fbbfc6de569f56b"
+.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@821afba53cff552a01ef9cd052b1301e2b2897a0"
 .venv/bin/pip install -e . --no-deps
 source .venv/bin/activate
 ```

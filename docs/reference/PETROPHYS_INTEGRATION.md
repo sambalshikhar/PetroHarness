@@ -33,7 +33,7 @@ flowchart TB
 
 | Fact | Value | Where |
 |---|---|---|
-| Petrophys build | commit `3a9378e27eaab54077d326ba5fbbfc6de569f56b`, package version 3.0.0 | `README.md` (install), `pyproject.toml` |
+| Petrophys build | commit `821afba53cff552a01ef9cd052b1301e2b2897a0`, package version 3.0.0 | `README.md` (install), `pyproject.toml` |
 | Interpretation of the raw LAS | Petrophys, once per well and setting, cached by content | `well/prepare.py`, `prepare_well` |
 | Lookups | Petrophys's six analyzers on each lithology zone; every statistic from `curve_statistics` | `record/catalog.py`, `well/stats.py` |
 | Verbs over Petrophys | `check`, `calculate`, `what_if`, `estimate`, `classify`, `summarize`, `calibrate` | `agent/library/` |
@@ -69,7 +69,7 @@ PetroHarness is built and tested against one Petrophys commit, installed as a pa
 ```bash
 python3.10 -m venv .venv
 .venv/bin/pip install -r requirements.lock
-.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@3a9378e27eaab54077d326ba5fbbfc6de569f56b"
+.venv/bin/pip install "petrophys @ git+https://github.com/sambalshikhar/petrophys.git@821afba53cff552a01ef9cd052b1301e2b2897a0"
 .venv/bin/pip install -e . --no-deps
 ```
 
@@ -78,7 +78,7 @@ python3.10 -m venv .venv
 
 | Name | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| Requirement | pip specifier | `petrophys>=3.0` | The dependency, with the comment `pinned at 3a9378e (README: install)` | `pyproject.toml` |
+| Requirement | pip specifier | `petrophys>=3.0` | The dependency, with the comment `pinned at 821afba (README: install)` | `pyproject.toml` |
 | Package version | str | `3.0.0` | `importlib.metadata.version("petrophys")` of the pinned build | installed metadata |
 | `library_identity()` | function | - | The installed Petrophys's version and build: a source checkout's commit (with `+dirty`), else the commit pip recorded, else a hash of its installed files (`files-...`) | `well/prepare.py` |
 
@@ -394,7 +394,7 @@ available -> mineral volumes computed, LITHO not inferred or overwritten`); `cla
 
 ```text
 {"classify": {"what": "minerals"}}
-[E1] minerals by Petrophys MultiMineralSolver (v2: porosity solved with the minerals, VCL given) on rows RHOB, NPHI, PEF, DT; solved 100.0% of samples; poor fit (residual over the library's tolerance) 3.4%
+[E1] minerals by Petrophys MultiMineralSolver (porosity solved with the minerals, VCL given) on rows RHOB, NPHI, PEF, DT; solved 100.0% of samples; poor fit (residual over the library's tolerance) 3.4%
   quartz mean volume over solved samples: Z2 0.4306; Z1 0.4123; Z4 0.3625; ... (30 other zones lower); pooled 0.06248
   ...
   written: V_QUARTZ, V_CALCITE, V_DOLOMITE, V_ANHYDRITE, MM_POOR_FIT (curves of this question)

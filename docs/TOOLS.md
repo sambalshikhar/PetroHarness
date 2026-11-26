@@ -180,7 +180,7 @@ On GeoLink 15/9-14 between 2700 and 3200 m (46 zones from its lithology log), `{
 begins (Data: GeoLink, CC BY-SA 4.0):
 
 ```text
-minerals by Petrophys MultiMineralSolver (v2: porosity solved with the minerals, VCL given) on rows RHOB, NPHI, PEF, DT; solved 100.0% of samples; poor fit (residual over the library's tolerance) 7.4%
+minerals by Petrophys MultiMineralSolver (porosity solved with the minerals, VCL given) on rows RHOB, NPHI, PEF, DT; solved 100.0% of samples; poor fit (residual over the library's tolerance) 7.4%
   quartz mean volume over solved samples: Z45 0.4433; Z2 0.4306; Z43 0.4296; Z1 0.4123; Z4 0.3625; Z44 0.3069; Z42 0.2945; Z40 0.1044; Z41 0.0879; Z28 0.06492; Z12 0.05345; Z46 0.04966 (34 other zones lower); pooled 0.1865
   calcite mean volume over solved samples: Z6 0.8518; Z15 0.8393; Z9 0.8101; Z8 0.7932; Z7 0.7789; Z11 0.7692; Z22 0.7689; Z21 0.7481; Z26 0.7471; Z25 0.7423; Z20 0.7402; Z23 0.7393 (34 other zones lower); pooled 0.3766
   […]

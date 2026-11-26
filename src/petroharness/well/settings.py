@@ -44,7 +44,7 @@ GROUPS = [
      ["mud_type", "mud_water", "mud_has_clay_or_kcl", "rmf_at_meas_temp", "rmf_meas_temp", "rmf_salinity_ppm",
       "rmf_chlorides_mg_l", "rm", "rm_meas_temp"]),
     ("lithology", "Lithology", "The interpretation domain and the mineral solve.",
-     ["lithology_domain", "lithology_source", "carbonate_calibration", "mineral_solver_version"]),
+     ["lithology_domain", "lithology_source", "carbonate_calibration"]),
     ("input", "Input handling", "How the LAS curves are read and checked.",
      ["standardize_input", "rename_input_curves", "calculation_profile"]),
 ]
@@ -72,7 +72,7 @@ LABELS = {
     "mud_has_clay_or_kcl": "Mud has clay or KCl", "rmf_at_meas_temp": "Rmf", "rmf_meas_temp": "Rmf temperature",
     "rmf_salinity_ppm": "Filtrate salinity", "rmf_chlorides_mg_l": "Filtrate chlorides", "rm": "Rm",
     "rm_meas_temp": "Rm temperature", "lithology_domain": "Interpretation domain", "lithology_source": "Lithology source",
-    "carbonate_calibration": "Carbonate calibration", "mineral_solver_version": "Mineral solver version",
+    "carbonate_calibration": "Carbonate calibration",
     "standardize_input": "Standardize curves and units", "rename_input_curves": "Rename vendor mnemonics",
     "calculation_profile": "Calculation profile",
     "rho_hc": "Hydrocarbon density (ρhc)", "hc_hydrogen_index": "Hydrocarbon hydrogen index",

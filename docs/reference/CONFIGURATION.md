@@ -326,7 +326,6 @@ it from the data.
 | `lithology_domain` | `auto`, `clastic`, `carbonate`, `evaporite` | from the data | Broad interpretation domain: "clastic" (the default when unset), "carbonate", "evaporite" or "auto". | Lithology |
 | `lithology_source` | `auto`, `external`, `vendor`, `computed`, `config` | `auto` | Lithology source. | Lithology |
 | `carbonate_calibration` | `generic`, `costa` | from the data | Calibration of the carbonate-domain mineral solve, which takes calcite and dolomite from bulk density and closure. | Lithology |
-| `mineral_solver_version` | integer | `1` | Mineral solver for the clastic mineral step. | Lithology |
 | `standardize_input` | switch | from the data | Standardize curve aliases and units before interpretation: vendor mnemonics get canonical aliases, units such as kg/m3 or percent porosity are converted and implausible values are screened, with a warning. | Input handling |
 | `rename_input_curves` | switch | `false` | Rename vendor mnemonics to canonical names instead of adding aliases. | Input handling |
 | `calculation_profile` | `current`, `geolink` | `current` | Interpretation configuration. | Input handling |

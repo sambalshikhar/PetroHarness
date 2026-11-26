@@ -14,9 +14,9 @@ from petroharness.agent.library import _method, register, scratch_well
 OBJECTS = {
     "gas": "gas effect: density porosity above neutron porosity by more than 0.05 (Petrophys detect_gas_effect), "
            "as GAS_FLAG with its depth runs; needs PHID and PHIN (else NPHI)",
-    "minerals": "mineral volumes by Petrophys: method solver (multi-mineral solver v2: quartz, calcite, dolomite, "
-                "anhydrite with porosity solved, its residual and poor-fit flag; needs RHOB, NPHI, VCL; PEF and DT "
-                "add rows) or calcite_dolomite (from RHOB, PHIE, VCL); writes V_<MINERAL>",
+    "minerals": "mineral volumes by Petrophys: method solver (multi-mineral solver: quartz, calcite, dolomite, "
+                "anhydrite, as many as the logs resolve, with porosity solved, its residual and poor-fit flag; needs "
+                "RHOB, NPHI, VCL; PEF and DT add rows) or calcite_dolomite (from RHOB, PHIE, VCL); writes V_<MINERAL>",
     "flow_units": "hydraulic flow units per sample from FZI (Petrophys calculate_flow_units, k-means on log FZI; k "
                   "units, else chosen by the library), as FLOW_UNIT with each unit's mean FZI; per sample, unlike "
                   "unit_roles' per-zone flow roles; needs PERM and PHIE",
@@ -160,7 +160,7 @@ def _minerals(f: Formation, method: str | None, picked, idx) -> Result:
         poor = np.asarray(res["qc_flag"], dtype=float)
         row = out.child()
         rows = "RHOB, NPHI" + (", PEF" if pef is not None else "") + (", DT" if dt is not None else "")
-        out.add(f"minerals by Petrophys MultiMineralSolver (v2: porosity solved with the minerals, VCL given) on rows "
+        out.add(f"minerals by Petrophys MultiMineralSolver (porosity solved with the minerals, VCL given) on rows "
                 f"{rows}; solved {row.pct(100 * float(solved[idx].mean()))} of samples; poor fit (residual over the "
                 f"library's tolerance) {row.pct(100 * float(np.nanmean(poor[idx] > 0.5)))}", row)
     else:
