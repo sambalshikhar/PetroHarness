@@ -299,7 +299,7 @@ The server of [section 3](#3-command-line-and-environment), one endpoint up and 
 model's name and the runs folder replaced):
 
 ```json
-{"version": "1.3.0", "model": "<served model name>", "label": "K2-Horizon-7B", "route": null, "connecting": false,
+{"version": "1.3.1", "model": "<served model name>", "label": "K2-Horizon-7B", "route": null, "connecting": false,
  "endpoints": [{"url": "http://HOST:8000/v1", "ok": true, "models": ["<served model name>"], "ms": 6, "busy": 0},
                {"url": "http://localhost:8001/v1", "ok": false, "models": [],
                 "error": "URLError: <urlopen error [Errno 111] Connection refused>", "busy": 0}],
@@ -1805,7 +1805,7 @@ this server listens beyond this computer, so its page cannot change its model. .
 | `POST /api/model/check` | `{route: "ollama", url?, size?, quant?}` | Ollama's `{running, version, new_enough, models, local, welllogllm: {SIZE: {QUANT: bool}}, checks}`: `checks` are this computer's, for that size and quantization (`[{name, state: ok, warn or bad, text}]`) | `App.model_check`, `connect.ollama_status`, `connect.checks` |
 | | `{route: "server", url, key?}` | `{url, models: [{id, context}], key_kept}`; the kept key for the address when none is given | `connect.server_models` |
 | | `{route: "openrouter", key?}` | `{label, limit, usage}` from OpenRouter, or 400 when it does not take the key | `connect.openrouter_check` |
-| `POST /api/model/connect` | `{route: "ollama", url?, model: "welllogllm" \| NAME, size?: "3.7b" \| "7b", quant?}`, `{route: "server", url, key?, remember?, model, kind?}` or `{route: "openrouter", key?, remember?, model}` | the task, `state: running`; follow it in `GET /api/model`. Once done, the next questions use the model and it is saved for the next start; a wrong choice ends the task in `error` with the message. A second connection while one runs: 400 | `App.connect`, `connect.connect` |
+| `POST /api/model/connect` | `{route: "ollama", url?, model: "welllogllm" \| NAME, size?: "3.7b", quant?}`, `{route: "server", url, key?, remember?, model, kind?}` or `{route: "openrouter", key?, remember?, model}` | the task, `state: running`; follow it in `GET /api/model`. Once done, the next questions use the model and it is saved for the next start; a wrong choice ends the task in `error` with the message. A second connection while one runs: 400 | `App.connect`, `connect.connect` |
 | `POST /api/model/stop` | `{}` | the task; a download in progress is abandoned (`state: stopped`) | `App.connect_stop` |
 | `POST /api/model/forget` | `{route, url?}` | the keys kept, that one removed | `connect.keep_key` |
 

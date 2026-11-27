@@ -468,8 +468,8 @@ The top bar names the model on a button, with a dot: green when the model answer
 is not ideal on this computer (part of it on the CPU, for example; a bar under the top bar says what, until you dismiss
 it), orange while it is being made ready, red when it does not answer. The button opens the **Model** dialog, which connects another model while the server runs:
 
-- **On this computer**: WellLogLLM-3.7B (recommended) or WellLogLLM-7B as a GGUF in Ollama, each in four
-  quantizations, or any model Ollama can pull. PetroHarness checks Ollama (and says how to install it when it is
+- **On this computer**: WellLogLLM-3.7B as a GGUF in Ollama (recommended, in four quantizations), or any model Ollama
+  can pull. PetroHarness checks Ollama (and says how to install it when it is
   missing) and this computer: its memory, its GPU (Apple silicon, NVIDIA or AMD) and the disk space for the download,
   marking what is not ideal with what to do. Then it pulls the model, makes a copy of it with a 65,536-token context,
   loads it, and says where Ollama put it: all on the GPU (on a Mac, through Metal), part on the CPU, or on the CPU.

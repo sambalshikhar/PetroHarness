@@ -235,11 +235,11 @@ def test_ollama_too_old_or_missing_is_said_with_what_to_do(ollama):
         C.connect({"route": "ollama", "url": ollama.url, "model": "welllogllm", "size": "13b"})
 
 
-def test_the_7b_gguf_is_its_own_download_and_copy(ollama):
-    choice = C.connect({"route": "ollama", "url": ollama.url, "model": "welllogllm", "size": "7b", "quant": "Q6_K"})
-    assert [c[2]["model"] for c in ollama.calls if c[1] == "/api/pull"] == ["hf.co/sambal/WellLogLLM-7B-GGUF:Q6_K"]
-    assert (choice["model"], choice["label"], choice["size"]) == ("welllogllm-7b:q6_k", "WellLogLLM-7B, GGUF", "7b")
-    assert card_settings(choice["model_card"])["model"] == "welllogllm-7b:q6_k"
+def test_on_this_computer_wellogllm_is_the_3_7b_the_7b_is_for_a_gpu_server(ollama):
+    assert set(C.GGUF) == {"3.7b"}                                              # no 7B GGUF to run on a CPU
+    with pytest.raises(ValueError, match="no WellLogLLM of size 7b"):
+        C.connect({"route": "ollama", "url": ollama.url, "model": "welllogllm", "size": "7b"})
+    assert "WellLogLLM-7B" in [m["label"] for m in C.vllm_guide()["models"]]  # the 7B: the vLLM command
 
 
 # --- what is not ideal on this computer ---------------------------------------------------------------------------------
@@ -285,7 +285,7 @@ def test_no_room_to_download_stops_before_the_download(monkeypatch, ollama):
 
 
 def test_another_computer_s_ollama_is_not_checked_from_here():
-    got = C.checks("7b", "Q8_0", url="http://gpu-box:11434")
+    got = C.checks("3.7b", "Q8_0", url="http://gpu-box:11434")
     assert len(got) == 1 and "another computer" in got[0]["text"]
 
 
@@ -402,7 +402,7 @@ def test_the_dialog_connects_a_model_and_the_next_questions_use_it(tmp_path, oll
         checked = client.json("/api/model/check", {"route": "ollama", "url": ollama.url})[1]
         assert checked["running"] and checked["new_enough"] and not any(checked["welllogllm"]["3.7b"].values())
         assert {c["name"] for c in checked["checks"]} == {"Memory", "GPU", "Disk"}       # this computer, for 3.7B Q8_0
-        assert st["needs"]["3.7b"]["Q8_0"] == C.gguf_needs("3.7b", "Q8_0") and set(st["gguf"]) == {"3.7b", "7b"}
+        assert st["needs"]["3.7b"]["Q8_0"] == C.gguf_needs("3.7b", "Q8_0") and set(st["gguf"]) == {"3.7b"}
         old_pool = app.endpoints
         status, task = client.json("/api/model/connect", {"route": "ollama", "url": ollama.url, "model": "welllogllm"})
         assert status == 200 and task["state"] == "running"

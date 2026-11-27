@@ -1,7 +1,7 @@
 """Connect a model: the ways a person running PetroHarness plugs in the model that answers, and the choice they keep.
 
-    ollama      a model on this computer, run by Ollama: WellLogLLM-3.7B or -7B as a GGUF from Hugging Face, or any
-                model Ollama can pull. PetroHarness makes a copy of it with the context window the harness needs
+    ollama      a model on this computer, run by Ollama: WellLogLLM-3.7B as a GGUF from Hugging Face, or any model
+                Ollama can pull. PetroHarness makes a copy of it with the context window the harness needs
                 (CONTEXT), loads it, and says where Ollama runs it (the GPU: Apple silicon through Metal, NVIDIA, AMD;
                 or the CPU) and what on this computer is not ideal for it (checks()).
     server      a vLLM server, or any OpenAI-compatible endpoint, with its API key if it has one.
@@ -42,17 +42,14 @@ OPENROUTER_KEYS = "https://openrouter.ai/keys"
 
 # WellLogLLM as GGUF files, by size: the Hugging Face repository Ollama pulls them from, each quantization's download
 # size in GB, the name of PetroHarness's copy in Ollama, the packaged card, and the Ollama release that first runs their
-# architecture (K2-Horizon).
+# architecture (K2-Horizon). The 3.7B only: a computer without a GPU runs it; WellLogLLM-7B is for a GPU server (vLLM).
 GGUF = {
     "3.7b": {"label": "WellLogLLM-3.7B, GGUF", "repo": "sambal/WellLogLLM-3.7B-GGUF", "copy": "welllogllm-3.7b",
              "quants": {"Q8_0": 5.4, "Q6_K": 4.2, "Q5_K_M": 3.6, "Q4_K_M": 3.2},   # the files: 5.39, 4.16, 3.64, 3.16 GB
              "quant": "Q8_0", "ollama": "0.40.4", "card": "welllogllm_3_7b_gguf"},
-    "7b": {"label": "WellLogLLM-7B, GGUF", "repo": "sambal/WellLogLLM-7B-GGUF", "copy": "welllogllm-7b",
-           "quants": {"Q8_0": 9.6, "Q6_K": 7.4, "Q5_K_M": 6.5, "Q4_K_M": 5.6},   # the files: 9.57, 7.39, 6.47, 5.59 GB
-           "quant": "Q8_0", "ollama": "0.40.4", "card": "welllogllm_7b_gguf"},
 }
 WELLLOGLLM_GGUF = GGUF["3.7b"]          # the default: the one PetroHarness starts with when no model is set
-# Both WellLogLLM models keep 147,456 bytes of context cache a token at 16 bits (36 layers, 8 key-value heads of 128):
+# WellLogLLM keeps 147,456 bytes of context cache a token at 16 bits (36 layers, 8 key-value heads of 128):
 # about 9.7 GB at CONTEXT, on top of the weights. With the runtime's own buffers, what a GGUF needs in memory.
 KV_BYTES_PER_TOKEN = 147456
 OVERHEAD_GB = 1.0
@@ -61,8 +58,8 @@ OVERHEAD_GB = 1.0
 def gguf_needs(size: str, quant: str) -> float:
     """The memory WellLogLLM's GGUF of this size and quantization needs at the harness's context, in GB."""
     return round(GGUF[size]["quants"][quant] + KV_BYTES_PER_TOKEN * CONTEXT / 1e9 + OVERHEAD_GB, 1)
-# WellLogLLM on a vLLM server (vllm_guide()): each model's Hugging Face repository, its served name (that of its packaged
-# card) and the GPU memory it needs at the harness's context window.
+# WellLogLLM on a vLLM server (vllm_guide()), in full precision (BF16): each model's Hugging Face repository, its served
+# name (that of its packaged card) and the GPU memory it needs at the harness's context window.
 VLLM_MODELS = [
     {"label": "WellLogLLM-7B", "repo": "sambal/WellLogLLM-7B", "served": "welllogllm-7b", "gpu": "40 GB"},
     {"label": "WellLogLLM-3.7B", "repo": "sambal/WellLogLLM-3.7B", "served": "welllogllm-3.7b", "gpu": "24 GB"},

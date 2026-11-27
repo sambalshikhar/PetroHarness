@@ -56,8 +56,8 @@ or drop your own LAS file, choose the interval, and ask in your own words. On a 
 
 **3. Or choose another model**
 
-**Model** (top right of the page) connects WellLogLLM-7B on your own GPU server (the dialog shows the vLLM command to
-start it, with a Copy button), any model a vLLM server or Ollama serves, or a hosted model through OpenRouter with your
+**Model** (top right of the page) connects WellLogLLM-7B or the full WellLogLLM-3.7B on your own GPU server (the
+dialog shows the vLLM commands that start them, with a Copy button), any model a vLLM server or Ollama serves, or a hosted model through OpenRouter with your
 API key. PetroHarness keeps the choice for the next start and for the command. From the command line:
 
 ```bash

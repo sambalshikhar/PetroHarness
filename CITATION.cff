@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use PetroHarness in your work, please cite the paper below."
 title: "PetroHarness"
 abstract: "An open-source agentic harness for auditable formation evaluation: it answers a petrophysics question about an interval of a well from its raw LAS file."
-version: 1.3.0
+version: 1.3.1
 date-released: 2026-11-27
 repository-code: "https://github.com/sambalshikhar/PetroHarness"
 license: CC-BY-4.0

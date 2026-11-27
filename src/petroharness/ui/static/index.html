@@ -1836,7 +1836,7 @@ const M = {st: null, tab: "", pick: "welllogllm", quant: "", other: "", ourl: ""
 const ICON = (d) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const ROUTES = [
   {id: "ollama", t: "On this computer", d: "WellLogLLM in Ollama. No GPU needed.", i: ICON('<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>')},
-  {id: "server", t: "A vLLM server", d: "WellLogLLM-7B on your GPU, or any OpenAI-compatible server.", i: ICON('<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>')},
+  {id: "server", t: "A vLLM server", d: "WellLogLLM-7B or -3.7B on your GPU, or any OpenAI-compatible server.", i: ICON('<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>')},
   {id: "openrouter", t: "OpenRouter", d: "Hosted models, with your API key.", i: ICON('<path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.1 9.2 4.5 4.5 0 0 0 7 18z"/>')}];
 const WHERE = {ollama: "Ollama on this computer", server: "a vLLM server", openrouter: "OpenRouter"};
 const QNOTE = {Q8_0: "closest to the original", Q4_K_M: "smallest, least accurate"};
@@ -1946,9 +1946,8 @@ function mpanelRender() {
   else { p.innerHTML = mRouter(); mRouterWire(); if (!M.or.list && !M.or.loading) routerList(); }
   mfootRender();
 }
-// on this computer: WellLogLLM as a GGUF (3.7B or 7B), or another Ollama model
-const SIZES = [["3.7b", "Our post-trained model for well-log interpretation, in the form Ollama runs on any computer.", true],
-               ["7b", "The larger WellLogLLM: more accurate, and it needs more memory.", false]];
+// on this computer: WellLogLLM-3.7B as a GGUF, or another Ollama model (WellLogLLM-7B is for a GPU server: vLLM)
+const SIZES = [["3.7b", "Our post-trained model for well-log interpretation, in the form Ollama runs on any computer.", true]];
 function mHave(size, q) { const o = M.ollama; return !!(o && o.welllogllm && o.welllogllm[size] && o.welllogllm[size][q]); }
 function mOllama() {
   const o = M.ollama, st = M.st;

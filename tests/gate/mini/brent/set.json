@@ -18,9 +18,9 @@
  },
  "petrophys": "3.0.0@files-6ddae85c6081",
  "setup": {
-  "hash": "00c86576f049",
-  "harness": "1.3.0",
-  "commit": "82ae07e3",
+  "hash": "cc55278411a2",
+  "harness": "1.3.1",
+  "commit": "099aa8e6",
   "petrophys": "3.0.0@files-6ddae85c6081",
   "components": {
    "C1": "07d1417c992e",

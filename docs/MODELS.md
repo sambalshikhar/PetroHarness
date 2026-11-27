@@ -64,7 +64,7 @@ asked keep theirs.
 
 | Route | What PetroHarness does |
 |---|---|
-| On this computer | Checks Ollama (and says how to install it when it is missing) and this computer (memory, GPU, disk), pulls WellLogLLM-3.7B or -7B as a GGUF or any model you name, makes a copy of it with a 65,536-token context, loads it and says where Ollama put it (all on the GPU, part on the CPU, or on the CPU). The page follows the download; what is not ideal is marked, with what to do |
+| On this computer | Checks Ollama (and says how to install it when it is missing) and this computer (memory, GPU, disk), pulls WellLogLLM-3.7B as a GGUF or any model you name, makes a copy of it with a 65,536-token context, loads it and says where Ollama put it (all on the GPU, part on the CPU, or on the CPU). The page follows the download; what is not ideal is marked, with what to do |
 | A vLLM server | Shows the commands that serve WellLogLLM-7B and -3.7B, lists the models the server at your address serves (with its API key if it has one), and chooses the card from the model's name: WellLogLLM and K2-Horizon models get the WellLogLLM card, others the generic one |
 | OpenRouter | Checks your key, lists OpenRouter's text models with their context window, price, reasoning and JSON support, and writes a hosted-API card for the one you choose |
 
@@ -121,10 +121,9 @@ vllm serve sambal/WellLogLLM-7B --served-model-name welllogllm-7b --port 8000 \
 petroharness --launch-ui --model-card welllogllm_7b --model-url http://localhost:8000/v1
 ```
 
-Both as GGUF files, for Ollama and llama.cpp on any computer (on a Mac, on its GPU through Metal):
-[`sambal/WellLogLLM-3.7B-GGUF`](https://huggingface.co/sambal/WellLogLLM-3.7B-GGUF) and
-[`sambal/WellLogLLM-7B-GGUF`](https://huggingface.co/sambal/WellLogLLM-7B-GGUF), in Q8_0, Q6_K, Q5_K_M and Q4_K_M
-([Install and set up](INSTALL.md#3a-welllogllm-on-this-computer-ollama)).
+WellLogLLM-3.7B as a GGUF, for Ollama and llama.cpp on any computer (on a Mac, on its GPU through Metal):
+[`sambal/WellLogLLM-3.7B-GGUF`](https://huggingface.co/sambal/WellLogLLM-3.7B-GGUF), in Q8_0, Q6_K, Q5_K_M and Q4_K_M
+([Install and set up](INSTALL.md#3a-welllogllm-on-this-computer-ollama)). WellLogLLM-7B is for a GPU server.
 </details>
 
 <details>
@@ -157,10 +156,9 @@ are in `src/petroharness/resources/models/`:
   answer's figures.
 - `welllogllm_7b.yaml`, `welllogllm_3_7b.yaml`: WellLogLLM-7B and -3.7B on vLLM, served as `welllogllm-7b` and
   `welllogllm-3.7b`, called as K2-Horizon-7B's card calls it.
-- `welllogllm_3_7b_gguf.yaml`, `welllogllm_7b_gguf.yaml`: WellLogLLM-3.7B and -7B as GGUF files in Ollama
-  (`welllogllm-3.7b:q8_0`, `welllogllm-7b:q8_0` at `http://localhost:11434/v1`): the same, with JSON asked for in the
-  prompt alone (`structured_output: none`) and three hours for a request (`timeout_s`), since a computer without a GPU
-  writes far more slowly.
+- `welllogllm_3_7b_gguf.yaml`: WellLogLLM-3.7B as a GGUF in Ollama (`welllogllm-3.7b:q8_0` at
+  `http://localhost:11434/v1`): the same, with JSON asked for in the prompt alone (`structured_output: none`) and three
+  hours for a request (`timeout_s`), since a computer without a GPU writes far more slowly.
 - `generic.yaml`: any chat model, named with `--model`. It sends no sampling settings and no chat-template variables,
   so the model's own defaults apply. Its output caps are 16,384 tokens for a step and for the writer; raise them for
   a model that thinks at length.

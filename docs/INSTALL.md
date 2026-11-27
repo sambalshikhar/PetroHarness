@@ -11,7 +11,7 @@ own computer, with or without a GPU. It downloads the model the first time.
 | | |
 |---|---|
 | Python | 3.10 or later, on macOS, Windows or Linux |
-| For WellLogLLM on your computer | [Ollama](https://ollama.com/download) 0.40.4 or later, and 16 GB of memory or more for WellLogLLM-3.7B (about 20 GB for WellLogLLM-7B). A GPU is used when there is one: Apple silicon, NVIDIA or AMD |
+| For WellLogLLM on your computer | [Ollama](https://ollama.com/download) 0.40.4 or later, and 16 GB of memory or more. A GPU is used when there is one: Apple silicon, NVIDIA or AMD |
 | For WellLogLLM on a GPU server | Linux with an NVIDIA GPU (40 GB or more for WellLogLLM-7B), and vLLM 0.30 or later |
 | For a hosted model | an [OpenRouter API key](https://openrouter.ai/keys) |
 
@@ -54,8 +54,8 @@ the code, install from a clone instead ([Development](DEVELOPMENT.md)).
 
 | Where | Choose it when | Model |
 |---|---|---|
-| [On this computer](#3a-welllogllm-on-this-computer-ollama) | you want your data to stay on your computer, with no GPU needed (a Mac's GPU is used) | WellLogLLM-3.7B or -7B, GGUF, in Ollama |
-| [On a GPU server](#3b-welllogllm-on-a-gpu-server-vllm) | you have an NVIDIA GPU, on this computer or one you reach | WellLogLLM-7B or WellLogLLM-3.7B, in vLLM; or any model vLLM serves |
+| [On this computer](#3a-welllogllm-on-this-computer-ollama) | you want your data to stay on your computer, with no GPU needed (a Mac's GPU is used) | WellLogLLM-3.7B, GGUF, in Ollama |
+| [On a GPU server](#3b-welllogllm-on-a-gpu-server-vllm) | you have an NVIDIA GPU, on this computer or one you reach | WellLogLLM-7B or WellLogLLM-3.7B in full precision, in vLLM; or any model vLLM serves |
 | [OpenRouter](#3c-a-hosted-model-openrouter) | you want a hosted model and nothing to install | any model OpenRouter lists |
 
 The web UI's **Model** dialog (top right of the page, on the model's name) sets up each of them, and PetroHarness keeps
@@ -96,9 +96,9 @@ ollama pull hf.co/sambal/WellLogLLM-3.7B-GGUF:Q8_0
 
 then a copy with `PARAMETER num_ctx 65536` in its Modelfile. The packaged model card `welllogllm_3_7b_gguf` calls it.
 
-**Sizes.** The dialog offers WellLogLLM-3.7B (recommended) and WellLogLLM-7B, the larger model, which needs more
-memory ([`sambal/WellLogLLM-7B-GGUF`](https://huggingface.co/sambal/WellLogLLM-7B-GGUF)), each in four quantizations. A
-smaller file runs in less memory, at some cost in accuracy; Q8_0 is the closest to the original. WellLogLLM-3.7B:
+**Sizes.** The dialog offers four quantizations of WellLogLLM-3.7B. A smaller file runs in less memory, at some cost in
+accuracy; Q8_0 is the closest to the original. WellLogLLM-7B, the larger model, is for a GPU server
+([section 3b](#3b-welllogllm-on-a-gpu-server-vllm)): on a computer without one, it would run far too slowly.
 
 | Quantization | Download | Same top token as the original |
 |---|---|---|
@@ -110,15 +110,12 @@ smaller file runs in less memory, at some cost in accuracy; Q8_0 is the closest 
 The last column compares each file with the unquantized model, token by token, on 57,344 tokens of these pages: how
 often both would write the same next token (llama.cpp's `llama-perplexity --kl-divergence`).
 
-WellLogLLM-7B: Q8_0 9.6 GB, Q6_K 7.4 GB, Q5_K_M 6.5 GB, Q4_K_M 5.6 GB.
-
 Whichever you choose, the 65,536-token context takes about 9.7 GB of memory on top of the model (147,456 bytes a
-token, for either size): plan on 16 GB of memory or more for WellLogLLM-3.7B, and about 20 GB for WellLogLLM-7B in
-Q8_0. A GPU makes the model write far faster: on an NVIDIA A100, Ollama wrote 70 to 134 tokens a second with
+token), so plan on 16 GB of memory or more. A GPU makes the model write far faster: on an NVIDIA A100, Ollama wrote 70 to 134 tokens a second with
 WellLogLLM-3.7B in Q8_0.
 
-**On a Mac.** On Apple silicon, Ollama runs the model on the Mac's GPU through Metal (the GPU PyTorch reaches as
-`mps`), with nothing to set up. The CPU and the GPU share the Mac's memory, so a 16 GB Mac is short for
+**On a Mac.** On Apple silicon, Ollama runs WellLogLLM-3.7B on the Mac's GPU through Metal (the GPU PyTorch reaches
+as `mps`), with nothing to set up. The CPU and the GPU share the Mac's memory, so a 16 GB Mac is short for
 WellLogLLM-3.7B in Q8_0 with the 64k-token context: Ollama may run part of it on the CPU, and the dialog says when it
 does. A
 Mac with an Intel processor runs the model on the CPU.
@@ -134,8 +131,14 @@ pulls it if it does not have it, and PetroHarness makes the same 64k-context cop
 
 ### 3b. WellLogLLM on a GPU server (vLLM)
 
-On Linux with an NVIDIA GPU, serve WellLogLLM-7B (40 GB of GPU memory or more) with vLLM 0.30 or later. The model
-downloads from Hugging Face ([`sambal/WellLogLLM-7B`](https://huggingface.co/sambal/WellLogLLM-7B)) the first time:
+On Linux with an NVIDIA GPU, serve WellLogLLM in full precision (BF16) with vLLM 0.30 or later:
+
+| Model | GPU memory | Hugging Face | Served as |
+|---|---|---|---|
+| WellLogLLM-7B | 40 GB or more | [`sambal/WellLogLLM-7B`](https://huggingface.co/sambal/WellLogLLM-7B) | `welllogllm-7b` |
+| WellLogLLM-3.7B | 24 GB or more: its weights (10.1 GB) and its 64k-token context (9.7 GB) | [`sambal/WellLogLLM-3.7B`](https://huggingface.co/sambal/WellLogLLM-3.7B) | `welllogllm-3.7b` |
+
+The model downloads from Hugging Face the first time. For WellLogLLM-7B:
 
 ```bash
 pip install "vllm>=0.30"
@@ -144,9 +147,9 @@ vllm serve sambal/WellLogLLM-7B --served-model-name welllogllm-7b --port 8000 \
   --reasoning-parser k2_horizon --chat-template-content-format string
 ```
 
-For WellLogLLM-3.7B, use `sambal/WellLogLLM-3.7B` and `--served-model-name welllogllm-3.7b`; its weights (10.1 GB)
-and its 64k-token context (9.7 GB) fit a 24 GB GPU. The Model dialog shows both commands, with a Copy button. vLLM
-runs on Linux with an NVIDIA GPU; on a Mac, run WellLogLLM-7B as a GGUF in Ollama instead (section 3a).
+For WellLogLLM-3.7B, use `sambal/WellLogLLM-3.7B` and `--served-model-name welllogllm-3.7b`. The Model dialog shows
+both commands, with a Copy button. vLLM runs on Linux with an NVIDIA GPU; on a Mac, run WellLogLLM-3.7B in Ollama
+instead (section 3a).
 
 Then connect to it, in the page or from the command line:
 
@@ -235,7 +238,7 @@ your runs folder (`./petroharness-ui-runs` by default) if you do not keep the ru
 |---|---|
 | *Ollama does not answer at 127.0.0.1:11434* | Install Ollama and start it (section 3a), then **Check again**. If it listens elsewhere, give its address under **Ollama's address** |
 | *Ollama … is too old for WellLogLLM* | Update Ollama to 0.40.4 or later |
-| *This computer has … GB; … needs about … GB* | Choose a smaller size (WellLogLLM-3.7B, or a smaller quantization), or run the model on a computer with more memory |
+| *This computer has … GB; … needs about … GB* | Choose a smaller quantization, or run the model on a computer with more memory |
 | *No GPU found* or *This Mac has no Apple silicon GPU* | It works on the CPU, far more slowly; on a computer with a GPU, Ollama uses it |
 | *Ollama put …% of the model on the CPU* | The model and its context did not fit in the GPU's memory: close programs that use it, or choose a smaller size |
 | *The download is … GB and … GB is free* | Free some disk space where Ollama keeps models, or choose a smaller size |

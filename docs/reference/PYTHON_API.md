@@ -968,7 +968,7 @@ with given_settings(given2):
 
 | Field | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
-| `harness` | str | required | The package version (`1.3.0`). | `core.setup.Setup` |
+| `harness` | str | required | The package version (`1.3.1`). | `core.setup.Setup` |
 | `commit` | str | required | The checkout's short commit, `+dirty` when `src/` has changes; "" for an installed package. | `harness_commit` |
 | `petrophys` | str | required | The Petrophys build (version and commit, or a hash of its installed files). | `well.prepare.library_identity` |
 | `components` | dict | required | Prompt component (`C1` ... `C10`) -> version. | `agent.components.versions` |

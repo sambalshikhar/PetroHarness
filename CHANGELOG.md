@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.1 (2026-11-27)
+
+WellLogLLM-7B is for a GPU server.
+
+- **On this computer, WellLogLLM-3.7B.** The Model dialog's *On this computer* offers WellLogLLM-3.7B alone, the model
+  a computer without a GPU runs: WellLogLLM-7B would run far too slowly there. Serve WellLogLLM-7B with vLLM on a GPU
+  server (the dialog's *A vLLM server* shows the command). The `welllogllm_7b_gguf` card is gone.
+- **On a GPU server, WellLogLLM-7B or -3.7B in full precision.** The dialog's *A vLLM server* names both, and Install
+  and set up lists the GPU memory each needs.
+- The Model dialog's pictures in the documentation, as it now is.
+
 ## 1.3.0 (2026-11-27)
 
 WellLogLLM, our post-trained model, is the default, and the web UI connects any model.

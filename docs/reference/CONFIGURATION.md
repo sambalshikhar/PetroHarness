@@ -451,8 +451,7 @@ Notes:
 - The card: `--model-card` (a YAML file, or a packaged card's name with or without `.yaml`), else the generic card
   when `--model` is given, else the K2-Horizon-7B card (`models.card_file`). The packaged cards are in
   `src/petroharness/resources/models/`: `generic` (no sampling or template fields sent, caps 16384, timeout 1800 s,
-  2 retries), the default card, and the WellLogLLM cards `welllogllm_7b`, `welllogllm_3_7b`, `welllogllm_7b_gguf` and
-  `welllogllm_3_7b_gguf`.
+  2 retries), the default card, and the WellLogLLM cards `welllogllm_7b`, `welllogllm_3_7b` and `welllogllm_3_7b_gguf`.
 - A card the Model dialog writes is in `cards/` of PetroHarness's folder; its `api_key_env` names a variable of its own
   (`PETROHARNESS_KEY_` and ten characters), which PetroHarness sets from `keys.json` (`connect.arm`).
 - Each card, model name and endpoint list gets a registry key in `models.MODELS`: `(card file, endpoints[, model])`
