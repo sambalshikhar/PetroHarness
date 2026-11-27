@@ -36,6 +36,13 @@ def pytest_make_collect_report(collector):
         rep.longrepr = (str(getattr(collector, "path", "")), 0, f"Skipped: {REASON}")
 
 
+@pytest.fixture(autouse=True)
+def _own_petroharness_home(tmp_path_factory, monkeypatch):
+    """Each test has its own empty PetroHarness folder (petroharness.connect.home): no model chosen in the web UI,
+    no key kept on this machine, reaches a test."""
+    monkeypatch.setenv("PETROHARNESS_HOME", str(tmp_path_factory.mktemp("petroharness-home")))
+
+
 @pytest.fixture
 def plain_settings(tmp_path):
     """Data settings for a test that reads no well (a model client, the configuration's defaults): an empty LAS folder

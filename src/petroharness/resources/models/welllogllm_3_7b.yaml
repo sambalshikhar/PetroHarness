@@ -1,0 +1,21 @@
+# Model card: WellLogLLM-3.7B, our post-trained K2-Horizon-3.7B (Hugging Face: sambal/WellLogLLM-3.7B), served by vLLM 0.30 or
+# later under the name in `model` below:
+#   vllm serve sambal/WellLogLLM-3.7B --served-model-name welllogllm-3.7b --max-model-len 65536 --trust-remote-code \
+#       --reasoning-parser k2_horizon --chat-template-content-format string
+# The request settings are K2-Horizon's (k2_horizon_7b.yaml): it thinks at high effort, and at low effort for the one
+# retry after an empty reply and for the call that chooses an answer's figures. The fields: docs/MODELS.md.
+model:
+  base_url: http://localhost:8000/v1
+  model: welllogllm-3.7b
+  label: WellLogLLM-3.7B
+  reasoning: true
+  chat_template_kwargs: {reasoning_effort: high}
+  retry_template_kwargs: {reasoning_effort: low}    # after an empty reply (reasoning used every token)
+  light_template_kwargs: {reasoning_effort: low}    # a call that needs little reasoning (choosing an answer's figures)
+  reasoning_end: "</ifm|think>"                     # at low effort the server leaves the reasoning before this marker
+  temperature: 1.0
+  top_p: 0.95
+  max_tokens_spec: 32768
+  max_tokens_writer: 32768
+  timeout_s: 3600
+  max_retries: 1

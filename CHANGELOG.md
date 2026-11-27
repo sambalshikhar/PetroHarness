@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.3.0 (2026-11-27)
+
+WellLogLLM, our post-trained model, is the default, and the web UI connects any model.
+
+- **WellLogLLM-3.7B by default.** With no model option and no `PETROHARNESS_MODEL_URL`, `petroharness --launch-ui`
+  and `petroharness` answer with WellLogLLM-3.7B as a GGUF in Ollama on this computer, with or without a GPU: Ollama
+  pulls it from Hugging Face (`sambal/WellLogLLM-3.7B-GGUF`, 5.4 GB for Q8_0) the first time, and PetroHarness makes a
+  copy with the 65,536-token context the harness needs.
+- **The Model dialog.** The model's name in the top bar opens it: WellLogLLM-3.7B or any model in Ollama, a vLLM
+  server (with the commands that serve WellLogLLM-7B and -3.7B, and its API key), or OpenRouter (its models listed with
+  context window and price). It switches the model while the server runs; questions already asked keep theirs. The
+  choice is kept for the next start and for the command (`model.json`), and API keys in `keys.json`, readable by their
+  owner only and never sent to the page. A server listening beyond this computer keeps the model it was started with.
+- **WellLogLLM-7B as a GGUF too** (`sambal/WellLogLLM-7B-GGUF`, 9.6 GB in Q8_0), in the dialog beside the 3.7B: on a
+  Mac, both run on the GPU through Metal, as any model in Ollama does.
+- **What is not ideal, said.** Before connecting, the dialog checks this computer for the model chosen: memory, GPU
+  (Apple silicon, NVIDIA or AMD) and the disk space for the download, with what to do; once connected, it loads the
+  model and says where Ollama put it, and a model not all on the GPU is marked in the top bar and by the command.
+- **Model cards** `welllogllm_7b`, `welllogllm_3_7b` (vLLM), `welllogllm_7b_gguf` and `welllogllm_3_7b_gguf`
+  (Ollama): K2-Horizon-7B's request settings under WellLogLLM's names; the GGUF cards ask for JSON in the prompt alone
+  and allow longer requests.
+- **Install and set up** (`docs/INSTALL.md`): every step per system, the sizes, where the choice is kept, and what to
+  do when something goes wrong. The README's quick start starts from it.
+- The endpoint health check carries the card's API key, so a server that wants one shows as healthy.
+
 ## 1.2.0 (2026-11-26)
 
 PetroHarness installs from PyPI, and credits the data behind its results and its examples.

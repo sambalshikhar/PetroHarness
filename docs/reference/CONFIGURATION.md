@@ -408,8 +408,11 @@ eval:
 
 A model card is a YAML file with one section, `model`, checked against `config.ModelConfig`; the card comes from
 `--model-card`, else the generic card when `--model` names the served model, else the K2-Horizon-7B card. The
-endpoints come from `--model-url`, else `PETROHARNESS_MODEL_URL` (comma-separated). [MODELS.md](../MODELS.md)
-explains serving and each field.
+endpoints come from `--model-url`, else `PETROHARNESS_MODEL_URL` (comma-separated). With none of these, the command and
+the web UI take the model chosen last in the web UI's Model dialog (`model.json` in PetroHarness's folder), else
+WellLogLLM-3.7B as a GGUF in Ollama (`welllogllm_3_7b_gguf` at `http://127.0.0.1:11434/v1`), made ready first
+(`petroharness.connect`; [Install and set up](../INSTALL.md#5-where-petroharness-keeps-your-choice)). Benchmark mode
+reads neither. [MODELS.md](../MODELS.md) explains serving and each field.
 
 ```yaml
 model:
@@ -448,7 +451,10 @@ Notes:
 - The card: `--model-card` (a YAML file, or a packaged card's name with or without `.yaml`), else the generic card
   when `--model` is given, else the K2-Horizon-7B card (`models.card_file`). The packaged cards are in
   `src/petroharness/resources/models/`: `generic` (no sampling or template fields sent, caps 16384, timeout 1800 s,
-  2 retries) and the default card.
+  2 retries), the default card, and the WellLogLLM cards `welllogllm_7b`, `welllogllm_3_7b`, `welllogllm_7b_gguf` and
+  `welllogllm_3_7b_gguf`.
+- A card the Model dialog writes is in `cards/` of PetroHarness's folder; its `api_key_env` names a variable of its own
+  (`PETROHARNESS_KEY_` and ten characters), which PetroHarness sets from `keys.json` (`connect.arm`).
 - Each card, model name and endpoint list gets a registry key in `models.MODELS`: `(card file, endpoints[, model])`
   (`models.register`).
 - A question's endpoint is `endpoints[(int(sha256(task_id)[:8], 16) + rep) % len(endpoints)]`
@@ -507,7 +513,10 @@ These are every environment variable read in `src/petroharness`.
 | Variable | Type | Default | Meaning | Defined in |
 |---|---|---|---|---|
 | `PETROHARNESS_DATA` | path | not set | The data config. For a question and for `petroharness setup`, the base settings file when `--settings` is not given; for benchmark mode and `HarnessConfig()`, the data config (else `configs/data.local.yaml`). The web UI shows it in `/api/config` (`settings_env`). | `config.data_file`, `interval._settings`, `core.setup.config_for`, `ui.server.App.config` |
-| `PETROHARNESS_MODEL_URL` | comma-separated URLs | not set | The model endpoints, when `--model-url` is not given. | `models.env_urls` |
+| `PETROHARNESS_MODEL_URL` | comma-separated URLs | not set | The model endpoints, when `--model-url` is not given. Set, the command and the web UI do not read the Model dialog's saved choice. | `models.env_urls` |
+| `PETROHARNESS_HOME` | folder | the system's place for an application's settings (`~/.config/petroharness`, `~/Library/Application Support/PetroHarness`, `%APPDATA%\PetroHarness`) | PetroHarness's folder: `model.json` (the Model dialog's choice), `keys.json` (the keys, readable by its owner only), `cards/`. The tests set one of their own. | `connect.home` |
+| `OPENROUTER_API_KEY` | text | not set | The OpenRouter key, when the Model dialog keeps none. | `connect.key` |
+| `PETROHARNESS_KEY_…` | text | set by PetroHarness | The key of a card the Model dialog wrote, set in the process from `keys.json`. | `connect.arm` |
 | `PETROHARNESS_API_KEY` | text | not set (`EMPTY` is sent) | The API key, unless the card's `api_key_env` names another variable. | `config.HarnessConfig.api_key` |
 | the card's `api_key_env` (for example `OPENAI_API_KEY`) | text | not set | The API key for that card. | `config.HarnessConfig.api_key` |
 | `PETROHARNESS_SKILLS` | folder or `none` | not set | The skill library, when `--skills` is not given. The web UI shows it in `/api/config` (`skills_env`). | `config.skills_setting`, `ui.server.App.config` |

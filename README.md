@@ -41,36 +41,32 @@ pip install -e .
 ```
 </details>
 
-**2. Connect a model**
-
-PetroHarness works with any chat model behind an OpenAI-compatible endpoint, with a context window of 64k tokens or
-more. Serve one, then point PetroHarness at it:
+**2. Launch the UI**
 
 ```bash
-# vLLM
-vllm serve Qwen/Qwen3-32B --port 8000 --max-model-len 65536
-export PETROHARNESS_MODEL_URL=http://localhost:8000/v1
-
-# or Ollama (its default context window is too small, so raise it)
-OLLAMA_CONTEXT_LENGTH=65536 ollama serve
-ollama pull qwen3:32b
-export PETROHARNESS_MODEL_URL=http://localhost:11434/v1
+petroharness --launch-ui
 ```
 
-Name the model you serve with `--model` (`--model Qwen/Qwen3-32B`, `--model qwen3:32b`). K2-Horizon-7B is the
-default and needs no `--model`. Several endpoints go in one variable, comma-separated. SGLang, a hosted API with your
-key, and serving K2-Horizon-7B: [Models](https://welllogbench.com/petroharness/docs/models.html).
+The page opens at http://localhost:7860. With nothing else set, the model is **WellLogLLM-3.7B**, our post-trained
+model for well-log interpretation, run by [Ollama](https://ollama.com/download) on your computer, with or without a GPU
+(a Mac's GPU, an NVIDIA or an AMD one is used):
+install Ollama first, and PetroHarness downloads the model (5.4 GB) the first time. Pick one of Petrophys's sample wells
+or drop your own LAS file, choose the interval, and ask in your own words. On a remote machine, forward the port first
+(`ssh -L 7860:localhost:7860 HOST`) and open the same address.
 
-**3. Launch the UI**
+**3. Or choose another model**
+
+**Model** (top right of the page) connects WellLogLLM-7B on your own GPU server (the dialog shows the vLLM command to
+start it, with a Copy button), any model a vLLM server or Ollama serves, or a hosted model through OpenRouter with your
+API key. PetroHarness keeps the choice for the next start and for the command. From the command line:
 
 ```bash
-petroharness --launch-ui                       # K2-Horizon-7B, at PETROHARNESS_MODEL_URL
-petroharness --launch-ui --model qwen3:32b     # any other model, by the name it is served under
+petroharness --launch-ui --model Qwen/Qwen3-32B --model-url http://localhost:8000/v1   # any model a server serves
 ```
 
-The UI opens at http://localhost:7860. Pick one of Petrophys's sample wells or drop your own LAS file, choose the
-interval, and ask in your own words. On a remote machine, forward the port first (`ssh -L 7860:localhost:7860 HOST`)
-and open the same address. More: [Web UI](https://welllogbench.com/petroharness/docs/ui.html).
+Every step, per system, with sizes and what to do when something goes wrong:
+[Install and set up](https://welllogbench.com/petroharness/docs/install.html). Serving models and model cards:
+[Models](https://welllogbench.com/petroharness/docs/models.html).
 
 **4. Or ask from the command line**
 
@@ -84,8 +80,8 @@ petroharness --las $LAS --tops $TOPS --formation "BRENT GP." \
   --question "What are the porosity, water saturation and permeability of the Brent Group, and is any of it hydrocarbon-bearing?"
 ```
 
-The answer is printed, and `answer.md` and `trace.json` (every model call and every result opened) go to
-`./petroharness-out/<LAS name>/`.
+It uses the model you chose in the page, or WellLogLLM-3.7B in Ollama when you chose none. The answer is printed, and
+`answer.md` and `trace.json` (every model call and every result opened) go to `./petroharness-out/<LAS name>/`.
 
 <details>
 <summary>Go further</summary>

@@ -265,7 +265,7 @@ left out; the served model's name is replaced, and the hash is the one computed 
 
 ```text
 setup 63669f4be296
-  harness: 1.2.0
+  harness: 1.3.0
   commit: <commit>
   petrophys: 3.0.0@files-c5de047fe601
   components:

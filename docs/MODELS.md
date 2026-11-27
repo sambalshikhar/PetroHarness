@@ -1,8 +1,9 @@
 # Models
 
 PetroHarness works with any chat model behind an OpenAI-compatible chat completions endpoint: a model you serve
-yourself with vLLM, SGLang, Ollama or LM Studio, or a hosted API. A model card says how to call it. The default model
-is K2-Horizon-7B.
+yourself with vLLM, SGLang, Ollama or LM Studio, or a hosted API. A model card says how to call it. With nothing set,
+the model is WellLogLLM-3.7B, our post-trained model, as a GGUF in Ollama on your computer
+([Install and set up](INSTALL.md)); the web UI's Model dialog connects any other.
 
 ```mermaid
 flowchart TB
@@ -38,9 +39,16 @@ investigation step and in Markdown when it writes the answer.
 
 | You want | How |
 |---|---|
-| K2-Horizon-7B (the default) | nothing: its model card is the default |
+| WellLogLLM-3.7B on your computer | nothing: with no model set, Ollama runs it, downloaded the first time ([Install and set up](INSTALL.md#3a-welllogllm-on-this-computer-ollama)) |
+| to choose in the page | **Model**, top right of the web UI: Ollama on this computer, a vLLM server, or OpenRouter. The choice is kept for the next start and for the command |
+| WellLogLLM-7B or -3.7B on your vLLM server | `--model-card welllogllm_7b` (or `welllogllm_3_7b`) `--model-url URL` |
+| K2-Horizon-7B | `--model-url URL`, or `PETROHARNESS_MODEL_URL`: with an endpoint and no card, its card is the default |
 | any chat model, by its served name | `--model NAME`: the generic card, with that name |
 | full control over the request | `--model-card FILE`: a model card of your own |
+
+Which model a run uses, first match wins: the options above; `PETROHARNESS_MODEL_URL`; the model chosen last in the web
+UI; WellLogLLM-3.7B in Ollama ([where the choice is kept](INSTALL.md#5-where-petroharness-keeps-your-choice)).
+Benchmark mode uses the options and `PETROHARNESS_MODEL_URL` only.
 
 The endpoints come from `--model-url` or `PETROHARNESS_MODEL_URL`, comma-separated. A batch spreads its questions over
 them, and the web UI sends each question to the least busy one. The API key is read from the environment variable the
@@ -48,6 +56,21 @@ card names (`PETROHARNESS_API_KEY` unless the card says otherwise); a local serv
 
 The same options work for the command, the web UI (`petroharness ui --model ...`), benchmark mode
 (`petroharness benchmark --model ...`) and Python (`ask(..., model="...", model_card="...")`).
+
+## The Model dialog
+
+**Model** (top right of the web UI, on the model's name) connects a model while the server runs; the questions already
+asked keep theirs.
+
+| Route | What PetroHarness does |
+|---|---|
+| On this computer | Checks Ollama (and says how to install it when it is missing) and this computer (memory, GPU, disk), pulls WellLogLLM-3.7B or -7B as a GGUF or any model you name, makes a copy of it with a 65,536-token context, loads it and says where Ollama put it (all on the GPU, part on the CPU, or on the CPU). The page follows the download; what is not ideal is marked, with what to do |
+| A vLLM server | Shows the commands that serve WellLogLLM-7B and -3.7B, lists the models the server at your address serves (with its API key if it has one), and chooses the card from the model's name: WellLogLLM and K2-Horizon models get the WellLogLLM card, others the generic one |
+| OpenRouter | Checks your key, lists OpenRouter's text models with their context window, price, reasoning and JSON support, and writes a hosted-API card for the one you choose |
+
+It writes the card it uses into `cards/` of PetroHarness's folder, and keeps any key you give in `keys.json` there,
+readable by you only ([where](INSTALL.md#5-where-petroharness-keeps-your-choice)): the page is told whether a key is
+kept, never the key. A server started with `--host` other than a loopback address keeps the model it was started with.
 
 ## Serve a model
 
@@ -74,13 +97,34 @@ petroharness --model Qwen/Qwen3-32B --model-url http://localhost:30000/v1 --las 
 <details>
 <summary>Ollama</summary>
 
-Its default context window is far smaller than the harness needs, so raise it:
+The Model dialog does this for you (**Another model in Ollama**): it pulls the model and makes a copy with a 64k-token
+context. By hand, Ollama's default context window is far smaller than the harness needs, so raise it:
 
 ```bash
 OLLAMA_CONTEXT_LENGTH=65536 ollama serve
 ollama pull qwen3:32b
 petroharness --model qwen3:32b --model-url http://localhost:11434/v1 --las $LAS --question "..."
 ```
+</details>
+
+<details>
+<summary>WellLogLLM-7B and WellLogLLM-3.7B</summary>
+
+Our post-trained K2-Horizon models ([`sambal/WellLogLLM-7B`](https://huggingface.co/sambal/WellLogLLM-7B),
+[`sambal/WellLogLLM-3.7B`](https://huggingface.co/sambal/WellLogLLM-3.7B)), served by vLLM 0.30 or later under the
+names their cards give:
+
+```bash
+vllm serve sambal/WellLogLLM-7B --served-model-name welllogllm-7b --port 8000 \
+  --max-model-len 65536 --trust-remote-code \
+  --reasoning-parser k2_horizon --chat-template-content-format string
+petroharness --launch-ui --model-card welllogllm_7b --model-url http://localhost:8000/v1
+```
+
+Both as GGUF files, for Ollama and llama.cpp on any computer (on a Mac, on its GPU through Metal):
+[`sambal/WellLogLLM-3.7B-GGUF`](https://huggingface.co/sambal/WellLogLLM-3.7B-GGUF) and
+[`sambal/WellLogLLM-7B-GGUF`](https://huggingface.co/sambal/WellLogLLM-7B-GGUF), in Q8_0, Q6_K, Q5_K_M and Q4_K_M
+([Install and set up](INSTALL.md#3a-welllogllm-on-this-computer-ollama)).
 </details>
 
 <details>
@@ -108,8 +152,15 @@ string, and without the flag the user's text does not reach the model.
 A model card is a YAML file with one section, `model`: the served model's name and how to call it. The packaged cards
 are in `src/petroharness/resources/models/`:
 
-- `k2_horizon_7b.yaml`: K2-Horizon-7B, the default (registry key `k2-horizon-7b`). It thinks at high effort, and at
-  low effort for the one retry after an empty reply and for the call that chooses an answer's figures.
+- `k2_horizon_7b.yaml`: K2-Horizon-7B, the default card with an endpoint given (registry key `k2-horizon-7b`). It
+  thinks at high effort, and at low effort for the one retry after an empty reply and for the call that chooses an
+  answer's figures.
+- `welllogllm_7b.yaml`, `welllogllm_3_7b.yaml`: WellLogLLM-7B and -3.7B on vLLM, served as `welllogllm-7b` and
+  `welllogllm-3.7b`, called as K2-Horizon-7B's card calls it.
+- `welllogllm_3_7b_gguf.yaml`, `welllogllm_7b_gguf.yaml`: WellLogLLM-3.7B and -7B as GGUF files in Ollama
+  (`welllogllm-3.7b:q8_0`, `welllogllm-7b:q8_0` at `http://localhost:11434/v1`): the same, with JSON asked for in the
+  prompt alone (`structured_output: none`) and three hours for a request (`timeout_s`), since a computer without a GPU
+  writes far more slowly.
 - `generic.yaml`: any chat model, named with `--model`. It sends no sampling settings and no chat-template variables,
   so the model's own defaults apply. Its output caps are 16,384 tokens for a step and for the writer; raise them for
   a model that thinks at length.

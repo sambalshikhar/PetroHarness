@@ -10,13 +10,15 @@ number was computed. Every run is saved, to come back to, rate and replay. The p
 ## Start it
 
 ```bash
-export PETROHARNESS_MODEL_URL=http://localhost:8000/v1    # several: comma-separated
 petroharness --launch-ui                                  # opens http://localhost:7860 in your browser
 ```
 
+With no model given, the page starts with the model chosen last in its Model dialog, else with WellLogLLM-3.7B in
+Ollama on this computer, downloaded the first time ([The model](#the-model); [Install and set up](INSTALL.md)).
 `petroharness ui` starts the same server without opening a browser (for a server you reach from elsewhere). Both
-take the options below, for example `petroharness --launch-ui --model qwen3:32b --model-url http://localhost:11434/v1`.
-On a Linux machine with no display, `--launch-ui` opens nothing and prints the address to open instead.
+take the options below, for example `petroharness --launch-ui --model-card welllogllm_7b --model-url
+http://localhost:8000/v1`. On a Linux machine with no display, `--launch-ui` opens nothing and prints the address to
+open instead.
 
 The server needs nothing beyond the package. It prints where it listens, the runs folder and the model endpoints, and
 runs until you stop it (Ctrl+C). As for the command, a data settings file in `PETROHARNESS_DATA` is the base the
@@ -33,7 +35,7 @@ with the defaults.
 | `--allow-host NAME` | a further host name the server answers when it listens on a loopback address, for a proxy that keeps its own host name (repeatable); without it, the API answers only requests for `localhost`, `127.0.0.1` and `::1` |
 | `--runs DIR` | the folder for saved runs and uploads (default `./petroharness-ui-runs`) |
 | `--workers N` | questions answered at once (default 4); more wait in a queue |
-| `--model NAME` | any chat model, by its served name (default: K2-Horizon-7B; [Models](MODELS.md)) |
+| `--model NAME` | any chat model, by its served name ([Models](MODELS.md)); without a model option or `PETROHARNESS_MODEL_URL`, the page starts with the model chosen last in its Model dialog, else WellLogLLM-3.7B in Ollama |
 | `--model-card CARD` | a model card: a YAML file or a packaged card's name |
 | `--model-url URLS` | the model endpoints, comma-separated (default `PETROHARNESS_MODEL_URL`) |
 | `--open` | open the page in your browser once the server listens (`petroharness --launch-ui` is `petroharness ui --open`) |
@@ -460,11 +462,34 @@ the answer. In the browser console, `__replay.open(id, 0)` then `__replay.seek(t
 seconds in.
 </details>
 
+## The model
+
+The top bar names the model on a button, with a dot: green when the model answers, amber when it answers in a way that
+is not ideal on this computer (part of it on the CPU, for example; a bar under the top bar says what, until you dismiss
+it), orange while it is being made ready, red when it does not answer. The button opens the **Model** dialog, which connects another model while the server runs:
+
+- **On this computer**: WellLogLLM-3.7B (recommended) or WellLogLLM-7B as a GGUF in Ollama, each in four
+  quantizations, or any model Ollama can pull. PetroHarness checks Ollama (and says how to install it when it is
+  missing) and this computer: its memory, its GPU (Apple silicon, NVIDIA or AMD) and the disk space for the download,
+  marking what is not ideal with what to do. Then it pulls the model, makes a copy of it with a 65,536-token context,
+  loads it, and says where Ollama put it: all on the GPU (on a Mac, through Metal), part on the CPU, or on the CPU.
+- **A vLLM server**: the commands that serve WellLogLLM-7B or -3.7B with vLLM, with a Copy button; then the server's
+  address and API key, the models it serves, and how the harness calls the one you choose.
+- **OpenRouter**: your API key, and OpenRouter's models with their context window and price, searchable.
+
+While a model downloads, a bar under the top bar follows it (the dialog's **Stop** stops it). Once the model answers,
+the next questions use it; questions already asked keep the model they were asked with. The choice is kept for the next
+start and for the `petroharness` command, and a key you give is kept on this computer, readable by you only
+([Install and set up](INSTALL.md#5-where-petroharness-keeps-your-choice)). When no model answers as the page opens, the
+dialog opens by itself. A server listening beyond this computer (`--host 0.0.0.0`) keeps the model it was started with.
+
+![The Model dialog's vLLM server route](images/ui-model-vllm.png "A vLLM server: 1, the command that serves WellLogLLM-7B (or -3.7B), to copy onto your GPU server; 2, its address and API key: Check the server lists the models it serves, then Connect.")
+
 ## Model endpoints and the queue
 
-The top bar names the model and shows each model endpoint as a dot, green when it answers `/v1/models` with the model
-the harness asks for (hover for its address and load). Each question goes to the least busy endpoint that answers;
-`--workers` questions run at once, and the top bar counts those running and waiting.
+The top bar shows each model endpoint as a dot, green when it answers `/v1/models` with the model the harness asks for
+(hover for its address and load). Each question goes to the least busy endpoint that answers; `--workers` questions run
+at once, and the top bar counts those running and waiting.
 
 ## The API
 

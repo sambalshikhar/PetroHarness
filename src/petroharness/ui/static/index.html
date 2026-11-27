@@ -14,7 +14,7 @@
   --navy: #011e3f; --navy-soft: #e6ecf4; --orange: #ef6719;
   --bg: #f8f7f4; --surface: #ffffff; --surface-2: #f6f5f1; --ink: #1c2433; --ink-2: #353a44; --muted: #636a76;
   --faint: #9aa0aa; --line: #e4e3df; --line-2: #eeede9; --code: #f0eeea;
-  --accent: #ef6719; --accent-ink: #b84e12; --accent-soft: #fdeee4;
+  --accent: #ef6719; --accent-ink: #b84e12; --accent-soft: #fdeee4; --warn: #a15c07; --warn-soft: #fdf3e1;
   --look: #285aa6; --look-soft: #e3ebf8; --note: #8f5300; --note-soft: #f6ead6;
   --done: #2b7536; --done-soft: #e0efe2; --warn: #a5401b; --warn-soft: #f6e1d8; --bad: #b42318; --bad-soft: #fbe5e2;
   --pp: #197e6f; --pp-soft: #e3f2ee;   /* Petrophys teal: only where Petrophys is named */
@@ -28,7 +28,7 @@
     --navy: #a9c1e8; --navy-soft: #1d2a3d; --orange: #ff7a2e;
     --bg: #0e1219; --surface: #151a23; --surface-2: #11161e; --ink: #eef1f6; --ink-2: #cfd5df; --muted: #9aa3b1;
     --faint: #6e7787; --line: #262d39; --line-2: #1d232d; --code: #1c222d;
-    --accent: #ff7a2e; --accent-ink: #ff8a45; --accent-soft: #3a2414;
+    --accent: #ff7a2e; --accent-ink: #ff8a45; --accent-soft: #3a2414; --warn: #f2b45a; --warn-soft: #33270f;
     --look: #82a9ee; --look-soft: #1b2941; --note: #e4a650; --note-soft: #382a13;
     --done: #77c582; --done-soft: #1a321f; --warn: #ee8c66; --warn-soft: #3b2119; --bad: #f87171; --bad-soft: #2f1819;
     --pp: #2fa58c; --pp-soft: #143029; --logo-light: none; --logo-dark: inline-block; --shadow: none;
@@ -38,7 +38,7 @@
   --navy: #a9c1e8; --navy-soft: #1d2a3d; --orange: #ff7a2e;
   --bg: #0e1219; --surface: #151a23; --surface-2: #11161e; --ink: #eef1f6; --ink-2: #cfd5df; --muted: #9aa3b1;
   --faint: #6e7787; --line: #262d39; --line-2: #1d232d; --code: #1c222d;
-  --accent: #ff7a2e; --accent-ink: #ff8a45; --accent-soft: #3a2414;
+  --accent: #ff7a2e; --accent-ink: #ff8a45; --accent-soft: #3a2414; --warn: #f2b45a; --warn-soft: #33270f;
   --look: #82a9ee; --look-soft: #1b2941; --note: #e4a650; --note-soft: #382a13;
   --done: #77c582; --done-soft: #1a321f; --warn: #ee8c66; --warn-soft: #3b2119; --bad: #f87171; --bad-soft: #2f1819;
   --pp: #2fa58c; --pp-soft: #143029; --logo-light: none; --logo-dark: inline-block; --shadow: none;
@@ -84,7 +84,7 @@ body.panel-closed .side { visibility: hidden; }
 .flabel { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 13px; margin-bottom: 8px; }
 .n { width: 20px; height: 20px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; }
 .lab { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
-select, input[type=text], input[type=number], textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+select, input[type=text], input[type=number], input[type=password], input[type=search], textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
 textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
 select:focus, input:focus, textarea:focus { outline: 3px solid var(--accent-soft); border-color: var(--accent); }
 .row { display: flex; gap: 8px; align-items: center; } .row > * { flex: 1; min-width: 0; } .row > .fix { flex: 0 0 auto; }
@@ -959,6 +959,110 @@ body:not(.panel-closed) .scrim { display: block; position: fixed; inset: 52px 0 
   .cfoot .long { display: none; }
   .sheet { max-height: 70vh; }
 }
+
+/* the model: the header's chip, the bar while one is being connected, the Model dialog */
+.modelchip { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 9px 0 11px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; max-width: min(340px, 38vw); flex: none; }
+.modelchip:hover { border-color: var(--accent); }
+.modelchip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modelchip .dot { margin: 0; flex: none; }
+.modelchip svg { flex: none; color: var(--muted); }
+.dot.busy { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.dot.warn { background: var(--warn); }
+.setupbar { position: sticky; top: 52px; z-index: 25; display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface);
+  border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+.setupbar .dot { margin: 0; flex: none; }
+.setupbar .sb-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setupbar .sb-n, .mfoot-n { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 12.5px; }
+.setupbar .btn { flex: none; }
+.meter { flex: 0 1 300px; min-width: 80px; height: 6px; border-radius: 999px; background: var(--line-2); overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width .5s; }
+.idlg.mdlg { width: min(880px, 100%); height: auto; max-height: min(900px, 100%); grid-template-rows: auto minmax(0, 1fr) auto; }
+.mnow { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 13px; color: var(--ink-2); flex-wrap: wrap; }
+.mnow .dot { margin: 0; }
+.mdlg-body { overflow-y: auto; padding: 18px 22px 22px; display: grid; gap: 18px; align-content: start; }
+.routes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.route { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 13px 14px 12px; cursor: pointer;
+  display: grid; gap: 3px; font: inherit; color: var(--ink); align-content: start; }
+.route:hover { border-color: var(--faint); }
+.route.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.route svg { color: var(--accent-ink); margin-bottom: 4px; }
+.route b { font-size: 14.5px; }
+.route span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+#mpanel { display: grid; gap: 18px; }
+.mcards { display: grid; gap: 10px; }
+.mcard { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 14px 16px; display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto; gap: 4px 12px; align-items: start; cursor: pointer; }
+.mcard:hover { border-color: var(--faint); }
+.mcard.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.mcard .t { font-weight: 650; font-size: 14.5px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mcard .d { color: var(--ink-2); font-size: 13px; line-height: 1.5; margin-top: 2px; }
+.mcard input[type=text] { margin-top: 10px; }
+.mcard select { width: auto; min-width: 210px; }
+.facts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
+.fact { font-size: 12px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; white-space: nowrap; }
+.fact.ok { color: var(--done); border-color: currentColor; background: var(--surface); }
+.badge { font-size: 11px; font-weight: 700; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 1px 8px; }
+.radio { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--faint); margin-top: 3px; display: grid; place-items: center; background: var(--surface); }
+.on > .radio { border-color: var(--accent); }
+.on > .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.msect { display: grid; gap: 10px; }
+.msect > .seg { justify-self: start; }
+.mhead { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14px; color: var(--ink); }
+.mline { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); flex-wrap: wrap; }
+.mline .dot { margin: 0; }
+.mline.bad { color: var(--bad); }
+.mchecks { display: grid; gap: 7px; }
+.mcheck { display: grid; grid-template-columns: 10px 62px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+.mcheck .dot { margin: 0; transform: translateY(-1px); }
+.mcheck b { color: var(--ink); font-weight: 650; }
+.mcheck.warn span:last-child { color: var(--warn); }
+.mcheck.bad span:last-child { color: var(--bad); }
+.mwarns { display: grid; gap: 6px; margin: 0; padding: 10px 12px; list-style: none; background: var(--warn-soft); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+.mwarns li { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.mwarns .dot { margin: 0; }
+.setupbar.warn { background: var(--warn-soft); }
+.setupbar .x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; counter-reset: st; }
+.steps li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 13px; color: var(--ink-2); counter-increment: st; }
+.steps li::before { content: counter(st); width: 20px; height: 20px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink);
+  display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; }
+.steps .btn { margin-left: 6px; }
+.codebox { position: relative; background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 12px 84px 12px 14px;
+  font-family: var(--mono); font-size: 12px; line-height: 1.65; white-space: pre; overflow-x: auto; color: var(--ink); }
+.codebox .copy { position: absolute; top: 8px; right: 8px; font-family: var(--sans); }
+code.inl { font-family: var(--mono); font-size: 12px; background: var(--code); border-radius: 5px; padding: 1px 5px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 10px 14px; align-items: end; }
+.grid2 label { display: block; }
+.grid2 .lab { margin-top: 0; }
+.msaid { font-size: 13px; color: var(--ink-2); }
+.msaid.bad { color: var(--bad); }
+.mmore summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+.mmore .row { margin-top: 8px; }
+.orlist { border: 1px solid var(--line); border-radius: 10px; max-height: 300px; overflow-y: auto; background: var(--surface); }
+.oritem { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 14px; padding: 9px 12px; border-bottom: 1px solid var(--line-2); cursor: pointer; }
+.oritem:last-child { border-bottom: 0; }
+.oritem:hover { background: var(--surface-2); }
+.oritem.on { background: var(--accent-soft); }
+.oritem .nm { font-weight: 600; font-size: 13px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.oritem .id { font-family: var(--mono); font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.oritem .r { text-align: right; font-size: 12px; color: var(--muted); line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tag { font-size: 10.5px; font-weight: 600; border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; color: var(--ink-2); background: var(--surface); }
+.tag.bad { color: var(--bad); border-color: currentColor; }
+.mnote { font-size: 12.5px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; line-height: 1.5; }
+.mstatus { display: grid; gap: 7px; font-size: 13px; color: var(--ink-2); min-width: 0; flex: 1 1 0; line-height: 1.45; }
+.mstatus .mtext { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mstatus .mprog { display: flex; align-items: center; gap: 10px; }
+.mstatus .mprog .meter { flex: 1 1 auto; max-width: 360px; }
+#mfoot { flex-wrap: nowrap; }
+.mstatus.bad { color: var(--bad); }
+.mstatus.good { color: var(--done); }
+.mstatus b { font-weight: 650; }
+@media (max-width: 760px) {
+  .routes { grid-template-columns: minmax(0, 1fr); } .route svg { display: none; }
+  .grid2 { grid-template-columns: minmax(0, 1fr); } .mcard { grid-template-columns: 18px minmax(0, 1fr); } .mcard select { grid-column: 2; }
+  .modelchip { max-width: 44vw; }
+}
 </style>
 </head>
 <body>
@@ -968,12 +1072,14 @@ body:not(.panel-closed) .scrim { display: block; position: fixed; inset: 52px 0 
   </button>
   <a class="logo" href="/" title="PetroHarness"><img class="logo-light" src="/img/petroharness_logo.svg" alt="PetroHarness"><img class="logo-dark" src="/img/petroharness_logo_dark.png" alt="PetroHarness"></a>
   <span class="divider"></span>
-  <div class="sub">Ask about a LAS file<span id="modelname"></span></div>
+  <div class="sub">Ask about a LAS file</div>
+  <button class="modelchip" id="modelbtn" title="The model that answers: change it" aria-haspopup="dialog"><span class="dot" id="modeldot"></span><span class="nm" id="modelname">Model</span><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 7.5l3-3"/></svg></button>
   <div class="grow"></div>
   <div class="health" id="health">checking endpoints…</div>
   <button class="btn fix newconv" id="newconv" title="Start a new conversation">+ New conversation</button>
 </header>
 
+<div class="setupbar" id="setupbar" hidden></div>
 <div class="shell">
   <aside class="side" id="side" aria-label="Runs">
     <div class="sidehead"><b>Runs</b><span class="count" id="runcount">0</span><span class="grow"></span><button class="link fix" id="refresh">Refresh</button></div>
@@ -1085,7 +1191,7 @@ const fmtS = s => s == null ? "" : s < 90 ? `${Math.round(s)} s` : `${Math.floor
 const fmtN = n => n == null ? "–" : Number(n).toLocaleString("en-US");
 const fmtD = v => v == null ? "–" : String(+(+v).toFixed(4));
 const host = u => { try { return new URL(u).host; } catch (e) { return u || ""; } };
-const hostname = u => { try { return new URL(u).hostname.split(".")[0]; } catch (e) { return u || ""; } };
+const hostname = u => { try { const h = new URL(u).hostname; return /^(127\.|localhost$|\[?::1\]?$)/.test(h) ? "this computer" : /^[\d.]+$/.test(h) ? h : h.split(".")[0]; } catch (e) { return u || ""; } };
 const narrow = () => window.matchMedia("(max-width: 1180px)").matches;
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 1800); }
 const S = {lin: {}, cfg: null, las: null, tops: null, mode: "whole", job: null, since: 0, events: [], last: null, tab: "main", pinned: false, sig: "", poll: null, runs: [], det: {}, open: {}, raw: {}, evMode: "", hlZone: null, wellZoom: 1, wellData: null, m: null, res: null};
@@ -1709,7 +1815,7 @@ async function fillForm(inputs) {
 async function loadConfig() {
   try {
     const c = await api("/api/config"); const first = !S.cfg; S.cfg = c;
-    $("#modelname").textContent = c.label ? ` · ${c.label}` : "";
+    modelChip(); modelState();
     if (first && !location.hash) emptyPage();                   // the tagline names the model
     const eps = c.endpoints || [];
     const dots = eps.map(e => `<span title="${esc(e.url)}: ${e.ok ? `serves ${esc(c.model)}${e.ms != null ? ` (${e.ms} ms)` : ""}; answering ${e.busy}` : esc(e.error || "not reachable")}"><span class="dot ${e.ok ? "ok" : "bad"}"></span><span class="hname">${esc(hostname(e.url))}</span></span>`).join("");
@@ -1720,6 +1826,299 @@ async function loadConfig() {
     $("#envnote").hidden = !env.length; $("#envnote").textContent = env.length ? `On this server, ${env.join("; ")}.` : "";
     if ($("#profile").options.length === 1) $("#profile").innerHTML += (c.profiles || []).map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
   } catch (e) { $("#health").innerHTML = `<span><span class="dot bad"></span>server not answering</span>`; }
+}
+
+
+// ---------- the model: the header's chip, the bar while one is being connected, the Model dialog ----------
+const M = {st: null, tab: "", pick: "welllogllm", quant: "", other: "", ourl: "", ollama: null, ochecking: false, vm: 0, poll: null, auto: false, said: "", bad: false,
+  srv: {url: "", key: "", models: null, model: "", kind: "auto", said: "", bad: false},
+  or: {key: "", list: null, q: "", model: "", loading: false}};
+const ICON = (d) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ROUTES = [
+  {id: "ollama", t: "On this computer", d: "WellLogLLM in Ollama. No GPU needed.", i: ICON('<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>')},
+  {id: "server", t: "A vLLM server", d: "WellLogLLM-7B on your GPU, or any OpenAI-compatible server.", i: ICON('<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>')},
+  {id: "openrouter", t: "OpenRouter", d: "Hosted models, with your API key.", i: ICON('<path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.1 9.2 4.5 4.5 0 0 0 7 18z"/>')}];
+const WHERE = {ollama: "Ollama on this computer", server: "a vLLM server", openrouter: "OpenRouter"};
+const QNOTE = {Q8_0: "closest to the original", Q4_K_M: "smallest, least accurate"};
+const sizes = (done, total) => {          // "2.1 of 5.4 GB", "120 of 270 MB": the unit the total needs
+  const [d, u] = total >= 1e9 ? [1e9, "GB"] : total >= 1e6 ? [1e6, "MB"] : [1e3, "kB"];
+  return `${((done || 0) / d).toFixed(d === 1e9 ? 1 : 0)} of ${(total / d).toFixed(d === 1e9 ? 1 : 0)} ${u}`;
+};
+const modelReady = () => ((S.cfg && S.cfg.endpoints) || []).some(e => e.ok);
+const connecting = () => !!(M.st && M.st.task && M.st.task.state === "running");
+function saidHtml(t) {                     // a message of the harness's form "WHAT: ... FIX: ...", as two plain parts
+  if (!t) return "";
+  const [what, fix] = String(t).replace(/^WHAT:\s*/, "").split(/\s*FIX:\s*/);
+  return `<span>${esc(what)}${fix ? ` <b>${esc(fix)}</b>` : ""}</span>`;
+}
+async function modelState() {
+  try { M.st = await api("/api/model"); } catch (e) { return; }
+  modelChip(); setupBar();
+  if (connecting() && !M.poll) M.poll = setInterval(modelTick, 1000);
+  if (!M.auto && S.cfg) {                  // the page's first look: a model that cannot answer opens the dialog
+    M.auto = true;
+    const t = M.st.task;
+    if (M.st.can_change && !modelReady() && !connecting() && (!t || t.state !== "done")) modelOpen();
+  }
+}
+async function modelTick() {
+  await modelState();
+  const t = M.st && M.st.task;
+  if (t && t.state !== "running") {
+    clearInterval(M.poll); M.poll = null;
+    if (t.state === "done") {
+      await loadConfig();
+      toast(t.text);
+      M.said = t.text; M.bad = false; M.good = true;
+      if (!(t.warnings || []).length) modelClose();
+    } else if (t.state === "error") { M.said = t.text; M.bad = true; }
+  }
+  if ($("#mdlg") && !$("#mdlg").hidden) { mnowRender(); mfootRender(); }
+}
+function modelChip() {
+  const label = (M.st && M.st.label) || (S.cfg && S.cfg.label) || "Model";
+  $("#modelname").textContent = label;
+  const warned = !!(M.st && (M.st.warnings || []).length);
+  $("#modeldot").className = "dot " + (connecting() ? "busy" : !modelReady() ? "bad" : warned ? "warn" : "ok");
+  $("#modelbtn").title = connecting() ? `Getting ${label} ready` : modelReady() ? `${label} answers. Click to change the model` : `${label} does not answer yet. Click to connect a model`;
+}
+function setupBar() {
+  const bar = $("#setupbar"), st = M.st, t = st && st.task;
+  if (connecting()) {
+    const pct = t.total ? Math.round(100 * (t.done || 0) / t.total) : null;
+    bar.innerHTML = `<span class="dot busy"></span><span class="sb-t">${esc(t.text || "Getting the model ready")}</span>` +
+      (t.total ? `<span class="meter"><span style="width:${pct}%"></span></span><span class="sb-n">${sizes(t.done, t.total)} · ${pct}%</span>` : `<span class="spin"></span>`) +
+      `<span class="grow"></span><button class="btn small" id="sbopen">Details</button>`;
+  } else if (st && S.cfg && !modelReady() && st.can_change) {
+    const why = t && t.state === "error" ? t.text : `${st.label} does not answer at ${(st.urls || []).map(host).join(", ") || "any address"}.`;
+    bar.innerHTML = `<span class="dot bad"></span><span class="sb-t"><b>No model answers yet.</b> ${esc(String(why).replace(/^WHAT:\s*/, "").split(/\s*FIX:/)[0])}</span><span class="grow"></span><button class="btn small" id="sbopen">Connect a model</button>`;
+  } else if (st && modelReady() && (st.warnings || []).length && sessionStorage.getItem("ph-warned") !== `${st.label}|${st.warnings[0]}`) {
+    bar.className = "setupbar warn";
+    bar.innerHTML = `<span class="dot warn"></span><span class="sb-t"><b>${esc(st.label)}${st.where ? `, ${esc(st.where)}` : ""}.</b> ${esc(String(st.warnings[0]).split(/\s*FIX:/)[0])}</span><span class="grow"></span><button class="btn small" id="sbopen">Details</button><button class="x" id="sbx" aria-label="Dismiss">×</button>`;
+    bar.hidden = false;
+    $("#sbopen").onclick = () => modelOpen();
+    $("#sbx").onclick = () => { sessionStorage.setItem("ph-warned", `${st.label}|${st.warnings[0]}`); setupBar(); };
+    return;
+  } else { bar.hidden = true; bar.innerHTML = ""; return; }
+  bar.className = "setupbar" + (connecting() ? "" : " bad");
+  bar.hidden = false;
+  $("#sbopen").onclick = () => modelOpen();
+}
+function mnowRender() {
+  const el = $("#mnow"); if (!el || !M.st) return;
+  const st = M.st, state = connecting() ? "busy" : modelReady() ? "ok" : "bad";
+  const where = st.route ? WHERE[st.route] : (st.urls || []).map(host).join(", ");
+  const warned = state === "ok" && (st.warnings || []).length;
+  el.innerHTML = `<span class="dot ${warned ? "warn" : state}"></span>Now: <b>${esc(st.label)}</b>${where ? `<span class="subtle">· ${esc(where)}</span>` : ""}${st.where && state !== "bad" ? `<span class="subtle">· ${esc(st.where)}</span>` : ""}${state === "bad" && !connecting() ? `<span class="subtle">· not answering</span>` : ""}`
+    + (warned && !connecting() ? `<ul class="mwarns" style="margin-top:8px;width:100%">${st.warnings.map(w => `<li><span class="dot warn"></span><span>${saidHtml(w)}</span></li>`).join("")}</ul>` : "");
+}
+function modelOpen(tab) {
+  if (!M.st) { modelState().then(() => M.st && modelOpen(tab)); return; }
+  let m = $("#mdlg");
+  if (!m) { m = document.createElement("div"); m.id = "mdlg"; m.className = "idlg-scrim"; document.body.appendChild(m); m.onclick = e => { if (e.target === m) modelClose(); }; }
+  M.tab = tab || M.tab || M.st.route || "ollama";
+  if (M.st.route === "server" && !M.srv.url && M.st.urls.length) M.srv.url = M.st.urls[0];
+  if (!connecting()) { M.said = ""; M.bad = false; M.good = false; }
+  m.hidden = false;
+  m.innerHTML = `<div class="idlg mdlg" role="dialog" aria-modal="true" aria-labelledby="mdlgt">
+    <div class="idlg-head"><div><h2 id="mdlgt">Model</h2><p>The model reads what Petrophys calculates and writes the answer. Choose where it runs: PetroHarness keeps your choice for the next start.</p><div class="mnow" id="mnow"></div></div><button class="x" id="mclose" aria-label="Close">×</button></div>
+    <div class="mdlg-body">
+      ${M.st.can_change ? "" : `<div class="mnote">This server listens beyond this computer, so its page cannot change the model. Start it with the model you want (<code class="inl">--model-card</code>, <code class="inl">--model-url</code>), or on 127.0.0.1.</div>`}
+      <div class="routes" role="tablist">${ROUTES.map(r => `<button class="route${r.id === M.tab ? " on" : ""}" role="tab" aria-selected="${r.id === M.tab}" data-route="${r.id}">${r.i}<b>${r.t}</b><span>${r.d}</span></button>`).join("")}</div>
+      <div id="mpanel"></div></div>
+    <div class="idlg-foot" id="mfoot"></div></div>`;
+  $("#mclose").onclick = modelClose;
+  $$(".route", m).forEach(b => b.onclick = () => {
+    M.tab = b.dataset.route; if (!connecting()) { M.said = ""; M.bad = false; M.good = false; }
+    $$(".route", m).forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-selected", String(x === b)); });
+    mpanelRender();
+  });
+  mnowRender(); mpanelRender();
+}
+function modelClose() { const m = $("#mdlg"); if (m) m.hidden = true; }
+document.addEventListener("keydown", e => { const m = $("#mdlg"); if (e.key === "Escape" && m && !m.hidden) modelClose(); });
+$("#modelbtn").onclick = () => modelOpen();
+
+function mpanelRender() {
+  const p = $("#mpanel"); if (!p || !M.st) return;
+  if (M.tab === "ollama") { p.innerHTML = mOllama(); mOllamaWire(); if (!M.ollama && !M.ochecking && M.st.can_change) ollamaCheck(); }
+  else if (M.tab === "server") { p.innerHTML = mServer(); mServerWire(); }
+  else { p.innerHTML = mRouter(); mRouterWire(); if (!M.or.list && !M.or.loading) routerList(); }
+  mfootRender();
+}
+// on this computer: WellLogLLM as a GGUF (3.7B or 7B), or another Ollama model
+const SIZES = [["3.7b", "Our post-trained model for well-log interpretation, in the form Ollama runs on any computer.", true],
+               ["7b", "The larger WellLogLLM: more accurate, and it needs more memory.", false]];
+function mHave(size, q) { const o = M.ollama; return !!(o && o.welllogllm && o.welllogllm[size] && o.welllogllm[size][q]); }
+function mOllama() {
+  const o = M.ollama, st = M.st;
+  M.size = M.size || "3.7b"; M.quants = M.quants || {};
+  const cards = SIZES.map(([size, about, rec]) => {
+    const g = st.gguf[size], q = M.quants[size] || g.quant, on = M.pick === "welllogllm" && M.size === size;
+    const opts = Object.entries(g.quants).map(([k, gbs]) => `<option value="${k}"${k === q ? " selected" : ""}>${k} · ${gbs} GB${QNOTE[k] ? ` · ${QNOTE[k]}` : ""}</option>`).join("");
+    return `<div class="mcard${on ? " on" : ""}" data-pick="welllogllm" data-size="${size}" role="radio" tabindex="0" aria-checked="${on}"><span class="radio"></span>
+      <div><div class="t">${esc(g.label)}${rec ? ` <span class="badge">Recommended</span>` : ""}</div>
+        <div class="d">${esc(about)} A GPU makes it faster: Apple silicon, NVIDIA or AMD. None is needed.</div>
+        <div class="facts">${mHave(size, q) ? `<span class="fact ok">✓ Downloaded</span>` : `<span class="fact">${g.quants[q]} GB download, once</span>`}<span class="fact">about ${Math.round(st.needs[size][q])} GB of memory</span><span class="fact">${Math.round(st.context / 1024)}k-token context</span></div></div>
+      <select class="mquant" data-size="${size}" aria-label="Quantization of ${esc(g.label)}" title="A smaller file runs in less memory, at some cost in accuracy">${opts}</select></div>`;
+  }).join("");
+  return `<div class="mcards" role="radiogroup" aria-label="The model">${cards}
+      <div class="mcard${M.pick === "other" ? " on" : ""}" data-pick="other" role="radio" tabindex="0" aria-checked="${M.pick === "other"}"><span class="radio"></span>
+        <div><div class="t">Another model in Ollama</div>
+          <div class="d">Any model Ollama can pull. PetroHarness makes a copy of it with the ${Math.round(st.context / 1024)}k-token context the harness needs.</div>
+          <input type="text" id="mother" class="mono" placeholder="for example qwen3:8b" value="${esc(M.other)}" spellcheck="false" autocomplete="off" aria-label="The Ollama model's name"></div></div></div>
+    <div class="msect"><div class="mhead">Ollama</div>${ollamaLine(o)}</div>
+    ${o && o.checks && M.pick === "welllogllm" ? `<div class="msect"><div class="mhead">This computer</div><div class="mchecks">${o.checks.map(c => `<div class="mcheck ${esc(c.state)}"><span class="dot ${c.state === "ok" ? "ok" : c.state === "bad" ? "bad" : "warn"}"></span><b>${esc(c.name)}</b><span>${saidHtml(c.text)}</span></div>`).join("")}</div></div>` : ""}
+    <details class="mmore"${M.ourl ? " open" : ""}><summary>Ollama's address</summary><div class="row"><input type="text" id="mourl" class="mono" value="${esc(M.ourl || st.ollama_url)}" spellcheck="false" aria-label="Ollama's address"><button class="btn fix" id="mocheck">Check</button></div></details>`;
+}
+function ollamaLine(o) {
+  if (!o) return `<div class="mline"><span class="spin"></span>Looking for Ollama…</div>`;
+  const dl = `<a class="btn small" href="${esc(o.download || M.st.ollama_download)}" target="_blank" rel="noopener">Download Ollama ↗</a>`;
+  if (o.running && o.new_enough) return `<div class="mline"><span class="dot ok"></span>Ollama ${esc(o.version)} is running at ${esc(host(o.url))}.</div>`;
+  if (o.running) return `<div class="mline bad"><span class="dot bad"></span>Ollama ${esc(o.version)} is too old for WellLogLLM: it needs ${esc(o.needs)} or later.</div>
+    <ol class="steps"><li><span><b>Update Ollama</b> ${dl}</span></li><li><span><b>Start it again</b>, then <button class="btn small" data-recheck>Check again</button></span></li></ol>`;
+  return `<div class="mline bad"><span class="dot bad"></span>Ollama does not answer at ${esc(host(o.url))}.</div>
+    <ol class="steps"><li><span><b>Install Ollama</b> for macOS, Windows or Linux. ${dl}</span></li>
+      <li><span><b>Start it</b>: open the Ollama app, or run <code class="inl">ollama serve</code> in a terminal.</span></li>
+      <li><span><button class="btn small" data-recheck>Check again</button> PetroHarness then downloads WellLogLLM by itself.</span></li></ol>`;
+}
+function mOllamaWire() {
+  $$("#mpanel .mcard").forEach(c => {
+    const pick = () => {
+      if (M.pick === c.dataset.pick && (!c.dataset.size || M.size === c.dataset.size)) return;
+      const recheck = c.dataset.size && c.dataset.size !== M.size;
+      M.pick = c.dataset.pick; if (c.dataset.size) M.size = c.dataset.size;
+      if (recheck) ollamaCheck(); else mpanelRender();
+      if (M.pick === "other") $("#mother").focus();
+    };
+    c.onclick = e => { if (!e.target.closest("select, input")) pick(); };
+    c.onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && !e.target.closest("select, input")) { e.preventDefault(); pick(); } };
+  });
+  $$("#mpanel .mquant").forEach(sel => sel.onchange = e => { M.quants[sel.dataset.size] = e.target.value; M.pick = "welllogllm"; M.size = sel.dataset.size; ollamaCheck(); });
+  $("#mother").oninput = e => { M.other = e.target.value; if (M.pick !== "other") { M.pick = "other"; $$("#mpanel .mcard").forEach(c => { c.classList.toggle("on", c.dataset.pick === "other"); c.setAttribute("aria-checked", String(c.dataset.pick === "other")); }); } mfootRender(); };
+  $("#mourl").oninput = e => { M.ourl = e.target.value.trim(); };
+  $("#mocheck").onclick = ollamaCheck;
+  $$("#mpanel [data-recheck]").forEach(b => b.onclick = ollamaCheck);
+}
+async function ollamaCheck() {
+  M.ochecking = true; M.ollama = null; if (M.tab === "ollama") mpanelRender();
+  const size = M.size || "3.7b", quant = (M.quants || {})[size];
+  try { M.ollama = await post("/api/model/check", {route: "ollama", url: M.ourl || M.st.ollama_url, size, quant}); }
+  catch (e) { M.ollama = {running: false, url: M.ourl || M.st.ollama_url, error: e.message}; }
+  M.ochecking = false; if (M.tab === "ollama") mpanelRender();
+}
+// a vLLM server: how to start WellLogLLM on one, then its address
+function mServer() {
+  const v = M.st.vllm, m = v.models[M.vm], s = M.srv, kept = (M.st.keys.servers || []).includes((s.url || "").replace(/\/+$/, ""));
+  s.url = s.url || v.url;
+  const models = s.models || [];
+  return `<div class="msect"><div class="mhead"><span class="n">1</span>Start WellLogLLM on a GPU server</div>
+      <div class="seg" id="mvm" role="tablist">${v.models.map((x, i) => `<button class="${i === M.vm ? "on" : ""}" data-i="${i}" role="tab" aria-selected="${i === M.vm}">${esc(x.label)}</button>`).join("")}</div>
+      <div class="codebox" id="mcode"><button class="btn small copy" id="mcopy">Copy</button>${esc(v.install)}\n${esc(m.command)}</div>
+      <div class="hint" style="margin-top:0">${esc(v.needs)} with ${esc(m.gpu)} of memory or more. The model downloads from Hugging Face the first time. From another computer, use the server's address, or forward its port: <code class="inl">ssh -L 8000:localhost:8000 SERVER</code>.</div></div>
+    <div class="msect"><div class="mhead"><span class="n">2</span>Connect to it</div>
+      <div class="grid2"><label><span class="lab">Server address</span><input type="text" id="msurl" class="mono" value="${esc(s.url)}" placeholder="${esc(v.url)}" spellcheck="false" autocomplete="off"></label>
+        <label><span class="lab">API key <span class="subtle">${kept ? "· saved on this computer" : "· if the server has one"}</span></span><input type="password" id="mskey" value="${esc(s.key)}" placeholder="${kept ? "saved" : "optional"}" autocomplete="off"></label></div>
+      <div class="mline"><button class="btn" id="mscheck">Check the server</button><span class="msaid${s.bad ? " bad" : ""}" id="mssaid">${saidHtml(s.said)}</span></div>
+      ${models.length ? `<div class="grid2"><label><span class="lab">Model</span><select id="msmodel">${models.map(x => `<option value="${esc(x.id)}"${x.id === s.model ? " selected" : ""}>${esc(x.id)}${x.context ? ` · ${Math.round(x.context / 1024)}k context` : ""}</option>`).join("")}</select></label>
+        <label><span class="lab">How the harness calls it</span><select id="mskind"><option value="auto"${s.kind === "auto" ? " selected" : ""}>Automatic, by the model's name</option><option value="welllogllm"${s.kind === "welllogllm" ? " selected" : ""}>WellLogLLM or K2-Horizon</option><option value="generic"${s.kind === "generic" ? " selected" : ""}>Any other chat model</option></select></label></div>` : ""}</div>`;
+}
+function mServerWire() {
+  const s = M.srv;
+  $$("#mvm button").forEach(b => b.onclick = () => { M.vm = +b.dataset.i; mpanelRender(); });
+  $("#mcopy").onclick = () => { const v = M.st.vllm; const text = `${v.install}\n${v.models[M.vm].command}`;
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Command copied"), () => { const r = document.createRange(); r.selectNodeContents($("#mcode")); getSelection().removeAllRanges(); getSelection().addRange(r); toast("Selected: copy it with Ctrl+C"); }); };
+  $("#msurl").oninput = e => { s.url = e.target.value.trim(); s.models = null; s.said = ""; mfootRender(); };
+  $("#msurl").onkeydown = $("#mskey").onkeydown = e => { if (e.key === "Enter") serverCheck(); };
+  $("#mskey").oninput = e => { s.key = e.target.value; };
+  $("#mscheck").onclick = serverCheck;
+  const sm = $("#msmodel"); if (sm) sm.onchange = e => { s.model = e.target.value; };
+  const sk = $("#mskind"); if (sk) sk.onchange = e => { s.kind = e.target.value; };
+}
+async function serverCheck() {
+  const s = M.srv; s.said = "Checking…"; s.bad = false; $("#mssaid").innerHTML = `<span class="spin"></span>`;
+  try {
+    const r = await post("/api/model/check", {route: "server", url: s.url, key: s.key});
+    s.models = r.models;
+    if (!r.models.some(x => x.id === s.model)) s.model = (r.models.find(x => /welllog|k2.*horizon/i.test(x.id)) || r.models[0] || {}).id || "";
+    s.said = r.models.length ? `Serves ${r.models.length === 1 ? "1 model" : `${r.models.length} models`}.` : "Serves no model.";
+  } catch (e) { s.models = null; s.said = e.message; s.bad = true; }
+  mpanelRender();
+}
+// OpenRouter: a key, then a model from its list
+function routerRows() {
+  const o = M.or, q = o.q.trim().toLowerCase();
+  if (!o.list) return `<div class="hint" style="padding:12px;margin:0"><span class="spin"></span> Loading OpenRouter's models…</div>`;
+  const rows = o.list.filter(r => !q || `${r.name} ${r.id}`.toLowerCase().includes(q)).slice(0, 250);
+  if (!rows.length) return `<div class="hint" style="padding:12px;margin:0">No model matches “${esc(o.q)}”.</div>`;
+  const price = r => r.price_in != null ? `$${r.price_in} in · $${r.price_out} out per M` : "";
+  return rows.map(r => `<div class="oritem${r.id === o.model ? " on" : ""}" data-id="${esc(r.id)}" role="option" aria-selected="${r.id === o.model}" tabindex="0">
+    <div><div class="nm">${esc(r.name)}${r.reasoning ? `<span class="tag">thinks</span>` : ""}${r.structured === "json_schema" ? `<span class="tag">JSON schema</span>` : ""}${r.context && r.context < M.st.context ? `<span class="tag bad">context too small</span>` : ""}</div><div class="id">${esc(r.id)}</div></div>
+    <div class="r">${r.context ? `${Math.round(r.context / 1000)}k context` : ""}<br>${price(r)}</div></div>`).join("");
+}
+function mRouter() {
+  const k = M.st.keys, kept = k.openrouter || k.openrouter_env;
+  return `<div class="msect"><div class="grid2"><label><span class="lab">OpenRouter API key ${k.openrouter ? `<span class="subtle">· saved on this computer</span>` : k.openrouter_env ? `<span class="subtle">· from OPENROUTER_API_KEY</span>` : ""}</span>
+        <input type="password" id="mokey" value="${esc(M.or.key)}" placeholder="${kept ? "saved" : "sk-or-…"}" autocomplete="off"></label>
+      <div class="mline" style="padding-bottom:9px"><a href="${esc(M.st.openrouter_keys)}" target="_blank" rel="noopener">Get a key at openrouter.ai ↗</a>${k.openrouter ? `<span class="subtle">·</span><button class="link" id="moforget">Forget the saved key</button>` : ""}</div></div></div>
+    <div class="msect"><div class="mhead">Model</div>
+      <input type="search" id="moq" placeholder="Search, for example claude, gpt, gemini, qwen" value="${esc(M.or.q)}" aria-label="Search OpenRouter's models">
+      <div class="orlist" id="molist" role="listbox">${routerRows()}</div></div>
+    <div class="mnote">With OpenRouter, each question's prompts, which include the well's data, go to OpenRouter and to the model's provider. With Ollama or your own server, they stay with you.</div>`;
+}
+function mRouterWire() {
+  $("#mokey").oninput = e => { M.or.key = e.target.value.trim(); mfootRender(); };
+  $("#moq").oninput = e => { M.or.q = e.target.value; $("#molist").innerHTML = routerRows(); routerPickWire(); };
+  const f = $("#moforget"); if (f) f.onclick = async () => { try { M.st.keys = await post("/api/model/forget", {route: "openrouter"}); toast("Key forgotten"); } catch (e) { toast(e.message); } mpanelRender(); };
+  routerPickWire();
+}
+function routerPickWire() {
+  $$("#molist .oritem").forEach(x => {
+    const pick = () => { M.or.model = x.dataset.id; $$("#molist .oritem").forEach(y => { y.classList.toggle("on", y === x); y.setAttribute("aria-selected", String(y === x)); }); mfootRender(); };
+    x.onclick = pick; x.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } };
+  });
+}
+async function routerList() {
+  M.or.loading = true;
+  try { M.or.list = await api("/api/model/openrouter"); } catch (e) { M.or.list = []; M.said = e.message; M.bad = true; }
+  M.or.loading = false; if (M.tab === "openrouter") mpanelRender();
+}
+// the footer: what is happening, and the button that connects
+function mChoice() {
+  if (M.tab === "ollama") {
+    const o = M.ollama, size = M.size || "3.7b", quant = (M.quants || {})[size] || M.st.gguf[size].quant;
+    const blocked = M.pick === "welllogllm" && !!(o && (o.checks || []).some(c => c.state === "bad"));
+    const ok = !!(o && o.running && !blocked && (M.pick === "other" ? M.other.trim() : o.new_enough));
+    return {ok, go: M.pick === "welllogllm" && !mHave(size, quant) ? "Download and connect" : "Connect",
+      body: {route: "ollama", url: M.ourl || M.st.ollama_url, model: M.pick === "welllogllm" ? "welllogllm" : M.other.trim(), size, quant}};
+  }
+  if (M.tab === "server") { const s = M.srv; return {ok: !!(s.models && s.model), go: "Connect", body: {route: "server", url: s.url, key: s.key || undefined, model: s.model, kind: s.kind}}; }
+  const k = M.st.keys; return {ok: !!((M.or.key || k.openrouter || k.openrouter_env) && M.or.model), go: "Connect", body: {route: "openrouter", key: M.or.key || undefined, model: M.or.model}};
+}
+function mfootRender() {
+  const f = $("#mfoot"); if (!f || !M.st) return;
+  const t = M.st.task, run = connecting(), c = mChoice();
+  let text = M.said, cls = M.bad ? " bad" : M.good ? " good" : "", meter = "";
+  if (run) {
+    text = t.text; cls = "";
+    if (t.total) { const pct = Math.round(100 * (t.done || 0) / t.total); meter = `<div class="mprog"><span class="meter"><span style="width:${pct}%"></span></span><span class="mfoot-n">${sizes(t.done, t.total)} · ${pct}%</span></div>`; }
+  }
+  const warns = !run && t && t.state === "done" && M.good ? (t.warnings || []) : [];
+  f.innerHTML = `<div class="mstatus${cls}"><div class="mtext">${run ? `<span class="spin"></span>` : ""}${saidHtml(text)}</div>${meter}${warns.length ? `<ul class="mwarns">${warns.map(w => `<li><span class="dot warn"></span><span>${saidHtml(w)}</span></li>`).join("")}</ul>` : ""}</div>
+    ${run ? `<button class="btn fix" id="mstop">Stop</button>` : `<button class="btn fix" id="mcancel">Close</button>`}
+    <button class="btn primary fix" id="mgo"${run || !c.ok || !M.st.can_change ? " disabled" : ""}>${run ? "Connecting…" : c.go}</button>`;
+  if (run) $("#mstop").onclick = async () => { try { await post("/api/model/stop", {}); } catch (e) { toast(e.message); } };
+  else $("#mcancel").onclick = modelClose;
+  $("#mgo").onclick = modelGo;
+}
+async function modelGo() {
+  const c = mChoice(); if (!c.ok) return;
+  M.said = ""; M.bad = false; M.good = false;
+  try { await post("/api/model/connect", c.body); }
+  catch (e) { M.said = e.message; M.bad = true; mfootRender(); return; }
+  M.srv.key = ""; M.or.key = "";
+  await modelState(); mnowRender(); mfootRender();
+  if (!M.poll) M.poll = setInterval(modelTick, 1000);
 }
 
 // ---------- the run list ----------

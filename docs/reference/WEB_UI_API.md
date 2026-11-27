@@ -30,7 +30,7 @@ flowchart TD
 | Address | `http://127.0.0.1:7860`; saved runs in `./petroharness-ui-runs` |
 | API | JSON over HTTP, `GET` and `POST` only, no login; a request another site's page could send is refused (403, [section 14](#14-security-notes)) |
 | Questions at once | 4 (`--workers`); the rest wait in a first-in, first-out queue |
-| Model | the server's model card and endpoints; a request cannot choose the model |
+| Model | the server's model card and endpoints; the Model dialog's routes change them for the next questions, on a loopback address only ([section 13](#13-model-endpoints)) |
 
 | Route | Returns |
 |---|---|
@@ -57,6 +57,12 @@ flowchart TD
 | [`GET /api/run/ID/logview`](#get-apirunidlogview-and-logdata) | the log viewer: every curve it can show, the tracks, the zones |
 | [`GET /api/run/ID/logdata`](#get-apirunidlogview-and-logdata) | the log viewer: curves in a depth window |
 | [`POST /api/rate/ID`](#post-apirateid) | records a rating of the run |
+| [`GET /api/model`](#the-model-dialog-s-routes) | the model in use, the one being connected and its progress, the keys kept (never a key) |
+| [`GET /api/model/openrouter`](#the-model-dialog-s-routes) | OpenRouter's text models |
+| [`POST /api/model/check`](#the-model-dialog-s-routes) | Ollama's state, a server's models, or whether OpenRouter takes a key |
+| [`POST /api/model/connect`](#the-model-dialog-s-routes) | connects a model in the background |
+| [`POST /api/model/stop`](#the-model-dialog-s-routes) | stops the connection in progress |
+| [`POST /api/model/forget`](#the-model-dialog-s-routes) | forgets a kept key |
 
 A question from a script, on the GeoLink sample well 30/6-5:
 
@@ -272,6 +278,8 @@ queue, the defaults and the tool groups.
 | `version` | string | The package version (`petroharness.__version__`). | `App.config` |
 | `model` | string | The served model's name the endpoints are asked for; `(stand-in model)` when the app runs with a test model. | `App.config`, `served_model` |
 | `label` | string | The model's name as people read it: `--model`, else the card's `label`, else the served name. | `models.label` |
+| `route` | string or null | Where the model runs when it was chosen in the Model dialog (or the default): `ollama`, `server` or `openrouter`; null when it was given with options. | `App.config` |
+| `connecting` | boolean | Whether a model is being connected (downloaded, copied, loaded) now. | `App.config` |
 | `endpoints` | list of objects | One row per endpoint (`Endpoints.health`): `url`, `ok`, `models` (the ids `/models` lists), `ms` (probe time) or `error`, and `busy` (questions it is answering). Empty with a test model. | `Endpoints._probe`, `Endpoints.health` |
 | `workers` | integer | Questions answered at once. | `App.config` |
 | `running` | integer | Jobs in memory whose status is `running`. | `App.config` |
@@ -291,7 +299,7 @@ The server of [section 3](#3-command-line-and-environment), one endpoint up and 
 model's name and the runs folder replaced):
 
 ```json
-{"version": "1.2.0", "model": "<served model name>", "label": "K2-Horizon-7B",
+{"version": "1.3.0", "model": "<served model name>", "label": "K2-Horizon-7B", "route": null, "connecting": false,
  "endpoints": [{"url": "http://HOST:8000/v1", "ok": true, "models": ["<served model name>"], "ms": 6, "busy": 0},
                {"url": "http://localhost:8001/v1", "ok": false, "models": [],
                 "error": "URLError: <urlopen error [Errno 111] Connection refused>", "busy": 0}],
@@ -1778,8 +1786,32 @@ server whose one endpoint is down (the served model's name replaced):
   start the UI with --model-url, then restart it.` The job ends in `error` with that message.
 - Each question's requests then go to the reserved endpoint; the question's own configuration is built by
   `agent.graph.task_config` from the model card.
+- The probe sends `Authorization: Bearer <key>` when the variable the card names (`api_key_env`) is set, so a server
+  that wants a key shows as healthy.
 
 </details>
+
+### The Model dialog's routes
+
+The page's Model dialog changes the model while the server runs ([UI.md](../UI.md#the-model)). A question takes the
+model in use when it is asked, and keeps it to its end (`App.submit` keeps the endpoints with the job). The `POST`
+routes answer on a server listening on a loopback address only: on another (`--host 0.0.0.0`) they answer 403 `WHAT:
+this server listens beyond this computer, so its page cannot change its model. ...`.
+
+| Route | Body | Answers | Defined in |
+|---|---|---|---|
+| `GET /api/model` | | `{label, model, urls, route, where, warnings, task, keys, gguf, needs, welllogllm, vllm, ollama_url, ollama_download, openrouter_keys, context, can_change}`: `where` is where Ollama runs the model in use and `warnings` what is not ideal for it; `task` is the connection in progress or the last one (`state` `running`, `done`, `error` or `stopped`; `text`; `done` and `total` bytes while downloading; `warnings` once done); `keys` says which keys are kept (`{openrouter, openrouter_env, servers}`), never a key; `gguf` and `needs` are WellLogLLM's GGUF files by size and the memory each needs; `vllm` holds the commands that serve WellLogLLM | `App.model_state` |
+| `GET /api/model/openrouter` | | `[{id, name, context, price_in, price_out, reasoning, structured, max_out}]`, prices in US dollars per million tokens, kept 10 minutes | `connect.openrouter_models` |
+| `POST /api/model/check` | `{route: "ollama", url?, size?, quant?}` | Ollama's `{running, version, new_enough, models, local, welllogllm: {SIZE: {QUANT: bool}}, checks}`: `checks` are this computer's, for that size and quantization (`[{name, state: ok, warn or bad, text}]`) | `App.model_check`, `connect.ollama_status`, `connect.checks` |
+| | `{route: "server", url, key?}` | `{url, models: [{id, context}], key_kept}`; the kept key for the address when none is given | `connect.server_models` |
+| | `{route: "openrouter", key?}` | `{label, limit, usage}` from OpenRouter, or 400 when it does not take the key | `connect.openrouter_check` |
+| `POST /api/model/connect` | `{route: "ollama", url?, model: "welllogllm" \| NAME, size?: "3.7b" \| "7b", quant?}`, `{route: "server", url, key?, remember?, model, kind?}` or `{route: "openrouter", key?, remember?, model}` | the task, `state: running`; follow it in `GET /api/model`. Once done, the next questions use the model and it is saved for the next start; a wrong choice ends the task in `error` with the message. A second connection while one runs: 400 | `App.connect`, `connect.connect` |
+| `POST /api/model/stop` | `{}` | the task; a download in progress is abandoned (`state: stopped`) | `App.connect_stop` |
+| `POST /api/model/forget` | `{route, url?}` | the keys kept, that one removed | `connect.keep_key` |
+
+A key sent with `check` or `connect` is used for that request; `connect` keeps it (unless `remember` is false) in
+`keys.json` in PetroHarness's folder, readable by its owner only ([Install and set up](../INSTALL.md#5-where-petroharness-keeps-your-choice)).
+No route returns a key.
 
 ## 14. Security notes
 
@@ -1808,6 +1840,7 @@ neither.
 | Run files | confined | | A run id must match `RUN_ID`; only `answer.md` and `trace.json` are served by name; figure names must match the figure pattern; images must sit directly in `static/img`. | `Store.folder`, `Store.file`, `Store.figure`, `Handler._route` |
 | Upload names | sanitized | | Stored under `uploads/` with a cleaned name and an allowed suffix; the client cannot choose the folder. | `Store.upload` |
 | Disclosure | not masked | | Responses carry server paths and settings as they are: the runs folder, `PETROHARNESS_DATA` and `PETROHARNESS_SKILLS` values (`/api/config`), the LAS path in every run, endpoint URLs, and exception messages in 400 and 500 bodies; run records keep tracebacks. The API key is never in a response. | `App.config`, `Handler._route`, `adapter.run` |
+| The model | changed on a loopback address only | | The Model dialog's `POST /api/model/...` routes answer 403 on a server listening beyond this computer, so that no one who can reach it sends the questions, and their well data, to an endpoint of their own. | `Handler._model` |
 | Body size | limits | 1024 MiB upload (`MAX_UPLOAD = 1024 * 2**20` bytes), 2 MiB JSON (`MAX_JSON = 2 * 2**20`) | Checked from `Content-Length` before reading; the accepted body is read into memory. | `Handler._body`, `ui.server.MAX_UPLOAD`, `MAX_JSON` |
 | Hosted tracing | refused | | LangSmith or LangChain tracing switched on in the environment makes every question fail, so prompts and well data are not sent to that service. | `agent.graph.no_hosted_tracing` |
 | Model provider | data leaves with prompts | | Every prompt holds the well's data and goes to the configured endpoint; with a hosted API, that provider receives it ([MODELS.md](../MODELS.md#a-hosted-api)). | `llm.LLM` |

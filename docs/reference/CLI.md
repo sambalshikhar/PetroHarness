@@ -33,7 +33,10 @@ flowchart LR
 | `petroharness benchmark` | Validation mode: a question file run in parallel | `runs/` under the repository root | 0 when it completes |
 
 - The model answers through any OpenAI-compatible endpoint: `PETROHARNESS_MODEL_URL=http://HOST:PORT/v1`, or
-  `--model-url`. K2-Horizon-7B's model card is the default; `--model NAME` runs any chat model.
+  `--model-url`; with an endpoint and no card, K2-Horizon-7B's model card is the default, and `--model NAME` runs any
+  chat model. With no model option and no `PETROHARNESS_MODEL_URL`, `petroharness` and `petroharness ui` use the model
+  chosen last in the web UI's Model dialog, else WellLogLLM-3.7B as a GGUF in Ollama on this computer, made ready first
+  (`ask.default_model`, `petroharness.connect`; [Install and set up](../INSTALL.md)). Benchmark mode does not.
 - Answers go to standard output; what was run goes to standard error.
 - Every command has `-h`/`--help`. A flag error stops with argparse's usage message and exit status 2.
 
@@ -491,7 +494,7 @@ The start of the report (the LAS path is shortened, the rest cut at […]):
 - **LAS file:** `…/petrophys/datasets/geolink/30_6-5.las`, SHA-256 `5ecf2c53826981f978c2efb47fe016abf94dac62e83dbdb54eee115596f801b9`
 - **Model:** K2-Horizon-7B
 - **Petrophys:** 3.0.0@files-c5de047fe601
-- **PetroHarness:** 1.2.0 commit <commit>, setup `d70dbbf039dd`
+- **PetroHarness:** 1.3.0 commit <commit>, setup `d70dbbf039dd`
 - **Questions:** 2 answered of 2 asked
 
 ![The interval as Petrophys displays it](overview.png)
@@ -541,7 +544,7 @@ The first command prints:
 
 ```text
 setup ae3aa9e6820f
-  harness: 1.2.0
+  harness: 1.3.0
   commit: <commit>
   petrophys: 3.0.0@files-c5de047fe601
   components:
@@ -614,11 +617,13 @@ petroharness ui --port 8080 --workers 2 --model Qwen/Qwen3-32B --model-url http:
 
 ```text
 PetroHarness UI on http://127.0.0.1:8080
-  runs: …/petroharness-ui-runs; workers: 2; model: Qwen/Qwen3-32B (Qwen/Qwen3-32B); endpoints: http://localhost:8000/v1
+  runs: …/petroharness-ui-runs; workers: 2; model: Qwen/Qwen3-32B (Qwen/Qwen3-32B, given); endpoints: http://localhost:8000/v1
 ```
 
-The second line names the model as people read it (`--model`, else the card's label), then the served name in
-brackets.
+The second line names the model as people read it (`--model`, else the card's label), then in brackets the served name
+and where the choice came from: `given` (an option or `PETROHARNESS_MODEL_URL`), `saved in …/model.json` (the Model
+dialog's last choice), or `the default` (WellLogLLM-3.7B in Ollama). For Ollama, a third line says the model is being
+made ready in the background (downloaded the first time); the page follows it.
 
 <details>
 <summary>Options of petroharness ui</summary>
@@ -630,8 +635,8 @@ brackets.
 | `--allow-host NAME` | text, repeatable | none | A further host name a server on a loopback address (`--host` `localhost`, `127.0.0.1` or `::1`) answers, for a proxy that keeps its own host name. Names are compared in lower case. Without it, such a server answers API requests only for the host names `localhost`, `127.0.0.1` and `::1`. | `ui.server.parser`, `ui.server.make_servers`, `Handler._refused` |
 | `--runs DIR` | path | `petroharness-ui-runs` (relative to the current folder) | The folder for saved runs, uploads and the shared cache. It is created when missing and resolved to an absolute path. | `ui.server.parser`, `ui.store.Store` |
 | `--workers N` | integer | `4` | Questions answered at once; values below 1 become 1. | `ui.server.parser`, `ui.server.App` |
-| `--model NAME` | text | none (the default model card) | Any chat model by its served name; selects the generic card unless `--model-card` is given. | `ui.server.parser`, `models.card_file` |
-| `--model-card CARD` | YAML path or packaged card name | none (the default card, K2-Horizon-7B) | A model card ([MODELS.md](../MODELS.md)). | `ui.server.parser`, `models.card_file` |
+| `--model NAME` | text | none (below) | Any chat model by its served name; selects the generic card unless `--model-card` is given. | `ui.server.parser`, `models.card_file` |
+| `--model-card CARD` | YAML path or packaged card name | none (below) | A model card ([MODELS.md](../MODELS.md)). With none of `--model`, `--model-card`, `--model-url` and `PETROHARNESS_MODEL_URL`: the Model dialog's saved choice, else `welllogllm_3_7b_gguf` at Ollama's `http://127.0.0.1:11434/v1`, made ready in the background; with an endpoint and no card, K2-Horizon-7B's. | `ui.server.parser`, `ui.server.main`, `connect.saved` |
 | `--model-url URLS` | comma-separated URLs | from the environment (below) | The OpenAI-compatible endpoints, each ending in `/v1`. Empty entries are dropped; a trailing `/` is removed. | `ui.server.parser`, `ui.server.Endpoints` |
 | `--open` | flag | off | Opens `http://localhost:PORT` (the server's own address for any other `--host`) in your browser once the server listens: on macOS and Windows, on Linux with a display, or where the environment names a `BROWSER` (an editor's remote terminal sets one). Elsewhere it prints the address to open and the SSH port forward. | `ui.server.parser`, `ui.server.open_browser`, `ui.server.page_url` |
 
@@ -651,7 +656,10 @@ brackets.
 - The API refuses, with status 403, a request from another site's page (an `Origin` other than the server's own), a
   `POST` that is neither JSON nor an upload with its `X-Filename` header, and, on a loopback address, a request for a
   host name it does not answer ([WEB_UI_API.md](WEB_UI_API.md#14-security-notes)).
-- Endpoint health is `GET <url>/models` with a 4-second timeout, kept for 15 seconds (`Endpoints`).
+- Endpoint health is `GET <url>/models` with a 4-second timeout, kept for 15 seconds, with the card's API key when its
+  variable is set (`Endpoints`).
+- The Model dialog's routes that change the model (`POST /api/model/...`) are refused, with status 403, on a server
+  that listens beyond this computer ([WEB_UI_API.md](WEB_UI_API.md#14-security-notes)).
 - Exit status 2 also when the model card is missing or wrong (`petroharness ui: <message>`), or when the address
   cannot be bound (`petroharness ui: cannot listen on HOST:PORT (...). FIX: choose another --port.`).
 - Only requests for `/` and `/index.html` are logged to standard error (`Handler.log_message`); the polling is not.

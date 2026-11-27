@@ -1,0 +1,24 @@
+# Model card: WellLogLLM-3.7B as a GGUF, run by Ollama 0.40.4 or later on any computer, with or without a GPU (Hugging
+# Face: sambal/WellLogLLM-3.7B-GGUF). The web UI's Model dialog sets it up: Ollama pulls the GGUF and PetroHarness makes
+# a copy with the 65,536-token context the harness needs, named as below for the default quantization (Q8_0). By hand:
+#   ollama pull hf.co/sambal/WellLogLLM-3.7B-GGUF:Q8_0
+#   (then a copy with PARAMETER num_ctx 65536, named welllogllm-3.7b:q8_0)
+# The request settings are K2-Horizon's (k2_horizon_7b.yaml), with two differences: the JSON replies are asked for in the
+# prompt alone (structured_output: none), and a request may take longer (timeout_s), since a computer without a GPU
+# writes far more slowly than a server. The fields: docs/MODELS.md.
+model:
+  base_url: http://localhost:11434/v1
+  model: welllogllm-3.7b:q8_0
+  label: WellLogLLM-3.7B, GGUF
+  reasoning: true
+  chat_template_kwargs: {reasoning_effort: high}
+  retry_template_kwargs: {reasoning_effort: low}    # after an empty reply (reasoning used every token)
+  light_template_kwargs: {reasoning_effort: low}    # a call that needs little reasoning (choosing an answer's figures)
+  reasoning_end: "</ifm|think>"                     # at low effort the server leaves the reasoning before this marker
+  temperature: 1.0
+  top_p: 0.95
+  structured_output: none
+  max_tokens_spec: 32768
+  max_tokens_writer: 32768
+  timeout_s: 10800
+  max_retries: 1

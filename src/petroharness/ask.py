@@ -234,9 +234,10 @@ EXAMPLES = """examples:
   petroharness --las well.las --top 5300 --base 5600 --depth-unit ft --question "..."
   petroharness --las well.las --question "..."          (the whole well)
 
-The model: K2-Horizon-7B by default; any chat model with --model NAME (as the server lists it), or a model card with
---model-card (docs/MODELS.md). Its endpoint: PETROHARNESS_MODEL_URL=http://HOST:PORT/v1 (comma-separated for several)
-or --model-url.
+The model: any chat model with --model NAME (as the server lists it), or a model card with --model-card
+(docs/MODELS.md), at PETROHARNESS_MODEL_URL=http://HOST:PORT/v1 (comma-separated for several) or --model-url. Without
+them: the model chosen last in the web UI's Model dialog, else WellLogLLM-3.7B as a GGUF in Ollama on this computer
+(downloaded the first time).
 
 Other commands (each has --help):
   petroharness chat --las well.las ...     keep an interval open and go on asking (docs/SESSIONS.md)
@@ -321,12 +322,60 @@ def options(args: argparse.Namespace) -> dict:
             "zones_sheet": getattr(args, "zones_sheet", None)}
 
 
+def _progress():
+    """What getting the model ready says on stderr: each step once, a download every 5%."""
+    last = {"text": None, "pct": -1}
+
+    def say(p: dict) -> None:
+        text = p.get("text") or ""
+        if p.get("total"):
+            pct = int(100 * (p.get("done") or 0) / p["total"])
+            if pct // 5 != last["pct"] // 5:
+                print(f"  {text}: {pct}% of {p['total'] / 1e9:.1f} GB", file=sys.stderr, flush=True)
+                last["pct"] = pct
+        elif text != last["text"]:
+            print(f"  {text}", file=sys.stderr, flush=True)
+        last["text"] = text
+    return say
+
+
+def default_model(kw: dict) -> None:
+    """The command given no model (no --model, --model-card, --model-url, PETROHARNESS_MODEL_URL): the model chosen
+    last in the web UI's Model dialog, else WellLogLLM-3.7B as a GGUF in Ollama, made ready first (downloaded the first
+    time; petroharness.connect). Sets kw's model_card and model_url."""
+    from petroharness import connect as C
+    from petroharness.models import env_urls
+    if kw.get("model") or kw.get("model_card") or kw.get("model_url") or env_urls():
+        return
+    kept = C.saved()
+    request = (kept or {}).get("request") if (kept or {}).get("route") == "ollama" else None
+    if kept is None:
+        request = {"route": "ollama", "model": "welllogllm"}
+    if request:
+        print("petroharness: getting the model ready in Ollama", file=sys.stderr, flush=True)
+        try:
+            choice = C.connect(request, report=_progress())
+        except ValueError as exc:
+            raise ValueError(f"{exc} Or give a model: --model-url URL with --model NAME or --model-card CARD, or "
+                             "PETROHARNESS_MODEL_URL (docs/MODELS.md).") from None
+        if kept is None:
+            C.save_choice(choice | {"request": request})
+        kept = choice
+    kw["model_card"], kw["model_url"] = kept["model_card"], ",".join(kept["urls"])
+    where = f", {kept['where']}" if kept.get("where") else ""
+    print(f"petroharness: model {kept['label']} at {kw['model_url']}{where}", file=sys.stderr, flush=True)
+    for w in kept.get("warnings") or []:                    # what is not ideal for the model on this computer
+        print(f"petroharness: note: {w}", file=sys.stderr, flush=True)
+
+
 def main(argv: list | None = None) -> int:
     """petroharness ...: the answer on stdout, what was run on stderr. Exit status 0 (answered), 1 (the run
     failed; the trace says why), 2 (the inputs are wrong)."""
     args = parser().parse_args(argv)
     try:
         kw = options(args)
+        if Path(kw["las"]).is_file():               # a wrong LAS is said before any model is made ready
+            default_model(kw)
         result = ask(**kw)
     except (ValueError, LookupError, OSError) as exc:
         print(f"petroharness: {exc}", file=sys.stderr)

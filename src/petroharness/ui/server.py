@@ -9,10 +9,12 @@ port from a remote one (`ssh -L 7860:localhost:7860 HOST`, or the editor's port 
 on both 127.0.0.1 and ::1; `--host 0.0.0.0` on every interface (anyone who can reach the port can then ask questions
 and read the saved runs).
 
-The model: K2-Horizon-7B by default, or any chat model on an OpenAI-compatible endpoint (--model NAME, or a model card
-with --model-card; docs/MODELS.md), on the endpoints in PETROHARNESS_MODEL_URL (comma-separated), or --model-url. Each
-question goes to the least busy endpoint that serves the model. --workers questions run at once (default 4); more wait
-in a queue.
+The model: the one given with --model NAME or --model-card CARD and --model-url (or PETROHARNESS_MODEL_URL), any chat
+model on an OpenAI-compatible endpoint (docs/MODELS.md). Without them, the model chosen last in the page's Model dialog
+(petroharness.connect), else WellLogLLM-3.7B as a GGUF in Ollama on this computer, downloaded the first time. The Model
+dialog changes it while the server runs: Ollama on this computer, a vLLM server, or OpenRouter. Each question goes to
+the least busy endpoint that serves the model, and keeps the model it was asked with. --workers questions run at once
+(default 4); more wait in a queue.
 
 API (JSON):
     GET  /api/config                endpoints and their health, workers, queue, defaults, topic areas, context profiles,
@@ -39,6 +41,15 @@ API (JSON):
     GET  /api/run/<id>/logview?extent=interval|well   the log viewer: every curve it can show, tracks, zones
     GET  /api/run/<id>/logdata?top=&base=&curves=A,B&points=N&extent=   those curves in a depth window (thinned to N)
     POST /api/rate/<id>             {verdict: good|partly|wrong, note}
+    GET  /api/model                 the model in use, the one being connected (its progress), the keys kept (never a
+                                    key), WellLogLLM's GGUF and vLLM commands, whether the page may change the model
+    GET  /api/model/openrouter      OpenRouter's models: context, price, reasoning, JSON
+    POST /api/model/check           {route, url?, key?} -> Ollama's state, a server's models, or an OpenRouter key's
+    POST /api/model/connect         {route, ...} (petroharness.connect.connect) -> the connection, run in the background
+    POST /api/model/stop            stop the connection in progress
+    POST /api/model/forget          {route, url?} -> the key kept for it, forgotten
+    The /api/model POSTs are answered on a loopback address only: a server others can reach keeps the model it was
+    started with.
 """
 
 from __future__ import annotations
@@ -87,10 +98,11 @@ def served_model(model: str | None = None, card: str | None = None) -> str:
 class Endpoints:
     """The model endpoints: their health (GET /v1/models, kept 15 s) and how many questions each is answering."""
 
-    def __init__(self, urls: list, model: str = "", max_age: float = 15.0):
+    def __init__(self, urls: list, model: str = "", max_age: float = 15.0, key_env: str | None = None):
         self.urls = [u.strip().rstrip("/") for u in urls if u.strip()]
         self.model = model
         self.max_age = max_age
+        self.key_env = key_env                      # the variable holding the endpoints' API key (the card's)
         self.busy = {u: 0 for u in self.urls}
         self._rows: list = []
         self._t = 0.0
@@ -98,8 +110,10 @@ class Endpoints:
 
     def _probe(self, url: str) -> dict:
         t0 = time.perf_counter()
+        key = os.environ.get(self.key_env or "")
+        req = urllib.request.Request(url + "/models", headers={"Authorization": f"Bearer {key}"} if key else {})
         try:
-            with urllib.request.urlopen(url + "/models", timeout=4) as r:
+            with urllib.request.urlopen(req, timeout=4) as r:
                 ids = [m.get("id") for m in json.loads(r.read()).get("data", [])]
         except Exception as exc:  # noqa: BLE001  (any failure to answer: the endpoint is down for the page)
             return {"url": url, "ok": False, "models": [], "error": f"{type(exc).__name__}: {str(exc)[:120]}"}
@@ -159,7 +173,14 @@ class App:
         self.choice = {k: v for k, v in (("model", model), ("model_card", model_card)) if v}   # ask's model options
         self.label = label(card_file(model_card, model), model)
         served = "" if model_factory is not None else served_model(model, model_card)
-        self.endpoints = Endpoints(urls if urls is not None else _env_urls(), served, max_age)
+        self.max_age = max_age
+        self.endpoints = Endpoints(urls if urls is not None else _env_urls(), served, max_age,
+                                   _key_env(card_file(model_card, model)))
+        self.route: str | None = None               # where the model runs, when chosen in the page (petroharness.connect)
+        self.where: str | None = None               # on what Ollama runs it (the GPU, the CPU), once it has loaded it
+        self.warnings: list = []                    # what is not ideal for the model in use on this computer
+        self.setup: dict | None = None              # the model being connected, as the page follows it
+        self._cancel: threading.Event | None = None
         self.model_factory = model_factory          # tests: a stand-in model; no endpoint is used then
         self.workers = max(1, int(workers))
         self.jobs: dict = {}
@@ -191,9 +212,12 @@ class App:
         if isinstance(inputs, dict):                # the stretches this question is on, chosen by the user (an answer
             inputs = {k: v for k, v in inputs.items() if k != "scope"} | ({"scope": scope} if scope else {})
             #                                         to a question back), set before the question is read
-        kwargs = A.arguments({k: v for k, v in inputs.items() if k != "scope"}) | self.choice   # wrong inputs are
+        with self._lock:                            # the model in use now: the question keeps it, whatever comes next
+            choice, pool = dict(self.choice), self.endpoints
+        kwargs = A.arguments({k: v for k, v in inputs.items() if k != "scope"}) | choice   # wrong inputs are
         #                                             said now, not after the queue
         job = A.Job(self.store.new_id(), inputs, kwargs)
+        job.pool = pool
         job.root = root or job.id
         with self._lock:
             self.jobs[job.id] = job
@@ -237,9 +261,10 @@ class App:
                 self._queue.task_done()
                 continue
             url = None
+            pool = getattr(job, "pool", None) or self.endpoints
             try:
                 if self.model_factory is None:
-                    url = self.endpoints.acquire()
+                    url = pool.acquire()
                     job.endpoint = url
                 A.run(job, self.store.prepare(job.id), url, self.model_factory,
                       None if job.root == job.id else self.store.folder(job.root))
@@ -249,7 +274,7 @@ class App:
                 job.emit({"kind": "phase", "name": "finished", "status": "error", "error": job.error})
             finally:
                 if url:
-                    self.endpoints.release(url)
+                    pool.release(url)
                 try:
                     self.store.save(job.record())
                 except Exception:  # noqa: BLE001  (a record not saved is said in the log; the worker goes on)
@@ -399,6 +424,97 @@ class App:
             self._typical = (now, out)
         return out
 
+    # --- the model: switched in the page (petroharness.connect) ---------------------------------------------------
+
+    def use(self, choice: dict) -> None:
+        """Answer the next questions with the model of `choice` (connect.connect's: its card and endpoints). The
+        questions waiting or running keep the model they were asked with."""
+        from petroharness.models import card_file, label
+        card = choice["model_card"]
+        file = card_file(card)
+        endpoints = Endpoints(choice["urls"], served_model(None, card), self.max_age, _key_env(file))
+        with self._lock:
+            self.choice, self.label, self.endpoints = {"model_card": card}, label(file), endpoints
+            self.route, self.where, self.warnings = choice.get("route"), choice.get("where"), choice.get("warnings") or []
+
+    def connect(self, body: dict) -> dict:
+        """Connect the model `body` asks for (petroharness.connect.connect), in the background: a download can take a
+        while. The page follows it in model_state()["task"]; once ready, the next questions use it, and it is saved for
+        the next start."""
+        from petroharness import connect as C
+        with self._lock:
+            if self.setup and self.setup.get("state") == "running":
+                raise A.InputError("WHAT: a model is being connected. FIX: wait for it, or stop it.")
+            task = {"state": "running", "route": body.get("route"), "text": "Starting", "started": time.time()}
+            self.setup, self._cancel = task, threading.Event()
+            cancel = self._cancel
+
+        def said(p: dict) -> None:
+            task.update({k: p.get(k) for k in ("text", "done", "total")})
+
+        def work() -> None:
+            try:
+                choice = C.connect(body, report=said, cancel=cancel)
+                self.use(choice)
+                C.save_choice(choice | {"request": {k: v for k, v in body.items() if k != "key"}})
+                where = f", {choice['where']}" if choice.get("where") else ""
+                task.update(state="done", text=f"Connected: {choice['label']}{where}", label=choice["label"],
+                            warnings=choice.get("warnings") or [], done=None, total=None)
+            except C.Cancelled:
+                task.update(state="stopped", text="Stopped.", done=None, total=None)
+            except Exception as exc:  # noqa: BLE001  (said in the page: what failed and what to do)
+                task.update(state="error", text=str(exc), done=None, total=None)
+            task["finished"] = time.time()
+
+        threading.Thread(target=work, name="petroharness-connect", daemon=True).start()
+        return dict(task)
+
+    def connect_stop(self) -> dict:
+        with self._lock:
+            if self._cancel is not None:
+                self._cancel.set()
+            return dict(self.setup or {})
+
+    def model_check(self, body: dict) -> dict:
+        """What the dialog shows before connecting: Ollama's state (and which WellLogLLM files it has), a server's
+        models, or whether OpenRouter takes a key."""
+        from petroharness import connect as C
+        route = body.get("route")
+        if route == "ollama":
+            url = body.get("url") or C.OLLAMA_URL
+            st = C.ollama_status(url)
+            have = {C._tagged(m).lower() for m in st.get("models") or []}
+            st["welllogllm"] = {size: {q: C._tagged(C.ollama_copy_name(f"hf.co/{g['repo']}:{q}")) in have
+                                       or C._tagged(f"hf.co/{g['repo']}:{q}").lower() in have for q in g["quants"]}
+                                for size, g in C.GGUF.items()}
+            size = body.get("size") if body.get("size") in C.GGUF else "3.7b"
+            quant = body.get("quant") if body.get("quant") in C.GGUF[size]["quants"] else C.GGUF[size]["quant"]
+            st["checks"] = C.checks(size, quant, url, have=st["welllogllm"][size][quant])
+            return st
+        if route == "server":
+            url = (body.get("url") or "").strip().rstrip("/")
+            token = (body.get("key") or "").strip() or C.key(C.slot("server", url))
+            return {"url": url, "models": C.server_models(url, token), "key_kept": bool(C.key(C.slot("server", url)))}
+        if route == "openrouter":
+            token = (body.get("key") or "").strip() or C.key(C.slot("openrouter"))
+            if not token:
+                raise A.InputError(f"WHAT: no OpenRouter API key. FIX: paste your key (from {C.OPENROUTER_KEYS}).")
+            return C.openrouter_check(token)
+        raise A.InputError("WHAT: where the model runs. FIX: route ollama, server or openrouter.")
+
+    def model_state(self) -> dict:
+        from petroharness import connect as C
+        with self._lock:
+            task = dict(self.setup) if self.setup else None
+            label, endpoints, route = self.label, self.endpoints, self.route
+            where, warnings = self.where, list(self.warnings)
+        needs = {size: {q: C.gguf_needs(size, q) for q in g["quants"]} for size, g in C.GGUF.items()}
+        return {"label": label, "model": endpoints.model, "urls": endpoints.urls, "route": route, "task": task,
+                "where": where, "warnings": warnings, "keys": C.key_state(), "gguf": C.GGUF, "needs": needs,
+                "welllogllm": C.WELLLOGLLM_GGUF, "vllm": C.vllm_guide(),
+                "ollama_url": C.OLLAMA_URL, "ollama_download": C.OLLAMA_DOWNLOAD, "openrouter_keys": C.OPENROUTER_KEYS,
+                "context": C.CONTEXT}
+
     def config(self) -> dict:
         from petroharness import __version__
         from petroharness.agent import direction
@@ -407,6 +523,7 @@ class App:
             running = sum(j.status == "running" for j in self.jobs.values())
             waiting = len(self.waiting)
         return {"version": __version__, "model": self.endpoints.model or "(stand-in model)", "label": self.label,
+                "route": self.route, "connecting": bool(self.setup and self.setup.get("state") == "running"),
                 "endpoints": self.endpoints.health() if self.model_factory is None else [],
                 "workers": self.workers, "running": running, "queued": waiting, "runs": str(self.store.root),
                 "max_steps": MAX_STEPS, "profiles": A.context_profiles(),
@@ -437,6 +554,12 @@ def petrophys_verbs() -> list:
     """The verbs over Petrophys (docs/TOOLS.md): their requests have Petrophys compute what the record lacks."""
     from petroharness.agent.toolset import TOOLSET
     return [t.name for t in TOOLSET if t.verb]
+
+
+def _key_env(file: str) -> str | None:
+    """The variable a model card reads its API key from."""
+    from petroharness.models import card_settings
+    return card_settings(file).get("api_key_env")
 
 
 def _env_urls() -> list:
@@ -534,6 +657,8 @@ class Handler(BaseHTTPRequestHandler):
             what, arg = (parts[1] if len(parts) > 1 else ""), (parts[2] if len(parts) > 2 else "")
             if method == "GET" and what == "config":
                 return self._json(app.config())
+            if what == "model":                                   # the Model dialog (petroharness.connect)
+                return self._model(method, arg)
             if method == "GET" and what == "settings":            # the interpretation settings, their defaults and help
                 from petroharness.well import settings as T
                 return self._json(T.schema())
@@ -605,6 +730,30 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001  (an unexpected failure is answered as a 500, the server goes on)
             traceback.print_exc()
             return self._json({"error": f"{type(exc).__name__}: {exc}"}, 500)
+
+
+    def _model(self, method: str, sub: str) -> None:
+        from petroharness import connect as C
+        app = self.app
+        if method == "GET" and not sub:
+            return self._json(app.model_state() | {"can_change": self.loopback})
+        if method == "GET" and sub == "openrouter":
+            return self._json(C.openrouter_models())
+        if method != "POST" or sub not in ("check", "connect", "stop", "forget"):
+            return self._json({"error": "not found"}, 404)
+        if not self.loopback:
+            return self._json({"error": "WHAT: this server listens beyond this computer, so its page cannot change its "
+                                        "model. FIX: start it with the model you want (--model-card, --model-url), "
+                                        "or on 127.0.0.1."}, 403)
+        if sub == "stop":
+            return self._json(app.connect_stop())
+        body = self._payload()
+        if sub == "check":
+            return self._json(app.model_check(body))
+        if sub == "connect":
+            return self._json(app.connect(body))
+        C.keep_key(C.slot(body.get("route") or "", body.get("url") or ""), None)
+        return self._json(C.key_state())
 
 
 class _Server(ThreadingHTTPServer):
@@ -683,8 +832,18 @@ def open_browser(url: str, env=None, platform: str | None = None, opener=None) -
 def main(argv: list | None = None) -> int:
     args = parser().parse_args(argv)
     urls = [u for u in args.model_url.split(",") if u.strip()] if args.model_url else None
+    card, start, chosen = args.model_card, None, "given"
+    if not (args.model or args.model_card or urls or _env_urls()):     # no model given: the saved one, else WellLogLLM
+        from petroharness import connect as C
+        kept = C.saved()
+        if kept:
+            card, urls, chosen = kept["model_card"], kept["urls"], f"saved in {C.home() / 'model.json'}"
+            start = kept.get("request") if kept.get("route") == "ollama" else None   # Ollama may have lost it
+        else:
+            card, urls, chosen = C.WELLLOGLLM_GGUF["card"], [C.OLLAMA_URL + "/v1"], "the default"
+            start = {"route": "ollama", "model": "welllogllm"}
     try:
-        app = App(args.runs, workers=args.workers, urls=urls, model=args.model, model_card=args.model_card)
+        app = App(args.runs, workers=args.workers, urls=urls, model=args.model, model_card=card)
     except ValueError as exc:                       # a model card that is missing or wrong
         print(f"petroharness ui: {exc}", file=sys.stderr)
         return 2
@@ -699,9 +858,15 @@ def main(argv: list | None = None) -> int:
     if args.host not in LOOPBACK:
         print(f"  listening on {args.host}: anyone who can reach this port can ask questions and read the files this "
               "server can read; listen on 127.0.0.1 and forward the port where you can", file=sys.stderr)
-    print(f"  runs: {app.store.root}; workers: {app.workers}; model: {app.label} ({app.endpoints.model}); endpoints: "
-          f"{', '.join(app.endpoints.urls) or 'none (set PETROHARNESS_MODEL_URL or --model-url)'}", file=sys.stderr,
-          flush=True)
+    print(f"  runs: {app.store.root}; workers: {app.workers}; model: {app.label} ({app.endpoints.model}, {chosen}); "
+          f"endpoints: {', '.join(app.endpoints.urls) or 'none (set PETROHARNESS_MODEL_URL or --model-url)'}",
+          file=sys.stderr, flush=True)
+    if start:
+        print("  getting the model ready in Ollama (downloaded the first time): follow it in the page, which also "
+              "changes the model (Model, top right)", file=sys.stderr, flush=True)
+    if start:                                       # Ollama: made ready in the background, downloaded if need be
+        app.route = "ollama"
+        app.connect(start)
     for s in servers[1:]:
         threading.Thread(target=s.serve_forever, daemon=True).start()
     if args.open:
